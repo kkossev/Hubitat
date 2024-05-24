@@ -1,14 +1,8 @@
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
-    base: 'driver',
-    author: 'Krassimir Kossev',
-    category: 'zigbee',
-    description: 'Zigbee Battery Library',
-    name: 'batteryLib',
-    namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/batteryLib.groovy',
-    version: '3.0.1',
-    documentationLink: ''
+    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Battery Library', name: 'batteryLib', namespace: 'kkossev',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/batteryLib.groovy', documentationLink: '',
+    version: '3.2.0'
 )
 /*
  *  Zigbee Level Library
@@ -24,40 +18,48 @@ library(
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added batteryLib.groovy
  * ver. 3.0.1  2024-04-06 kkossev  - customParsePowerCluster bug fix
+ * ver. 3.0.2  2024-04-14 kkossev  - batteryPercentage bug fix (was x2); added bVoltCtr; added battertRefresh
+ * ver. 3.2.0  2024-04-14 kkossev  - (dev. branch) commonLib 3.2.0 allignment; added lastBattery
  *
+ *                                   TODO:
  *                                   TODO: battery voltage low/high limits configuration
 */
 
-
-static String batteryLibVersion()   { '3.0.1' }
-static String batteryLibStamp() { '2024/04/06 9:33 AM' }
+static String batteryLibVersion()   { '3.2.0' }
+static String batteryLibStamp() { '2024/05/21 5:57 PM' }
 
 metadata {
     capability 'Battery'
-    attribute 'batteryVoltage', 'number'
+    attribute  'batteryVoltage', 'number'
+    attribute  'lastBattery', 'date'         // last battery event time - added in 3.2.0 05/21/2024
     // no commands
     preferences {
-        if (device) {
+        if (device && advancedOptions == true) {
             input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: '<i>Convert battery voltage to battery Percentage remaining.</i>'
         }
     }
 }
 
-void customParsePowerCluster(final Map descMap) {
+void standardParsePowerCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    if (descMap.attrId in ['0020', '0021']) {
-        state.lastRx['batteryTime'] = new Date().getTime()
-        state.stats['battCtr'] = (state.stats['battCtr'] ?: 0) + 1
-    }
     final int rawValue = hexStrToUnsignedInt(descMap.value)
-    if (descMap.attrId == '0020') {
+    if (descMap.attrId == '0020') { // battery voltage
+        state.lastRx['batteryTime'] = new Date().getTime()
+        state.stats['bVoltCtr'] = (state.stats['bVoltCtr'] ?: 0) + 1
         sendBatteryVoltageEvent(rawValue)
         if ((settings.voltageToPercent ?: false) == true) {
             sendBatteryVoltageEvent(rawValue, convertToPercent = true)
         }
     }
-    else if (descMap.attrId == '0021') {
-        sendBatteryPercentageEvent(rawValue * 2)
+    else if (descMap.attrId == '0021') { // battery percentage
+        state.lastRx['batteryTime'] = new Date().getTime()
+        state.stats['battCtr'] = (state.stats['battCtr'] ?: 0) + 1
+        if (isTuya()) {
+            sendBatteryPercentageEvent(rawValue)
+        }
+        else {
+            sendBatteryPercentageEvent((rawValue / 2) as int)
+        }
     }
     else {
         logWarn "customParsePowerCluster: zigbee received unknown Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
@@ -66,6 +68,7 @@ void customParsePowerCluster(final Map descMap) {
 
 void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false) {
     logDebug "batteryVoltage = ${(double)rawValue / 10.0} V"
+    final Date lastBattery = new Date()
     Map result = [:]
     BigDecimal volts = safeToBigDecimal(rawValue) / 10G
     if (rawValue != 0 && rawValue != 255) {
@@ -91,6 +94,7 @@ void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false)
         result.isStateChange = true
         logInfo "${result.descriptionText}"
         sendEvent(result)
+        sendEvent(name: 'lastBattery', value: lastBattery)
     }
     else {
         logWarn "ignoring BatteryResult(${rawValue})"
@@ -102,6 +106,7 @@ void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=fals
         logWarn "ignoring battery report raw=${batteryPercent}"
         return
     }
+    final Date lastBattery = new Date()
     Map map = [:]
     map.name = 'battery'
     map.timeStamp = now()
@@ -118,11 +123,13 @@ void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=fals
     if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) {
         // send it now!
         sendDelayedBatteryPercentageEvent(map)
+        sendEvent(name: 'lastBattery', value: lastBattery)
     }
     else {
         int delayedTime = (settings?.batteryDelay as int) - timeDiff
         map.delayed = delayedTime
         map.descriptionText += " [delayed ${map.delayed} seconds]"
+        map.lastBattery = lastBattery
         logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds"
         runIn(delayedTime, 'sendDelayedBatteryEvent', [overwrite: true, data: map])
     }
@@ -132,6 +139,7 @@ private void sendDelayedBatteryPercentageEvent(Map map) {
     logInfo "${map.descriptionText}"
     //map.each {log.trace "$it"}
     sendEvent(map)
+    sendEvent(name: 'lastBattery', value: map.lastBattery)
 }
 
 /* groovylint-disable-next-line UnusedPrivateMethod */
@@ -139,4 +147,12 @@ private void sendDelayedBatteryVoltageEvent(Map map) {
     logInfo "${map.descriptionText}"
     //map.each {log.trace "$it"}
     sendEvent(map)
+    sendEvent(name: 'lastBattery', value: map.lastBattery)
+}
+
+List<String> batteryRefresh() {
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 100)         // battery voltage
+    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 100)         // battery percentage
+    return cmds
 }

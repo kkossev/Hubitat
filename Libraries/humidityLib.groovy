@@ -1,14 +1,8 @@
 /* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
-    base: 'driver',
-    author: 'Krassimir Kossev',
-    category: 'zigbee',
-    description: 'Zigbee Humidity Library',
-    name: 'humidityLib',
-    namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/humidityLib.groovy',
-    version: '3.0.0',
-    documentationLink: ''
+    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Humidity Library', name: 'humidityLib', namespace: 'kkossev',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/humidityLib.groovy', documentationLink: '',
+    version: '3.2.0'
 )
 /*
  *  Zigbee Humidity Library
@@ -23,12 +17,13 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added humidityLib.groovy
+ * ver. 3.2.0  2024-05-21 kkossev  - (dev.branch) commonLib 3.2.0 allignment
  *
  *                                   TODO:
 */
 
-static String humidityLibVersion()   { '3.0.0' }
-static String humidityLibStamp() { '2024/04/06 11:49 PM' }
+static String humidityLibVersion()   { '3.2.0' }
+static String humidityLibStamp() { '2024/05/21 5:09 PM' }
 
 metadata {
     capability 'RelativeHumidityMeasurement'
@@ -47,7 +42,7 @@ metadata {
     }
 }
 
-void customParseHumidityCluster(final Map descMap) {
+void standardParseHumidityCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     final int value = hexStrToUnsignedInt(descMap.value)
     handleHumidityEvent(value / 100.0F as BigDecimal)

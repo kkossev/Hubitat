@@ -1,14 +1,9 @@
 /* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
-    base: 'driver',
-    author: 'Krassimir Kossev',
-    category: 'zigbee',
-    description: 'Zigbee Illuminance Library',
-    name: 'illuminanceLib',
-    namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/illuminanceLib.groovy',
-    version: '3.0.0',
-    documentationLink: ''
+    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Illuminance Library', name: 'illuminanceLib', namespace: 'kkossev',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/illuminanceLib.groovy', documentationLink: '',
+    version: '3.2.0'
+    
 )
 /*
  *  Zigbee Illuminance Library
@@ -23,12 +18,14 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added illuminanceLib.groovy
+ * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment;
  *
- *                                   TODO:
+ *                                   TODO: illum threshold not working!
+ *                                   TODO: check illuminanceInitializeVars() and illuminanceProcessTuyaDP() usage
 */
 
-static String illuminanceLibVersion()   { '3.0.0' }
-static String illuminanceLibStamp() { '2024/04/06 2:40 PM' }
+static String illuminanceLibVersion()   { '3.2.0' }
+static String illuminanceLibStamp() { '2024/05/21 9:03 PM' }
 
 metadata {
     // no capabilities
@@ -39,16 +36,16 @@ metadata {
     }
 }
 
-@Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 5
+@Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 10
 
-void customParseIlluminanceCluster(final Map descMap) {
+void standardParseIlluminanceCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     final int value = hexStrToUnsignedInt(descMap.value)
     int lux = value > 0 ? Math.round(Math.pow(10, (value / 10000))) : 0
     handleIlluminanceEvent(lux)
 }
 
-void handleIlluminanceEvent(int illuminance, Boolean isDigital=false) {
+void handleIlluminanceEvent(int illuminance, boolean isDigital=false) {
     Map eventMap = [:]
     if (state.stats != null) { state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 } else { state.stats = [:] }
     eventMap.name = 'illuminance'
@@ -89,7 +86,7 @@ private void sendDelayedIllumEvent(Map eventMap) {
 @Field static final Map tuyaIlluminanceOpts = [0: 'low', 1: 'medium', 2: 'high']
 
 /* groovylint-disable-next-line UnusedMethodParameter */
-void customProcessTuyaDP(final Map descMap, int dp, int dp_id, int fncmd) {
+void illuminanceProcessTuyaDP(final Map descMap, int dp, int dp_id, int fncmd) {
     switch (dp) {
         case 0x01 : // on/off
             if (DEVICE_TYPE in  ['LightSensor']) {
@@ -116,7 +113,7 @@ void customProcessTuyaDP(final Map descMap, int dp, int dp_id, int fncmd) {
     }
 }
 
-void customInitializeVars( boolean fullInit = false ) {
+void illuminanceInitializeVars( boolean fullInit = false ) {
     logDebug "customInitializeVars()... fullInit = ${fullInit}"
     if (device.hasCapability('IlluminanceMeasurement')) {
         if (fullInit || settings?.minReportingTime == null) { device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number']) }

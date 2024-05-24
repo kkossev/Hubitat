@@ -1,14 +1,7 @@
 /* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitReturnStatement, LineLength, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter */
 library(
-    base: 'driver',
-    author: 'Krassimir Kossev',
-    category: 'zigbee',
-    description: 'Xiaomi Library',
-    name: 'xiaomiLib',
-    namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/xiaomiLib.groovy',
-    version: '1.0.2',
-    documentationLink: ''
+    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Xiaomi Library', name: 'xiaomiLib', namespace: 'kkossev', importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/xiaomiLib.groovy', documentationLink: '',
+    version: '1.1.0'
 )
 /*
  *  Xiaomi Library
@@ -25,14 +18,15 @@ library(
  * ver. 1.0.0  2023-09-09 kkossev  - added xiaomiLib
  * ver. 1.0.1  2023-11-07 kkossev  - (dev. branch)
  * ver. 1.0.2  2024-04-06 kkossev  - (dev. branch) Groovy linting; aqaraCube specific code;
+ * ver. 1.1.0  2024-05-21 kkossev  - (dev. branch) comonLib 3.2.0 alignmment
  *
  *                                   TODO: remove the isAqaraXXX  dependencies !!
 */
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String xiaomiLibVersion()   { '1.0.2' }
+static String xiaomiLibVersion()   { '1.1.0' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String xiaomiLibStamp() { '2024/04/06 12:14 PM' }
+static String xiaomiLibStamp() { '2024/05/21 3:28 PM' }
 
 boolean isAqaraTVOC_Lib()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
 boolean isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
@@ -68,9 +62,9 @@ boolean isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remo
 
 // called from parseXiaomiCluster() in the main code ...
 //
-void parseXiaomiClusterLib(final Map descMap) {
+void standardParseXiaomiFCC0Cluster(final Map descMap) {
     if (settings.logEnable) {
-        logTrace "zigbee received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
+        logTrace "standardParseXiaomiFCC0Cluster: zigbee received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
     if (DEVICE_TYPE in  ['Thermostat']) {
         parseXiaomiClusterThermostatLib(descMap)
@@ -82,13 +76,14 @@ void parseXiaomiClusterLib(final Map descMap) {
     }
     // TODO - refactor AqaraCube specific code
     // TODO - refactor FP1 specific code
+    final String funcName = 'standardParseXiaomiFCC0Cluster'
     switch (descMap.attrInt as Integer) {
         case 0x0009:                      // Aqara Cube T1 Pro
-            if (DEVICE_TYPE in  ['AqaraCube']) { logDebug "AqaraCube 0xFCC0 attribute 0x009 value is ${hexStrToUnsignedInt(descMap.value)}" }
-            else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" }
+            if (DEVICE_TYPE in  ['AqaraCube']) { logDebug "standardParseXiaomiFCC0Cluster: AqaraCube 0xFCC0 attribute 0x009 value is ${hexStrToUnsignedInt(descMap.value)}" }
+            else { logDebug "${funcName}: unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" }
             break
         case 0x00FC:                      // FP1
-            log.info 'unknown attribute - resetting?'
+            logWarn "${funcName}: unknown attribute - resetting?"
             break
         case PRESENCE_ATTR_ID:            // 0x0142 FP1
             final Integer value = hexStrToUnsignedInt(descMap.value)
@@ -103,7 +98,7 @@ void parseXiaomiClusterLib(final Map descMap) {
             final Integer regionId = HexUtils.hexStringToInt(descMap.value[0..1])
             final Integer value = HexUtils.hexStringToInt(descMap.value[2..3])
             if (settings.logEnable) {
-                log.debug "xiaomi: region ${regionId} action is ${value}"
+                log.debug "${funcName}: xiaomi: region ${regionId} action is ${value}"
             }
             if (device.currentValue("region${regionId}") != null) {
                 RegionUpdateBuffer.get(device.id).put(regionId, value)
@@ -127,11 +122,11 @@ void parseXiaomiClusterLib(final Map descMap) {
             break
         case 0x0148 :                    // Aqara Cube T1 Pro - Mode
             if (DEVICE_TYPE in  ['AqaraCube']) { parseXiaomiClusterAqaraCube(descMap) }
-            else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" }
+            else { logDebug "${funcName}: unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" }
             break
         case 0x0149:                     // (329) Aqara Cube T1 Pro - i side facing up (0..5)
             if (DEVICE_TYPE in  ['AqaraCube']) { parseXiaomiClusterAqaraCube(descMap) }
-            else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" }
+            else { logDebug "${funcName}: unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" }
             break
         case XIAOMI_SPECIAL_REPORT_ID:   // 0x00F7 sent every 55 minutes
             final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value)
@@ -152,36 +147,37 @@ void parseXiaomiClusterLib(final Map descMap) {
             }
             break
         default:
-            log.warn "zigbee received unknown xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})"
+            log.warn "${funcName}: zigbee received unknown xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})"
             break
     }
 }
 
 void parseXiaomiClusterTags(final Map<Integer, Object> tags) {
+    final String funcName = 'parseXiaomiClusterTags'
     tags.each { final Integer tag, final Object value ->
         switch (tag) {
             case 0x01:    // battery voltage
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value / 1000}V (raw=${value})"
+                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} battery voltage is ${value / 1000}V (raw=${value})"
                 break
             case 0x03:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device temperature is ${value}&deg;"
+                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} device temperature is ${value}&deg;"
                 break
             case 0x05:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} RSSI is ${value}"
+                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} RSSI is ${value}"
                 break
             case 0x06:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} LQI is ${value}"
+                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} LQI is ${value}"
                 break
             case 0x08:            // SWBUILD_TAG_ID:
                 final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0')
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})"
+                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})"
                 device.updateDataValue('aqaraVersion', swBuild)
                 break
             case 0x0a:
                 String nwk = intToHexStr(value as Integer, 2)
                 if (state.health == null) { state.health = [:] }
                 String oldNWK = state.health['parentNWK'] ?: 'n/a'
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${nwk}</b>"
+                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${nwk}</b>"
                 if (oldNWK != nwk ) {
                     logWarn "parentNWK changed from ${oldNWK} to ${nwk}"
                     state.health['parentNWK']  = nwk
@@ -189,59 +185,59 @@ void parseXiaomiClusterTags(final Map<Integer, Object> tags) {
                 }
                 break
             case 0x0b:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} light level is ${value}"
+                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} light level is ${value}"
                 break
             case 0x64:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value / 100} (raw ${value})"    // Aqara TVOC
+                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} temperature is ${value / 100} (raw ${value})"    // Aqara TVOC
                 // TODO - also smoke gas/density if UINT !
                 break
             case 0x65:
-                if (isAqaraFP1()) { logDebug "xiaomi decode PRESENCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                if (isAqaraFP1()) { logDebug "${funcName} PRESENCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
                 else              { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} humidity is ${value / 100} (raw ${value})" }    // Aqara TVOC
                 break
             case 0x66:
-                if (isAqaraFP1()) { logDebug "xiaomi decode SENSITIVITY_LEVEL_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                if (isAqaraFP1()) { logDebug "${funcName} SENSITIVITY_LEVEL_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
                 else if (isAqaraTVOC_Lib()) { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} airQualityIndex is ${value}" }        // Aqara TVOC level (in ppb)
                 else                    { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} presure is ${value}" }
                 break
             case 0x67:
-                if (isAqaraFP1()) { logDebug "xiaomi decode DIRECTION_MODE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                else              { logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }                        // Aqara TVOC:
+                if (isAqaraFP1()) { logDebug "${funcName} DIRECTION_MODE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                else              { logDebug "${funcName} unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }                        // Aqara TVOC:
                 // air quality (as 6 - #stars) ['excellent', 'good', 'moderate', 'poor', 'unhealthy'][val - 1]
                 break
             case 0x69:
-                if (isAqaraFP1()) { logDebug "xiaomi decode TRIGGER_DISTANCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                else              { logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                if (isAqaraFP1()) { logDebug "${funcName} TRIGGER_DISTANCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                else              { logDebug "${funcName} unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
                 break
             case 0x6a:
-                if (isAqaraFP1()) { logDebug "xiaomi decode FP1 unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                else              { logDebug "xiaomi decode MOTION SENSITIVITY tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                if (isAqaraFP1()) { logDebug "${funcName} FP1 unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                else              { logDebug "${funcName} MOTION SENSITIVITY tag: 0x${intToHexStr(tag, 1)}=${value}" }
                 break
             case 0x6b:
-                if (isAqaraFP1()) { logDebug "xiaomi decode FP1 unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                else              { logDebug "xiaomi decode MOTION LED tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                if (isAqaraFP1()) { logDebug "${funcName} FP1 unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                else              { logDebug "${funcName} MOTION LED tag: 0x${intToHexStr(tag, 1)}=${value}" }
                 break
             case 0x95:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} energy is ${value}"
+                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} energy is ${value}"
                 break
             case 0x96:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} voltage is ${value}"
+                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} voltage is ${value}"
                 break
             case 0x97:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} current is ${value}"
+                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} current is ${value}"
                 break
             case 0x98:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} power is ${value}"
+                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} power is ${value}"
                 break
             case 0x9b:
                 if (isAqaraCube()) {
-                    logDebug "Aqara cubeMode tag: 0x${intToHexStr(tag, 1)} is '${AqaraCubeModeOpts.options[value as int]}' (${value})"
+                    logDebug "${funcName} Aqara cubeMode tag: 0x${intToHexStr(tag, 1)} is '${AqaraCubeModeOpts.options[value as int]}' (${value})"
                     sendAqaraCubeOperationModeEvent(value as int)
                 }
-                else { logDebug "xiaomi decode CONSUMER CONNECTED tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                else { logDebug "${funcName} CONSUMER CONNECTED tag: 0x${intToHexStr(tag, 1)}=${value}" }
                 break
             default:
-                logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
+                logDebug "${funcName} unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
         }
     }
 }

@@ -7,7 +7,7 @@ library(
     name: 'deviceProfileLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy',
-    version: '3.1.0',
+    version: '3.1.3',
     documentationLink: ''
 )
 /*
@@ -28,12 +28,19 @@ library(
  * ver. 3.0.2  2023-12-17 kkossev  - (dev. branch) inputIt moved to the preferences section; setfunction replaced by customSetFunction; Groovy Linting;
  * ver. 3.0.4  2024-03-30 kkossev  - (dev. branch) more Groovy Linting; processClusterAttributeFromDeviceProfile exception fix;
  * ver. 3.1.0  2024-04-03 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
+ * ver. 3.1.1  2024-04-21 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix; resetPreferencesToDefaults bug fix;
+ * ver. 3.1.2  2024-05-05 kkossev  - (dev. branch) added isSpammyDeviceProfile()
+ * ver. 3.1.3  2024-05-21 kkossev  - (dev. branch) skip processClusterAttributeFromDeviceProfile if cluster or attribute or value is missing
  *
+ *                                   TODO - updateStateUnknownDPs !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ *                                   TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
+ *                                   TODO: handle preferences of a type TEXT
+ *
 */
 
-static String deviceProfileLibVersion()   { '3.1.0' }
-static String deviceProfileLibStamp() { '2024/04/03 4:38 PM' }
+static String deviceProfileLibVersion()   { '3.1.3' }
+static String deviceProfileLibStamp() { '2024/05/21 10:53 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -75,10 +82,13 @@ metadata {
     }
 }
 
-String getDeviceProfile()    { state.deviceProfile ?: 'UNKNOWN' }
-Map getDEVICE()              { deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : deviceProfilesV2[getDeviceProfile()] }
-Set getDeviceProfiles()      { deviceProfilesV3?.keySet() ?: deviceProfilesV2?.keySet() }
-List<String> getDeviceProfilesMap()   { deviceProfilesV3.values().description as List<String> ?: deviceProfilesV2.values().description as List<String> }
+boolean is2in1() { return getDeviceProfile().contains('TS0601_2IN1') }
+
+String  getDeviceProfile()       { state.deviceProfile ?: 'UNKNOWN' }
+Map     getDEVICE()              { deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : deviceProfilesV2[getDeviceProfile()] }
+Set     getDeviceProfiles()      { deviceProfilesV3 != null ? deviceProfilesV3?.keySet() : deviceProfilesV2?.keySet() }
+List<String> getDeviceProfilesMap()   { deviceProfilesV3 != null ? deviceProfilesV3.values().description as List<String> : deviceProfilesV2.values().description as List<String> }
+
 // ---------------------------------- deviceProfilesV3 helper functions --------------------------------------------
 
 /**
@@ -86,13 +96,10 @@ List<String> getDeviceProfilesMap()   { deviceProfilesV3.values().description as
  * @param valueStr The profile description to search for.
  * @return The profile key if found, otherwise null.
  */
-
 String getProfileKey(final String valueStr) {
-    String key = deviceProfilesV3.find { _, profileMap -> profileMap.description == valueStr }?.key
-    if (key == null) {
-        key = deviceProfilesV3.find { _, profileMap -> profileMap.description == valueStr }?.key
-    }
-    return key
+    if (deviceProfilesV3 != null) { return deviceProfilesV3.find { _, profileMap -> profileMap.description == valueStr }?.key }
+    else if (deviceProfilesV2 != null) { return deviceProfilesV2.find { _, profileMap -> profileMap.description == valueStr }?.key }
+    else { return null }
 }
 
 /**
@@ -138,21 +145,20 @@ Map getPreferencesMapByName(final String param, boolean debug=false) {
 
 Map getAttributesMap(String attribName, boolean debug=false) {
     Map foundMap = [:]
-    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
-    def searchMap = []
+    List<Map> searchMapList = []
     if (debug) { logDebug "getAttributesMap: searching for attribute ${attribName} in tuyaDPs" }
-    if (DEVICE?.tuyaDPs != null) {
-        searchMap =  DEVICE?.tuyaDPs
-        foundMap = searchMap.find { it.name == attribName }
+    if (DEVICE?.tuyaDPs != null && DEVICE?.tuyaDPs != [:]) {
+        searchMapList =  DEVICE?.tuyaDPs
+        foundMap = searchMapList.find { it.name == attribName }
         if (foundMap != null) {
             if (debug) { logDebug "getAttributesMap: foundMap = ${foundMap}" }
             return foundMap
         }
     }
     if (debug) { logDebug "getAttributesMap: searching for attribute ${attribName} in attributes" }
-    if (DEVICE?.attributes != null) {
-        searchMap  =  DEVICE?.attributes
-        foundMap = searchMap.find { it.name == attribName }
+    if (DEVICE?.attributes != null && DEVICE?.attributes != [:]) {
+        searchMapList  =  DEVICE?.attributes
+        foundMap = searchMapList.find { it.name == attribName }
         if (foundMap != null) {
             if (debug) { logDebug "getAttributesMap: foundMap = ${foundMap}" }
             return foundMap
@@ -166,39 +172,24 @@ Map getAttributesMap(String attribName, boolean debug=false) {
  * Resets the device preferences to their default values.
  * @param debug A boolean indicating whether to output debug information.
  */
-void resetPreferencesToDefaults(boolean debug=false) {
-    logTrace "resetPreferencesToDefaults: DEVICE=${DEVICE?.description} preferences=${DEVICE?.preferences}"
+void resetPreferencesToDefaults(boolean debug=true) {
+    logDebug "resetPreferencesToDefaults: DEVICE=${DEVICE?.description} preferences=${DEVICE?.preferences}"
     Map preferences = DEVICE?.preferences
-    if (preferences == null || preferences.isEmpty()) {
-        logDebug 'Preferences not found!'
-        return
-    }
+    if (preferences == null || preferences.isEmpty()) { logDebug 'Preferences not found!' ; return }
     Map parMap = [:]
     preferences.each { parName, mapValue ->
         if (debug) { log.trace "$parName $mapValue" }
-        // TODO - could be also 'true' or 'false' ...
-        if (mapValue in [true, false]) {
-            logDebug "Preference ${parName} is predefined -> (${mapValue})"
-            // TODO - set the predefined value
-            /*
-            if (debug) log.info "par ${parName} defVal = ${parMap.defVal}"
-            device.updateSetting("${parMap.name}",[value:parMap.defVal, type:parMap.type])
-            */
+        if ((mapValue in [true, false]) || (mapValue in ['true', 'false'])) {
+            logDebug "Preference ${parName} is predefined -> (${mapValue})"     // what was the idea here?
             return // continue
         }
-        // find the individual preference map
-        parMap = getPreferencesMapByName(parName, false)
-        if (parMap?.isEmpty()) {
-            logDebug "Preference ${parName} not found in tuyaDPs or attributes map!"
-            return // continue
-        }
-        // parMap = [at:0xE002:0xE005, name:staticDetectionSensitivity, type:number, dt:UINT8, rw:rw, min:0, max:5, scale:1, unit:x, title:Static Detection Sensitivity, description:Static detection sensitivity]
-        if (parMap.defVal == null) {
-            logDebug "no default value for preference ${parName} !"
-            return // continue
-        }
-        if (debug) { log.info "par ${parName} defVal = ${parMap.defVal}" }
-        device.updateSetting("${parMap.name}", [value:parMap.defVal, type:parMap.type])
+        parMap = getPreferencesMapByName(parName, false)    // the individual preference map
+        if (parMap?.isEmpty()) { logDebug "Preference ${parName} not found in tuyaDPs or attributes map!";  return }    // continue
+        // at:'0x0406:0x0020', name:'fadingTime', type:'enum', dt: '0x21', rw: 'rw', min:15, max:999, defVal:'30', scale:1, unit:'seconds', map:[15:'15 seconds', 30:'30 seconds', 60:'60 seconds', 120:'120 seconds', 300:'300 seconds'], title:'<b>Fading Time</b>',   description:'<i>Radar fading time in seconds</i>'],
+        if (parMap.defVal == null) { logDebug "no default value for preference ${parName} !" ; return }     // continue
+        if (debug) { log.info "setting par ${parMap.name} defVal = ${parMap.defVal} (type:${parMap.type})" }
+        String str = parMap.name
+        device.updateSetting("$str", [value:parMap.defVal as String, type:parMap.type])
     }
     logInfo 'Preferences reset to default values'
 }
@@ -261,7 +252,7 @@ def getScaledPreferenceValue(String preference, Map dpMap) {
 
 // called from updated() method
 // TODO !!!!!!!!!! - refactor it !!!  IAS settings do not use Tuya DPs !!!
-void updateAllPreferences() {
+public void updateAllPreferences() {
     logDebug "updateAllPreferences: preferences=${DEVICE?.preferences}"
     if (DEVICE?.preferences == null || DEVICE?.preferences == [:]) {
         logDebug "updateAllPreferences: no preferences defined for device profile ${getDeviceProfile()}"
@@ -410,7 +401,7 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
  * @param val The parameter value.
  * @return true if the parameter was successfully set, false otherwise.
  */
-boolean setPar(final String parPar=null, final String val=null ) {
+public boolean setPar(final String parPar=null, final String val=null ) {
     List<String> cmds = []
     //Boolean validated = false
     logDebug "setPar(${parPar}, ${val})"
@@ -506,8 +497,8 @@ boolean setPar(final String parPar=null, final String val=null ) {
             return false
         }
         else {
-            logInfo "setPar: (2) successfluly executed setPar <b>$customSetFunction</b>(<b>$val</b> (scaledValue=${scaledValue}))"
-            sendZigbeeCommands( cmds )
+            logInfo "setPar: (2) sending parameter <b>$par</b> (<b>$val</b> (scaledValue=${scaledValue}))"
+            sendZigbeeCommands(cmds)
             return false
         }
     }
@@ -516,7 +507,7 @@ boolean setPar(final String parPar=null, final String val=null ) {
         int cluster
         int attribute
         int dt
-        String mfgCode
+        String mfgCodeString = ''
         try {
             cluster = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(':')[0])
             //log.trace "cluster = ${cluster}"
@@ -524,16 +515,16 @@ boolean setPar(final String parPar=null, final String val=null ) {
             //log.trace "attribute = ${attribute}"
             dt = dpMap.dt != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.dt) : null
             //log.trace "dt = ${dt}"
-            mfgCode = dpMap.mfgCode
+            mfgCodeString = dpMap.mfgCode
         //log.trace "mfgCode = ${dpMap.mfgCode}"
         }
         catch (e) {
             logWarn "setPar: Exception '${e}' caught while splitting cluser and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val}))"
             return false
         }
-        Map mapMfCode = ['mfgCode':mfgCode]
-        logDebug "setPar: found cluster=0x${zigbee.convertToHexString(cluster, 2)} attribute=0x${zigbee.convertToHexString(attribute, 2)} dt=${dpMap.dt} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
-        if (mfgCode != null) {
+        Map mapMfCode = ['mfgCode':mfgCodeString]
+        logDebug "setPar: found cluster=0x${zigbee.convertToHexString(cluster, 2)} attribute=0x${zigbee.convertToHexString(attribute, 2)} dt=${dpMap.dt} mfgCodeString=${mfgCodeString} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
+        if (mfgCodeString != null && mfgCodeString != '') {
             cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, mapMfCode, delay = 200)
         }
         else {
@@ -583,7 +574,7 @@ List<String> sendTuyaParameter( Map dpMap, String par, tuyaValue) {
 }
 
 /* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
-boolean sendAttribute(String par=null, val=null ) {
+public boolean sendAttribute(String par=null, val=null ) {
     List<String> cmds = []
     //Boolean validated = false
     logDebug "sendAttribute(${par}, ${val})"
@@ -714,7 +705,7 @@ boolean sendAttribute(String par=null, val=null ) {
  * @param val     - The value to send with the command, can be null.
  * @return true on success, false otherwise.
  */
-boolean sendCommand(final String command_orig=null, final String val_orig=null) {
+public boolean sendCommand(final String command_orig=null, final String val_orig=null) {
     //logDebug "sending command ${command}(${val}))"
     final String command = command_orig?.trim()
     final String val = val_orig?.trim()
@@ -908,6 +899,7 @@ void setDeviceNameAndProfile(String model=null, String manufacturer=null) {
     }
 }
 
+// TODO!
 List<String> refreshDeviceProfile() {
     List<String> cmds = []
     if (cmds == []) { cmds = ['delay 299'] }
@@ -915,6 +907,7 @@ List<String> refreshDeviceProfile() {
     return cmds
 }
 
+// TODO !
 List<String> configureDeviceProfile() {
     List<String> cmds = []
     logDebug "configureDeviceProfile() : ${cmds}"
@@ -922,6 +915,7 @@ List<String> configureDeviceProfile() {
     return cmds
 }
 
+// TODO
 List<String> initializeDeviceProfile() {
     List<String> cmds = []
     logDebug "initializeDeviceProfile() : ${cmds}"
@@ -929,8 +923,8 @@ List<String> initializeDeviceProfile() {
     return cmds
 }
 
-void initVarsDeviceProfile(boolean fullInit=false) {
-    logDebug "initVarsDeviceProfile(${fullInit})"
+public void deviceProfileInitializeVars(boolean fullInit=false) {
+    logDebug "deviceProfileInitializeVars(${fullInit})"
     if (state.deviceProfile == null) {
         setDeviceNameAndProfile()
     }
@@ -947,7 +941,7 @@ void initEventsDeviceProfile(boolean fullInit=false) {
 // returns: true  - do not process this message if the spammy DP is defined in the spammyDPsToIgnore element of the active Device Profule
 //          false - the processing can continue
 //
-boolean isSpammyDPsToIgnore(Map descMap) {
+public boolean isSpammyDPsToIgnore(Map descMap) {
     //log.trace "isSpammyDPsToIgnore: ${state.deviceProfile == 'TS0225_LINPTECH_RADAR'} ${descMap.cluster == 'E002'} ${descMap.attrId == 'E00A'} ${settings?.ignoreDistance == true}"
     if (state.deviceProfile == 'TS0225_LINPTECH_RADAR' && descMap.cluster == 'E002' && descMap.attrId == 'E00A' && settings?.ignoreDistance == true) { return true }
     if (!(descMap?.clusterId == 'EF00' && (descMap?.command in ['01', '02']))) { return false }
@@ -962,7 +956,7 @@ boolean isSpammyDPsToIgnore(Map descMap) {
 // returns: true  - do not generate Debug log messages if the chatty DP is defined in the spammyDPsToNotTrace element of the active Device Profule
 //          false - debug logs can be generated
 //
-boolean isSpammyDPsToNotTrace(Map descMap) {
+public boolean isSpammyDPsToNotTrace(Map descMap) {
     //log.trace "isSpammyDPsToNotTrace: ${state.deviceProfile == 'TS0225_LINPTECH_RADAR'} ${descMap.cluster == 'E002'} ${descMap.attrId == 'E00A'} ${settings?.ignoreDistance == true}"
     if (state.deviceProfile == 'TS0225_LINPTECH_RADAR' && descMap.cluster == 'E002' && descMap.attrId == 'E00A' && settings?.ignoreDistance == true) { return true }
     if (!(descMap?.clusterId == 'EF00' && (descMap?.command in ['01', '02']))) { return false }
@@ -972,12 +966,19 @@ boolean isSpammyDPsToNotTrace(Map descMap) {
     return (spammyList != null && (dp in spammyList))
 }
 
+// all DPs are spammy - sent periodically!
+public boolean isSpammyDeviceProfile() {
+    if (deviceProfilesV3 == null || deviceProfilesV3[getDeviceProfile()] == null) { return false }
+    Boolean isSpammy = deviceProfilesV3[getDeviceProfile()]?.device?.isSpammy ?: false
+    return isSpammy
+}
+
 /* groovylint-disable-next-line UnusedMethodParameter */
 List<Object> compareAndConvertStrings(final Map foundItem, String tuyaValue, String hubitatValue) {
     String convertedValue = tuyaValue
     boolean isEqual    = ((tuyaValue  as String) == (hubitatValue as String))      // because the events(attributes) are always strings
     if (foundItem?.scale != null || foundItem?.scale != 0 || foundItem?.scale != 1) {
-        log.warn "compareAndConvertStrings: scaling: foundItem.scale=${foundItem.scale} tuyaValue=${tuyaValue} hubitatValue=${hubitatValue}"
+        logTrace "compareAndConvertStrings: scaling: foundItem.scale=${foundItem.scale} tuyaValue=${tuyaValue} hubitatValue=${hubitatValue}"
     }
     return [isEqual, convertedValue]
 }
@@ -1103,12 +1104,22 @@ List<Object> compareAndConvertTuyaToHubitatEventValue(Map foundItem, int fncmd, 
             (isEqual, hubitatEventValue) = compareAndConvertStrings(foundItem, foundItem.map[fncmd as int] ?: 'unknown', device.currentValue(foundItem.name) ?: 'unknown')
             break
         case 'enum' :       // [0:"inactive", 1:"active"]  foundItem.map=[75:0.75 meters, 150:1.50 meters, 225:2.25 meters, 300:3.00 meters, 375:3.75 meters, 450:4.50 meters]
-            logTrace "compareAndConvertTuyaToHubitatEventValue: enum: foundItem.scale=${foundItem.scale}, fncmd=${fncmd}, device.currentValue(foundItem.name)=${(device.currentValue(foundItem.name))}"
-            (isEqual, hubitatEventValue) = compareAndConvertEnumKeys(foundItem, fncmd, device.currentValue(foundItem.name))
+            logTrace "compareAndConvertTuyaToHubitatEventValue: enum: foundItem.scale=${foundItem.scale}, fncmd=${fncmd}, device.currentValue(${foundItem.name})=${(device.currentValue(foundItem.name))} map=${foundItem.map}"
+            Object latestEvent = device.currentState(foundItem.name)
+            String dataType = latestEvent?.dataType
+            logTrace "latestEvent is dataType is ${dataType}"
+            // if the attribute is of a type enum, the value is a string. Compare the string values!
+            if (dataType == 'ENUM') {
+                (isEqual, hubitatEventValue) = compareAndConvertStrings(foundItem, foundItem.map[fncmd as int] ?: 'unknown', device.currentValue(foundItem.name) ?: 'unknown')
+            }
+            else {
+                (isEqual, hubitatEventValue) = compareAndConvertEnumKeys(foundItem, fncmd, device.currentValue(foundItem.name))
+            }
             logTrace "compareAndConvertTuyaToHubitatEventValue: after compareAndConvertStrings: isEqual=${isEqual} hubitatEventValue=${hubitatEventValue}"
             break
         case 'value' :      // depends on foundItem.scale
         case 'number' :
+            //logTrace "compareAndConvertTuyaToHubitatEventValue: foundItem.scale=${foundItem.scale} fncmd=${fncmd} device.currentValue(${foundItem.name})=${(device.currentValue(foundItem.name))}"
             (isEqual, hubitatEventValue) = compareAndConvertNumbers(foundItem, safeToInt(fncmd), safeToInt(device.currentValue(foundItem.name)))
             break
         case 'decimal' :
@@ -1122,7 +1133,7 @@ List<Object> compareAndConvertTuyaToHubitatEventValue(Map foundItem, int fncmd, 
     return [isEqual, hubitatEventValue]
 }
 
-Integer preProc(final Map foundItem, int fncmd_orig) {
+public Integer preProc(final Map foundItem, int fncmd_orig) {
     Integer fncmd = fncmd_orig
     if (foundItem == null) { return fncmd }
     if (foundItem.preProc == null) { return fncmd }
@@ -1158,13 +1169,13 @@ Integer preProc(final Map foundItem, int fncmd_orig) {
  * @param dp_len The length of the received DP.
  * @return true if the DP was processed successfully, false otherwise.
  */
-boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, final int dp_id, final int fncmd_orig, final int dp_len) {
+/* groovylint-disable-next-line UnusedMethodParameter */
+public boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, final int dp_id, final int fncmd_orig, final int dp_len) {
     int fncmd = fncmd_orig
     if (state.deviceProfile == null)  { return false }
-    //if (!(DEVICE?.device?.type == "radar"))      { return false }   // enabled for all devices - 10/22/2023 !!!    // only these models are handled here for now ...
     if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status)
 
-    Map tuyaDPsMap = deviceProfilesV3[state.deviceProfile]?.tuyaDPs as Map
+    List<Map> tuyaDPsMap = deviceProfilesV3[state.deviceProfile]?.tuyaDPs
     if (tuyaDPsMap == null || tuyaDPsMap == [:]) { return false }    // no any Tuya DPs defined in the Device Profile
 
     Map foundItem = null
@@ -1176,18 +1187,18 @@ boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, final in
     }
     if (foundItem == null || foundItem == [:]) {
         // DP was not found into the tuyaDPs list for this particular deviceProfile
-        updateStateUnknownDPs(descMap, dp, dp_id, fncmd, dp_len)
+//      updateStateUnknownDPs(descMap, dp, dp_id, fncmd, dp_len)    // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!
         // continue processing the DP report in the old code ...
         return false
     }
-
-    return processFoundItem(foundItem, fncmd_orig)
+    return processFoundItem(foundItem, fncmd, isSpammyDPsToNotTrace(descMap))
 }
 
 // TODO: refactor!
 public boolean processClusterAttributeFromDeviceProfile(final Map descMap) {
     logTrace "processClusterAttributeFromDeviceProfile: descMap = ${descMap}"
     if (state.deviceProfile == null)  { logTrace '<b>state.deviceProfile is missing!<b>'; return false }
+    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return false }
 
     List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes
     if (attribMap == null || attribMap.isEmpty()) { return false }    // no any attributes are defined in the Device Profile
@@ -1216,12 +1227,12 @@ public boolean processClusterAttributeFromDeviceProfile(final Map descMap) {
         logTrace "processClusterAttributeFromDeviceProfile: clusterAttribute ${clusterAttribute} was not found in the attributes list for this deviceProfile ${DEVICE?.description}"
         return false
     }
-    return processFoundItem(foundItem, value)
+    return processFoundItem(foundItem, value, isSpammyDPsToNotTrace(descMap))
 }
 
 // modifies the value of the foundItem if needed !!!
 /* groovylint-disable-next-line MethodParameterTypeRequired */
-boolean processFoundItem(final Map foundItem, int value) {
+boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = false) {
     if (foundItem == null) { return false }
     // added 10/31/2023 - preProc the attribute value if needed
     if (foundItem.preProc != null) {
@@ -1254,7 +1265,6 @@ boolean processFoundItem(final Map foundItem, int value) {
     boolean isAttribute = device.hasAttribute(foundItem.name)    // check if there is such a attribute for this clusterAttribute
     boolean isEqual = false
     boolean wasChanged = false
-    boolean doNotTrace = false  // isSpammyDPsToNotTrace(descMap)          // do not log/trace the spammy clusterAttribute's TODO!
     if (!doNotTrace) {
         logTrace "processFoundItem: name=${foundItem.name}, isAttribute=${isAttribute}, preferenceExists=${preferenceExists}, existingPrefValue=${existingPrefValue} (type ${foundItem.type}, rw=${foundItem.rw}) value is ${value} (description: ${foundItem.description})"
     }
@@ -1269,8 +1279,8 @@ boolean processFoundItem(final Map foundItem, int value) {
     if (!isAttribute && !preferenceExists) {                    // if the previous value of this clusterAttribute is not stored anywhere - just seend an Info log if Debug is enabled
         if (!doNotTrace) {                                      // only if the clusterAttribute is not in the spammy list
             logTrace "processFoundItem: no preference or attribute for ${name} - just log the value, if not equal to the last one..."
-            (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, value, doNotTrace)
-            descText  = "${name} is ${valueScaled} ${unitText}"
+            // TODO - scaledValue ?????
+            descText  = "${name} is ${value} ${unitText}"
             if (settings.logEnable) { logInfo "${descText }" }  // only when Debug is enabled!
         }
         // no more processing is needed, as this clusterAttribute is not a preference and not an attribute
@@ -1278,19 +1288,22 @@ boolean processFoundItem(final Map foundItem, int value) {
     }
 
     // first, check if there is a preference defined to be updated
-    if (preferenceExists) {
+    if (preferenceExists && !doNotTrace) {  // do not even try to automatically update the preference if it is in the spammy list! - added 04/23/2024
         // preference exists and its's value is extracted
         (isEqual, preferenceValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, value, existingPrefValue)
-        //log.trace "processFoundItem: preference '${name}' exists with existingPrefValue ${existingPrefValue} (type ${foundItem.type}) -> <b>isEqual=${isEqual} preferenceValue=${preferenceValue}</b>"
-        if (isEqual == true) {                                 // the clusterAttribute value is the same as the preference value - no need to update the preference
-            logDebug "no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
+        logTrace "processFoundItem: preference '${name}' exists with existingPrefValue ${existingPrefValue} (type ${foundItem.type}) -> <b>isEqual=${isEqual} preferenceValue=${preferenceValue}</b>"
+        if (isEqual == true) {
+            //log.trace "doNotTrace=${doNotTrace} isSpammyDeviceProfile=${isSpammyDeviceProfile()}"
+            if (!(doNotTrace || isSpammyDeviceProfile())) {                                 // the clusterAttribute value is the same as the preference value - no need to update the preference
+                logDebug "processFoundItem: no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
+            }
         }
         else {
             String scaledPreferenceValue = preferenceValue      //.toString() is not neccessary
             if (foundItem.type == 'enum' && foundItem.scale != null && foundItem.scale != 0 && foundItem.scale != 1) {
                 scaledPreferenceValue = ((preferenceValue * safeToInt(foundItem.scale)) as int).toString()
             }
-            logDebug "preference '${name}' value ${existingPrefValue} <b>differs</b> from the new scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
+            logDebug "processFoundItem: preference '${name}' value ${existingPrefValue} <b>differs</b> from the new scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
             if (settings.logEnable) { logInfo "updating the preference '${name}' from ${existingPrefValue} to ${preferenceValue} (scaledPreferenceValue=${scaledPreferenceValue}, type=${foundItem.type})" }
             try {
                 device.updateSetting("${name}", [value:scaledPreferenceValue, type:foundItem.type])
@@ -1309,17 +1322,17 @@ boolean processFoundItem(final Map foundItem, int value) {
 
     // second, send an event if this is declared as an attribute!
     if (isAttribute) {                                         // this clusterAttribute has an attribute that must be sent in an Event
-        logTrace "attribute '${name}' exists (type ${foundItem.type})"
         (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, value, doNotTrace)
+        if (isEqual == false) { logTrace "attribute '${name}' exists (type ${foundItem.type}), value ${value} -> <b>isEqual=${isEqual} valueScaled=${valueScaled}</b> wasChanged=${wasChanged}" }
         descText  = "${name} is ${valueScaled} ${unitText}"
         if (settings?.logEnable == true) { descText += " (raw:${value})" }
-
+        if (state.states != null && state.states['isRefresh'] == true) { descText += ' [refresh]' }
         if (isEqual && !wasChanged) {                        // this DP report has the same value as the last one - just send a debug log and move along!
             if (!doNotTrace) {
-                if (settings.logEnable) { logInfo "${descText } (no change)" }
+                if (settings.logEnable) { logDebug "${descText } (no change)" }
             }
             // patch for inverted motion sensor 2-in-1
-            if (name == 'motion' && is2in1()) {
+            if (name == 'motion' && is2in1()) {                 // TODO - remove the patch !!
                 logDebug 'patch for inverted motion sensor 2-in-1'
             // continue ...
             }
@@ -1334,7 +1347,7 @@ boolean processFoundItem(final Map foundItem, int value) {
         }
 
         // clusterAttribute value (value) is not equal to the attribute last value or was changed- we must send an event!
-
+        //log.trace 'sending event'
         int divider = safeToInt(foundItem.scale ?: 1) ?: 1
         float valueCorrected = value / divider
         if (!doNotTrace) { logTrace "value=${value} foundItem.scale=${foundItem.scale}  divider=${divider} valueCorrected=${valueCorrected}" }
@@ -1343,7 +1356,7 @@ boolean processFoundItem(final Map foundItem, int value) {
         else {
             switch (name) {
                 case 'motion' :
-                    handleMotion(motionActive = value)  // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    handleMotion(value as boolean)  // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                     break
                 case 'temperature' :
                     //temperatureEvent(value / getTemperatureDiv())
@@ -1353,8 +1366,9 @@ boolean processFoundItem(final Map foundItem, int value) {
                     handleHumidityEvent(valueScaled)
                     break
                 case 'illuminance' :
-                case 'illuminance_lux' :
-                    handleIlluminanceEvent(valueCorrected.toInteger())
+                case 'illuminance_lux' :    // ignore the IAS Zone illuminance reports for HL0SS9OA and 2AAELWXK
+                    //log.trace "illuminance event received deviceProfile is ${getDeviceProfile()} value=${value} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
+                    handleIlluminanceEvent(valueCorrected as int)
                     break
                 case 'pushed' :
                     logDebug "button event received value=${value} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
@@ -1363,8 +1377,8 @@ boolean processFoundItem(final Map foundItem, int value) {
                 default :
                     sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
                     if (!doNotTrace) {
-                        logDebug "event ${name} sent w/ value ${valueScaled}"
-                        logInfo "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
+                        logTrace "event ${name} sent w/ value ${valueScaled}"
+                        logInfo "${descText}"   // TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
                     }
                     break
             }
@@ -1375,7 +1389,7 @@ boolean processFoundItem(final Map foundItem, int value) {
     return true
 }
 
-boolean validateAndFixPreferences(boolean debug=false) {
+public boolean validateAndFixPreferences(boolean debug=false) {
     if (debug) { logTrace "validateAndFixPreferences: preferences=${DEVICE?.preferences}" }
     if (DEVICE?.preferences == null || DEVICE?.preferences == [:]) {
         logDebug "validateAndFixPreferences: no preferences defined for device profile ${getDeviceProfile()}"
@@ -1456,10 +1470,10 @@ boolean validateAndFixPreferences(boolean debug=false) {
     return true
 }
 
-void printFingerprints() {
+public void printFingerprints() {
     deviceProfilesV3.each { profileName, profileMap ->
         profileMap.fingerprints?.each { fingerprint ->
-            logInfo fingerprint
+            logInfo "${fingerprint}"
         }
     }
 }

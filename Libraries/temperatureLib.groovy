@@ -1,14 +1,8 @@
 /* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
-    base: 'driver',
-    author: 'Krassimir Kossev',
-    category: 'zigbee',
-    description: 'Zigbee Temperature Library',
-    name: 'temperatureLib',
-    namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/temperatureLib.groovy',
-    version: '3.0.0',
-    documentationLink: ''
+    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Temperature Library', name: 'temperatureLib', namespace: 'kkossev',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/temperatureLib.groovy', documentationLink: '',
+    version: '3.2.0'
 )
 /*
  *  Zigbee Temperature Library
@@ -23,12 +17,14 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added temperatureLib.groovy
+ * ver. 3.0.1  2024-04-19 kkossev  - temperature rounding fix
+ * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment
  *
  *                                   TODO:
 */
 
-static String temperatureLibVersion()   { '3.0.0' }
-static String temperatureLibStamp() { '2024/04/06 11:49 PM' }
+static String temperatureLibVersion()   { '3.2.0' }
+static String temperatureLibStamp() { '2024/05/21 5:04 PM' }
 
 metadata {
     capability 'TemperatureMeasurement'
@@ -47,7 +43,7 @@ metadata {
     }
 }
 
-void customParseTemperatureCluster(final Map descMap) {
+void standardParseTemperatureCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     int value = hexStrToSignedInt(descMap.value)
     handleTemperatureEvent(value / 100.0F as BigDecimal)
@@ -55,17 +51,17 @@ void customParseTemperatureCluster(final Map descMap) {
 
 void handleTemperatureEvent(BigDecimal temperaturePar, boolean isDigital=false) {
     Map eventMap = [:]
-    BigDecimal temperature = safeToBigDecimal(temperaturePar)
+    BigDecimal temperature = safeToBigDecimal(temperaturePar).setScale(2, BigDecimal.ROUND_HALF_UP)
     if (state.stats != null) { state.stats['tempCtr'] = (state.stats['tempCtr'] ?: 0) + 1 } else { state.stats = [:] }
     eventMap.name = 'temperature'
     if (location.temperatureScale == 'F') {
-        temperature = (temperature * 1.8) + 32
+        temperature = ((temperature * 1.8) + 32).setScale(2, BigDecimal.ROUND_HALF_UP)
         eventMap.unit = '\u00B0F'
     }
     else {
         eventMap.unit = '\u00B0C'
     }
-    BigDecimal tempCorrected = (temperature + safeToBigDecimal(settings?.temperatureOffset ?: 0))
+    BigDecimal tempCorrected = (temperature + safeToBigDecimal(settings?.temperatureOffset ?: 0)).setScale(2, BigDecimal.ROUND_HALF_UP)
     eventMap.value = tempCorrected.setScale(1, BigDecimal.ROUND_HALF_UP)
     BigDecimal lastTemp = device.currentValue('temperature') ?: 0
     logTrace "lastTemp=${lastTemp} tempCorrected=${tempCorrected} delta=${Math.abs(lastTemp - tempCorrected)}"
