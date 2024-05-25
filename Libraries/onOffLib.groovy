@@ -1,4 +1,4 @@
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee OnOff Cluster Library', name: 'onOffLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/onOffLib.groovy', documentationLink: '',
@@ -34,7 +34,9 @@ metadata {
     }
     // no commands
     preferences {
-        if (advancedOptions == true) {
+        if (settings?.advancedOptions == true) {
+            input(name: 'ignoreDuplicated', type: 'bool', title: '<b>Ignore Duplicated Switch Events</b>', description: '<i>Some switches and plugs send periodically the switch status as a heart-beet </i>', defaultValue: true)
+            input(name: 'alwaysOn', type: 'bool', title: '<b>Always On</b>', description: '<i>Disable switching OFF for plugs that must be always On</i>', defaultValue: false)
             if (_THREE_STATE == true) {
                 input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>Experimental multi-state switch events</i>', defaultValue: false
             }
@@ -214,7 +216,7 @@ void sendSwitchEvent(int switchValuePar) {
 void parseOnOffAttributes(final Map it) {
     logDebug "OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}"
     /* groovylint-disable-next-line VariableTypeRequired */
-    def mode
+    String mode
     String attrName
     if (it.value == null) {
         logDebug "OnOff attribute ${it.attrId} cluster ${it.cluster } skipping NULL value status=${it.status}"
@@ -266,20 +268,16 @@ void parseOnOffAttributes(final Map it) {
     if (settings?.logEnable) { logInfo "${attrName} is ${mode}" }
 }
 
-
 List<String> onOffRefresh() {
-    logDebug "onOffRefresh()"
+    logDebug 'onOffRefresh()'
     List<String> cmds = []
     cmds = zigbee.readAttribute(0x0006, 0x0000, [:], delay = 100)
     return cmds
 }
 
-
 void onOfInitializeVars( boolean fullInit = false ) {
     logDebug "onOfInitializeVars()... fullInit = ${fullInit}"
+    if (fullInit || settings?.ignoreDuplicated == null) { device.updateSetting('ignoreDuplicated', true) }
     if (fullInit || settings?.alwaysOn == null) { device.updateSetting('alwaysOn', false) }
     if ((fullInit || settings?.threeStateEnable == null) && _THREE_STATE == true) { device.updateSetting('threeStateEnable', false) }
 }
-
-
-

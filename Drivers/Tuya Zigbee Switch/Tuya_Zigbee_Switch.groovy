@@ -25,7 +25,7 @@
  * ver. 3.0.3  2024-02-24 kkossev  - (dev. branch) commonLib 3.0.3 allignment
  * ver. 3.0.7  2024-04-18 kkossev  - (dev. branch) commonLib 3.0.7 and groupsLib allignment
  * ver. 3.1.1  2024-05-15 kkossev  - added SONOFF ZBMicro; commonLib 3.1.1 allignment; Groovy linting;
- * ver. 3.2.0  2024-05-23 kkossev  - (dev. branch) commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-05-25 kkossev  - (dev. branch) commonLib 3.2.0 allignment
  *
  *                                   TODO: Sonof ZBMINIL2 :zigbee read BASIC_CLUSTER attribute 0x0001 error: Unsupported Attribute
  *                                   TODO: add toggle() command; initialize 'switch' to unknown
@@ -35,7 +35,7 @@
  */
 
 static String version() { '3.2.0' }
-static String timeStamp() { '2024/05/23 11:04 PM' }
+static String timeStamp() { '2024/05/25 7:31 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -52,6 +52,7 @@ deviceType = 'Switch'
 
 #include kkossev.commonLib
 #include kkossev.onOffLib
+#include kkossev.reportingLib
 #include kkossev.groupsLib
 
 metadata {
@@ -60,22 +61,7 @@ metadata {
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Switch/Tuya_Zigbee_Switch_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
-        if (_DEBUG) {
-            command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
-            command 'parseTest', [[name: 'parseTest', type: 'STRING', description: 'parseTest', defaultValue : '']]
-            command 'tuyaTest', [
-                [name:'dpCommand', type: 'STRING', description: 'Tuya DP Command', constraints: ['STRING']],
-                [name:'dpValue',   type: 'STRING', description: 'Tuya DP value', constraints: ['STRING']],
-                [name:'dpType',    type: 'ENUM',   constraints: ['DP_TYPE_VALUE', 'DP_TYPE_BOOL', 'DP_TYPE_ENUM'], description: 'DP data type']
-            ]
-        }
-        capability 'Actuator'
-        capability 'Switch'
-        if (_THREE_STATE == true) {
-            attribute 'switch', 'enum', SwitchThreeStateOpts.options.values() as List<String>
-        }
-
-        // deviceType specific capabilities, commands and attributes
+        // all the capabilities are already declared in the libraries
 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0006,0007,0B05,FC57', outClusters:'0019', model:'ZBMINIL2', manufacturer:'SONOFF', deviceJoinName: 'SONOFF ZBMINIL2'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,0008,1000,FC7C', outClusters:'0005,0019,0020,1000', model:'TRADFRI control outlet', manufacturer:'IKEA of Sweden', deviceJoinName: 'TRADFRI control outlet'
@@ -88,21 +74,9 @@ metadata {
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
-        input(name: 'alwaysOn', type: 'bool', title: '<b>Always On</b>', description: '<i>Disable switching OFF for plugs that must be always On</i>', defaultValue: false)
-        if (advancedOptions == true || advancedOptions == true) {
-            input(name: 'ignoreDuplicated', type: 'bool', title: '<b>Ignore Duplicated Switch Events</b>', description: '<i>Some switches and plugs send periodically the switch status as a heart-beet </i>', defaultValue: false)
-        }
     }
 }
 
-@Field static final String ONOFF = 'Switch'
-@Field static final String POWER = 'Power'
-@Field static final String INST_POWER = 'InstPower'
-@Field static final String ENERGY = 'Energy'
-@Field static final String VOLTAGE = 'Voltage'
-@Field static final String AMPERAGE = 'Amperage'
-@Field static final String FREQUENCY = 'Frequency'
-@Field static final String POWER_FACTOR = 'PowerFactor'
 
 boolean isZBMINIL2()   { return (device?.getDataValue('model') ?: 'n/a') in ['ZBMINIL2'] }
 
@@ -160,105 +134,6 @@ void customParseMeteringCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     int value = hexStrToUnsignedInt(descMap.value)
     logDebug "customParseMeteringCluster: (0x0702)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
-}
-
-List<String> configureReporting(String operation, String measurement,  String minTime='0', String maxTime='0', String delta='0', Boolean sendNow=true ) {
-    int intMinTime = safeToInt(minTime)
-    int intMaxTime = safeToInt(maxTime)
-    int intDelta = safeToInt(delta)
-    String epString = state.destinationEP
-    Integer ep = safeToInt(epString)
-    if (ep == null || ep == 0) {
-        ep = 1
-        epString = '01'
-    }
-
-    logDebug "configureReporting operation=${operation}, measurement=${measurement}, minTime=${intMinTime}, maxTime=${intMaxTime}, delta=${intDelta} )"
-
-    List<String> cmds = []
-
-    switch (measurement) {
-        case ONOFF :
-            if (operation == 'Write') {
-                cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${epString} 0x01 0x0006 {${device.zigbeeId}} {}", 'delay 251', ]
-                cmds += ["he cr 0x${device.deviceNetworkId} 0x${epString} 6 0 16 ${intMinTime} ${intMaxTime} {}", 'delay 251', ]
-            }
-            else if (operation == 'Disable') {
-                cmds += ["he cr 0x${device.deviceNetworkId} 0x${epString} 6 0 16 65535 65535 {}", 'delay 251', ]    // disable switch automatic reporting
-            }
-            cmds +=  zigbee.reportingConfiguration(0x0006, 0x0000, [destEndpoint :ep], 251)    // read it back
-            break
-        case ENERGY :    // default delta = 1 Wh (0.001 kWh)
-            if (operation == 'Write') {
-                cmds += zigbee.configureReporting(0x0702, 0x0000,  DataType.UINT48, intMinTime, intMaxTime, (intDelta * getEnergyDiv() as int))
-            }
-            else if (operation == 'Disable') {
-                cmds += zigbee.configureReporting(0x0702, 0x0000,  DataType.UINT48, 0xFFFF, 0xFFFF, 0x0000)    // disable energy automatic reporting - tested with Frient
-            }
-            cmds += zigbee.reportingConfiguration(0x0702, 0x0000, [destEndpoint :ep], 252)
-            break
-        case INST_POWER :        // 0x702:0x400
-            if (operation == 'Write') {
-                cmds += zigbee.configureReporting(0x0702, 0x0400,  DataType.INT16, intMinTime, intMaxTime, (intDelta * getPowerDiv() as int))
-            }
-            else if (operation == 'Disable') {
-                cmds += zigbee.configureReporting(0x0702, 0x0400,  DataType.INT16, 0xFFFF, 0xFFFF, 0x0000)    // disable power automatic reporting - tested with Frient
-            }
-            cmds += zigbee.reportingConfiguration(0x0702, 0x0400, [destEndpoint :ep], 253)
-            break
-        case POWER :        // Active power default delta = 1
-            if (operation == 'Write') {
-                cmds += zigbee.configureReporting(0x0B04, 0x050B,  DataType.INT16, intMinTime, intMaxTime, (intDelta * getPowerDiv() as int) )   // bug fixes in ver  1.6.0 - thanks @guyee
-            }
-            else if (operation == 'Disable') {
-                cmds += zigbee.configureReporting(0x0B04, 0x050B,  DataType.INT16, 0xFFFF, 0xFFFF, 0x8000)    // disable power automatic reporting - tested with Frient
-            }
-            cmds += zigbee.reportingConfiguration(0x0B04, 0x050B, [destEndpoint :ep], 254)
-            break
-        case VOLTAGE :    // RMS Voltage default delta = 1
-            if (operation == 'Write') {
-                cmds += zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT16, intMinTime, intMaxTime, (intDelta * getVoltageDiv() as int))
-            }
-            else if (operation == 'Disable') {
-                cmds += zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT16, 0xFFFF, 0xFFFF, 0xFFFF)    // disable voltage automatic reporting - tested with Frient
-            }
-            cmds += zigbee.reportingConfiguration(0x0B04, 0x0505, [destEndpoint :ep], 255)
-            break
-        case AMPERAGE :    // RMS Current default delta = 100 mA = 0.1 A
-            if (operation == 'Write') {
-                cmds += zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT16, intMinTime, intMaxTime, (intDelta * getCurrentDiv() as int))
-            }
-            else if (operation == 'Disable') {
-                cmds += zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT16, 0xFFFF, 0xFFFF, 0xFFFF)    // disable amperage automatic reporting - tested with Frient
-            }
-            cmds += zigbee.reportingConfiguration(0x0B04, 0x0508, [destEndpoint :ep], 256)
-            break
-        case FREQUENCY :    // added 03/27/2023
-            if (operation == 'Write') {
-                cmds += zigbee.configureReporting(0x0B04, 0x0300,  DataType.UINT16, intMinTime, intMaxTime, (intDelta * getFrequencyDiv() as int))
-            }
-            else if (operation == 'Disable') {
-                cmds += zigbee.configureReporting(0x0B04, 0x0300,  DataType.UINT16, 0xFFFF, 0xFFFF, 0xFFFF)    // disable frequency automatic reporting - tested with Frient
-            }
-            cmds += zigbee.reportingConfiguration(0x0B04, 0x0300, [destEndpoint :ep], 257)
-            break
-        case POWER_FACTOR : // added 03/27/2023
-            if (operation == 'Write') {
-                cmds += zigbee.configureReporting(0x0B04, 0x0510,  DataType.UINT16, intMinTime, intMaxTime, (intDelta * getPowerFactorDiv() as int))
-            }
-            cmds += zigbee.reportingConfiguration(0x0B04, 0x0510, [destEndpoint :ep], 258)
-            break
-        default :
-            break
-    }
-    if (cmds != null) {
-        if (sendNow == true) {
-            sendZigbeeCommands(cmds)
-        }
-        else {
-            return cmds
-        }
-    }
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////

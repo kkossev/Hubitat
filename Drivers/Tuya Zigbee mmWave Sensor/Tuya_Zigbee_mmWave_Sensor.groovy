@@ -23,7 +23,8 @@
  * ver. 3.1.2  2024-05-08 kkossev  - added _TZ3218_t9ynfz4x as a new Linptech manufacturer; fixed HL0SS9OA and 2AAELWXK wrong IAS illuminance reprots; existance_time reanmed to occupiedTime
  * ver. 3.1.3  2024-05-11 kkossev  - added TS0601 _TZE204_7gclukjs; fixed debug trace logging;
  * ver. 3.1.4  2024-05-14 kkossev  - added TS0601_24GHZ_PIR_RADAR profile TS0601 _TZE200_2aaelwxk and TS0601 _TZE200_kb5noeto for tests; added TS0601 _TZE204_fwondbzy; 
- * ver. 3.2.0  2024-05-24 kkossev  - (dev.branch) commonLib 2.0 allignment
+ * ver. 3.2.0  2024-05-24 kkossev  - commonLib 2.0 allignment
+ * ver. 3.2.1  2024-05-25 kkossev  - Tuya radars bug fix
  *                                   
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
  *                                   TODO: cleanup the 4-in-1 state variables.
@@ -40,8 +41,8 @@
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
 */
 
-static String version() { "3.2.0" }
-static String timeStamp() {"2024/05/24 6:07 PM"}
+static String version() { "3.2.1" }
+static String timeStamp() {"2024/05/25 9:57 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -995,13 +996,7 @@ void customParseZdoClusters(final Map descMap){
 }
 
 void customParseTuyaCluster(final Map descMap) {
-    if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '11') {}
-        if (getDeviceProfile() == 'TS0601_BLACK_SQUARE_RADAR') {
-        updateInidicatorLight()
-    }
-    else {
-        logDebug "customParseTuyaCluster: received Tuya cluster <b>command ${descMap.command}</b>"
-    }
+    standardParseTuyaCluster(descMap)  // commonLib
 }
 
 void customParseIlluminanceCluster(final Map descMap) {

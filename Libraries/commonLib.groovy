@@ -33,10 +33,9 @@ library(
   * ver. 3.0.7  2024-04-23 kkossev  - tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr, activeEpRqCtr; trace ZDO commands; added 0x0406 OccupancyCluster; reduced debug for chatty devices;
   * ver. 3.1.0  2024-04-28 kkossev  - unnecesery unschedule() speed optimization; added syncTuyaDateTime(); tuyaBlackMagic() initialization bug fix.
   * ver. 3.1.1  2024-05-05 kkossev  - getTuyaAttributeValue bug fix; added customCustomParseIlluminanceCluster method
-  * ver. 3.2.0  2024-05-23 kkossev  - (dev.branch) W.I.P - standardParse____Cluster and customParse___Cluster methods;
+  * ver. 3.2.0  2024-05-23 kkossev  - standardParse____Cluster and customParse___Cluster methods; moved onOff methods to a new library; rename all custom handlers in the libs to statdndardParseXXX
+  * ver. 3.2.1  2024-05-25 kkossev  - (dev. branch)
   *
-  *                                   TODO: move onOff methods to a new library
-  *                                   TODO: rename all custom handlers in the libs to statdndardParseXXX !! W.I.P.
   *                                   TODO: MOVE ZDO counters to health state;
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib
@@ -45,8 +44,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.2.0' }
-String commonLibStamp() { '2024/05/23 11:00 PM' }
+String commonLibVersion() { '3.2.1' }
+String commonLibStamp() { '2024/05/25 7:59 AM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -190,25 +189,6 @@ void parse(final String description) {
     if (standardAndCustomParseCluster(descMap, description)) { return }
     //
     switch (descMap.clusterInt as Integer) {
-        case zigbee.GROUPS_CLUSTER:                        // 0x0004
-            parseGroupsCluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseGroupsCluster(descMap + map) }
-            break
-        case zigbee.SCENES_CLUSTER:                         // 0x0005
-            parseScenesCluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseScenesCluster(descMap + map) }
-            break
-         case 0x0102 :                                      // window covering
-            parseWindowCoveringCluster(descMap)
-            break
-        case zigbee.ELECTRICAL_MEASUREMENT_CLUSTER:
-            parseElectricalMeasureCluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseElectricalMeasureCluster(descMap + map) }
-            break
-        case zigbee.METERING_CLUSTER:
-            parseMeteringCluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseMeteringCluster(descMap + map) }
-            break
         case 0x000C :  // special case : ZigUSB                                     // Aqara TVOC Air Monitor; Aqara Cube T1 Pro;
             if (this.respondsTo('customParseAnalogInputClusterDescription')) {
                 customParseAnalogInputClusterDescription(descMap, description)                 // ZigUSB
@@ -224,25 +204,10 @@ void parse(final String description) {
 }
 
 @Field static final Map<Integer, String> ClustersMap = [
-    0x0000: 'Basic',
-    0x0001: 'Power',
-    0x0003: 'Identify',
-    0x000C: 'AnalogInput',
-    0x0006: 'OnOff',
-    0x0008: 'LevelControl',
-    0x0012: 'MultistateInput',
-    0x0201: 'Thermostat',
-    0x0300: 'ColorControl',
-    0x0400: 'Illuminance',
-    0x0402: 'Temperature',
-    0x0405: 'Humidity',
-    0x0406: 'Occupancy',
-    0x042A: 'Pm25',
-    0xE002: 'E002',
-    0xEC03: 'EC03',
-    0xEF00: 'Tuya',
-    0xFC11: 'FC11',
-    0xFC7E: 'AirQualityIndex', // Sensirion VOC index
+    0x0000: 'Basic',                0x0001: 'Power',            0x0003: 'Identify',         0x0004: 'Groups',           0x0005: 'Scenes',       0x000C: 'AnalogInput',
+    0x0006: 'OnOff',                0x0008: 'LevelControl',     0x0012: 'MultistateInput',  0x0102: 'WindowCovering',   0x0201: 'Thermostat',   0x0300: 'ColorControl',
+    0x0400: 'Illuminance',          0x0402: 'Temperature',      0x0405: 'Humidity',         0x0406: 'Occupancy',        0x042A: 'Pm25',         0x0702: 'ElectricalMeasure',
+    0x0B04: 'Metering',             0xE002: 'E002',             0xEC03: 'EC03',             0xEF00: 'Tuya',             0xFC11: 'FC11',         0xFC7E: 'AirQualityIndex', // Sensirion VOC index
     0xFCC0: 'XiaomiFCC0',
 ]
 
@@ -302,9 +267,9 @@ boolean isSpammyTuyaRadar() {
 }
 
 @Field static final Map<Integer, String> ZdoClusterEnum = [
-    0x0002: 'Node Descriptor Request', 0x0005: 'Active Endpoints Request', 0x0006: 'Match Descriptor Request', 0x0022: 'Unbind Request', 0x0013: 'Device announce', 0x0034: 'Management Leave Request',
+    0x0002: 'Node Descriptor Request',  0x0005: 'Active Endpoints Request',   0x0006: 'Match Descriptor Request',  0x0022: 'Unbind Request',  0x0013: 'Device announce', 0x0034: 'Management Leave Request',
     0x8002: 'Node Descriptor Response', 0x8004: 'Simple Descriptor Response', 0x8005: 'Active Endpoints Response', 0x801D: 'Extended Simple Descriptor Response', 0x801E: 'Extended Active Endpoint Response',
-    0x8021: 'Bind Response', 0x8022: 'Unbind Response', 0x8023: 'Bind Register Response', 0x8034: 'Management Leave Response'
+    0x8021: 'Bind Response',            0x8022: 'Unbind Response',            0x8023: 'Bind Register Response',    0x8034: 'Management Leave Response'
 ]
 
 // ZDO (Zigbee Data Object) Clusters Parsing
@@ -427,8 +392,6 @@ void parseConfigureResponse(final Map descMap) {
 
 // Parses the response of reading reporting configuration - command 0x09
 void parseReadReportingConfigResponse(final Map descMap) {
-    // TS0121 Received Read Reporting Configuration Response (0x09) for cluster:0006 , data=[00, 00, 00, 00, 10, 00, 00, 58, 02] (Status: Success) min=0 max=600
-    // TS0121 Received Read Reporting Configuration Response (0x09) for cluster:0702 , data=[00, 00, 00, 00, 25, 3C, 00, 10, 0E, 00, 00, 00, 00, 00, 00] (Status: Success) min=60 max=3600
     int status = zigbee.convertHexToInt(descMap.data[0])    // Status: Success (0x00)
     //def attr = zigbee.convertHexToInt(descMap.data[3])*256 + zigbee.convertHexToInt(descMap.data[2])    // Attribute: OnOff (0x0000)
     if (status == 0) {
@@ -732,21 +695,6 @@ String intTo16bitUnsignedHex(int value) {
 
 String intTo8bitUnsignedHex(int value) {
     return zigbee.convertToHexString(value.toInteger(), 2)
-}
-
-// Electrical Measurement Cluster 0x0702
-void parseElectricalMeasureCluster(final Map descMap) {
-    if (!executeCustomHandler('customParseElectricalMeasureCluster', descMap)) { logWarn 'parseElectricalMeasureCluster is NOT implemented1' }
-}
-
-// Metering Cluster 0x0B04
-void parseMeteringCluster(final Map descMap) {
-    if (!executeCustomHandler('customParseMeteringCluster', descMap)) { logWarn 'parseMeteringCluster is NOT implemented1' }
-}
-
-// Window Covering Cluster 0x0102
-void parseWindowCoveringCluster(final Map descMap) {
-    if (this.respondsTo('customParseWindowCoveringCluster')) { customParseWindowCoveringCluster(descMap) } else { logWarn "parseWindowCoveringCluster: don't know how to handle descMap=${descMap}" }
 }
 
 /*

@@ -1,14 +1,8 @@
 /* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterName, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
-    base: 'driver',
-    author: 'Krassimir Kossev',
-    category: 'zigbee',
-    description: 'Device Profile Library',
-    name: 'deviceProfileLib',
-    namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy',
-    version: '3.1.3',
-    documentationLink: ''
+    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy', documentationLink: '',
+    version: '3.1.3'
 )
 /*
  *  Device Profile Library
@@ -30,8 +24,10 @@ library(
  * ver. 3.1.0  2024-04-03 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
  * ver. 3.1.1  2024-04-21 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix; resetPreferencesToDefaults bug fix;
  * ver. 3.1.2  2024-05-05 kkossev  - (dev. branch) added isSpammyDeviceProfile()
- * ver. 3.1.3  2024-05-21 kkossev  - (dev. branch) skip processClusterAttributeFromDeviceProfile if cluster or attribute or value is missing
+ * ver. 3.1.3  2024-05-21 kkossev  - skip processClusterAttributeFromDeviceProfile if cluster or attribute or value is missing
+ * ver. 3.2.0  2024-05-25 kkossev  - (dev. branch) commonLib 3.2.0 allignment; Tuya Multi Sensor 4 In 1 (V3) driver allignment
  *
+ *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
  *                                   TODO - updateStateUnknownDPs !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  *                                   TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
@@ -39,8 +35,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.1.3' }
-static String deviceProfileLibStamp() { '2024/05/21 10:53 AM' }
+static String deviceProfileLibVersion()   { '3.2.0' }
+static String deviceProfileLibStamp() { '2024/05/25 3:36 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -62,22 +58,19 @@ metadata {
     ]
 
     preferences {
-        // itterate over DEVICE.preferences map and inputIt all
-        if (DEVICE != null && DEVICE?.preferences != null && DEVICE?.preferences != [:]) {
-            (DEVICE?.preferences).each { key, value ->
-                if (inputIt(key) != null) {
-                    input inputIt(key)
+        if (device) {
+            // itterate over DEVICE.preferences map and inputIt all
+            if (DEVICE != null && DEVICE?.preferences != null && DEVICE?.preferences != [:] && DEVICE?.device?.isDepricated != true) {
+                (DEVICE?.preferences).each { key, value ->
+                    Map inputMap = inputIt(key)
+                    if (inputMap != null && inputMap != [:]) {
+                        input inputMap
+                    }
                 }
             }
-            if (('motionReset' in DEVICE?.preferences) && (DEVICE?.preferences.motionReset == true)) {
-                input(name: 'motionReset', type: 'bool', title: '<b>Reset Motion to Inactive</b>', description: '<i>Software Reset Motion to Inactive after timeout. Recommended value is <b>false</b></i>', defaultValue: false)
-                if (motionReset.value == true) {
-                    input('motionResetTimer', 'number', title: '<b>Motion Reset Timer</b>', description: '<i>After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds</i>', range: '0..7200', defaultValue: 60)
-                }
+            if (advancedOptions == true) {
+                input(name: 'forcedProfile', type: 'enum', title: '<b>Device Profile</b>', description: '<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>',  options: getDeviceProfilesMap())
             }
-        }
-        if (advancedOptions == true) {
-            input(name: 'forcedProfile', type: 'enum', title: '<b>Device Profile</b>', description: '<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>',  options: getDeviceProfilesMap())
         }
     }
 }
@@ -87,7 +80,20 @@ boolean is2in1() { return getDeviceProfile().contains('TS0601_2IN1') }
 String  getDeviceProfile()       { state.deviceProfile ?: 'UNKNOWN' }
 Map     getDEVICE()              { deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : deviceProfilesV2[getDeviceProfile()] }
 Set     getDeviceProfiles()      { deviceProfilesV3 != null ? deviceProfilesV3?.keySet() : deviceProfilesV2?.keySet() }
-List<String> getDeviceProfilesMap()   { deviceProfilesV3 != null ? deviceProfilesV3.values().description as List<String> : deviceProfilesV2.values().description as List<String> }
+//List<String> getDeviceProfilesMap()   { deviceProfilesV3 != null ? deviceProfilesV3.values().description as List<String> : deviceProfilesV2.values().description as List<String> }
+List<String> getDeviceProfilesMap()   {
+    if (deviceProfilesV3 == null) {
+        if (deviceProfilesV2 == null) { return [] }
+        return deviceProfilesV2.values().description as List<String>
+    }
+    List<String> activeProfiles = []
+    deviceProfilesV3.each { profileName, profileMap ->
+        if (profileMap.device?.isDepricated != true) {
+            activeProfiles.add(profileName)
+        }
+    }
+    return activeProfiles
+}
 
 // ---------------------------------- deviceProfilesV3 helper functions --------------------------------------------
 

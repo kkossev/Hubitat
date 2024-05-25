@@ -16,13 +16,14 @@
  * ver. 1.0.0  2024-02-25 kkossev  - first test version - decoding success! refresh() and configure();
  * ver. 1.0.1  2024-04-01 kkossev  - commonLib 3.0.4 alligned
  * ver. 1.0.2  2024-04-06 kkossev  - (dev. branch) more GroovyLint fixes; created energyLib.groovy library;
- * ver. 3.2.0  2024-05-23 kkossev  - (dev. branch) commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-05-25 kkossev  - (dev. branch) commonLib 3.2.0 allignment
  *
+ *                                   TODO: power/voltage/amperage info logs are duplicated
  *                                   TODO: individual thresholds for each attribute
  */
 
 static String version() { '3.2.0' }
-static String timeStamp() { '2024/05/23 10:57 AM' }
+static String timeStamp() { '2024/05/25 10:45 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -35,6 +36,7 @@ deviceType = 'Plug'
 /* groovylint-disable-next-line NglParseError */
 #include kkossev.commonLib
 #include kkossev.onOffLib
+#include kkossev.reportingLib
 #include kkossev.energyLib
 #include kkossev.temperatureLib
 
@@ -44,37 +46,10 @@ metadata {
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/ZigUSB/ZigUSB.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
-        if (_DEBUG) {
-            command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
-            command 'parseTest', [[name: 'parseTest', type: 'STRING', description: 'parseTest', defaultValue : '']]
-            command 'tuyaTest', [
-                [name:'dpCommand', type: 'STRING', description: 'Tuya DP Command', constraints: ['STRING']],
-                [name:'dpValue',   type: 'STRING', description: 'Tuya DP value', constraints: ['STRING']],
-                [name:'dpType',    type: 'ENUM',   constraints: ['DP_TYPE_VALUE', 'DP_TYPE_BOOL', 'DP_TYPE_ENUM'], description: 'DP data type']
-            ]
-        }
-        capability 'Actuator'
         capability 'Outlet'
-        capability 'Switch'
-        //capability 'TemperatureMeasurement'   // do not expose the capability, this is the device internal temperature!
-        capability 'PowerMeter'
-        capability 'EnergyMeter'
-        capability 'VoltageMeasurement'
-        capability 'CurrentMeter'
 
         attribute 'temperature', 'number'   // make it a custom attribute
 
-        if (_THREE_STATE == true) {
-            attribute 'switch', 'enum', SwitchThreeStateOpts.options.values() as List<String>
-        }
-
-        // deviceType specific capabilities, commands and attributes
-        if (_DEBUG || (deviceType in ['Dimmer', 'ButtonDimmer', 'Switch', 'Valve'])) {
-            command 'zigbeeGroups', [
-                [name:'command', type: 'ENUM',   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
-                [name:'value',   type: 'STRING', description: 'Group number', constraints: ['STRING']]
-            ]
-        }
         // https://github.com/xyzroe/ZigUSB
         // https://github.com/Koenkk/zigbee-herdsman-converters/blob/9f761492fcfeffc4ef2f88f4e96ea3b6afa8ac0b/src/devices/xyzroe.ts
         // https://github.com/Koenkk/zigbee-herdsman-converters/pull/7077 https://github.com/Koenkk/zigbee-herdsman-converters/commit/9f761492fcfeffc4ef2f88f4e96ea3b6afa8ac0b
@@ -84,10 +59,8 @@ metadata {
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: false, description: '<i>Turns on debug logging for 24 hours.</i>'
-        input name: 'alwaysOn', type: 'bool', title: '<b>Always On</b>', description: '<i>Disable switching OFF for plugs that must be always On</i>', defaultValue: false
         input name: 'autoReportingTime', type: 'number', title: '<b>Automatic reporting time period</b>', description: '<i>V/A/W reporting interval, seconds (0..3600)<br>0 (zero) disables the automatic reporting!</i>', range: '0..3600', defaultValue: DEFAULT_REPORTING_TIME
-        if (advancedOptions == true || advancedOptions == true) {
-            input name: 'ignoreDuplicated', type: 'bool', title: '<b>Ignore Duplicated Switch Events</b>', description: '<i>Some switches and plugs send periodically the switch status as a heart-beat </i>', defaultValue: true
+        if (settings?.advancedOptions == true) {
             input name: 'inverceSwitch', type: 'bool', title: '<b>Invert the switch on/off</b>', description: '<i>ZigUSB has the on and off states inverted!</i>', defaultValue: true
         }
     }
@@ -97,14 +70,6 @@ metadata {
 @Field static final int    DEFAULT_PRECISION = 3           // 3 decimal places
 @Field static final BigDecimal DEFAULT_DELTA = 0.001
 @Field static final int    MAX_POWER_LIMIT = 999
-@Field static final String ONOFF = 'Switch'
-@Field static final String POWER = 'Power'
-@Field static final String INST_POWER = 'InstPower'
-@Field static final String ENERGY = 'Energy'
-@Field static final String VOLTAGE = 'Voltage'
-@Field static final String AMPERAGE = 'Amperage'
-@Field static final String FREQUENCY = 'Frequency'
-@Field static final String POWER_FACTOR = 'PowerFactor'
 
 /**
  * ZigUSB has a really wierd way of reporting the on/off state back to the hub...

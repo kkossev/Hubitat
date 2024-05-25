@@ -4,7 +4,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLib.groovy",
       "id": 142,
       "codeType": "library",
-      "version": 409
+      "version": 423
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/rgbLib.groovy",
@@ -34,7 +34,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/energyLib.groovy",
       "id": 166,
       "codeType": "library",
-      "version": 8
+      "version": 13
     },
     {
       "filepath": "/C:/Work/Hubitat/Libraries/buttonLib.groovy",
@@ -46,7 +46,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 488
+      "version": 493
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/groupsLib.groovy",
@@ -112,7 +112,13 @@
       "filepath": "/c:/Work/Hubitat/Libraries/onOffLib.groovy",
       "id": 176,
       "codeType": "library",
-      "version": 10
+      "version": 16
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/reportingLib.groovy",
+      "id": 177,
+      "codeType": "library",
+      "version": 6
     }
   ]
 }

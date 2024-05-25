@@ -70,6 +70,7 @@
  * ver. 1.8.0  2024-03-23 kkossev  - (dev.branch) more Groovy linting; fixed 'This driver requires HE version 2.2.7 (May 2021) or newer!' bug; device.latestState('battery') exception bug fixes;
  * ver. 1.8.1  2024-04-16 kkossev  - (dev.branch) tuyaDPs list of maps bug fixes; added _TZE204_kyhbrfyl; added smallMotionDetectionSensitivity;
  * ver. 1.9.0  2024-05-06 kkossev  - depricated all radars except Linptech;
+ * ver. 1.9.1  2024-05-25 kkossev  - preferences are not sent for depricated devices.
  *
  *                                   TODO: Implement ping() for all devices
  *                                   TODO: W.I.P. TS0202_4IN1 refactoring
@@ -93,8 +94,8 @@
 */
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String version() { '1.9.0' }
-static String timeStamp() { '2024/05/06 10:39 AM' }
+static String version() { '1.9.1' }
+static String timeStamp() { '2024/05/25 5:14 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -206,10 +207,10 @@ metadata {
             if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences?.luxThreshold != false)) {
                 input('luxThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: 5)
                 input name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: '<i>Illuminance correction coefficient, range (0.10..10.00)</i>', range: '0.10..10.00', defaultValue: 1.00
-            }
         }
         if (('DistanceMeasurement' in DEVICE?.capabilities)) {
             input(name: 'ignoreDistance', type: 'bool', title: '<b>Ignore distance reports</b>', description: 'If not used, ignore the distance reports received every 1 second!', defaultValue: true)
+            }
         }
 
         // itterate over DEVICE.preferences map and inputIt all!
@@ -773,7 +774,7 @@ boolean isChattyRadarReport(final Map descMap) {
     'TS0225_LINPTECH_RADAR'   : [
             description   : 'Tuya TS0225_LINPTECH 24GHz Radar',
             models        : ['TS0225'],
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
             preferences   : ['fadingTime':'101', 'motionDetectionDistance':'0xE002:0xE00B', 'motionDetectionSensitivity':'0xE002:0xE004', 'staticDetectionSensitivity':'0xE002:0xE005'],
             fingerprints  : [
@@ -799,7 +800,7 @@ boolean isChattyRadarReport(final Map descMap) {
     'TS0225_EGNGMRZH_RADAR'   : [
             description   : 'Tuya TS0225_EGNGMRZH 24GHz Radar',
             models        : ['TS0225'],
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
             fingerprints  : [[manufacturer:'_TZFED8_egngmrzh']],
             // uses IAS for occupancy!
@@ -2225,7 +2226,7 @@ void updated() {
     //logDebug "forcedProfile is not set"
     }
 
-    if (DEVICE?.device?.depricated == true) {
+    if (DEVICE?.device?.isDepricated == true) {
         logWarn 'The use of this driver with this device is depricated. Please update to the new driver!'
         return
     }
