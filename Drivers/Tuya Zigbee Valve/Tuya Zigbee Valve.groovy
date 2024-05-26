@@ -36,7 +36,6 @@
  *  ver. 1.3.0 2024-03-17 kkossev - more code linting; added TS0049 _TZ3210_0jxeoadc; added three-states (opening, closing)
  *  ver. 1.3.1 2024-04-30 kkossev - getPowerSource bug fix; TS0049 command '06' processing; TS049 battery% fix; TS049 open/close fix; TS0049 command '05' processing;
  *
- *                                  TODO: 
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
  *                                  TODO: clear the old states on update; add rejoinCtr;
  */
@@ -45,7 +44,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 String version() { '1.3.1' }
-String timeStamp() { '2024/04/30 7:56 AM' }
+String timeStamp() { '2024/04/30 7:57 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -72,7 +71,7 @@ metadata {
         attribute 'irrigationDuration', 'number'
         attribute 'irrigationCapacity', 'number'
 
-        command 'setIrrigationTimer', [[name:'timer, in seconds (Saswell) or minutes (GiEX)', type: 'NUMBER', description: 'Set the irrigation duration timer, in seconds (Saswell) or in minutes (GiEX and TS0049)', constraints: ['0..86400']]]
+        command 'setIrrigationTimer', [[name:'timer, in seconds (Saswell) or minutes (GiEX, TS0049)', type: 'NUMBER', description: 'Set the irrigation duration timer, in seconds (Saswell) or in minutes (GiEX, TS0049)', constraints: ['0..86400']]]
         command 'setIrrigationCapacity', [[name:'capacity, liters (Saswell and GiEX)', type: 'NUMBER', description: 'Set Irrigation Capacity, litres', constraints: ['0..9999']]]
         command 'setIrrigationMode', [[name:'select the mode (Saswell and GiEX)', type: 'ENUM', description: 'Set Irrigation Mode', constraints: ['--select--', 'duration', 'capacity']]]
 
