@@ -34,9 +34,8 @@
  *  ver. 1.2.6 2023-07-28 kkossev - fixed exceptions in configure(), ping() and rtt commands; scheduleDeviceHealthCheck() was not scheduled on initialize() and updated(); UNKNOWN deviceProfile fixed; set deviceProfile preference to match the automatically selected one; fake deviceCommandTimeout fix;
  *  ver. 1.2.7 2023-12-18 kkossev - code linting
  *  ver. 1.3.0 2024-03-17 kkossev - more code linting; added TS0049 _TZ3210_0jxeoadc; added three-states (opening, closing)
- *  ver. 1.3.1 2024-04-30 kkossev - (dev.branch) getPowerSource bug fix; TS0049 command '06' processing; TS049 battery% fix; TS049 open/close fix; TS0049 command '05' processing;
+ *  ver. 1.3.1 2024-04-30 kkossev - getPowerSource bug fix; TS0049 command '06' processing; TS049 battery% fix; TS049 open/close fix; TS0049 command '05' processing;
  *
- *                                  TODO: 
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
  *                                  TODO: clear the old states on update; add rejoinCtr;
  */

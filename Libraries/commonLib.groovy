@@ -45,7 +45,7 @@ library(
 */
 
 String commonLibVersion() { '3.2.1' }
-String commonLibStamp() { '2024/05/25 7:59 AM' }
+String commonLibStamp() { '2024/05/25 10:32 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -211,6 +211,7 @@ void parse(final String description) {
     0xFCC0: 'XiaomiFCC0',
 ]
 
+// first try calling the custom parser, if not found, call the standard parser
 boolean standardAndCustomParseCluster(Map descMap, final String description) {
     Integer clusterInt = descMap.clusterInt as Integer
     String  clusterName = ClustersMap[clusterInt] ?: UNKNOWN
