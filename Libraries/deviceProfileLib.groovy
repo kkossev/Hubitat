@@ -1,4 +1,4 @@
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterName, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NestedBlockDepth, NoDouble, NoFloat, NoWildcardImports, ParameterName, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy', documentationLink: '',
@@ -25,18 +25,21 @@ library(
  * ver. 3.1.1  2024-04-21 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix; resetPreferencesToDefaults bug fix;
  * ver. 3.1.2  2024-05-05 kkossev  - (dev. branch) added isSpammyDeviceProfile()
  * ver. 3.1.3  2024-05-21 kkossev  - skip processClusterAttributeFromDeviceProfile if cluster or attribute or value is missing
- * ver. 3.2.0  2024-05-25 kkossev  - (dev. branch) commonLib 3.2.0 allignment; Tuya Multi Sensor 4 In 1 (V3) driver allignment
+ * ver. 3.2.0  2024-05-25 kkossev  - commonLib 3.2.0 allignment;
+ * ver. 3.2.1  2024-05-30 kkossev  - (dev. branch) Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent);
  *
+ *                                   TODO - remove 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
  *                                   TODO - updateStateUnknownDPs !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- *                                   TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
+ *                                   TODO - check why the forcedProfile preference is not initialized?
+ *                                   TODO - when [refresh], send Info logs for parameters that are not events or preferences
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
  *                                   TODO: handle preferences of a type TEXT
  *
 */
 
-static String deviceProfileLibVersion()   { '3.2.0' }
-static String deviceProfileLibStamp() { '2024/05/25 3:36 PM' }
+static String deviceProfileLibVersion()   { '3.2.1' }
+static String deviceProfileLibStamp() { '2024/05/30 11:12 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -75,11 +78,11 @@ metadata {
     }
 }
 
-boolean is2in1() { return getDeviceProfile().contains('TS0601_2IN1') }
+boolean is2in1() { return getDeviceProfile().contains('TS0601_2IN1') }    // patch removed 05/29/2024
 
-String  getDeviceProfile()       { state.deviceProfile ?: 'UNKNOWN' }
-Map     getDEVICE()              { deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : deviceProfilesV2[getDeviceProfile()] }
-Set     getDeviceProfiles()      { deviceProfilesV3 != null ? deviceProfilesV3?.keySet() : deviceProfilesV2?.keySet() }
+String  getDeviceProfile()       { state?.deviceProfile ?: 'UNKNOWN' }
+Map     getDEVICE()              { deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : deviceProfilesV2 != null ? deviceProfilesV2[getDeviceProfile()] : [:] }
+Set     getDeviceProfiles()      { deviceProfilesV3 != null ? deviceProfilesV3?.keySet() : deviceProfilesV2 != null ?  deviceProfilesV2?.keySet() : [] }
 //List<String> getDeviceProfilesMap()   { deviceProfilesV3 != null ? deviceProfilesV3.values().description as List<String> : deviceProfilesV2.values().description as List<String> }
 List<String> getDeviceProfilesMap()   {
     if (deviceProfilesV3 == null) {
@@ -117,10 +120,7 @@ String getProfileKey(final String valueStr) {
  */
 Map getPreferencesMapByName(final String param, boolean debug=false) {
     Map foundMap = [:]
-    if (!(param in DEVICE?.preferences)) {
-        if (debug) { log.warn "getPreferencesMapByName: preference ${param} not defined for this device!" }
-        return [:]
-    }
+    if (!(param in DEVICE?.preferences)) { if (debug) { log.warn "getPreferencesMapByName: preference ${param} not defined for this device!" } ; return [:] }
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def preference
     try {
@@ -264,15 +264,12 @@ public void updateAllPreferences() {
         logDebug "updateAllPreferences: no preferences defined for device profile ${getDeviceProfile()}"
         return
     }
-    //Integer dpInt = 0
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def preferenceValue    // int or String for enums
     // itterate over the preferences map and update the device settings
     (DEVICE?.preferences).each { name, dp ->
-        Map foundMap
-        foundMap = getPreferencesMapByName(name, false)
+        Map foundMap = getPreferencesMapByName(name, false)
         logDebug "updateAllPreferences: foundMap = ${foundMap}"
-
         if (foundMap != null && foundMap != [:]) {
             // preferenceValue = getScaledPreferenceValue(name, foundMap)
             preferenceValue = settings."${name}"
@@ -281,18 +278,10 @@ public void updateAllPreferences() {
                 // scale the value
                 preferenceValue = (safeToDouble(preferenceValue) / safeToInt(foundMap.scale)) as double
             }
-            if (preferenceValue != null) {
-                setPar(name, preferenceValue.toString())
-            }
-            else {
-                logDebug "updateAllPreferences: preference ${name} is not set (preferenceValue was null)"
-                return
-            }
+            if (preferenceValue != null) { setPar(name, preferenceValue.toString()) }
+            else { logDebug "updateAllPreferences: preference ${name} is not set (preferenceValue was null)" ;  return }
         }
-        else {
-            logDebug "warning: couldn't find map for preference ${name}"
-            return
-        }
+        else { logDebug "warning: couldn't find map for preference ${name}" ; return }
     }
     return
 }
@@ -309,6 +298,36 @@ int divideBy1(int val) { return (val as int) / 1 }    //tests
 int signedInt(int val) {
     if (val > 127) { return (val as int) - 256 }
     else { return (val as int) }
+}
+int invert(int val) {  
+    if (settings.invertMotion == true) { return val == 0 ? 1 : 0 }
+    else { return val }
+}
+
+List<String> zclWriteAttribute(Map attributesMap, int scaledValue) {
+    if (attributesMap == null || attributesMap == [:]) { logWarn "attributesMap=${attributesMap}" ; return [] }
+    List<String> cmds = []
+    Map map = [:]
+    // cluster:attribute
+    try {
+        map['cluster'] = hubitat.helper.HexUtils.hexStringToInt((attributesMap.at).split(':')[0]) as Integer
+        map['attribute'] = hubitat.helper.HexUtils.hexStringToInt((attributesMap.at).split(':')[1]) as Integer
+        map['dt']  = (attributesMap.dt != null && attributesMap.dt != '') ? hubitat.helper.HexUtils.hexStringToInt(attributesMap.dt) as Integer : null
+        map['mfgCode'] = attributesMap.mfgCode ? attributesMap.mfgCode as String : null
+    }
+    catch (e) { logWarn "setPar: Exception caught while splitting cluser and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val})) :  '${e}' " ; return [] }
+    // dt (data type) is obligatory when writing to a cluster...
+    if (attributesMap.rw != null && attributesMap.rw == 'rw' && map.dt == null) {
+        map.dt = attributesMap.type in ['number', 'decimal'] ? DataType.INT16 : DataType.UINT8
+        logDebug "cluster:attribute ${attributesMap.at} is read-write, but no data type (dt) is defined! Assuming 0x${zigbee.convertToHexString(map.dt, 2)}"
+    }
+    if (map.mfgCode != null && map.mfgCode != '') {
+        cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, map.mfgCode, delay = 200)
+    }
+    else {
+        cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, [:], delay = 200)
+    }
+    return cmds
 }
 
 /**
@@ -420,35 +439,20 @@ public boolean setPar(final String parPar=null, final String val=null ) {
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def scaledValue = validateAndScaleParameterValue(dpMap, val as String)      // convert the val to the correct type and scale it if needed
     if (scaledValue == null) { logInfo "setPar: invalid parameter value <b>${val}</b>. Must be in the range ${dpMap.min} to ${dpMap.max}"; return false }
-    /*
-    // update the device setting // TODO: decide whether the setting must be updated here, or after it is echeod back from the device
-    try {
-        device.updateSetting("$par", [value:val, type:dpMap.type])
-    }
-    catch (e) {
-        logWarn "setPar: Exception '${e}'caught while updateSetting <b>$par</b>(<b>$val</b>) type=${dpMap.type}"
-        return false
-    }
-    */
-    //logDebug "setPar: parameter ${par} value ${val}, type ${dpMap.type} validated and scaled to ${scaledValue} type=${dpMap.type}"
+
     // if there is a dedicated set function, use it
     String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1]
     String customSetFunction = "customSet${capitalizedFirstChar}"
     if (this.respondsTo(customSetFunction)) {
         logDebug "setPar: found customSetFunction=${setFunction}, scaledValue=${scaledValue}  (val=${val})"
         // execute the customSetFunction
-        try {
-            cmds = "$customSetFunction"(scaledValue)
-        }
-        catch (e) {
-            logWarn "setPar: Exception '${e}'caught while processing <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val}))"
-            return false
-        }
+        try { cmds = "$customSetFunction"(scaledValue) }
+        catch (e) { logWarn "setPar: Exception caught while processing <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val})) : '${e}'" ; return false }
         logDebug "customSetFunction result is ${cmds}"
         if (cmds != null && cmds != []) {
             logInfo "setPar: (1) successfluly executed setPar <b>$customSetFunction</b>(<b>$scaledValue</b>)"
             sendZigbeeCommands( cmds )
-            return false
+            return true
         }
         else {
             logWarn "setPar: customSetFunction <b>$customSetFunction</b>(<b>$scaledValue</b>) returned null or empty list"
@@ -485,16 +489,9 @@ public boolean setPar(final String parPar=null, final String val=null ) {
     // check whether this is a tuya DP or a cluster:attribute parameter
     boolean isTuyaDP
 
-    try {
-        // check if dpMap.dp is a number
-        /* groovylint-disable-next-line Instanceof */
-        isTuyaDP = dpMap.dp instanceof Number
-    }
-    catch (e) {
-        logWarn"setPar: (1) exception ${e} caught while checking isNumber() preference ${preference}"
-        isTuyaDP = false
-    //return false
-    }
+    /* groovylint-disable-next-line Instanceof */
+    try { isTuyaDP = dpMap.dp instanceof Number }
+    catch (e) { logWarn"setPar: (1) exception ${e} caught while checking isNumber() preference ${preference}" ; isTuyaDP = false }
     if (dpMap.dp != null && isTuyaDP) {
         // Tuya DP
         cmds = sendTuyaParameter(dpMap,  par, scaledValue)
@@ -510,37 +507,14 @@ public boolean setPar(final String parPar=null, final String val=null ) {
     }
     else if (dpMap.at != null) {
         // cluster:attribute
-        int cluster
-        int attribute
-        int dt
-        String mfgCodeString = ''
-        try {
-            cluster = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(':')[0])
-            //log.trace "cluster = ${cluster}"
-            attribute = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(':')[1])
-            //log.trace "attribute = ${attribute}"
-            dt = dpMap.dt != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.dt) : null
-            //log.trace "dt = ${dt}"
-            mfgCodeString = dpMap.mfgCode
-        //log.trace "mfgCode = ${dpMap.mfgCode}"
-        }
-        catch (e) {
-            logWarn "setPar: Exception '${e}' caught while splitting cluser and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val}))"
+        logDebug "setPar: found at=${dpMap.at} dt=${dpMap.dt} mapMfCode=${dpMap.mapMfCode} scaledValue=${scaledValue}  (val=${val})"
+        cmds = zclWriteAttribute(dpMap, scaledValue)
+        if (cmds == null || cmds == []) {
+            logWarn "setPar: failed to write cluster:attribute ${dpMap.at} value ${scaledValue}"
             return false
         }
-        Map mapMfCode = ['mfgCode':mfgCodeString]
-        logDebug "setPar: found cluster=0x${zigbee.convertToHexString(cluster, 2)} attribute=0x${zigbee.convertToHexString(attribute, 2)} dt=${dpMap.dt} mfgCodeString=${mfgCodeString} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
-        if (mfgCodeString != null && mfgCodeString != '') {
-            cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, mapMfCode, delay = 200)
-        }
-        else {
-            cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, [:], delay = 200)
-        }
     }
-    else {
-        logWarn "setPar: invalid dp or at value <b>${dpMap.dp}</b> for parameter <b>${par}</b>"
-        return false
-    }
+    else { logWarn "setPar: invalid dp or at value <b>${dpMap.dp}</b> for parameter <b>${par}</b>" ; return false }
     logInfo "setPar: (3) successfluly executed setPar <b>$customSetFunction</b>(<b>$scaledValue</b>)"
     sendZigbeeCommands( cmds )
     return true
@@ -552,10 +526,7 @@ public boolean setPar(final String parPar=null, final String val=null ) {
 List<String> sendTuyaParameter( Map dpMap, String par, tuyaValue) {
     //logDebug "sendTuyaParameter: trying to send parameter ${par} value ${tuyaValue}"
     List<String> cmds = []
-    if (dpMap == null) {
-        logWarn "sendTuyaParameter: tuyaDPs map not found for parameter <b>${par}</b>"
-        return []
-    }
+    if (dpMap == null) { logWarn "sendTuyaParameter: tuyaDPs map not found for parameter <b>${par}</b>" ; return [] }
     String dp = zigbee.convertToHexString(dpMap.dp, 2)
     if (dpMap.dp <= 0 || dpMap.dp >= 256) {
         logWarn "sendTuyaParameter: invalid dp <b>${dpMap.dp}</b> for parameter <b>${par}</b>"
@@ -575,7 +546,12 @@ List<String> sendTuyaParameter( Map dpMap, String par, tuyaValue) {
     // sendTuyaCommand
     String dpValHex = dpType == DP_TYPE_VALUE ? zigbee.convertToHexString(tuyaValue as int, 8) : zigbee.convertToHexString(tuyaValue as int, 2)
     logDebug "sendTuyaParameter: sending parameter ${par} dpValHex ${dpValHex} (raw=${tuyaValue}) Tuya dp=${dp} dpType=${dpType} "
-    cmds = sendTuyaCommand( dp, dpType, dpValHex)
+    if (dpMap.tuyaCmd != null ) {
+        cmds = sendTuyaCommand( dp, dpType, dpValHex, dpMap.tuyaCmd as int)
+    }
+    else {
+        cmds = sendTuyaCommand( dp, dpType, dpValHex)
+    }
     return cmds
 }
 
@@ -667,33 +643,10 @@ public boolean sendAttribute(String par=null, val=null ) {
     }
     else if (dpMap.at != null) {
         // cluster:attribute
-        int cluster
-        int attribute
-        int dt
-        // int mfgCode
-        try {
-            cluster = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(':')[0])
-            //log.trace "cluster = ${cluster}"
-            attribute = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(':')[1])
-            //log.trace "attribute = ${attribute}"
-            dt = dpMap.dt != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.dt) : null
-        //log.trace "dt = ${dt}"
-        //log.trace "mfgCode = ${dpMap.mfgCode}"
-        //  mfgCode = dpMap.mfgCode != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.mfgCode) : null
-        //  log.trace "mfgCode = ${mfgCode}"
-        }
-        catch (e) {
-            logWarn "sendAttribute: Exception '${e}'caught while splitting cluster and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val}))"
+        cmds = zclWriteAttribute(dpMap, scaledValue)
+        if (cmds == null || cmds == []) {
+            logWarn "sendAttribute: failed to write cluster:attribute ${dpMap.at} value ${scaledValue}"
             return false
-        }
-
-        logDebug "sendAttribute: found cluster=${cluster} attribute=${attribute} dt=${dpMap.dt} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
-        if (dpMap.mfgCode != null) {
-            Map mapMfCode = ['mfgCode':dpMap.mfgCode]
-            cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, mapMfCode, delay = 200)
-        }
-        else {
-            cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, [:], delay = 200)
         }
     }
     else {
@@ -729,9 +682,7 @@ public boolean sendCommand(final String command_orig=null, final String val_orig
         return false
     }
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
-    def func
-    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
-    def funcResult
+    def func, funcResult
     try {
         func = DEVICE?.commands.find { it.key == command }.value
         if (val != null) {
@@ -865,8 +816,7 @@ Map inputIt(String paramPar, boolean debug = false) {
  * @return A list containing the device name and profile.
  */
 List<String> getDeviceNameAndProfile(String model=null, String manufacturer=null) {
-    String deviceName         = UNKNOWN
-    String deviceProfile      = UNKNOWN
+    String deviceName = UNKNOWN, deviceProfile = UNKNOWN
     String deviceModel        = model != null ? model : device.getDataValue('model') ?: UNKNOWN
     String deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
     deviceProfilesV3.each { profileName, profileMap ->
@@ -917,7 +867,7 @@ List<String> refreshDeviceProfile() {
 List<String> configureDeviceProfile() {
     List<String> cmds = []
     logDebug "configureDeviceProfile() : ${cmds}"
-    if (cmds == []) { cmds = ['delay 299'] }    // no ,
+    if (cmds == []) { cmds = ['delay 299'] }
     return cmds
 }
 
@@ -1162,17 +1112,45 @@ public Integer preProc(final Map foundItem, int fncmd_orig) {
     return fncmd
 }
 
+// TODO: refactor!
+// called from custom drivers (customParseE002Cluster customParseFC11Cluster customParseOccupancyCluster ...)
+// returns true if the DP was processed successfully, false otherwise.
+public boolean processClusterAttributeFromDeviceProfile(final Map descMap) {
+    logTrace "processClusterAttributeFromDeviceProfile: descMap = ${descMap}"
+    if (state.deviceProfile == null)  { logTrace '<b>state.deviceProfile is missing!<b>'; return false }
+    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return false }
+
+    List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes
+    if (attribMap == null || attribMap.isEmpty()) { return false }    // no any attributes are defined in the Device Profile
+
+    String clusterAttribute = "0x${descMap.cluster}:0x${descMap.attrId}"
+    int value
+    try {
+        value = hexStrToUnsignedInt(descMap.value)
+    }
+    catch (e) {
+        logWarn "processClusterAttributeFromDeviceProfile: exception ${e} caught while converting hex value ${descMap.value} to integer"
+        return false
+    }
+    Map foundItem = attribMap.find { it['at'] == clusterAttribute }
+    if (foundItem == null || foundItem == [:]) {
+        // clusterAttribute was not found into the attributes list for this particular deviceProfile
+        // updateStateUnknownclusterAttribute(descMap)
+        // continue processing the descMap report in the old code ...
+        logTrace "processClusterAttributeFromDeviceProfile: clusterAttribute ${clusterAttribute} was not found in the attributes list for this deviceProfile ${DEVICE?.description}"
+        return false
+    }
+    return processFoundItem(descMap, foundItem, value, isSpammyDPsToNotTrace(descMap))
+}
+
 /**
+ * Called from standardProcessTuyaDP method in commonLib
+ *
  * Processes a Tuya DP (Data Point) received from the device, based on the device profile and its defined Tuya DPs.
  * If a preference exists for the DP, it updates the preference value and sends an event if the DP is declared as an attribute.
  * If no preference exists for the DP, it logs the DP value as an info message.
  * If the DP is spammy (not needed for anything), it does not perform any further processing.
  *
- * @param descMap The description map of the received DP.
- * @param dp The value of the received DP.
- * @param dp_id The ID of the received DP.
- * @param fncmd The command of the received DP.
- * @param dp_len The length of the received DP.
  * @return true if the DP was processed successfully, false otherwise.
  */
 /* groovylint-disable-next-line UnusedMethodParameter */
@@ -1184,96 +1162,45 @@ public boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, f
     List<Map> tuyaDPsMap = deviceProfilesV3[state.deviceProfile]?.tuyaDPs
     if (tuyaDPsMap == null || tuyaDPsMap == [:]) { return false }    // no any Tuya DPs defined in the Device Profile
 
-    Map foundItem = null
-    tuyaDPsMap.each { item ->
-        if (item['dp'] == (dp as int)) {
-            foundItem = item
-            return
-        }
-    }
+    Map foundItem = tuyaDPsMap.find { it['dp'] == (dp as int) }
     if (foundItem == null || foundItem == [:]) {
         // DP was not found into the tuyaDPs list for this particular deviceProfile
 //      updateStateUnknownDPs(descMap, dp, dp_id, fncmd, dp_len)    // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!
         // continue processing the DP report in the old code ...
         return false
     }
-    return processFoundItem(foundItem, fncmd, isSpammyDPsToNotTrace(descMap))
+    return processFoundItem(descMap, foundItem, fncmd, isSpammyDPsToNotTrace(descMap))
 }
 
-// TODO: refactor!
-public boolean processClusterAttributeFromDeviceProfile(final Map descMap) {
-    logTrace "processClusterAttributeFromDeviceProfile: descMap = ${descMap}"
-    if (state.deviceProfile == null)  { logTrace '<b>state.deviceProfile is missing!<b>'; return false }
-    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return false }
-
-    List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes
-    if (attribMap == null || attribMap.isEmpty()) { return false }    // no any attributes are defined in the Device Profile
-
-    Map foundItem = null
-    String clusterAttribute = "0x${descMap.cluster}:0x${descMap.attrId}"
-    int value
-    try {
-        value = hexStrToUnsignedInt(descMap.value)
-    }
-    catch (e) {
-        logWarn "processClusterAttributeFromDeviceProfile: exception ${e} caught while converting hex value ${descMap.value} to integer"
-        return false
-    }
-    //logTrace "clusterAttribute = ${clusterAttribute}"
-    attribMap.each { item ->
-        if (item['at'] == clusterAttribute) {
-            foundItem = item
-            return
-        }
-    }
-    if (foundItem == null) {
-        // clusterAttribute was not found into the attributes list for this particular deviceProfile
-        // updateStateUnknownclusterAttribute(descMap)
-        // continue processing the descMap report in the old code ...
-        logTrace "processClusterAttributeFromDeviceProfile: clusterAttribute ${clusterAttribute} was not found in the attributes list for this deviceProfile ${DEVICE?.description}"
-        return false
-    }
-    return processFoundItem(foundItem, value, isSpammyDPsToNotTrace(descMap))
-}
-
-// modifies the value of the foundItem if needed !!!
-/* groovylint-disable-next-line MethodParameterTypeRequired */
-boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = false) {
+/*
+ * deviceProfile DP processor : updates the preference value and calls a custom handler or sends an event if the DP is declared as an attribute in the device profile
+ */
+private boolean processFoundItem(final Map descMap, final Map foundItem, int value, boolean doNotTrace = false) {
     if (foundItem == null) { return false }
     // added 10/31/2023 - preProc the attribute value if needed
     if (foundItem.preProc != null) {
         /* groovylint-disable-next-line ParameterReassignment */
         Integer preProcValue = preProc(foundItem, value)
-        if (preProcValue == null) {
-            logDebug "processFoundItem: preProc returned null for ${foundItem.name} value ${value} -> further processing is skipped!"
-            return true
-        }
+        if (preProcValue == null) { logDebug "processFoundItem: preProc returned null for ${foundItem.name} value ${value} -> further processing is skipped!" ; return true }
         if (preProcValue != value) {
             logDebug "processFoundItem: <b>preProc</b> changed ${foundItem.name} value to ${preProcValue}"
             /* groovylint-disable-next-line ParameterReassignment */
             value = preProcValue as int
         }
     }
-    else {
-        logTrace "processFoundItem: no preProc for ${foundItem.name}"
-    }
+    else { logTrace "processFoundItem: no preProc for ${foundItem.name}" }
 
     String name = foundItem.name                                   // preference name as in the attributes map
-    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     String existingPrefValue = settings[foundItem.name] ?: 'none'  // existing preference value
-    //existingPrefValue = existingPrefValue?.replace("[", "").replace("]", "")               // preference name as in Hubitat settings (preferences), if already created.
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def preferenceValue = null   // preference value
     //log.trace "settings=${settings}"
-    //boolean preferenceExists = settings.containsKey(foundItem.name)         // check if there is an existing preference for this clusterAttribute
     boolean preferenceExists = DEVICE?.preferences?.containsKey(foundItem.name)         // check if there is an existing preference for this clusterAttribute
     //log.trace "preferenceExists=${preferenceExists}"
     boolean isAttribute = device.hasAttribute(foundItem.name)    // check if there is such a attribute for this clusterAttribute
     boolean isEqual = false
     boolean wasChanged = false
-    if (!doNotTrace) {
-        logTrace "processFoundItem: name=${foundItem.name}, isAttribute=${isAttribute}, preferenceExists=${preferenceExists}, existingPrefValue=${existingPrefValue} (type ${foundItem.type}, rw=${foundItem.rw}) value is ${value} (description: ${foundItem.description})"
-    }
+    if (!doNotTrace) { logTrace "processFoundItem: name=${foundItem.name}, isAttribute=${isAttribute}, preferenceExists=${preferenceExists}, existingPrefValue=${existingPrefValue} (type ${foundItem.type}, rw=${foundItem.rw}) value is ${value} (description: ${foundItem.description})" }
     // check if the clusterAttribute has the same value as the last one, or the value has changed
     // the previous value may be stored in an attribute, as a preference, as both attribute and preference or not stored anywhere ...
     String unitText     = foundItem.unit != null ? "$foundItem.unit" : ''
@@ -1285,27 +1212,26 @@ boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = fa
     if (!isAttribute && !preferenceExists) {                    // if the previous value of this clusterAttribute is not stored anywhere - just seend an Info log if Debug is enabled
         if (!doNotTrace) {                                      // only if the clusterAttribute is not in the spammy list
             logTrace "processFoundItem: no preference or attribute for ${name} - just log the value, if not equal to the last one..."
-            // TODO - scaledValue ?????
+            // TODO - scaledValue ????? TODO!
             descText  = "${name} is ${value} ${unitText}"
             if (settings.logEnable) { logInfo "${descText }" }  // only when Debug is enabled!
         }
-        // no more processing is needed, as this clusterAttribute is not a preference and not an attribute
-        return true
+        return true         // no more processing is needed, as this clusterAttribute is NOT a preference and NOT an attribute
     }
 
-    // first, check if there is a preference defined to be updated
+    // first, check if there is a preference defined in the deviceProfileV3 to be updated
     if (preferenceExists && !doNotTrace) {  // do not even try to automatically update the preference if it is in the spammy list! - added 04/23/2024
         // preference exists and its's value is extracted
         (isEqual, preferenceValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, value, existingPrefValue)
         logTrace "processFoundItem: preference '${name}' exists with existingPrefValue ${existingPrefValue} (type ${foundItem.type}) -> <b>isEqual=${isEqual} preferenceValue=${preferenceValue}</b>"
-        if (isEqual == true) {
+        if (isEqual == true) {              // the preference is not changed - do nothing
             //log.trace "doNotTrace=${doNotTrace} isSpammyDeviceProfile=${isSpammyDeviceProfile()}"
             if (!(doNotTrace || isSpammyDeviceProfile())) {                                 // the clusterAttribute value is the same as the preference value - no need to update the preference
                 logDebug "processFoundItem: no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
             }
         }
-        else {
-            String scaledPreferenceValue = preferenceValue      //.toString() is not neccessary
+        else {      // the preferences has changed - update it!
+            String scaledPreferenceValue = preferenceValue
             if (foundItem.type == 'enum' && foundItem.scale != null && foundItem.scale != 0 && foundItem.scale != 1) {
                 scaledPreferenceValue = ((preferenceValue * safeToInt(foundItem.scale)) as int).toString()
             }
@@ -1322,7 +1248,7 @@ boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = fa
     }
     else {    // no preference exists for this clusterAttribute
         // if not in the spammy list - log it!
-        unitText = foundItem.unit != null ? "$foundItem.unit" : ''
+        unitText = foundItem.unit != null ? "$foundItem.unit" : ''      // TODO - check if unitText must be declared here or outside the if block
         //logInfo "${name} is ${value} ${unitText}"
     }
 
@@ -1337,101 +1263,67 @@ boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = fa
             if (!doNotTrace) {
                 if (settings.logEnable) { logDebug "${descText } (no change)" }
             }
+            
             // patch for inverted motion sensor 2-in-1
             if (name == 'motion' && is2in1()) {                 // TODO - remove the patch !!
                 logDebug 'patch for inverted motion sensor 2-in-1'
             // continue ...
             }
+            
             else {
                 if (state.states != null && state.states['isRefresh'] == true) {
                     logTrace 'isRefresh = true - continue and send an event, although there was no change...'
                 }
                 else {
+                    //log.trace "should not be here !!!!!!!!!!"
                     return true       // we are done (if there was potentially a preference, it should be already set to the same value)
                 }
             }
         }
 
-        // clusterAttribute value (value) is not equal to the attribute last value or was changed- we must send an event!
-        //log.trace 'sending event'
+        // clusterAttribute value (value) is not equal to the attribute last value or was changed- we must send an update event!
         int divider = safeToInt(foundItem.scale ?: 1) ?: 1
         float valueCorrected = value / divider
         if (!doNotTrace) { logTrace "value=${value} foundItem.scale=${foundItem.scale}  divider=${divider} valueCorrected=${valueCorrected}" }
         // process the events in the device specific driver..
-        if (DEVICE_TYPE in ['Thermostat'])  { processDeviceEventThermostat(name, valueScaled, unitText, descText) }
+        if (this.respondsTo('customProcessDeviceProfileEvent')) {
+            customProcessDeviceProfileEvent(descMap, name, valueScaled, unitText, descText)             // used in Zigbee_TRV
+        }
         else {
-            switch (name) {
-                case 'motion' :
-                    handleMotion(value as boolean)  // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                    break
-                case 'temperature' :
-                    //temperatureEvent(value / getTemperatureDiv())
-                    handleTemperatureEvent(valueScaled as Float)
-                    break
-                case 'humidity' :
-                    handleHumidityEvent(valueScaled)
-                    break
-                case 'illuminance' :
-                case 'illuminance_lux' :    // ignore the IAS Zone illuminance reports for HL0SS9OA and 2AAELWXK
-                    //log.trace "illuminance event received deviceProfile is ${getDeviceProfile()} value=${value} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
-                    handleIlluminanceEvent(valueCorrected as int)
-                    break
-                case 'pushed' :
-                    logDebug "button event received value=${value} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
-                    buttonEvent(valueScaled)
-                    break
-                default :
-                    sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
-                    if (!doNotTrace) {
-                        logTrace "event ${name} sent w/ value ${valueScaled}"
-                        logInfo "${descText}"   // TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
-                    }
-                    break
+            // no custom handler - send the event as usual
+            sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
+            if (!doNotTrace) {
+                logTrace "event ${name} sent w/ value ${valueScaled}"
+                logInfo "${descText}"   // TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
             }
-        //logTrace "attrValue=${attrValue} valueScaled=${valueScaled} equal=${isEqual}"
         }
     }
-    // all processing was done here!
-    return true
+    return true     // all processing was done here!
 }
 
+// not used ? (except for debugging)? TODO
 public boolean validateAndFixPreferences(boolean debug=false) {
+    //debug = true
     if (debug) { logTrace "validateAndFixPreferences: preferences=${DEVICE?.preferences}" }
-    if (DEVICE?.preferences == null || DEVICE?.preferences == [:]) {
-        logDebug "validateAndFixPreferences: no preferences defined for device profile ${getDeviceProfile()}"
-        return false
-    }
-    int validationFailures = 0
-    int validationFixes = 0
-    int total = 0
+    if (DEVICE?.preferences == null || DEVICE?.preferences == [:]) { logDebug "validateAndFixPreferences: no preferences defined for device profile ${getDeviceProfile()}" ; return false }
+    int validationFailures = 0, validationFixes = 0, total = 0
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
-    def oldSettingValue
-    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
-    def newValue
-    String settingType
+    def oldSettingValue, newValue
+    String settingType = ''
     DEVICE?.preferences.each {
         Map foundMap = getPreferencesMapByName(it.key)
-        if (foundMap == null || foundMap == [:]) {
-            logDebug "validateAndFixPreferences: map not found for preference ${it.key}"    // 10/21/2023 - sevirity lowered to debug
-            return false
-        }
-        settingType = device.getSettingType(it.key)
-        oldSettingValue = device.getSetting(it.key)
-        if (settingType == null) {
-            logDebug "validateAndFixPreferences: settingType not found for preference ${it.key}"
-            return false
-        }
+        if (foundMap == null || foundMap == [:]) { logDebug "validateAndFixPreferences: map not found for preference ${it.key}" ; return false }
+        settingType = device.getSettingType(it.key) ; oldSettingValue = device.getSetting(it.key)
+        if (settingType == null) { logDebug "validateAndFixPreferences: settingType not found for preference ${it.key}" ; return false }
         if (debug) { logTrace "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) oldSettingValue = ${oldSettingValue} mapType = ${foundMap.type} settingType=${settingType}" }
         if (foundMap.type != settingType) {
             logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) new mapType = ${foundMap.type} <b>differs</b> from the old settingType=${settingType} (oldSettingValue = ${oldSettingValue}) "
             validationFailures ++
             // remove the setting and create a new one using the foundMap.type
             try {
-                device.removeSetting(it.key)
-                logDebug "validateAndFixPreferences: removing setting ${it.key}"
+                device.removeSetting(it.key) ; logDebug "validateAndFixPreferences: removing setting ${it.key}"
             } catch (e) {
-                logWarn "validateAndFixPreferences: exception ${e} caught while removing setting ${it.key}"
-                return false
+                logWarn "validateAndFixPreferences: exception ${e} caught while removing setting ${it.key}" ; return false
             }
             // first, try to use the old setting value
             try {
@@ -1465,8 +1357,7 @@ public boolean validateAndFixPreferences(boolean debug=false) {
                     logDebug "validateAndFixPreferences: updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with <b>default</b> value ${newValue} "
                     validationFixes ++
                 } catch (e2) {
-                    logWarn "<b>validateAndFixPreferences: exception '${e2}' caught while setting default value ... Giving up!</b>"
-                    return false
+                    logWarn "<b>validateAndFixPreferences: exception '${e2}' caught while setting default value ... Giving up!</b>" ; return false
                 }
             }
         }
@@ -1476,10 +1367,24 @@ public boolean validateAndFixPreferences(boolean debug=false) {
     return true
 }
 
+// command for debugging
 public void printFingerprints() {
     deviceProfilesV3.each { profileName, profileMap ->
         profileMap.fingerprints?.each { fingerprint ->
             logInfo "${fingerprint}"
+        }
+    }
+}
+
+// command for debugging
+public void printPreferences() {
+    logDebug "printPreferences: DEVICE?.preferences=${DEVICE?.preferences}"
+    if (DEVICE != null && DEVICE?.preferences != null && DEVICE?.preferences != [:] && DEVICE?.device?.isDepricated != true) {
+        (DEVICE?.preferences).each { key, value ->
+            Map inputMap = inputIt(key, true)   // debug = true
+            if (inputMap != null && inputMap != [:]) {
+                log.trace inputMap
+            }
         }
     }
 }

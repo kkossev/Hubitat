@@ -25,7 +25,6 @@ library(
 static String reportingLibVersion()   { '3.2.0' }
 static String reportingLibStamp() { '2024/05/25 7:27 AM' }
 
-
 metadata {
     // no capabilities
     // no attributes

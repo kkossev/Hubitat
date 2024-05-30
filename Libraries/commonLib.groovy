@@ -34,7 +34,7 @@ library(
   * ver. 3.1.0  2024-04-28 kkossev  - unnecesery unschedule() speed optimization; added syncTuyaDateTime(); tuyaBlackMagic() initialization bug fix.
   * ver. 3.1.1  2024-05-05 kkossev  - getTuyaAttributeValue bug fix; added customCustomParseIlluminanceCluster method
   * ver. 3.2.0  2024-05-23 kkossev  - standardParse____Cluster and customParse___Cluster methods; moved onOff methods to a new library; rename all custom handlers in the libs to statdndardParseXXX
-  * ver. 3.2.1  2024-05-25 kkossev  - (dev. branch)
+  * ver. 3.2.1  2024-05-27 kkossev  - (dev. branch) 4 in 1 V3 compatibility; added IAS cluster;
   *
   *                                   TODO: MOVE ZDO counters to health state;
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
@@ -45,7 +45,7 @@ library(
 */
 
 String commonLibVersion() { '3.2.1' }
-String commonLibStamp() { '2024/05/25 10:32 PM' }
+String commonLibStamp() { '2024/05/27 10:13 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -206,7 +206,7 @@ void parse(final String description) {
 @Field static final Map<Integer, String> ClustersMap = [
     0x0000: 'Basic',                0x0001: 'Power',            0x0003: 'Identify',         0x0004: 'Groups',           0x0005: 'Scenes',       0x000C: 'AnalogInput',
     0x0006: 'OnOff',                0x0008: 'LevelControl',     0x0012: 'MultistateInput',  0x0102: 'WindowCovering',   0x0201: 'Thermostat',   0x0300: 'ColorControl',
-    0x0400: 'Illuminance',          0x0402: 'Temperature',      0x0405: 'Humidity',         0x0406: 'Occupancy',        0x042A: 'Pm25',         0x0702: 'ElectricalMeasure',
+    0x0400: 'Illuminance',          0x0402: 'Temperature',      0x0405: 'Humidity',         0x0406: 'Occupancy',        0x042A: 'Pm25',         0x0500: 'IAS',             0x0702: 'ElectricalMeasure',
     0x0B04: 'Metering',             0xE002: 'E002',             0xEC03: 'EC03',             0xEF00: 'Tuya',             0xFC11: 'FC11',         0xFC7E: 'AirQualityIndex', // Sensirion VOC index
     0xFCC0: 'XiaomiFCC0',
 ]
@@ -220,13 +220,13 @@ boolean standardAndCustomParseCluster(Map descMap, final String description) {
         return false
     }
     String customParser = "customParse${clusterName}Cluster"
-    String standardParser = "standardParse${clusterName}Cluster"
     // check if a custom parser is defined in the custom driver. If found there, the standard parser should  be called within that custom parser, if needed
     if (this.respondsTo(customParser)) {
         this."${customParser}"(descMap)
         descMap.remove('additionalAttrs')?.each { final Map map -> this."${customParser}"(descMap + map) }
         return true
     }
+    String standardParser = "standardParse${clusterName}Cluster"
     // if no custom parser is defined, try the standard parser (if exists), eventually defined in the included library file
     if (this.respondsTo(standardParser)) {
         this."${standardParser}"(descMap)
@@ -482,7 +482,7 @@ BigDecimal approxRollingAverage(BigDecimal avgPar, BigDecimal newSample) {
 */
 @Field static final Map powerSourceOpts =  [ defaultValue: 0, options: [0: 'unknown', 1: 'mains', 2: 'mains', 3: 'battery', 4: 'dc', 5: 'emergency mains', 6: 'emergency mains']]
 
-// Zigbee Basic Cluster Parsing  0x0000
+// Zigbee Basic Cluster Parsing  0x0000 - called from the main parse method
 void standardParseBasicCluster(final Map descMap) {
     Long now = new Date().getTime()
     if (state.lastRx == null) { state.lastRx = [:] }
@@ -738,12 +738,11 @@ void syncTuyaDateTime() {
     }
     //
     List<String> cmds = zigbee.command(CLUSTER_TUYA, SETTIME, '0008' + zigbee.convertToHexString((int)(now() / 1000), 8) + zigbee.convertToHexString((int)((now() + offset) / 1000), 8))
-    String dateTimeNow = unix2formattedDate(now())
-    logDebug "sending time data : ${dateTimeNow} (${cmds})"
     sendZigbeeCommands(cmds)
-    logInfo "Tuya device time synchronized to ${dateTimeNow}"
+    logDebug "Tuya device time synchronized to ${unix2formattedDate(now())} (${cmds})"
 }
 
+// called from the main parse method when the cluster is 0xEF00
 void standardParseTuyaCluster(final Map descMap) {
     if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '24') {        //getSETTIME
         syncTuyaDateTime()
@@ -773,7 +772,7 @@ void standardParseTuyaCluster(final Map descMap) {
             if (!isChattyDeviceReport(descMap) && isSpammyDeviceProfileDefined && !isSpammyDeviceProfile()) {
                 logDebug "standardParseTuyaCluster: command=${descMap?.command} dp_id=${dp_id} dp=${dp} (0x${descMap?.data[2 + i]}) fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
             }
-            processTuyaDP(descMap, dp, dp_id, fncmd)
+            standardProcessTuyaDP(descMap, dp, dp_id, fncmd)
             i = i + fncmd_len + 4
         }
     }
@@ -782,17 +781,19 @@ void standardParseTuyaCluster(final Map descMap) {
     }
 }
 
-void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
-    logTrace "processTuyaDP: <b> checking customProcessTuyaDp</b> dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
-    if (this.respondsTo(customProcessTuyaDp)) {
-        logTrace 'customProcessTuyaDp exists, calling it...'
+// called from the standardParseTuyaCluster method for each DP chunk in the messages (usually one, but could be multiple DPs in one message)
+void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
+    logTrace "standardProcessTuyaDP: <b> checking customProcessTuyaDp</b> dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
+    if (this.respondsTo('customProcessTuyaDp')) {
+        logTrace 'standardProcessTuyaDP: customProcessTuyaDp exists, calling it...'
         if (customProcessTuyaDp(descMap, dp, dp_id, fncmd, dp_len) == true) {
-            return
+            return       // EF00 DP has been processed in the custom handler - we are done!
         }
     }
-    if (this.respondsTo(processTuyaDPfromDeviceProfile)) {  // check if the method  method exists
-        if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {    // sucessfuly processed the new way - we are done.  version 3.0
-            return
+    // check if DeviceProfile processing method exists (deviceProfieLib should be included in the main driver)
+    if (this.respondsTo(processTuyaDPfromDeviceProfile)) {  
+        if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {
+            return      // sucessfuly processed the new way - we are done.  (version 3.0)
         }
     }
     logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -814,12 +815,12 @@ private int getTuyaAttributeValue(final List<String> _data, final int index) {
 
 private List<String> getTuyaCommand(String dp, String dp_type, String fncmd) { return sendTuyaCommand(dp, dp_type, fncmd) }
 
-private List<String> sendTuyaCommand(String dp, String dp_type, String fncmd) {
+private List<String> sendTuyaCommand(String dp, String dp_type, String fncmd, int tuyaCmdDefault = SETDATA) {
     List<String> cmds = []
     int ep = safeToInt(state.destinationEP)
     if (ep == null || ep == 0) { ep = 1 }
-    int tuyaCmd = isFingerbot() ? 0x04 : SETDATA
-    //tuyaCmd = 0x04  // !!!!!!!!!!!!!!!!!!!!!!!
+    //int tuyaCmd = isFingerbot() ? 0x04 : SETDATA
+    int tuyaCmd = isFingerbot() ? 0x04 : tuyaCmdDefault // 0x00 is the default command for most of the Tuya devices, except some ..
     cmds = zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], delay = 201, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd )
     logDebug "${device.displayName} getTuyaCommand (dp=$dp fncmd=$fncmd dp_type=$dp_type) = ${cmds}"
     return cmds
@@ -909,10 +910,16 @@ List<String> customHandlers(final List customHandlersList) {
 void refresh() {
     logDebug "refresh()... DEVICE_TYPE is ${DEVICE_TYPE} model=${device.getDataValue('model')} manufacturer=${device.getDataValue('manufacturer')}"
     checkDriverVersion(state)
-    List<String> cmds = []
-    setRefreshRequest()    // 3 seconds
-    List<String> customCmds = customHandlers(['batteryRefresh', 'groupsRefresh', 'onOffRefresh', 'customRefresh'])
-    if (customCmds != null && !customCmds.isEmpty()) { cmds +=  customCmds } else { logDebug 'no customHandlers refresh() defined' }
+    List<String> cmds = [], customCmds = []
+    if (this.respondsTo('customRefresh')) {     // if there is a customRefresh() method defined in the main driver, call it
+        customCmds = customRefresh()
+        if (customCmds != null && !customCmds.isEmpty()) { cmds +=  customCmds } else { logDebug 'no customRefresh method defined' }
+    }
+    else {  // call all known libraryRefresh methods
+        customCmds = customHandlers(['onOffRefresh', 'groupsRefresh', 'batteryRefresh', 'levelRefresh', 'temperatureRefresh', 'humidityRefresh', 'illuminanceRefresh'])
+        if (customCmds != null && !customCmds.isEmpty()) { cmds +=  customCmds } else { logDebug 'no libraries refresh() defined' }
+    }
+    /*
     if (DEVICE_TYPE in  ['Dimmer']) {
         cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay = 200)
         cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay = 200)
@@ -921,8 +928,10 @@ void refresh() {
         cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200)
         cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay = 200)
     }
+    */
     if (cmds != null && !cmds.isEmpty()) {
         logDebug "refresh() cmds=${cmds}"
+        setRefreshRequest()    // 3 seconds
         sendZigbeeCommands(cmds)
     }
     else {
@@ -1546,7 +1555,7 @@ String unix2formattedDate(Long unixTime) {
     }
 }
 
-long formattedDate2unix(String formattedDate) {
+Long formattedDate2unix(String formattedDate) {
     try {
         if (formattedDate == null) { return null }
         Date date = Date.parse('yyyy-MM-dd HH:mm:ss.SSS', formattedDate)

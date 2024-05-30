@@ -18,17 +18,17 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added illuminanceLib.groovy
- * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment;
+ * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment; added capability 'IlluminanceMeasurement'; added illuminanceRefresh()
  *
  *                                   TODO: illum threshold not working!
  *                                   TODO: check illuminanceInitializeVars() and illuminanceProcessTuyaDP() usage
 */
 
 static String illuminanceLibVersion()   { '3.2.0' }
-static String illuminanceLibStamp() { '2024/05/21 9:03 PM' }
+static String illuminanceLibStamp() { '2024/05/28 1:33 PM' }
 
 metadata {
-    // no capabilities
+    capability 'IlluminanceMeasurement'
     // no attributes
     // no commands
     preferences {
@@ -123,4 +123,10 @@ void illuminanceInitializeVars( boolean fullInit = false ) {
         if (fullInit || settings?.illuminanceThreshold == null) { device.updateSetting('illuminanceThreshold', [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:'number']) }
         if (fullInit || settings?.illuminanceCoeff == null) { device.updateSetting('illuminanceCoeff', [value:1.00, type:'decimal']) }
     }
+}
+
+List<String> illuminanceRefresh() {
+    List<String> cmds = []
+    cmds = zigbee.readAttribute(0x0400, 0x0000, [:], delay = 200) // illuminance
+    return cmds
 }

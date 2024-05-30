@@ -18,27 +18,26 @@ library(
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added temperatureLib.groovy
  * ver. 3.0.1  2024-04-19 kkossev  - temperature rounding fix
- * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment; added temperatureRefresh()
  *
- *                                   TODO:
+ *                                   TODO: check why  if (settings?.minReportingTime...) condition in the preferences ?
+ *                                   TODO: add temperatureOffset
+ *                                   TODO: unschedule('sendDelayedTempEvent') only if needed (add boolean flag to sendDelayedTempEvent())
+ *                                   TODO: check for negative temperature values in standardParseTemperatureCluster()
 */
 
 static String temperatureLibVersion()   { '3.2.0' }
-static String temperatureLibStamp() { '2024/05/21 5:04 PM' }
+static String temperatureLibStamp() { '2024/05/29 9:06 PM' }
 
 metadata {
     capability 'TemperatureMeasurement'
     // no commands
     preferences {
         if (device) {
-            if (settings?.minReportingTime == null) {
-                input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: '<i>Minimum reporting interval, seconds (1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
-            }
-            if (settings?.minReportingTime == null) {
-                if (deviceType != 'mmWaveSensor') {
-                    input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: '<i>Maximum reporting interval, seconds (120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
-                }
-            }
+            input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: '<i>Minimum reporting interval, seconds (1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
+            if (deviceType != 'mmWaveSensor') {
+                input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: '<i>Maximum reporting interval, seconds (120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
+           }
         }
     }
 }
@@ -100,5 +99,11 @@ void sendDelayedTempEvent(Map eventMap) {
 List<String> temperatureLibInitializeDevice() {
     List<String> cmds = []
     cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1도*/)                // 402 - temperature
+    return cmds
+}
+
+List<String> temperatureRefresh() {
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200)
     return cmds
 }

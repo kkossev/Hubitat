@@ -17,28 +17,19 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added humidityLib.groovy
- * ver. 3.2.0  2024-05-21 kkossev  - (dev.branch) commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-05-29 kkossev  - (dev.branch) commonLib 3.2.0 allignment; added humidityRefresh()
  *
  *                                   TODO:
 */
 
 static String humidityLibVersion()   { '3.2.0' }
-static String humidityLibStamp() { '2024/05/21 5:09 PM' }
+static String humidityLibStamp() { '2024/05/29 9:09 PM' }
 
 metadata {
     capability 'RelativeHumidityMeasurement'
     // no commands
     preferences {
-        if (device) {
-            if (settings?.minReportingTime == null) {
-                input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: '<i>Minimum reporting interval, seconds (1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
-            }
-            if (settings?.minReportingTime == null) {
-                if (deviceType != 'mmWaveSensor') {
-                    input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: '<i>Maximum reporting interval, seconds (120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
-                }
-            }
-        }
+        // the minReportingTime and maxReportingTime are already defined in the temperatureLib.groovy
     }
 }
 
@@ -88,5 +79,11 @@ void sendDelayedHumidityEvent(Map eventMap) {
 List<String> humidityLibInitializeDevice() {
     List<String> cmds = []
     cmds += zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0 /*RALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.UINT16, 15, 300, 400/*10/100=0.4%*/)   // 405 - humidity
+    return cmds
+}
+
+List<String> humidityRefresh() {
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay = 200)
     return cmds
 }

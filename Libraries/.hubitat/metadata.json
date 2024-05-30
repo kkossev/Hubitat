@@ -4,19 +4,13 @@
       "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLib.groovy",
       "id": 142,
       "codeType": "library",
-      "version": 423
+      "version": 471
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/rgbLib.groovy",
       "id": 143,
       "codeType": "library",
       "version": 107
-    },
-    {
-      "filepath": "/C:/Work/Hubitat/Libraries/commonLib.groovy",
-      "id": 144,
-      "codeType": "library",
-      "version": 295
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/airQualityLib.groovy",
@@ -34,19 +28,13 @@
       "filepath": "/c:/Work/Hubitat/Libraries/energyLib.groovy",
       "id": 166,
       "codeType": "library",
-      "version": 13
-    },
-    {
-      "filepath": "/C:/Work/Hubitat/Libraries/buttonLib.groovy",
-      "id": 167,
-      "codeType": "library",
-      "version": 4
+      "version": 14
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 494
+      "version": 506
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/groupsLib.groovy",
@@ -58,13 +46,13 @@
       "filepath": "/c:/Work/Hubitat/Libraries/levelLib.groovy",
       "id": 170,
       "codeType": "library",
-      "version": 18
+      "version": 20
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/buttonLib.groovy",
       "id": 167,
       "codeType": "library",
-      "version": 20
+      "version": 21
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/batteryLib.groovy",
@@ -73,34 +61,10 @@
       "version": 14
     },
     {
-      "filepath": "/C:/Work/Hubitat/Libraries/temperatureLib.groovy",
-      "id": 172,
-      "codeType": "library",
-      "version": 6
-    },
-    {
-      "filepath": "/C:/Work/Hubitat/Libraries/humidityLib.groovy",
-      "id": 173,
-      "codeType": "library",
-      "version": 6
-    },
-    {
-      "filepath": "/c:/Work/Hubitat/Libraries/temperatureLib.groovy",
-      "id": 172,
-      "codeType": "library",
-      "version": 14
-    },
-    {
       "filepath": "/c:/Work/Hubitat/Libraries/illuminanceLib.groovy",
       "id": 168,
       "codeType": "library",
-      "version": 8
-    },
-    {
-      "filepath": "/c:/Work/Hubitat/Libraries/humidityLib.groovy",
-      "id": 172,
-      "codeType": "library",
-      "version": 12
+      "version": 11
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/ctLib.groovy",
@@ -112,13 +76,31 @@
       "filepath": "/c:/Work/Hubitat/Libraries/onOffLib.groovy",
       "id": 176,
       "codeType": "library",
-      "version": 16
+      "version": 20
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/reportingLib.groovy",
       "id": 177,
       "codeType": "library",
-      "version": 6
+      "version": 7
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/iasLib.groovy",
+      "id": 178,
+      "codeType": "library",
+      "version": 18
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/temperatureLib.groovy",
+      "id": 172,
+      "codeType": "library",
+      "version": 24
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/humidityLib.groovy",
+      "id": 173,
+      "codeType": "library",
+      "version": 10
     }
   ]
 }

@@ -16,25 +16,32 @@
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
  * ver. 2.0.0  2023-05-08 kkossev  - Initial test version
- * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) comminLib 3.6
+ * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) commonLib 3.0.6
+ * ver. 3.2.0  2024-05-28 kkossev  - (dev. branch) commonLib 3.2.0
  *
  *                                   TODO:
  */
 
-static String version() { "3.0.6" }
-static String timeStamp() {"2024/04/06 10:53 PM"}
+static String version() { "3.2.0" }
+static String timeStamp() {"2024/05/28 1:34 PM"}
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 
 #include kkossev.commonLib
-#include kkossev.onOffLib
-#include kkossev.groupsLib
 #include kkossev.buttonLib
+#include kkossev.ctLib
 #include kkossev.energyLib
+#include kkossev.groupsLib
+#include kkossev.humidityLib
+#include kkossev.iasLib
 #include kkossev.illuminanceLib
 #include kkossev.levelLib
-//#include kkossev.rgbLib
-//#include kkossev.deviceProfileLib // can not get property 'UNKNOWN' on null object in librabry rgrbLib
+#include kkossev.onOffLib
+#include kkossev.reportingLib
+#include kkossev.rgbLib
+#include kkossev.temperatureLib
+#include kkossev.deviceProfileLib 
+// can not get property 'UNKNOWN' on null object in librabry rgrbLib
 
 deviceType = "Device"
 @Field static final String DEVICE_TYPE = "Device"

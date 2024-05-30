@@ -16,13 +16,13 @@ library(
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.2.0  2024-05-24 kkossev  - commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment
  *
  *                                   TODO:
 */
 
 static String onOffLibVersion()   { '3.2.0' }
-static String onOffLibStamp() { '2024/05/24 10:44 AM' }
+static String onOffLibStamp() { '2024/05/28 10:44 AM' }
 
 @Field static final Boolean _THREE_STATE = true
 
@@ -34,7 +34,7 @@ metadata {
     }
     // no commands
     preferences {
-        if (settings?.advancedOptions == true) {
+        if (settings?.advancedOptions == true && device != null && DEVICE_TYPE != 'Device') {
             input(name: 'ignoreDuplicated', type: 'bool', title: '<b>Ignore Duplicated Switch Events</b>', description: '<i>Some switches and plugs send periodically the switch status as a heart-beet </i>', defaultValue: true)
             input(name: 'alwaysOn', type: 'bool', title: '<b>Always On</b>', description: '<i>Disable switching OFF for plugs that must be always On</i>', defaultValue: false)
             if (_THREE_STATE == true) {
@@ -270,8 +270,7 @@ void parseOnOffAttributes(final Map it) {
 
 List<String> onOffRefresh() {
     logDebug 'onOffRefresh()'
-    List<String> cmds = []
-    cmds = zigbee.readAttribute(0x0006, 0x0000, [:], delay = 100)
+    List<String> cmds = zigbee.readAttribute(0x0006, 0x0000, [:], delay = 100)
     return cmds
 }
 

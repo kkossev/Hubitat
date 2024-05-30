@@ -25,6 +25,7 @@
  * ver. 3.1.4  2024-05-14 kkossev  - added TS0601_24GHZ_PIR_RADAR profile TS0601 _TZE200_2aaelwxk and TS0601 _TZE200_kb5noeto for tests; added TS0601 _TZE204_fwondbzy; 
  * ver. 3.2.0  2024-05-24 kkossev  - commonLib 2.0 allignment
  * ver. 3.2.1  2024-05-25 kkossev  - Tuya radars bug fix
+ * ver. 3.2.2  2024-05-30 kkossev  - (dev. branch)
  *                                   
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
  *                                   TODO: cleanup the 4-in-1 state variables.
@@ -41,8 +42,8 @@
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
 */
 
-static String version() { "3.2.1" }
-static String timeStamp() {"2024/05/25 9:57 PM"}
+static String version() { "3.2.2" }
+static String timeStamp() {"2024/05/30 10:56 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -145,14 +146,14 @@ metadata {
     'TS0601_TUYA_RADAR'   : [        // isZY_M100Radar()        // spammy devices!
             description   : 'Tuya Human Presence mmWave Radar ZY-M100',
             models        : ['TS0601'],
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false, isSpammy:true, ignoreIAS:true], // sends all DPs periodically!
+            device        : [type: 'radar', powerSource: 'dc', isSleepy:false, /*isSpammy:true, */ignoreIAS:true], // sends all DPs periodically!
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
             preferences   : ['radarSensitivity':'2', 'detectionDelay':'101', 'fadingTime':'102', 'minimumDistance':'3', 'maximumDistance':'4'],
             commands      : ['resetStats':'resetStats'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ztc6ggyl', deviceJoinName: 'Tuya ZigBee Breath Presence Sensor ZY-M100'],       // KK
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_ztc6ggyl', deviceJoinName: 'Tuya ZigBee Breath Presence Sensor ZY-M100'],       // KK
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ikvncluo', deviceJoinName: 'Moes TuyaHuman Presence Detector Radar 2 in 1'],    // jw970065
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ikvncluo', deviceJoinName: 'Moes TuyaHuman Presence Detector Radar 2 in 1'],    // jw970065; very spammy1
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_lyetpprm', deviceJoinName: 'Tuya ZigBee Breath Presence Sensor'],
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_wukb7rhc', deviceJoinName: 'Moes Smart Human Presence Detector'],               // https://www.moeshouse.com/collections/smart-sensor-security/products/smart-zigbee-human-presence-detector-pir-mmwave-radar-detection-sensor-ceiling-mount
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_jva8ink8', deviceJoinName: 'AUBESS Human Presence Detector'],                   // https://www.aliexpress.com/item/1005004262109070.html
@@ -181,7 +182,7 @@ metadata {
 
             ],
             spammyDPsToIgnore : [9],
-            spammyDPsToNotTrace : [9, 103],
+            spammyDPsToNotTrace : [9, 103, 104], // added the illuminance as a spammyDP - 05/30/10114
             deviceJoinName: 'Tuya Human Presence Detector ZY-M100'
     ],
     
@@ -893,6 +894,32 @@ void customParseEC03Cluster(final Map descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "customParseEC03Cluster: zigbee received unknown cluster 0xEC03 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
 }
+
+// called from processFoundItem in deviceProfileLib 
+void customProcessDeviceProfileEvent(final Map descMap, final String name, final valueScaled, final String unitText, final String descText) {
+    logTrace "customProcessDeviceProfileEvent(${name}, ${valueScaled}) called"
+    boolean doNotTrace = isSpammyDPsToNotTrace(descMap)
+    Map eventMap = [name: name, value: valueScaled, unit: unitText, descriptionText: descText, type: 'physical', isStateChange: true]
+    switch (name) {
+        case 'motion' :
+            handleMotion(valueScaled == 'active' ? true : false)  // bug fixed 05/30/2024
+            break
+        case 'illuminance' :
+        case 'illuminance_lux' :    // ignore the IAS Zone illuminance reports for HL0SS9OA and 2AAELWXK
+            //log.trace "illuminance event received deviceProfile is ${getDeviceProfile()} value=${value} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
+            handleIlluminanceEvent(valueScaled as int)  // TODO : was valueCorrected !!!!! ?? check! TODO !
+            break
+        default :
+            sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
+            if (!doNotTrace) {
+                logTrace "event ${name} sent w/ value ${valueScaled}"
+                logInfo "${descText}"   // TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
+            }
+            break
+    }    
+}
+
+
 
 List<String> refreshFromDeviceProfileList() {
     logDebug "refreshFromDeviceProfileList()"

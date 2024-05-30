@@ -20,19 +20,11 @@ library(
  * ver. 3.0.0  2024-04-06 kkossev  - added energyLib.groovy
  * ver. 3.2.0  2024-05-24 kkossev  - CommonLib 3.2.0 allignment
  *
- *                                   TODO:
+ *                                   TODO: add energyRefresh() 
 */
 
 static String energyLibVersion()   { '3.2.0' }
 static String energyLibStamp() { '2024/05/24 10:59 PM' }
-
-//import groovy.json.*
-//import groovy.transform.Field
-//import hubitat.zigbee.clusters.iaszone.ZoneStatus
-//import hubitat.zigbee.zcl.DataType
-//import java.util.concurrent.ConcurrentHashMap
-
-//import groovy.transform.CompileStatic
 
 metadata {
     capability 'PowerMeter'
@@ -157,4 +149,16 @@ void sendPowerFactorEvent(BigDecimal pf, boolean isDigital=false) {
     else {
         logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastFrequency} is less than ${powerFactorThreshold} %)"
     }
+}
+
+void standardParseElectricalMeasureCluster(Map descMap) {
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    int value = hexStrToUnsignedInt(descMap.value)
+    logDebug "standardParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
+}
+
+void standardParseMeteringCluster(Map descMap) {
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    int value = hexStrToUnsignedInt(descMap.value)
+    logDebug "standardParseElectricalMeasureCluster: (0x0702)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
 }

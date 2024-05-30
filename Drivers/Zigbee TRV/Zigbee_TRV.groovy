@@ -27,7 +27,8 @@
  * ver. 3.0.7  2024-03-04 kkossev  - (dev. branch) commonLib 3.0.3 check; more Groovy lint;
  * ver. 3.0.8  2024-04-01 kkossev  - (dev. branch) commonLib 3.0.4 check; more Groovy lint; tested w/ Sonoff TRVZB;
  * ver. 3.1.0  2024-04-19 kkossev  - commonLib 3.1.0 check; deviceProfilesV3; enum attributes bug fix
- * ver. 3.2.0  2024-05-24 kkossev  - (dev. branch) commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-05-25 kkossev  - (dev. branch) commonLib 3.2.0 allignment;
+ * ver. 3.2.1  2024-05-28 kkossev  - (dev. branch) customProcessDeviceProfileEvent; Xiaomi cluster value exception bug fix
  *
  *                                   TODO: Test VRT-100
  *                                   TODO: Test Aqara TRV
@@ -72,9 +73,9 @@
  */
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String version() { '3.2.0' }
+static String version() { '3.2.1' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String timeStamp() { '2024/05/24 12:58 PM' }
+static String timeStamp() { '2024/05/28 10:53 AM' }
 
 @Field static final Boolean _DEBUG = true
 
@@ -528,9 +529,7 @@ void sendEventMap(final Map event, final boolean isDigital = false) {
 void parseXiaomiClusterThermostatLib(final Map descMap) {
     //logWarn "parseXiaomiClusterThermostatLib: received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
 
-    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
-    logTrace "zigbee received Thermostat 0xFCC0 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
-    Boolean result
+    logTrace "zigbee received Thermostat 0xFCC0 attribute 0x${descMap.attrId} (raw value = ${descMap.value})"
 
     if ((descMap.attrInt as Integer) == 0x00F7 ) {      // XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes
         final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value)
@@ -538,7 +537,7 @@ void parseXiaomiClusterThermostatLib(final Map descMap) {
         return
     }
 
-    result = processClusterAttributeFromDeviceProfile(descMap)
+    Boolean result = processClusterAttributeFromDeviceProfile(descMap)
 
     if ( result == false ) {
         logWarn "parseXiaomiClusterThermostatLib: received unknown Thermostat cluster (0xFCC0) attribute 0x${descMap.attrId} (value ${descMap.value})"
@@ -1307,8 +1306,8 @@ private String getDescriptionText(final String msg) {
 // (works for BRT-100, Sonoff TRVZV)
 //
 /* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
-void processDeviceEventThermostat(final String name, final valueScaled, final String unitText, final String descText) {
-    logTrace "processDeviceEventThermostat(${name}, ${valueScaled}) called"
+void customProcessDeviceProfileEvent(final Map descMap, final String name, final valueScaled, final String unitText, final String descText) {
+    logTrace "customProcessDeviceProfileEvent(${name}, ${valueScaled}) called"
     Map eventMap = [name: name, value: valueScaled, unit: unitText, descriptionText: descText, type: 'physical', isStateChange: true]
     switch (name) {
         case 'temperature' :

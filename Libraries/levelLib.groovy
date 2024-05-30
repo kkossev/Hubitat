@@ -17,13 +17,13 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added levelLib.groovy
- * ver. 3.2.0  2024-05-22 kkossev  - commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment
  *
  *                                   TODO:
 */
 
 static String levelLibVersion()   { '3.2.0' }
-static String levelLibStamp() { '2024/05/22 10:00 PM' }
+static String levelLibStamp() { '2024/05/28 12:33 PM' }
 
 metadata {
     capability 'Switch'             // TODO - move to a new library
@@ -32,9 +32,11 @@ metadata {
     // no attributes
     // no commands
     preferences {
-        input name: 'levelUpTransition', type: 'enum', title: '<b>Dim up transition length</b>', options: TransitionOpts.options, defaultValue: TransitionOpts.defaultValue, required: true, description: '<i>Changes the speed the light dims up. Increasing the value slows down the transition.</i>'
-        input name: 'levelDownTransition', type: 'enum', title: '<b>Dim down transition length</b>', options: TransitionOpts.options, defaultValue: TransitionOpts.defaultValue, required: true, description: '<i>Changes the speed the light dims down. Increasing the value slows down the transition.</i>'
-        input name: 'levelChangeRate', type: 'enum', title: '<b>Level change rate</b>', options: LevelRateOpts.options, defaultValue: LevelRateOpts.defaultValue, required: true, description: '<i>Changes the speed that the light changes when using <b>start level change</b> until <b>stop level change</b> is sent.</i>'
+        if (device != null && DEVICE_TYPE != 'Device') {        
+            input name: 'levelUpTransition', type: 'enum', title: '<b>Dim up transition length</b>', options: TransitionOpts.options, defaultValue: TransitionOpts.defaultValue, required: true, description: '<i>Changes the speed the light dims up. Increasing the value slows down the transition.</i>'
+            input name: 'levelDownTransition', type: 'enum', title: '<b>Dim down transition length</b>', options: TransitionOpts.options, defaultValue: TransitionOpts.defaultValue, required: true, description: '<i>Changes the speed the light dims down. Increasing the value slows down the transition.</i>'
+            input name: 'levelChangeRate', type: 'enum', title: '<b>Level change rate</b>', options: LevelRateOpts.options, defaultValue: LevelRateOpts.defaultValue, required: true, description: '<i>Changes the speed that the light changes when using <b>start level change</b> until <b>stop level change</b> is sent.</i>'
+        }
     }
 }
 
@@ -290,8 +292,7 @@ void updatedLevel() {
     logDebug "updatedLevel: ${device.currentValue('level')}"
 }
 
-List<String> refreshLevel() {
-    List<String> cmds = []
-    cmds = zigbee.onOffRefresh(100) + zigbee.levelRefresh(101)
+List<String> levelRefresh() {
+    List<String> cmds = zigbee.onOffRefresh(100) + zigbee.levelRefresh(101)
     return cmds
 }

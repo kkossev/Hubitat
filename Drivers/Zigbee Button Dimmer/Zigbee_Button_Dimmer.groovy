@@ -12,22 +12,19 @@
  * 	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  * 	for the specific language governing permissions and limitations under the License.
  *
- * This driver is inspired by @w35l3y work on Tuya device driver (Edge project).
- * For a big portions of code all credits go to Jonathan Bradshaw.
- *
  * ver. 2.0.5  2023-07-02 kkossev  - Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command; added switch moode (dimmer/scene) for TS004F
  * ver. 2.1.4  2023-09-06 kkossev  - buttonDimmerLib library; added IKEA Styrbar E2001/E2002, IKEA on/off switch E1743, IKEA remote control E1810; added Identify cluster; Ranamed 'Zigbee Button Dimmer'; bugfix - Styrbar ignore button 1; IKEA RODRET E2201  key #4 changed to key #2; added IKEA TRADFRI open/close remote E1766
  * ver. 3.0.4  2024-04-01 kkossev  - commonLib 3.0.4; added 'Schneider Electric WDE002924'
  * ver. 3.0.5  2024-04-05 kkossev  - fixed digital button events exception; reverseButton option enabled for Tuya devices only; added 'FLSSYSTEM-M4' alternative model name, when modified by the Zigbee - Generic Switch driver
  * ver. 3.0.6  2024-04-07 kkossev  - zigbee groups library; setLevel exception bug fix;
  * ver. 3.0.7  2024-04-28 kkossev  - commonLib 3.1.0; re-initialize TS004F dimmers in the last mode during re-pairing; defaults bug fix;
- * ver. 3.2.0  2024-05-23 kkossev  - commonLib 3.2.0;
+ * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0;
  *
  *                                   TODO: 
  */
 
 static String version() { "3.2.0" }
-static String timeStamp() {"2024/05/23 11:44 PM"}
+static String timeStamp() {"2024/05/28 2:33 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
