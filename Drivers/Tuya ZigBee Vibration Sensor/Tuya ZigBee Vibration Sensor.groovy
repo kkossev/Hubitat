@@ -35,8 +35,8 @@
  *                                TODO: handle tamper: (zoneStatus & 1<<2); handle battery_low: (zoneStatus & 1<<3); TODO: check const sens = {'high': 0, 'medium': 2, 'low': 6}[value];
  */
 
-static String version() { "1.2.1" }
-static String timeStamp() { "2024/06/03 12:49 PM" }
+static String version() { "1.2.2" }
+static String timeStamp() { "2024/06/03 1:03 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
