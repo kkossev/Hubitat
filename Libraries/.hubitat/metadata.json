@@ -4,7 +4,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLib.groovy",
       "id": 142,
       "codeType": "library",
-      "version": 471
+      "version": 474
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/rgbLib.groovy",
@@ -22,7 +22,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/xiaomiLib.groovy",
       "codeType": "library",
       "id": 165,
-      "version": 11
+      "version": 18
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/energyLib.groovy",
@@ -34,7 +34,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 506
+      "version": 511
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/groupsLib.groovy",
@@ -70,7 +70,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/ctLib.groovy",
       "id": 175,
       "codeType": "library",
-      "version": 8
+      "version": 10
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/onOffLib.groovy",
@@ -88,7 +88,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/iasLib.groovy",
       "id": 178,
       "codeType": "library",
-      "version": 18
+      "version": 19
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/temperatureLib.groovy",

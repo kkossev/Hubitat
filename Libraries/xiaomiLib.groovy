@@ -18,7 +18,7 @@ library(
  * ver. 1.0.0  2023-09-09 kkossev  - added xiaomiLib
  * ver. 1.0.1  2023-11-07 kkossev  - (dev. branch)
  * ver. 1.0.2  2024-04-06 kkossev  - (dev. branch) Groovy linting; aqaraCube specific code;
- * ver. 1.1.0  2024-05-21 kkossev  - (dev. branch) comonLib 3.2.0 alignmment
+ * ver. 1.1.0  2024-06-01 kkossev  - (dev. branch) comonLib 3.2.0 alignmment
  *
  *                                   TODO: remove the isAqaraXXX  dependencies !!
 */
@@ -26,7 +26,7 @@ library(
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String xiaomiLibVersion()   { '1.1.0' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String xiaomiLibStamp() { '2024/05/21 3:28 PM' }
+static String xiaomiLibStamp() { '2024/06/01 8:29 AM' }
 
 boolean isAqaraTVOC_Lib()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
 boolean isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
@@ -261,27 +261,33 @@ private static BigInteger readBigIntegerBytes(final ByteArrayInputStream stream,
  *  returns a map of decoded tag number and value pairs where the value is either a
  *  BigInteger for fixed values or a String for variable length.
  */
-private static Map<Integer, Object> decodeXiaomiTags(final String hexString) {
-    final Map<Integer, Object> results = [:]
-    final byte[] bytes = HexUtils.hexStringToByteArray(hexString)
-    new ByteArrayInputStream(bytes).withCloseable { final stream ->
-        while (stream.available() > 2) {
-            int tag = stream.read()
-            int dataType = stream.read()
-            Object value
-            if (DataType.isDiscrete(dataType)) {
-                int length = stream.read()
-                byte[] byteArr = new byte[length]
-                stream.read(byteArr, 0, length)
-                value = new String(byteArr)
-            } else {
-                int length = DataType.getLength(dataType)
-                value = readBigIntegerBytes(stream, length)
+private Map<Integer, Object> decodeXiaomiTags(final String hexString) {
+    try {
+        final Map<Integer, Object> results = [:]
+        final byte[] bytes = HexUtils.hexStringToByteArray(hexString)
+        new ByteArrayInputStream(bytes).withCloseable { final stream ->
+            while (stream.available() > 2) {
+                int tag = stream.read()
+                int dataType = stream.read()
+                Object value
+                if (DataType.isDiscrete(dataType)) {
+                    int length = stream.read()
+                    byte[] byteArr = new byte[length]
+                    stream.read(byteArr, 0, length)
+                    value = new String(byteArr)
+                } else {
+                    int length = DataType.getLength(dataType)
+                    value = readBigIntegerBytes(stream, length)
+                }
+                results[tag] = value
             }
-            results[tag] = value
         }
+        return results
     }
-    return results
+    catch (e) {
+        if (settings.logEnable) "${device.displayName} decodeXiaomiTags: ${e}"
+        return [:]
+    }
 }
 
 List<String> refreshXiaomi() {

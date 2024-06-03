@@ -123,5 +123,14 @@ public void standardParseIASCluster(final Map descMap) {
         else {
         logDebug "${clusterInfo} NOT PROCESSED ${descMap}"
         }
-*/        
+*/
+}
+
+List<String> refreshAllIas() {
+    logDebug "refreshAllIas()"
+    List<String> cmds = []
+    IAS_ATTRIBUTES.each { key, value ->
+        cmds += zigbee.readAttribute(0x0500, key, [:], delay = 199)
+    }        
+    return cmds
 }

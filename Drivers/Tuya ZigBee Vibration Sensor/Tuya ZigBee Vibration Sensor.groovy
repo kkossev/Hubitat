@@ -24,7 +24,8 @@
  * ver 1.0.8 2022-11-08 kkossev - TS0210 _TZ3000_bmfw9ykl
  * ver 1.1.0 2023-03-07 kkossev - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj ; IAS is initialized on configure();
  * ver 1.2.0 2024-05-20 kkossev - add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability and preference 'ThreeAxis'; added Samsung multisensor; logsOff scheduler; added sensitivity attribute,
- * ver 1.2.1 2024-05-22 kkossev - (dev. branch) - delete scheduled jobs on Save Preferences; added lastBattery attribute; added setAccelarationInactive command;
+ * ver 1.2.1 2024-05-22 kkossev - delete scheduled jobs on Save Preferences; added lastBattery attribute; added setAccelarationInactive command;
+ * ver 1.2.2 2024-06-03 kkossev - (dev. branch) - sensitivity preference is hidden for non-Tuya models; threeAxis preference is hidden for Tuya models;
  * 
  *                                TODO: bugFix: healthCheck is not started on installed()
  *                                TODO: add powerSource attribute
@@ -35,7 +36,7 @@
  */
 
 static String version() { "1.2.1" }
-static String timeStamp() { "2024/05/22 9:12 PM" }
+static String timeStamp() { "2024/06/03 12:49 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -77,9 +78,13 @@ metadata {
 	preferences {
 		input name: "txtEnable", type: "bool", title: "<b>Enable info message logging</b>", description: ""
 		input name: "logEnable", type: "bool", title: "<b>Enable debug message logging</b>", description: ""
-        input name: "sensitivity", type: "enum", title: "<b>Vibration Sensitivity</b>", description: "Select Vibration Sensitivity", defaultValue: "3", options:["0":"0 - Maximum", "1":"1", "2":"2", "3":"3 - Medium", "4":"4", "5":"5", "6":"6 - Minimum"]
+        if (device && isTuya()) {
+            input name: "sensitivity", type: "enum", title: "<b>Vibration Sensitivity</b>", description: "Select Vibration Sensitivity", defaultValue: "3", options:["0":"0 - Maximum", "1":"1", "2":"2", "3":"3 - Medium", "4":"4", "5":"5", "6":"6 - Minimum"]
+        }
 		input "vibrationReset", "number", title: "After vibration is detected, wait ___ second(s) until <b>resetting to inactive state</b>. Default = 3 seconds.", description: "", range: "1..7200", defaultValue: 3
-        input name: 'threeAxis', type: 'enum', title: '<b>Three Axis</b>', description: '<i>Enable or disable the Three Axis reporting<br>(ThirdReality and Samsung)</i>', defaultValue: ThreeAxisOpts.defaultValue, options: ThreeAxisOpts.options
+        if (device && !isTuya()) {
+            input name: 'threeAxis', type: 'enum', title: '<b>Three Axis</b>', description: '<i>Enable or disable the Three Axis reporting<br>(ThirdReality and Samsung)</i>', defaultValue: ThreeAxisOpts.defaultValue, options: ThreeAxisOpts.options
+        }
         if (device) {
             input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
             if (advancedOptions == true) {
@@ -576,7 +581,7 @@ boolean isTuya() {
     String model = device.getDataValue('model')
     String manufacturer = device.getDataValue('manufacturer')
     /* groovylint-disable-next-line UnnecessaryTernaryExpression */
-    return (model?.startsWith('TS') && manufacturer?.startsWith('_T')) ? true : false
+    return (model?.startsWith('T') && manufacturer?.startsWith('_T')) ? true : false
 }
 
 void updateTuyaVersion() {
@@ -815,7 +820,7 @@ void initializeVars( boolean fullInit = false ) {
         state.clear()
         unschedule()
         resetStats()
-        state.comment = 'Works with Tuya TS0210 Vibration Sensors'
+        state.comment = 'Works with Tuya TS0210 and TR Vibration Sensors'
         logInfo 'all states and scheduled jobs cleared!'
         state.driverVersion = driverVersionAndTimeStamp()
     }
@@ -861,7 +866,7 @@ void configureReporting() {
     // added 03/07/2023
     cmds += zigbee.enrollResponse(200) + zigbee.readAttribute(0x0500, 0x0000, [:], delay=200)
     //
-    if ( settings?.sensitivity != null ) {
+    if (settings?.sensitivity != null && isTuya()) {
     logDebug("Configuring vibration sensitivity to : ${settings?.sensitivity}")
             int iSens = settings.sensitivity?.toInteger()
             if (iSens>=0 && iSens<7)  {

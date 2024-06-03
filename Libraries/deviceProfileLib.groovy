@@ -26,7 +26,7 @@ library(
  * ver. 3.1.2  2024-05-05 kkossev  - (dev. branch) added isSpammyDeviceProfile()
  * ver. 3.1.3  2024-05-21 kkossev  - skip processClusterAttributeFromDeviceProfile if cluster or attribute or value is missing
  * ver. 3.2.0  2024-05-25 kkossev  - commonLib 3.2.0 allignment;
- * ver. 3.2.1  2024-05-30 kkossev  - (dev. branch) Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent);
+ * ver. 3.2.1  2024-05-31 kkossev  - (dev. branch) Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent);
  *
  *                                   TODO - remove 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
@@ -39,7 +39,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.2.1' }
-static String deviceProfileLibStamp() { '2024/05/30 11:12 AM' }
+static String deviceProfileLibStamp() { '2024/05/31 7:43 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -299,7 +299,7 @@ int signedInt(int val) {
     if (val > 127) { return (val as int) - 256 }
     else { return (val as int) }
 }
-int invert(int val) {  
+int invert(int val) {
     if (settings.invertMotion == true) { return val == 0 ? 1 : 0 }
     else { return val }
 }
@@ -855,7 +855,32 @@ void setDeviceNameAndProfile(String model=null, String manufacturer=null) {
     }
 }
 
-// TODO!
+// called from customRefresh() in the device drivers
+List<String> refreshFromDeviceProfileList() {
+    logDebug 'refreshFromDeviceProfileList()'
+    List<String> cmds = []
+    if (DEVICE?.refresh != null) {
+        List<String> refreshList = DEVICE.refresh
+        for (String k : refreshList) {
+            k = k.replaceAll('\\[|\\]', '')
+            if (k != null) {
+                // check whether the string in the refreshList matches an attribute name in the DEVICE.attributes list
+                Map map = DEVICE.attributes.find { it.name == k }
+                if (map != null) {
+                    Map mfgCode = map.mfgCode != null ? ['mfgCode':map.mfgCode] : [:]
+                    cmds += zigbee.readAttribute(hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[0]), hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[1]), mfgCode, delay = 100)
+                }
+                // check whether the string in the refreshList matches a method defined somewhere in the code
+                if (this.respondsTo(k)) {
+                    cmds += this."${k}"()
+                }
+            }
+        }
+    }
+    return cmds
+}
+
+// TODO! - remove?
 List<String> refreshDeviceProfile() {
     List<String> cmds = []
     if (cmds == []) { cmds = ['delay 299'] }
@@ -1263,13 +1288,13 @@ private boolean processFoundItem(final Map descMap, final Map foundItem, int val
             if (!doNotTrace) {
                 if (settings.logEnable) { logDebug "${descText } (no change)" }
             }
-            
+
             // patch for inverted motion sensor 2-in-1
             if (name == 'motion' && is2in1()) {                 // TODO - remove the patch !!
                 logDebug 'patch for inverted motion sensor 2-in-1'
             // continue ...
             }
-            
+
             else {
                 if (state.states != null && state.states['isRefresh'] == true) {
                     logTrace 'isRefresh = true - continue and send an event, although there was no change...'
