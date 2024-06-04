@@ -62,7 +62,8 @@
  *  ver. 1.9.2 2024-03-30 kkossev - more Groovy Linting; added TS0001 _TZ3000_mkhkxx1p _TZ3000_tgddllx4 _TZ3000_x3ewpzyr _TZ3000_qnejhcsu _TZ3000_xkap8wtb Tuya switch modules w/ power monitoring;
  *  ver. 1.9.3 2024-04-07 kkossev - setEnergyPrice() bug fix;
  *  ver. 1.9.4 2024-04-14 kkossev - added for tests: TS0601 _TZE204_ves1ycwx _TZE200_ves1ycwx _TZE200_v9hkz2yn Zemismart Real-time Smart Energy Monitors - ONE CHANNEL ONLY!
- *  ver. 1.9.5 2024-05-16 kkossev - (dev. branch) - added ThirdReality 3RSPE01044BZ Smart Plug E2 (European socket!)
+ *  ver. 1.9.5 2024-05-16 kkossev - added ThirdReality 3RSPE01044BZ Smart Plug E2 (European socket!)
+ *  ver. 1.9.6 2024-06-04 kkossev - (dev. branch) - 
  *
  *                                 TODO: add TS0601 _TZE200_qhlxve78 (no info on this device yet)
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
@@ -86,8 +87,8 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
-static String version() { '1.9.5' }
-static String timeStamp() { '2024/05/16 9:26 PM' }
+static String version() { '1.9.6' }
+static String timeStamp() { '2024/06/04 10:12 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -120,8 +121,9 @@ metadata {
         command 'ledMode', [[name:'LED mode', type: 'ENUM', description: 'Select LED mode', constraints: ['--- Select ---', 'Disabled', 'Lit when On', 'Lit when Off', 'Freeze', 'Always Green', 'Red when On; Green when Off', 'Green when On; Red when Off', 'Always Red' ]]]
         command 'setPowerOnState', [[name:"Select 'Power On State' and click on the button", type: 'ENUM', description: 'Select Power On State', constraints: ['--- Select ---', 'off', 'on', 'Last state']]]
         command 'setSwitchType',   [[name:"Select 'Switch Type' and click on the button", type: 'ENUM', description: "Select 'Switch Type", constraints: ['--- Select ---'] + switchTypeOptions.values() as List<String>]]
-        command 'setEnergyPrice', [[name:'setEnergyPrice', type: 'STRING', description: 'Set the energy cost (rate) for 1 KWh. The value is shown in the Preferences section', constraints: ['STRING'], defaultValue : '0.12']]
+        command 'setEnergyPrice', [[name:'setEnergyPrice', type: 'STRING', description: 'Set the energy cost (rate) for 1 kWh. The value is shown in the Preferences section', constraints: ['STRING'], defaultValue : '0.12']]
         command 'resetEnergy', [[name: 'Reset the accumulated Energy value' ]]
+        command 'setEnergy', [[name: 'Set the Energy value, kWh', type: 'NUMBER', description: 'Set the Energy value']]
 
         if (_DEBUG == true) {
             command 'activeEndpoints'
@@ -258,68 +260,68 @@ metadata {
     }
 
     preferences {
-        input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: '<i>Debug information, useful for troubleshooting. Recommended setting is <b>off</b></i>', defaultValue: false)
-        input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: '<i>Display measured values in HE log page. Recommended setting is <b>on</b></i>', defaultValue: true)
-        input(name: 'autoReportingEnabled', type: 'bool', title: '<b>Automatic reporting configuration</b>', description: '<i>Enable the configuration of outlet automatic reporting, if supported by the device. Default setting is <b>off</b></i>', defaultValue: false)
-        input(name: 'autoPollingEnabled', type: 'bool', title: '<b>Automatic polling</b>', description: '<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended setting is <b>on</b></i>', defaultValue: true)
+        input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: 'Display measured values in HE log page. Recommended setting is <b>on</b>', defaultValue: true)
+        input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: 'Debug information, useful for troubleshooting. Recommended setting is <b>off</b>', defaultValue: false)
+        input(name: 'autoReportingEnabled', type: 'bool', title: '<b>Automatic reporting configuration</b>', description: 'Enable the configuration of outlet automatic reporting, if supported by the device. Default setting is <b>off</b>', defaultValue: false)
+        input(name: 'autoPollingEnabled', type: 'bool', title: '<b>Automatic polling</b>', description: 'Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended setting is <b>on</b>', defaultValue: true)
         if (autoPollingEnabled?.value == true) {
-            input(name: 'pollingInterval', type: 'number', title: '<b>Polling interval</b>, seconds', description: '<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended setting is <b>60 seconds</b></i>',
+            input(name: 'pollingInterval', type: 'number', title: '<b>Polling interval</b>, seconds', description: 'The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended setting is <b>60 seconds</b>',
                    range: '10..99999', defaultValue: defaultPollingInterval)
         }
-        input(name: 'alwaysOn', type: 'bool', title: '<b>Always On</b>', description: '<i>Disable switching OFF for plugs that must be always On</i>', defaultValue: false)
-        input(name: 'optimizations', type: 'bool', title: '<b>Optimize polling and logging</b>', description: '<i>Additional optimizations to reduce the hub load</i>. Recommended value is <b>on</b>', defaultValue: true)
+        input(name: 'alwaysOn', type: 'bool', title: '<b>Always On</b>', description: 'Disable switching OFF for plugs that must be always On', defaultValue: false)
+        input(name: 'optimizations', type: 'bool', title: '<b>Optimize polling and logging</b>', description: 'Additional optimizations to reduce the hub load. Recommended value is <b>on</b>', defaultValue: true)
         if (optimizations?.value == true || autoReportingEnabled?.value == true) {
-            input(name: 'energyMinReportingTime', type: 'number', title: '<b>Shortest reporting interval</b>, seconds', description: '<i>The minimum allowed time between two automatic reports. Recommended setting is <b>30 seconds</b></i>',
+            input(name: 'energyMinReportingTime', type: 'number', title: '<b>Shortest reporting interval</b>, seconds', description: 'The minimum allowed time between two automatic reports. Recommended setting is <b>30 seconds</b>',
                 range: '1..86399', defaultValue: 30)
-            input(name: 'energyMaxReportingTime', type: 'number', title: '<b>Longest reporting interval</b>, seconds', description: '<i>The maximum time without automatic reports. Recommended setting is <b>900 seconds</b></i>',
+            input(name: 'energyMaxReportingTime', type: 'number', title: '<b>Longest reporting interval</b>, seconds', description: 'The maximum time without automatic reports. Recommended setting is <b>900 seconds</b>',
                 range: '10..86400', defaultValue: 900)
             // 09/23/2022
-            input(name: 'energyMode', type: 'enum', title: '<b>Energy Reporting</b>', description:'<i>Select Energy Reporting Mode</i>', defaultValue: 'POLLED', options: energyModeOptions)
+            input(name: 'energyMode', type: 'enum', title: '<b>Energy Reporting</b>', description:'Select Energy Reporting Mode', defaultValue: 'POLLED', options: energyModeOptions)
             if (isEnergyEnabled()) {    // if (energyMode?.value == true)
                 if (energyMode == 'FIXED') {     // "4":"Fixed Power Load"
-                    input(name: 'fixedPower', type: 'number', title: '<b>Fixed Power</b>, W', description: '<i>The fixed power consumption when the plug is switched on</i>', range: '1..9000', defaultValue: 100)
+                    input(name: 'fixedPower', type: 'number', title: '<b>Fixed Power</b>, W', description: 'The fixed power consumption when the plug is switched on', range: '1..9000', defaultValue: 100)
                 }
-                input(name: 'energyPrice', type: 'text', title: "<b>Energy price for 1 KWh</b>, \$", description: '<i>Energy price for KWh used in the Energy Cost calculations.</i>', defaultValue: '0.21326')
-                input(name: 'energyThreshold', type: 'number', title: '<b>Energy minimum change to be reported</b>, Wh', description: '<i>The minimum Energy change that will trigger reporting.</i>', range: '1..10000', defaultValue: 1)
+                input(name: 'energyPrice', type: 'text', title: "<b>Energy price for 1 KWh</b>, \$", description: 'Energy price for KWh used in the Energy Cost calculations.', defaultValue: '0.21326')
+                input(name: 'energyThreshold', type: 'number', title: '<b>Energy minimum change to be reported</b>, Wh', description: 'The minimum Energy change that will trigger reporting.', range: '1..10000', defaultValue: 1)
             }
 
-            input(name: 'reportPower', type:    'bool', title: '<b>Power Reporting Off or On</b>',  description:   '<i>(Disable reporting (Off) when not desired)</i>', defaultValue: true)
+            input(name: 'reportPower', type:    'bool', title: '<b>Power Reporting Off or On</b>',  description:   '(Disable reporting (Off) when not desired)', defaultValue: true)
             if (reportPower?.value == true) {
-                input(name: 'powerThreshold', type: 'number', title: '<b>Power minimum change to be reported</b>, W', description: '<i>The minimum Power change that will trigger reporting.</i>', range: '1..10000', defaultValue: 1)
+                input(name: 'powerThreshold', type: 'number', title: '<b>Power minimum change to be reported</b>, W', description: 'The minimum Power change that will trigger reporting.', range: '1..10000', defaultValue: 1)
             }
             if (!isFrientEnergyMonitor()) {
-                input(name: 'reportAmperage', type: 'bool', title: '<b>Amperage Reporting Off or On</b>', description: '<i>(Disable reporting (Off) when not desired)</i>', defaultValue: true)
+                input(name: 'reportAmperage', type: 'bool', title: '<b>Amperage Reporting Off or On</b>', description: '(Disable reporting (Off) when not desired)', defaultValue: true)
                 if (reportAmperage?.value == true) {
-                    input(name: 'amperageThreshold', type: 'number', title: '<b>Amperage minimum change to be reported</b>, mA', description: '<i>The minimum Amperage change that will trigger reporting.</i>', range: '1..10000', defaultValue: 25)
+                    input(name: 'amperageThreshold', type: 'number', title: '<b>Amperage minimum change to be reported</b>, mA', description: 'The minimum Amperage change that will trigger reporting.', range: '1..10000', defaultValue: 25)
                 }
-                input(name: 'reportVoltage', type:  'bool', title: '<b>Voltage Reporting Off or On</b>',  description: '<i>(Disable reporting (Off) when not desired)</i>', defaultValue: true)
+                input(name: 'reportVoltage', type:  'bool', title: '<b>Voltage Reporting Off or On</b>',  description: '(Disable reporting (Off) when not desired)', defaultValue: true)
                 if (reportVoltage?.value == true) {
-                    input(name: 'voltageThreshold', type: 'number', title: '<b>Voltage minimum change to be reported</b>, V', description: '<i>The minimum Voltage change that will trigger reporting.</i>', range: '1..10000', defaultValue: 1)
+                    input(name: 'voltageThreshold', type: 'number', title: '<b>Voltage minimum change to be reported</b>, V', description: 'The minimum Voltage change that will trigger reporting.', range: '1..10000', defaultValue: 1)
                 }
-                input(name: 'reportFrequency', type:  'bool', title: '<b>Frequency Reporting Off or On</b>',  description: '<i>(Disable reporting (Off) when not desired)</i>', defaultValue: false)
-                input(name: 'reportPowerFactor', type:  'bool', title: '<b>Power Factor Reporting Off or On</b>',  description: '<i>(Disable reporting (Off) when not desired)</i>', defaultValue: false)
-                input(name: 'reportTemperature', type:  'bool', title: '<b>Temperature Reporting Off or On</b>',  description: '<i>(Disable reporting (Off) when not desired)</i>', defaultValue: false)
+                input(name: 'reportFrequency', type:  'bool', title: '<b>Frequency Reporting Off or On</b>',  description: '(Disable reporting (Off) when not desired)', defaultValue: false)
+                input(name: 'reportPowerFactor', type:  'bool', title: '<b>Power Factor Reporting Off or On</b>',  description: '(Disable reporting (Off) when not desired)', defaultValue: false)
+                input(name: 'reportTemperature', type:  'bool', title: '<b>Temperature Reporting Off or On</b>',  description: '(Disable reporting (Off) when not desired)', defaultValue: false)
                 if (isTongouSY2()) {
-                    input(name: 'overTemperatureBreaker', type:  'bool', title: '<b>Over Temperature Protection</b>',  description: '<i>Disable or enable the Over Temperature Protection</i>', defaultValue: false)
-                    input(name: 'overTemperatureBreakerThreshold', type: 'number', title: '<b>Temperature Protection Threshold, &degC</b>', description: '<i>The Temperature Protection Threshold, &degC</i>', range: '0..100', defaultValue: 90)
-                    input(name: 'overPowerBreaker', type:  'bool', title: '<b>Over Power Protection</b>',  description: '<i>Disable or enable the Over Power Protection</i>', defaultValue: false)
-                    input(name: 'overPowerBreakerThreshold', type: 'number', title: '<b>Power Protection Threshold, kW</b>', description: '<i>The Power Protection Threshold, (1..13) kW</i>', range: '1..13', defaultValue: 12)
-                    input(name: 'overCurrentBreaker', type:  'bool', title: '<b>Over Current Protection</b>',  description: '<i>Disable or enable the Over Current Protection</i>', defaultValue: false)
-                    input(name: 'overCurrentBreakerThreshold', type: 'number', title: '<b>Over Current Protection Threshold, A</b>', description: '<i>The Over Current Protection Threshold, (1..64) A</i>', range: '1..64', defaultValue: 64)
-                    input(name: 'overVoltageBreaker', type:  'bool', title: '<b>Over Voltage Protection</b>',  description: '<i>Disable or enable the Over Voltage Protection</i>', defaultValue: false)
-                    input(name: 'overVoltageBreakerThreshold', type: 'number', title: '<b>Over Voltage Protection Threshold, V</b>', description: '<i>The Over Voltage Protection Threshold, (100..255) V</i>', range: '100..255', defaultValue: 250)
-                    input(name: 'underVoltageBreaker', type:  'bool', title: '<b>Under Voltage Protection</b>',  description: '<i>Disable or enable the Under Voltage Protection</i>', defaultValue: false)
-                    input(name: 'underVoltageBreakerThreshold', type: 'number', title: '<b>Under Voltage Protection Threshold, V</b>', description: '<i>The Under Voltage Protection Threshold, (50..240) V</i>', range: '50..240', defaultValue: 64)
+                    input(name: 'overTemperatureBreaker', type:  'bool', title: '<b>Over Temperature Protection</b>',  description: 'Disable or enable the Over Temperature Protection', defaultValue: false)
+                    input(name: 'overTemperatureBreakerThreshold', type: 'number', title: '<b>Temperature Protection Threshold, &degC</b>', description: 'The Temperature Protection Threshold, &degC', range: '0..100', defaultValue: 90)
+                    input(name: 'overPowerBreaker', type:  'bool', title: '<b>Over Power Protection</b>',  description: 'Disable or enable the Over Power Protection', defaultValue: false)
+                    input(name: 'overPowerBreakerThreshold', type: 'number', title: '<b>Power Protection Threshold, kW</b>', description: 'The Power Protection Threshold, (1..13) kW', range: '1..13', defaultValue: 12)
+                    input(name: 'overCurrentBreaker', type:  'bool', title: '<b>Over Current Protection</b>',  description: 'Disable or enable the Over Current Protection', defaultValue: false)
+                    input(name: 'overCurrentBreakerThreshold', type: 'number', title: '<b>Over Current Protection Threshold, A</b>', description: 'The Over Current Protection Threshold, (1..64) A', range: '1..64', defaultValue: 64)
+                    input(name: 'overVoltageBreaker', type:  'bool', title: '<b>Over Voltage Protection</b>',  description: 'Disable or enable the Over Voltage Protection', defaultValue: false)
+                    input(name: 'overVoltageBreakerThreshold', type: 'number', title: '<b>Over Voltage Protection Threshold, V</b>', description: 'The Over Voltage Protection Threshold, (100..255) V', range: '100..255', defaultValue: 250)
+                    input(name: 'underVoltageBreaker', type:  'bool', title: '<b>Under Voltage Protection</b>',  description: 'Disable or enable the Under Voltage Protection', defaultValue: false)
+                    input(name: 'underVoltageBreakerThreshold', type: 'number', title: '<b>Under Voltage Protection Threshold, V</b>', description: 'The Under Voltage Protection Threshold, (50..240) V', range: '50..240', defaultValue: 64)
                 }
             }
         }
         if (isFrientEnergyMonitor() == true) {
             command 'pulseConfiguration', [[name: 'PulseConfiguration', type: 'NUMBER', description: 'test', defaultValue : 1000]]
-            input(name: 'pulseConfiguration', type: 'number', title: '<b>Frient Energy Monitor Pulse Configuration</b>', description: '<i>Frient Energy Monitor Pulse Configuration</i>', range: '10..100000', defaultValue: 1000)
-            input(name: 'frientEnergyMeterMode', type: 'enum', title: '<b>Energy Reporting Mode</b>', description:'<i>Select Frient Energy Reporting Mode</i>', defaultValue: '0', options: develcoInterfaceMode)
+            input(name: 'pulseConfiguration', type: 'number', title: '<b>Frient Energy Monitor Pulse Configuration</b>', description: 'Frient Energy Monitor Pulse Configuration', range: '10..100000', defaultValue: 1000)
+            input(name: 'frientEnergyMeterMode', type: 'enum', title: '<b>Energy Reporting Mode</b>', description:'Select Frient Energy Reporting Mode', defaultValue: '0', options: develcoInterfaceMode)
         }
-        input(name: 'attribEnable', type:  'bool', title: '<b>Enable HTML Attribute Creation?</b>',  description: '<i>html attribute for use in HE dashboards</i>', defaultValue: false)
-        input(name: 'allEnable', type:  'bool', title: "<b>Enable 'all' Attribute Creation?</b>",  description: '<i>text attribute for use in HE device and rooms view</i>', defaultValue: false)
+        input(name: 'attribEnable', type:  'bool', title: '<b>Enable HTML Attribute Creation?</b>',  description: 'html attribute for use in HE dashboards', defaultValue: false)
+        input(name: 'allEnable', type:  'bool', title: "<b>Enable 'all' Attribute Creation?</b>",  description: 'text attribute for use in HE device and rooms view', defaultValue: false)
     }
 }
 
@@ -2600,6 +2602,23 @@ void setEnergyPrice(/*String*/ price) {
 void setEnergyPriceDelayed(Map map) {
     device.updateSetting('energyPrice', [value:map.priceDouble, type:'decimal'])
     if (settings?.txtEnable) { log.info "${device.displayName} energy price was set to ${map.priceDouble} on ${FormattedDateTimeFromUnix(now())}" }
+}
+
+void setEnergy(Number energy) {
+    logDebug "setEnergy() : state.lastEnergyRaw = ${state.lastEnergyRaw}"
+    state.lastResetDate = FormattedDateTimeFromUnix(now())
+    state.lastEnergyCost = 0.0
+    state.lastResetEnergy = state.lastEnergyRaw - energy
+    state.lastHourlyEnergy = state.lastEnergyRaw - energy
+    //
+    energyCostEvent(0, isDigital = true)
+    energyDurationEvent(0, isDigital = true)
+    /*
+    energyEvent(energy, isDigital = true)
+    hourlyEnergyEvent(0, isDigital = true)
+    */
+    logInfo "Energy (total:${state.lastEnergyRaw} kWh) was set to ${energy}KWh on ${state.lastResetDate}"
+    refresh()
 }
 
 void resetEnergy() {
