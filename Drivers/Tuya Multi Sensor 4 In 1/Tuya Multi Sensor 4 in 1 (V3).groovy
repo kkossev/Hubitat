@@ -15,8 +15,8 @@
  * This driver is inspired by @w35l3y work on Tuya device driver (Edge project).
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
- * ver. 3.2.0  2024-05-26 kkossev  - (dev.branch) first version, based on the mmWave radar driver code : depricated Linptech; added TS0202 add _TYZB01_vwqnz1sn; 
- * ver. 3.2.1  2024-05-29 kkossev  - (dev.branch) tested 2In1 _TZE200_3towulqd ; new device profile group 'RH3040_TUYATEC'
+ * ver. 3.2.0  2024-05-26 kkossev  - first version, based on the mmWave radar driver code : depricated Linptech; added TS0202 add _TYZB01_vwqnz1sn; 
+ * ver. 3.2.1  2024-05-31 kkossev  - commonLib ver 3.2.1 allignment; tested 2In1 _TZE200_3towulqd ; new device profile group 'RH3040_TUYATEC'; SiHAS; 
  *                                   
  *                                   TODO: test TUYATEC-53o41joc IAS - add refresh commands (battery not reported when paired!);
  *                                   TODO: temperature and humidity thresholds SIHAS exception : List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes // library marker kkossev.deviceProfileLib, line 1118
@@ -36,7 +36,7 @@
 */
 
 static String version() { "3.2.1" }
-static String timeStamp() {"2024/05/30 10:36 AM"}
+static String timeStamp() {"2024/05/31 5:29 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -178,9 +178,9 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [at:'0x0500:0x0013',  name:'sensitivity', type:'enum',    rw: 'rw', min:0,     max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'<i>PIR sensor sensitivity (update at the time motion is activated)</i>'],
                 [at:'0x0500:0xF001',  name:'keepTime',    type:'enum',    rw: 'rw', min:0,     max:5,    defVal:'0',  unit:'seconds',    map:[0:'0 seconds', 1:'30 seconds', 2:'60 seconds', 3:'120 seconds', 4:'240 seconds', 5:'480 seconds'], title:'<b>Keep Time</b>',   description:'<i>PIR keep time in seconds (update at the time motion is activated)</i>']
             ],
-
-            deviceJoinName: 'Tuya Multi Sensor 4 In 1',
-            configuration : ['battery': false]
+            refresh:        ['refreshAllIas','sensitivity', 'keepTime', 'refreshFantem'],
+            configuration : ['battery': false],
+            deviceJoinName: 'Tuya Multi Sensor 4 In 1'
     ],
 
     // tested TS0601  _TZE200_7hfcudw5 - OK
@@ -418,11 +418,14 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0400,0003,0406,0402,0001,0405,0500', outClusters:'0004,0003,0019', model:'USM-300Z', manufacturer:'ShinaSystem', deviceJoinName: 'SiHAS MultiPurpose Sensor']
             ],
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
-            tuyaDPs       : [:],
-            attributes    : [:],
-            deviceJoinName: 'SiHAS USM-300Z 4-in-1',
+            //tuyaDPs       : [:],
+            attributes    : [
+                [at:'0x0406:0x0000', name:'motion',        type:'enum',   rw: 'ro', min:0,   max:1,    defVal:'0',   scale:1,    map:[0:'inactive', 1:'active'], title:'<b>Presence</b>', description:'<i>Presence state</i>']
+            ],
+            refresh       : [ 'batteryRefresh', 'illuminanceRefresh', 'temperatureRefresh', 'humidityRefresh', 'motion'],
             //configuration : ["0x0406":"bind"]     // TODO !!
-            configuration : [:]
+            configuration : [:],
+            deviceJoinName: 'SiHAS USM-300Z 4-in-1'
     ],
 
     'NONTUYA_MOTION_IAS'   : [
@@ -704,9 +707,9 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                     description:'Motion state'
                 ]
             ],
-            deviceJoinName: 'Unknown device',        // used during the inital pairing, if no individual fingerprint deviceJoinName was found
             configuration : ['battery': true],
-            batteries     : 'unknown'
+            batteries     : 'unknown',
+            deviceJoinName: 'Unknown device'        // used during the inital pairing, if no individual fingerprint deviceJoinName was found
     ]
 
 ]
@@ -836,12 +839,30 @@ int getSecondsInactive() {
 }
 
 void customParseOccupancyCluster(final Map descMap) {
-    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    //final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "customParseOccupancyCluster: zigbee received cluster 0x0406 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
     if (result == false) {
-        logWarn "customParseOccupancyCluster: received unknown 0x0406 attribute 0x${descMap.attrId} (value ${descMap.value})"
+        if (descMap.attrId == '0000') {
+            int raw = Integer.parseInt(descMap.value, 16)
+            handleMotion(raw ? true : false)
+        }
+        // TODO - should be processed in the processClusterAttributeFromDeviceProfile method!
+        else if (descMap.attrId == '0020') {    // OWON and SONOFF
+            int value = zigbee.convertHexToInt(descMap.value)
+            sendEvent('name': 'fadingTime', 'value': value, 'unit': 'seconds', 'type': 'physical', 'descriptionText': "fading time is ${value} seconds")
+            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (fadingTime) value is ${value} (0x${descMap.value} seconds)"
+        }
+        else if (descMap.attrId == '0022') {
+            int value = zigbee.convertHexToInt(descMap.value)
+            sendEvent('name': 'radarSensitivity', 'value': value, 'unit': '', 'type': 'physical', 'descriptionText': "radar sensitivity is ${value}")
+            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (radarSensitivity) value is ${value} (0x${descMap.value})"
+        }
+        else {
+            logDebug "UNPROCESSED Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${descMap.value} (0x${descMap.value})"
+        }
     }
+
 }
 
 // called processFoundItem in the deviceProfileLib
@@ -880,35 +901,26 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, value
     }
 }
 
-// TODO - move to deviceProfileLib !!!!!!!!!!!!!!!!!!!
-List<String> refreshFromDeviceProfileList() {
-    logDebug "refreshFromDeviceProfileList()"
-    List<String> cmds = []
-    if (DEVICE?.refresh != null) {
-        List<String> refreshList = DEVICE.refresh
-        for (String k : refreshList) {
-            if (k != null) {
-                Map map = DEVICE.attributes.find { it.name == k }
-                if (map != null) {
-                    Map mfgCode = map.mfgCode != null ? ['mfgCode':map.mfgCode] : [:]
-                    cmds += zigbee.readAttribute(hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[0]), hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[1]), mfgCode, delay = 100)
-                }
-            }
-        }
-    }
+List<String> refreshFantem() {
+    List<String>  cmds = zigbee.command(0xEF00, 0x07, '00')    // Fantem Tuya Magic
     return cmds
 }
 
 List<String> customRefresh() {
     logDebug "customRefresh()"
     List<String> cmds = []
+    /*
     if (is4in1()) {
         IAS_ATTRIBUTES.each { key, value ->
             cmds += zigbee.readAttribute(0x0500, key, [:], delay = 199)
         }        
         cmds += zigbee.command(0xEF00, 0x07, '00')    // Fantem Tuya Magic
     }
-    cmds += refreshFromDeviceProfileList()
+    */
+    List<String> devProfCmds = refreshFromDeviceProfileList()
+    if (devProfCmds != null && !devProfCmds.isEmpty()) {
+        cmds += devProfCmds
+    }
     return cmds
 }
 
@@ -983,27 +995,6 @@ void customInitEvents(final boolean fullInit=false) {
         sendEvent(name: 'WARNING', value: 'EXTREMLY SPAMMY DEVICE!', descriptionText: 'This device bombards the hub every 4 seconds!')
     }
 }
-/*
-void updateInidicatorLight() {
-    if (settings?.indicatorLight != null && getDeviceProfile() == 'TS0601_BLACK_SQUARE_RADAR') {
-        // in the old 4-in-1 driver we used the Tuya command 0x11 to restore the LED on/off configuration
-        // dont'know what command "11" means, it is sent by the square black radar when powered on. Will use it to restore the LED on/off configuration :)
-        ArrayList<String> cmds = []
-        int value = safeToInt(settings.indicatorLight)
-        String dpValHex = zigbee.convertToHexString(value as int, 2)
-        cmds = sendTuyaCommand('67', DP_TYPE_BOOL, dpValHex)       // TODO - refactor!
-        if (settings?.logEnable) log.info "${device.displayName} updating indicator light to : ${(value ? 'ON' : 'OFF')} (${value})"
-        sendZigbeeCommands(cmds)
-    }
-}
-*/
-/*
-void customParseZdoClusters(final Map descMap){
-    if (descMap.clusterInt == 0x0013 && getDeviceProfile() == 'TS0601_BLACK_SQUARE_RADAR') {  // device announcement
-        updateInidicatorLight()
-    }
-}
-*/
 
 void customParseTuyaCluster(final Map descMap) {
     standardParseTuyaCluster(descMap)  // process it first in commonLib, then come back ... :) 
@@ -1030,35 +1021,6 @@ void customParseIASCluster(final Map descMap) {
 
 void formatAttrib() {
     logDebug "trapped formatAttrib() from the 4-in-1 driver..."
-}
-
-// ------------------------- sbruke781 tooltips methods -------------------------
-
-String getZindexToggle(String setting, int low = 10, int high = 50) {
-    return "<style> div:has(label[for^='settings[${setting}]']) { z-index: ${low}; } div:has(label):has(div):has(span):hover { z-index: ${high}; } </style>";
-}
-
-String getTooltipHTML(String heading, String tooltipText, String hrefURL, String hrefLabel='View Documentation'){
-    return "<span class='help-tip'> <p> <span class='help-tip-header'>${heading}</span> <br/>${tooltipText}<br/> <a href='${hrefURL}' target='_blank'>${hrefLabel}</a> </p> </span>";
-}
-
-def pageDeviceConfiguration(params) {
-    String tooltipStyle = "<style> /* The icon */ .help-tip{     /* HE styling overrides */ 	box-sizing: content-box; 	white-space: collapse; 	 	display: inline-block; 	margin: auto; 	vertical-align: text-top; 	text-align: center; 	border: 2px solid white; 	border-radius: 50%; 	width: 16px; 	height: 16px; 	font-size: 12px; 	 	cursor: default; 	color: white; 	background-color: #2f4a9c; } /* Add the icon text, e.g. question mark */ .help-tip:before{     white-space: collapse; 	content:'?';     font-family: sans-serif;     font-weight: normal;     color: white; 	z-index: 10; } /* When hovering over the icon, display the tooltip */ .help-tip:hover p{     display:block;     transform-origin: 100% 0%;     -webkit-animation: fadeIn 0.5s ease;     animation: fadeIn 0.5s ease; } /* The tooltip */ .help-tip p {     /* HE styling overrides */ 	box-sizing: content-box; 	 	/* initially hidden */ 	display: none; 	 	position: relative; 	float: right; 	width: 178px; 	height: auto; 	left: 50%; 	transform: translate(204px, -90px); 	border-radius: 3px; 	box-shadow: 0 0px 20px 0 rgba(0,0,0,0.1);	 	background-color: #FFFFFF; 	padding: 12px 16px; 	z-index: 999; 	 	color: #37393D; 	 	text-align: center; 	line-height: 18px; 	font-family: sans-serif; 	font-size: 12px; 	text-rendering: optimizeLegibility; 	-webkit-font-smoothing: antialiased; 	 } .help-tip p a { 	color: #067df7; 	text-decoration: none; 	z-index: 100; } .help-tip p a:hover { 	text-decoration: underline; } .help-tip-header {     font-weight: bold; 	color: #6482de; } /* CSS animation */ @-webkit-keyframes fadeIn {     0% { opacity:0; }     100% { opacity:100%; } } @keyframes fadeIn {     0% { opacity:0; }     100% { opacity:100%; } } </style>";
-    dynamicPage (name: "pageDeviceConfiguration", title: "Mobile Device Configuration", nextPage: "pageApplyConfiguration", install: false, uninstall: false) {
-        section("") {
-            paragraph "Select the permissions you want to grant for Mobile Controller on your mobile device: ${tooltipStyle}"
-            input ("btMonitor", "bool", title: "Monitor Bluetooth Connections? ${getZindexToggle('btMonitor')} ${getTooltipHTML('Bluetooth Monitoring', 'Allow Mobile Controller to detect devices paired to the mobile device.  Child devices will be created in HE to capture the connection status for each bluetooth device.', 'https://github.com/sburke781/MobileController/blob/master/Settings.md#bluetooth-monitoring')}",     required: true, submitOnChange: true, defaultValue: false)
-            input ("wifiMonitor", "bool", title: "Monitor Wi-Fi Connections? ${getZindexToggle('wifiMonitor')} ${getTooltipHTML('Wi-Fi Monitoring','Allow Mobile Controller to detect connections to a specified list of Wi-Fi networks, allowing easy switching between local and cloud communications and contributing to presence detection.', 'https://github.com/sburke781/MobileController/blob/master/Settings.md#wi-fi-monitoring')}",     required: true, submitOnChange: true, defaultValue: false)
-            input ("callMonitor", "bool", title: "Monitor Calls? ${getZindexToggle('callMonitor')} ${getTooltipHTML('Call Monitoring', 'Allow Mobile Controller to detect incoming, ongoing and missed calls, reporting the call status to HE.', 'https://github.com/sburke781/MobileController/blob/master/Settings.md#call-monitoring')}",     required: true, submitOnChange: true, defaultValue: false)
-            input ("msgMonitor", "bool", title: "Monitor Messages? ${getZindexToggle('msgMonitor')} ${getTooltipHTML('Message Monitoring', 'Allow Mobile Controller to detect new or unread SMS/MMS messages on the mobile device, reporting the status back to HE.', 'https://github.com/sburke781/MobileController/blob/master/Settings.md#message-monitoring')}",     required: true, submitOnChange: true, defaultValue: false)
-            input ("syncModes", "bool", title: "Synchronize HE Modes? ${getZindexToggle('syncModes')} ${getTooltipHTML('Synchronizing HE Modes', 'Changes to the HE mode will be communicated to and stored on the mobile device, allowing use of the mode in custom automations on the mobile device.', 'https://github.com/sburke781/MobileController/blob/master/Settings.md#synchronizing-he-modes')}",     required: true, submitOnChange: true, defaultValue: false)
-            input ("controlModes", "bool", title: "Allow Control of HE Mode From The Device? ${getZindexToggle('controlModes')} ${getTooltipHTML('Control HE Modes', 'Allows changes to the HE mode to be initiated on the mobile device through elements such as a home-screen widget.', 'https://github.com/sburke781/MobileController/blob/master/Settings.md#control-he-modes')}",     required: true, submitOnChange: true, defaultValue: false)
-            input ("cloudComms", "bool", title: "Allow Cloud Communication? ${getZindexToggle('cloudComms')} ${getTooltipHTML('Cloud Communication', 'Allows the mobile controller to send status updates and other commands from the mobile device when not connected to the HE hub over a local Wi-Fi or VPN connection.', 'https://github.com/sburke781/MobileController/blob/master/Settings.md#cloud-communication')}",     required: true, submitOnChange: true, defaultValue: false)
-            input ("useVPN", "bool", title: "Communicate using VPN Connection When Available? ${getZindexToggle('useVPN')} ${getTooltipHTML('VPN Connection', 'If a VPN connection is available (connected) on the mobile device, this will be used when communicating from HE to the mobile device.', 'https://github.com/sburke781/MobileController/blob/master/Settings.md#vpn-connection')}",     required: true, submitOnChange: true, defaultValue: false)
-            input ("vpnIP", "string", title: "Mobile Device VPN IP Address",     required: false, submitOnChange: true, defaultValue: '')
-            paragraph "Click Next to apply the configuration settings"
-        }
-    }
 }
 
 // ------------------------- end of Simon's tooltips methods -------------------------
