@@ -17,7 +17,7 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added humidityLib.groovy
- * ver. 3.2.0  2024-05-29 kkossev  - (dev.branch) commonLib 3.2.0 allignment; added humidityRefresh()
+ * ver. 3.2.0  2024-05-29 kkossev  - commonLib 3.2.0 allignment; added humidityRefresh()
  *
  *                                   TODO:
 */
