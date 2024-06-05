@@ -16,13 +16,13 @@ library(
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-06-04 kkossev  - commonLib 3.2.1 allignment; if isRefresh then sendEvent with isStateChange = true
  *
  *                                   TODO:
 */
 
 static String onOffLibVersion()   { '3.2.0' }
-static String onOffLibStamp() { '2024/05/28 10:44 AM' }
+static String onOffLibStamp() { '2024/06/04 1:54 PM' }
 
 @Field static final Boolean _THREE_STATE = true
 
@@ -35,10 +35,10 @@ metadata {
     // no commands
     preferences {
         if (settings?.advancedOptions == true && device != null && DEVICE_TYPE != 'Device') {
-            input(name: 'ignoreDuplicated', type: 'bool', title: '<b>Ignore Duplicated Switch Events</b>', description: '<i>Some switches and plugs send periodically the switch status as a heart-beet </i>', defaultValue: true)
-            input(name: 'alwaysOn', type: 'bool', title: '<b>Always On</b>', description: '<i>Disable switching OFF for plugs that must be always On</i>', defaultValue: false)
+            input(name: 'ignoreDuplicated', type: 'bool', title: '<b>Ignore Duplicated Switch Events</b>', description: 'Some switches and plugs send periodically the switch status as a heart-beet ', defaultValue: true)
+            input(name: 'alwaysOn', type: 'bool', title: '<b>Always On</b>', description: 'Disable switching OFF for plugs that must be always On', defaultValue: false)
             if (_THREE_STATE == true) {
-                input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>Experimental multi-state switch events</i>', defaultValue: false
+                input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: 'Experimental multi-state switch events', defaultValue: false
             }
         }
     }
@@ -177,9 +177,10 @@ void sendSwitchEvent(int switchValuePar) {
     }
     String value = (switchValue == null) ? 'unknown' : (switchValue == 0x00) ? 'off' : (switchValue == 0x01) ? 'on' : 'unknown'
     Map map = [:]
+    boolean isRefresh = state.states['isRefresh'] ?: false
     boolean debounce = state.states['debounce'] ?: false
     String lastSwitch = state.states['lastSwitch'] ?: 'unknown'
-    if (value == lastSwitch && (debounce || (settings.ignoreDuplicated ?: false))) {
+    if (value == lastSwitch && (debounce || (settings.ignoreDuplicated ?: false)) && !isRefresh) {
         logDebug "Ignored duplicated switch event ${value}"
         runInMillis(DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true])
         return
@@ -198,7 +199,6 @@ void sendSwitchEvent(int switchValuePar) {
     }
     map.name = 'switch'
     map.value = value
-    boolean isRefresh = state.states['isRefresh'] ?: false
     if (isRefresh) {
         map.descriptionText = "${device.displayName} is ${value} [Refresh]"
         map.isStateChange = true

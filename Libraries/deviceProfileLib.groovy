@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy', documentationLink: '',
-    version: '3.1.3'
+    version: '3.2.1'
 )
 /*
  *  Device Profile Library
@@ -26,7 +26,7 @@ library(
  * ver. 3.1.2  2024-05-05 kkossev  - (dev. branch) added isSpammyDeviceProfile()
  * ver. 3.1.3  2024-05-21 kkossev  - skip processClusterAttributeFromDeviceProfile if cluster or attribute or value is missing
  * ver. 3.2.0  2024-05-25 kkossev  - commonLib 3.2.0 allignment;
- * ver. 3.2.1  2024-05-31 kkossev  - (dev. branch) Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent);
+ * ver. 3.2.1  2024-06-05 kkossev  - (dev. branch) Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent); getDeviceProfilesMap bug fix; forcedProfile is always shown in preferences;
  *
  *                                   TODO - remove 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
@@ -39,7 +39,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.2.1' }
-static String deviceProfileLibStamp() { '2024/05/31 7:43 AM' }
+static String deviceProfileLibStamp() { '2024/06/05 1:06 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -71,9 +71,9 @@ metadata {
                     }
                 }
             }
-            if (advancedOptions == true) {
-                input(name: 'forcedProfile', type: 'enum', title: '<b>Device Profile</b>', description: '<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>',  options: getDeviceProfilesMap())
-            }
+            //if (advancedOptions == true) {
+                input(name: 'forcedProfile', type: 'enum', title: '<b>Device Profile</b>', description: 'Manually change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!',  options: getDeviceProfilesMap())
+            //}
         }
     }
 }
@@ -84,6 +84,7 @@ String  getDeviceProfile()       { state?.deviceProfile ?: 'UNKNOWN' }
 Map     getDEVICE()              { deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : deviceProfilesV2 != null ? deviceProfilesV2[getDeviceProfile()] : [:] }
 Set     getDeviceProfiles()      { deviceProfilesV3 != null ? deviceProfilesV3?.keySet() : deviceProfilesV2 != null ?  deviceProfilesV2?.keySet() : [] }
 //List<String> getDeviceProfilesMap()   { deviceProfilesV3 != null ? deviceProfilesV3.values().description as List<String> : deviceProfilesV2.values().description as List<String> }
+
 List<String> getDeviceProfilesMap()   {
     if (deviceProfilesV3 == null) {
         if (deviceProfilesV2 == null) { return [] }
@@ -91,12 +92,13 @@ List<String> getDeviceProfilesMap()   {
     }
     List<String> activeProfiles = []
     deviceProfilesV3.each { profileName, profileMap ->
-        if (profileMap.device?.isDepricated != true) {
-            activeProfiles.add(profileName)
+        if ((profileMap.device?.isDepricated ?: false) != true) {
+            activeProfiles.add(profileMap.description ?: '---')
         }
     }
     return activeProfiles
 }
+
 
 // ---------------------------------- deviceProfilesV3 helper functions --------------------------------------------
 
@@ -191,7 +193,7 @@ void resetPreferencesToDefaults(boolean debug=true) {
         }
         parMap = getPreferencesMapByName(parName, false)    // the individual preference map
         if (parMap?.isEmpty()) { logDebug "Preference ${parName} not found in tuyaDPs or attributes map!";  return }    // continue
-        // at:'0x0406:0x0020', name:'fadingTime', type:'enum', dt: '0x21', rw: 'rw', min:15, max:999, defVal:'30', scale:1, unit:'seconds', map:[15:'15 seconds', 30:'30 seconds', 60:'60 seconds', 120:'120 seconds', 300:'300 seconds'], title:'<b>Fading Time</b>',   description:'<i>Radar fading time in seconds</i>'],
+        // at:'0x0406:0x0020', name:'fadingTime', type:'enum', dt: '0x21', rw: 'rw', min:15, max:999, defVal:'30', scale:1, unit:'seconds', map:[15:'15 seconds', 30:'30 seconds', 60:'60 seconds', 120:'120 seconds', 300:'300 seconds'], title:'<b>Fading Time</b>',   description:'Radar fading time in seconds</i>'],
         if (parMap.defVal == null) { logDebug "no default value for preference ${parName} !" ; return }     // continue
         if (debug) { log.info "setting par ${parMap.name} defVal = ${parMap.defVal} (type:${parMap.type})" }
         String str = parMap.name
@@ -318,11 +320,12 @@ List<String> zclWriteAttribute(Map attributesMap, int scaledValue) {
     catch (e) { logWarn "setPar: Exception caught while splitting cluser and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val})) :  '${e}' " ; return [] }
     // dt (data type) is obligatory when writing to a cluster...
     if (attributesMap.rw != null && attributesMap.rw == 'rw' && map.dt == null) {
-        map.dt = attributesMap.type in ['number', 'decimal'] ? DataType.INT16 : DataType.UINT8
+        map.dt = attributesMap.type in ['number', 'decimal'] ? DataType.INT16 : DataType.ENUM8
         logDebug "cluster:attribute ${attributesMap.at} is read-write, but no data type (dt) is defined! Assuming 0x${zigbee.convertToHexString(map.dt, 2)}"
     }
     if (map.mfgCode != null && map.mfgCode != '') {
-        cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, map.mfgCode, delay = 200)
+        Map mfgCode = map.mfgCode != null ? ['mfgCode':map.mfgCode] : [:]
+        cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, mfgCode, delay = 200)
     }
     else {
         cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, [:], delay = 200)
