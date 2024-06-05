@@ -1,4 +1,4 @@
-/* groovylint-disable DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, InsecureRandom, LineLength, MethodCount, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter, UnnecessarySetter, UnusedPrivateMethod */
+/* groovylint-disable DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, InsecureRandom, LineLength, MethodCount, NoJavaUtilDate, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter, UnnecessarySetter, UnusedPrivateMethod */
 /**
  *  Tuya Contact Sensor+ with healthStatus driver for Hubitat
  *
@@ -20,12 +20,12 @@
  * ver. 1.1.0  2023-04-24 kkossev  - added advancedOptions; added battery reporting configuration
  * ver. 1.1.1  2023-06-08 kkossev  - bug fix: batteryReporting configuration for Sonoff DS01
  * ver. 1.1.2  2023-10-20 kkossev  - added option 'Convert Battery Voltage to Percent'; added  pollContactStatus preference
- * ver. 1.2.0  2024-05-23 kkossev  - (dev. branch) Groovy linting; setDeviceName() bug fix; added lastBattery attribute; added ThirdReality 3RDS17BZ fingerprint; added Xfinity XHS2-UE fingerprint; 
+ * ver. 1.2.0  2024-05-23 kkossev  - Groovy linting; setDeviceName() bug fix; added lastBattery attribute; added ThirdReality 3RDS17BZ fingerprint; added Xfinity XHS2-UE fingerprint; 
  *                                   the configuration attempts are not repeated, if error code is returned; added setOpen and setClosed commands (for tests); added pollBatteryStatus option for devices that do not report the battery level automatically
+ * ver. 1.2.1  2024-06-03 kkossev  - added resetStats command
  *
- *                                   TODO:
+ *                                   TODO: handle the case when 'lastBattery' is missing!
  *                                   TODO: filter duplicated open/close messages when 'Poll Contact Status' option is enabled
- *                                   TODO: Add clearStats command
  *                                   TODO: Add stat.stats for contact, battery, reJoin, ZDO
  *                                   TODO: Sonoff contact sensor is not reporting the battery - add an battery configuration option like in TS004F driver
  *                                   TODO: deviceProfile is not recognized?? ver 1.0.3 20223/02/25; TODO - remove 'lastRx'on Initialize
@@ -34,8 +34,8 @@
  *                                   TODO: refactor - use libraries !
  */
 
-static String version() { '1.2.0' }
-static String timeStamp() { '2024/05/23 2:55 PM' }
+static String version() { '1.2.1' }
+static String timeStamp() { '2024/06/03 7:52 AM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -69,6 +69,7 @@ metadata {
         }
         command 'setClosed', [[name: 'Set contact state to closed (for tests)']]
         command 'setOpen', [[name: 'Set contact state to open (for tests)']]
+        command 'resetStats', [[name: 'Reset the statistics\n\rPress F5 to refresh the page']]
 
         attribute 'Info', 'string'
         // when defined as attributes, will be shown on top of the 'Current States' list ...
@@ -95,28 +96,14 @@ metadata {
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,000A,0001,0500', outClusters: '0019', model: 'RH3001', manufacturer: 'TUYATEC-0l6xaqmi', deviceJoinName: 'BlitzWolf Contact Sensor'   // KK
 
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0003,0500,0001', outClusters: '0003', model: 'DS01', manufacturer: 'eWeLink', deviceJoinName: 'Sonoff Contact Sensor'
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,FF01,FF00,0001,0500", outClusters: "0019", model: "3RDS17BZ", manufacturer: "Third Reality, Inc", deviceJoinName: "Third Reality Contact Sensor" 
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0020,0402,0500,0B05", outClusters: "0019", model: "URC4460BC0-X-R", manufacturer: "Universal Electronics Inc", deviceJoinName: 'Xfinity/Visonic MCT-350 Zigbee Contact Sensor'   
+        fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,FF01,FF00,0001,0500', outClusters: '0019', model: '3RDS17BZ', manufacturer: 'Third Reality, Inc', deviceJoinName: 'Third Reality Contact Sensor' 
+        fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0003,0020,0402,0500,0B05', outClusters: '0019', model: 'URC4460BC0-X-R', manufacturer: 'Universal Electronics Inc', deviceJoinName: 'Xfinity/Visonic MCT-350 Zigbee Contact Sensor'   
     }
     preferences {
         input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: '<i>Display measured values in HE log page. Recommended value is <b>true</b></i>', defaultValue: true)
         input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: '<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>', defaultValue: true)
         if (isConfigurable()) {
             input(title: 'To configure a sleepy device, try any of the methods below :', description: '<b>* Change open/closed state<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>', type: 'paragraph', element: 'paragraph')
-            /*
-            def model = getModelGroup()
-            def modelProperties = deviceProfiles["$model"] as Map
-
-            if (modelProperties != null) {
-                def preferences =  modelProperties.find{it.key=="preferences"}
-                if (preferences != null && preferences != []) {
-                    preferences.value.each { key, value ->
-                        def strMap = value as Map
-                    //                        input ("${strMap.name}", "${strMap.type}", title: "<b>${strMap.title}</b>", description: "<i>${strMap.description}</i>", range: "${strMap.range}", defaultValue: "${strMap.defaultValue}")
-                    }
-                }
-            }
-            */
         }
         input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', defaultValue: false)
         if (advancedOptions == true) {
@@ -127,8 +114,8 @@ metadata {
             }
             input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: '<i>Convert battery voltage to battery Percentage remaining.</i>'
             input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between non-contact reports</b>', description: '<i>Minimum time between non-contact reporting (humidity, illuminance), seconds</i>', defaultValue: 10, range: '1..3600'
-            input name: 'pollContactStatus', type: 'bool', title: '<b>Poll Contact Status</b>', description: '<i>Poll the contact status when the device is awake</i>', defaultValue: false
-            input name: 'pollBatteryStatus', type: 'bool', title: '<b>Poll Battery Status</b>', description: '<i>Poll the battery status when the device is awake</i>', defaultValue: false
+            input name: 'pollContactStatus', type: 'bool', title: '<b>Poll Contact Status</b>', description: '<i>Poll the contact status every time the device is awake (check for outOfSync)</i>', defaultValue: false
+            input name: 'pollBatteryStatus', type: 'bool', title: '<b>Poll Battery Status</b>', description: '<i>Poll the battery status when no recent battery reports are received</i>', defaultValue: false
         }
     }
 }
@@ -251,33 +238,33 @@ metadata {
     ]
 ]
 
-def getModelGroup()         { return (state.deviceProfile as String) ?: 'UNKNOWN' }
-def isConfigurable(model)   { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
-def isConfigurable()        { def model = getModelGroup(); return isConfigurable(model) }
-def isBatteryConfigurable() { deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true }
+String getModelGroup()         { return (state.deviceProfile as String) ?: 'UNKNOWN' }
+boolean isConfigurable(model)   { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
+boolean isConfigurable()        { String model = getModelGroup(); return isConfigurable(model) }
+boolean isBatteryConfigurable() { deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true }
 
 @Field static final Integer MaxRetries = 3
 @Field static final Integer ConfigTimer = 15
 @Field static final Integer presenceCountDefaultThreshold = 12    // 12 hours
 
-private static getCLUSTER_TUYA() { 0xEF00 }
-private static getSETDATA() { 0x00 }
-private static getSETTIME() { 0x24 }
+private static int getCLUSTER_TUYA() { 0xEF00 }
+private static int getSETDATA() { 0x00 }
+private static int getSETTIME() { 0x24 }
 
 // Tuya Commands
-private static getTUYA_REQUEST() { 0x00 }
-private static getTUYA_REPORTING() { 0x01 }
-private static getTUYA_QUERY() { 0x02 }
-private static getTUYA_STATUS_SEARCH() { 0x06 }
-private static getTUYA_TIME_SYNCHRONISATION() { 0x24 }
+private static int getTUYA_REQUEST() { 0x00 }
+private static int getTUYA_REPORTING() { 0x01 }
+private static int getTUYA_QUERY() { 0x02 }
+private static int getTUYA_STATUS_SEARCH() { 0x06 }
+private static int getTUYA_TIME_SYNCHRONISATION() { 0x24 }
 
 // tuya DP type
-private static getDP_TYPE_RAW() { '01' }    // [ bytes ]
-private static getDP_TYPE_BOOL() { '01' }    // [ 0/1 ]
-private static getDP_TYPE_VALUE() { '02' }    // [ 4 byte value ]
-private static getDP_TYPE_STRING() { '03' }    // [ N byte string ]
-private static getDP_TYPE_ENUM() { '04' }    // [ 0-255 ]
-private static getDP_TYPE_BITMAP() { '05' }    // [ 1,2,4 bytes ] as bits
+private static String getDP_TYPE_RAW() { '01' }    // [ bytes ]
+private static String getDP_TYPE_BOOL() { '01' }    // [ 0/1 ]
+private static String getDP_TYPE_VALUE() { '02' }    // [ 4 byte value ]
+private static String getDP_TYPE_STRING() { '03' }    // [ N byte string ]
+private static String getDP_TYPE_ENUM() { '04' }    // [ 0-255 ]
+private static String getDP_TYPE_BITMAP() { '05' }    // [ 1,2,4 bytes ] as bits
 
 // Parse incoming device messages to generate events
 def parse(String description) {
@@ -1132,13 +1119,13 @@ def initialize() {
 }
 
 private sendTuyaCommand(dp, dp_type, fncmd) {
-    ArrayList<String> cmds = []
+    List<String> cmds = []
     cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay = 200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int) (fncmd.length() / 2), 4) + fncmd)
     if (settings?.logEnable) { log.trace "${device.displayName} sendTuyaCommand = ${cmds}" }
     return cmds
 }
 
-void sendZigbeeCommands(ArrayList<String> cmd) {
+void sendZigbeeCommands(List<String> cmd) {
     if (settings?.logEnable) {
         log.trace "${device.displayName} sendZigbeeCommands(cmd=$cmd)"
     }
@@ -1205,8 +1192,8 @@ void sendBatteryVoltageEvent(rawValue, Boolean convertToPercent=false) {
         def maxVolts = 3.2
         def pct = (volts - minVolts) / (maxVolts - minVolts)
         def roundedPct = Math.round(pct * 100)
-        if (roundedPct <= 0) roundedPct = 1
-        if (roundedPct >100) roundedPct = 100
+        if (roundedPct <= 0) { roundedPct = 1 }
+        if (roundedPct >100) { roundedPct = 100 }
         if (convertToPercent == true) {
             result.value = Math.min(100, roundedPct)
             result.name = 'battery'
@@ -1224,7 +1211,7 @@ void sendBatteryVoltageEvent(rawValue, Boolean convertToPercent=false) {
         result.isStateChange = true
         logInfo "${result.descriptionText}"
         sendEvent(result)
-        sendLastBatteryEvent()        
+        sendLastBatteryEvent()
     }
     else {
         logWarn "ignoring BatteryResult(${rawValue})"
@@ -1240,7 +1227,7 @@ void sendLastBatteryEvent() {
 void setHealthStatusOnline() {
     if ((device.currentValue('healthStatus', true) ?: 'unknown') != 'online') {
         sendHealthStatusEvent('online')
-        if (settings?.txtEnable) log.info "${device.displayName} is present"
+        if (settings?.txtEnable) { log.info "${device.displayName} is present" }
     }
     state.notPresentCounter = 0
 }

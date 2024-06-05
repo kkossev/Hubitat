@@ -63,7 +63,7 @@
  *  ver. 1.9.3 2024-04-07 kkossev - setEnergyPrice() bug fix;
  *  ver. 1.9.4 2024-04-14 kkossev - added for tests: TS0601 _TZE204_ves1ycwx _TZE200_ves1ycwx _TZE200_v9hkz2yn Zemismart Real-time Smart Energy Monitors - ONE CHANNEL ONLY!
  *  ver. 1.9.5 2024-05-16 kkossev - added ThirdReality 3RSPE01044BZ Smart Plug E2 (European socket!)
- *  ver. 1.9.6 2024-06-04 kkossev - (dev. branch) - 
+ *  ver. 1.9.6 2024-06-04 kkossev - (dev. branch) - added setEnergy() command
  *
  *                                 TODO: add TS0601 _TZE200_qhlxve78 (no info on this device yet)
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv

@@ -17,13 +17,13 @@
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
  * ver. 2.1.5  2023-11-06 kkossev  - (dev. branch) Aqara E1 thermostat; added deviceProfileLib; Aqara LED Strip T1 driver;
- * ver. 3.2.0  2024-05-23 kkossev  - (dev. branch) commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-06-01 kkossev  - (dev. branch) commonLib 3.2.0 allignment
  *
  *                                   TODO: 
  */
 
 static String version() { "3.2.0" }
-static String timeStamp() {"2024/05/23 11:14 PM"}
+static String timeStamp() {"2024/06/01 8:29 AM"}
 
 @Field static final Boolean _DEBUG = false
 
