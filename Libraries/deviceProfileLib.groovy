@@ -26,7 +26,7 @@ library(
  * ver. 3.1.2  2024-05-05 kkossev  - (dev. branch) added isSpammyDeviceProfile()
  * ver. 3.1.3  2024-05-21 kkossev  - skip processClusterAttributeFromDeviceProfile if cluster or attribute or value is missing
  * ver. 3.2.0  2024-05-25 kkossev  - commonLib 3.2.0 allignment;
- * ver. 3.2.1  2024-06-05 kkossev  - (dev. branch) Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent); getDeviceProfilesMap bug fix; forcedProfile is always shown in preferences;
+ * ver. 3.2.1  2024-06-06 kkossev  - (dev. branch) Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent); getDeviceProfilesMap bug fix; forcedProfile is always shown in preferences;
  *
  *                                   TODO - remove 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
@@ -39,7 +39,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.2.1' }
-static String deviceProfileLibStamp() { '2024/06/05 1:06 PM' }
+static String deviceProfileLibStamp() { '2024/06/06 5:43 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -258,7 +258,7 @@ def getScaledPreferenceValue(String preference, Map dpMap) {
     return scaledValue
 }
 
-// called from updated() method
+// called from customUpdated() method in the custom driver
 // TODO !!!!!!!!!! - refactor it !!!  IAS settings do not use Tuya DPs !!!
 public void updateAllPreferences() {
     logDebug "updateAllPreferences: preferences=${DEVICE?.preferences}"
@@ -688,19 +688,19 @@ public boolean sendCommand(final String command_orig=null, final String val_orig
     def func, funcResult
     try {
         func = DEVICE?.commands.find { it.key == command }.value
-        if (val != null) {
-            funcResult = "${func}"(val)
+        if (val != null && val != '') {
             logInfo "executed <b>$func</b>($val)"
+            funcResult = "${func}"(val)
         }
         else {
-            funcResult = "${func}"()
             logInfo "executed <b>$func</b>()"
+            funcResult = "${func}"()
         }
-    }
+    } 
     catch (e) {
         logWarn "sendCommand: Exception '${e}' caught while processing <b>$func</b>(${val})"
         return false
-    }
+    } 
     // funcResult is expected to be list of commands to be sent to the device, but can also return boolean or null
     // check if the result is a list of commands
     /* groovylint-disable-next-line Instanceof */
@@ -713,10 +713,12 @@ public boolean sendCommand(final String command_orig=null, final String val_orig
         logDebug "sendCommand: <b>$func</b>(${val}) returned <b>${funcResult}</b> instead of a list of commands!"
         return false
     }
+    /*
     cmds = funcResult
     if (cmds != null && cmds != []) {
         sendZigbeeCommands( cmds )
     }
+    */
     return true
 }
 

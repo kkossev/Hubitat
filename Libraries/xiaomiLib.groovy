@@ -1,7 +1,7 @@
 /* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitReturnStatement, LineLength, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter */
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Xiaomi Library', name: 'xiaomiLib', namespace: 'kkossev', importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/xiaomiLib.groovy', documentationLink: '',
-    version: '1.1.0'
+    version: '3.2.2'
 )
 /*
  *  Xiaomi Library
@@ -19,17 +19,20 @@ library(
  * ver. 1.0.1  2023-11-07 kkossev  - (dev. branch)
  * ver. 1.0.2  2024-04-06 kkossev  - (dev. branch) Groovy linting; aqaraCube specific code;
  * ver. 1.1.0  2024-06-01 kkossev  - (dev. branch) comonLib 3.2.0 alignmment
+ * ver. 3.2.2  2024-06-01 kkossev  - (dev. branch) comonLib 3.2.2 alignmment
  *
+ *                                   TODO: remove the DEVICE_TYPE dependencies for Bulb, Thermostat, AqaraCube, FP1, TRV_OLD
  *                                   TODO: remove the isAqaraXXX  dependencies !!
 */
 
-/* groovylint-disable-next-line ImplicitReturnStatement */
-static String xiaomiLibVersion()   { '1.1.0' }
-/* groovylint-disable-next-line ImplicitReturnStatement */
-static String xiaomiLibStamp() { '2024/06/01 8:29 AM' }
+static String xiaomiLibVersion()   { '3.2.2' }
+static String xiaomiLibStamp() { '2024/06/05 4:57 AM' }
 
 boolean isAqaraTVOC_Lib()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
+boolean isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
 boolean isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
+boolean isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
+boolean isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
 
 // no metadata for this library!
 
@@ -298,7 +301,7 @@ List<String> refreshXiaomi() {
 
 List<String> configureXiaomi() {
     List<String> cmds = []
-    logDebug "configureThermostat() : ${cmds}"
+    logDebug "configureXiaomi() : ${cmds}"
     if (cmds == []) { cmds = ['delay 299'] }    // no ,
     return cmds
 }
@@ -316,4 +319,21 @@ void initVarsXiaomi(boolean fullInit=false) {
 
 void initEventsXiaomi(boolean fullInit=false) {
     logDebug "initEventsXiaomi(${fullInit})"
+}
+
+List<String> standardAqaraBlackMagic() {
+    return []
+    /////////////////////////////////////////
+    List<String> cmds = []
+    if (isAqaraTVOC_OLD() || isAqaraTRV_OLD()) {
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", 'delay 200',]
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 200)    // TODO: check - battery voltage
+        if (isAqaraTVOC_OLD()) {
+            cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay = 200)    // TVOC only
+        }
+        logDebug 'standardAqaraBlackMagic()'
+    }
+    return cmds
 }

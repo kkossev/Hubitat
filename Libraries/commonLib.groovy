@@ -35,17 +35,17 @@ library(
   * ver. 3.1.1  2024-05-05 kkossev  - getTuyaAttributeValue bug fix; added customCustomParseIlluminanceCluster method
   * ver. 3.2.0  2024-05-23 kkossev  - standardParse____Cluster and customParse___Cluster methods; moved onOff methods to a new library; rename all custom handlers in the libs to statdndardParseXXX
   * ver. 3.2.1  2024-06-05 kkossev  - 4 in 1 V3 compatibility; added IAS cluster; setDeviceNameAndProfile() fix;
+  * ver. 3.2.2  2024-06-05 kkossev  - (dev. branch) removed isAqaraTRV_OLD() and isAqaraTVOC_OLD() dependencies from the lib; added timeToHMS();
   *
   *                                   TODO: MOVE ZDO counters to health state;
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
-  *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib
   *                                   TODO: add GetInfo (endpoints list) command
   *                                   TODO: disableDefaultResponse for Tuya commands
   *
 */
 
-String commonLibVersion() { '3.2.1' }
-String commonLibStamp() { '2024/06/05 11:02 AM' }
+String commonLibVersion() { '3.2.2' }
+String commonLibStamp() { '2024/06/05 4:57 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -134,9 +134,9 @@ metadata {
 
 boolean isVirtual() { device.controllerType == null || device.controllerType == '' }
 /* groovylint-disable-next-line UnusedMethodParameter */
-boolean isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
-boolean isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
-boolean isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
+//boolean isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
+//boolean isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
+//boolean isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
 boolean isFingerbot()  { DEVICE_TYPE == 'Fingerbot' ? isFingerbotFingerot() : false }
 
 /**
@@ -197,7 +197,7 @@ void parse(final String description) {
             break
         case 0x0300 :  // Patch - need refactoring of the standardParseColorControlCluster !
             if (this.respondsTo('standardParseColorControlCluster')) {
-                standardParseColorControlCluster(descMap, description) 
+                standardParseColorControlCluster(descMap, description)
                 descMap.remove('additionalAttrs')?.each { final Map map -> standardParseColorControlCluster(descMap + map, description) }
             }
             break
@@ -694,7 +694,6 @@ boolean otherTuyaOddities(final String description) {
     return bWasAtLeastOneAttributeProcessed && !bWasThereAnyStandardAttribite
 }
 
-
 String intTo16bitUnsignedHex(int value) {
     String hexStr = zigbee.convertToHexString(value.toInteger(), 4)
     return new String(hexStr.substring(2, 4) + hexStr.substring(0, 2))
@@ -797,7 +796,7 @@ void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, fin
         }
     }
     // check if DeviceProfile processing method exists (deviceProfieLib should be included in the main driver)
-    if (this.respondsTo(processTuyaDPfromDeviceProfile)) {  
+    if (this.respondsTo(processTuyaDPfromDeviceProfile)) {
         if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {
             return      // sucessfuly processed the new way - we are done.  (version 3.0)
         }
@@ -853,20 +852,15 @@ List<String> tuyaBlackMagic() {
 
 void aqaraBlackMagic() {
     List<String> cmds = []
-    if (isAqaraTVOC_OLD() || isAqaraTRV_OLD()) {
-        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", 'delay 200',]
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
-        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 200)    // TODO: check - battery voltage
-        if (isAqaraTVOC_OLD()) {
-            cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay = 200)    // TVOC only
-        }
+    if (this.respondsTo('customAqaraBlackMagic')) {
+        cmds = customAqaraBlackMagic()
+    }
+    if (cmds != null && !cmds.isEmpty()) {
+        logDebug 'sending aqaraBlackMagic()'
         sendZigbeeCommands(cmds)
-        logDebug 'sent aqaraBlackMagic()'
+        return
     }
-    else {
-        logDebug 'aqaraBlackMagic() was SKIPPED'
-    }
+    logDebug 'aqaraBlackMagic() was SKIPPED'
 }
 
 // Invoked from configure()
@@ -925,16 +919,6 @@ void refresh() {
         customCmds = customHandlers(['onOffRefresh', 'groupsRefresh', 'batteryRefresh', 'levelRefresh', 'temperatureRefresh', 'humidityRefresh', 'illuminanceRefresh'])
         if (customCmds != null && !customCmds.isEmpty()) { cmds +=  customCmds } else { logDebug 'no libraries refresh() defined' }
     }
-    /*
-    if (DEVICE_TYPE in  ['Dimmer']) {
-        cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay = 200)
-        cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay = 200)
-    }
-    if (DEVICE_TYPE in  ['THSensor']) {
-        cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200)
-        cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay = 200)
-    }
-    */
     if (cmds != null && !cmds.isEmpty()) {
         logDebug "refresh() cmds=${cmds}"
         setRefreshRequest()    // 3 seconds
@@ -1166,12 +1150,11 @@ void loadAllDefaults() {
     deleteAllScheduledJobs()
     deleteAllStates()
     deleteAllChildDevices()
-    
+
     initialize()
     configureNow()     // calls  also   configureDevice()   // bug fixed 04/03/2024
     updated()
     sendInfoEvent('All Defaults Loaded! F5 to refresh')
-    
 }
 
 void configureNow() {
@@ -1191,9 +1174,7 @@ void configure() {
     if (isTuya()) {
         cmds += tuyaBlackMagic()
     }
-    if (isAqaraTVOC_OLD() || isAqaraTRV_OLD()) {
-        aqaraBlackMagic()   // zigbee commands are sent here!
-    }
+    aqaraBlackMagic()   // zigbee commands are sent here!
     List<String> initCmds = initializeDevice()
     if (initCmds != null && !initCmds.isEmpty()) { cmds += initCmds }
     List<String> cfgCmds = configureDevice()
@@ -1572,4 +1553,11 @@ Long formattedDate2unix(String formattedDate) {
         logDebug "Error parsing formatted date: ${formattedDate}. Returning current time instead."
         return now()
     }
+}
+
+static String timeToHMS(final int time) {
+    int hours = (time / 3600) as int
+    int minutes = ((time % 3600) / 60) as int
+    int seconds = time % 60
+    return "${hours}h ${minutes}m ${seconds}s"
 }
