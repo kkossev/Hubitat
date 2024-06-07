@@ -395,3 +395,260 @@ catchall: 0104 0201 01 01 0040 00 194C 01 00 0000 00 01 06080100004006A4016C0758
 ======>  dev:48352024-05-20 22:54:16.309warnSonof TRVZB parseThermostatClusterThermostat: received unknown Thermostat cluster (0x0201) attribute 0xnull (value null)
 dev:48352024-05-20 22:54:16.306warnSonof TRVZB processClusterAttributeFromDeviceProfile: exception org.codehaus.groovy.runtime.typehandling.GroovyCastException: Cannot cast object 'null' with class 'null' to class 'int'. Try 'java.lang.Integer' instead caught while converting hex value null to integer
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Thermostat AVATTO
+
+Standard Instruction Set
+Standard Status Set
+Code	Type	Values
+switch	Boolean	
+"{true,false}"
+mode	Enum	
+{
+  "range": [
+    "manual",
+    "program"
+  ]
+}
+temp_set	Integer	
+{
+  "unit": "℃",
+  "min": 5,
+  "max": 99,
+  "scale": 0,
+  "step": 1
+}
+temp_set_f	Integer	
+{
+  "unit": "℉",
+  "min": 32,
+  "max": 210,
+  "scale": 0,
+  "step": 1
+}
+upper_temp_f	Integer	
+{
+  "unit": "℉",
+  "min": 86,
+  "max": 203,
+  "scale": 0,
+  "step": 1
+}
+upper_temp	Integer	
+{
+  "unit": "℃",
+  "min": 30,
+  "max": 95,
+  "scale": 0,
+  "step": 1
+}
+lower_temp_f	Integer	
+{
+  "unit": "℉",
+  "min": 41,
+  "max": 68,
+  "scale": 0,
+  "step": 1
+}
+temp_unit_convert	Enum	
+{
+  "range": [
+    "c",
+    "f"
+  ]
+}
+lower_temp	Integer	
+{
+  "unit": "℃",
+  "min": 5,
+  "max": 20,
+  "scale": 0,
+  "step": 1
+}
+temp_correction	Integer	
+{
+  "unit": "℃",
+  "min": -9,
+  "max": 9,
+  "scale": 0,
+  "step": 1
+}
+factory_reset	Boolean	
+"{true,false}"
+child_lock	Boolean	
+"{true,false}"
+sensor_choose	Enum	
+{
+  "range": [
+    "in",
+    "out"
+  ]
+}
+
+-------------
+Standard Status Set
+Code	Type	Values
+switch	Boolean	
+"{true,false}"
+mode	Enum	
+{
+  "range": [
+    "manual",
+    "program"
+  ]
+}
+temp_set	Integer	
+{
+  "unit": "℃",
+  "min": 5,
+  "max": 99,
+  "scale": 0,
+  "step": 1
+}
+temp_set_f	Integer	
+{
+  "unit": "℉",
+  "min": 32,
+  "max": 210,
+  "scale": 0,
+  "step": 1
+}
+upper_temp_f	Integer	
+{
+  "unit": "℉",
+  "min": 86,
+  "max": 203,
+  "scale": 0,
+  "step": 1
+}
+upper_temp	Integer	
+{
+  "unit": "℃",
+  "min": 30,
+  "max": 95,
+  "scale": 0,
+  "step": 1
+}
+lower_temp_f	Integer	
+{
+  "unit": "℉",
+  "min": 41,
+  "max": 68,
+  "scale": 0,
+  "step": 1
+}
+temp_unit_convert	Enum	
+{
+  "range": [
+    "c",
+    "f"
+  ]
+}
+temp_current	Integer	
+{
+  "unit": "℃",
+  "min": 0,
+  "max": 99,
+  "scale": 0,
+  "step": 1
+}
+lower_temp	Integer	
+{
+  "unit": "℃",
+  "min": 5,
+  "max": 20,
+  "scale": 0,
+  "step": 1
+}
+temp_correction	Integer	
+{
+  "unit": "℃",
+  "min": -9,
+  "max": 9,
+  "scale": 0,
+  "step": 1
+}
+temp_current_f	Integer	
+{
+  "unit": "℉",
+  "min": 32,
+  "max": 210,
+  "scale": 0,
+  "step": 1
+}
+valve_state	Enum	
+{
+  "range": [
+    "open",
+    "close"
+  ]
+}
+factory_reset	Boolean	
+"{true,false}"
+child_lock	Boolean	
+"{true,false}"
+sensor_choose	Enum	
+{
+  "range": [
+    "in",
+    "out"
+  ]
+}
+fault	Bitmap	
+{
+  "label": [
+    "e1",
+    "e2",
+    "e3"
+  ]
+}
+
+
+----------
+
+1   - switch
+2 - mode
+16 - set temperature
+17 - set temperature Fahrenheit
+18 - set temperature upper limit Fahrenheit
+19 - set temperature ceiling
+20 - set the lower lower limit Fahrenheit
+23 - temperature scale
+24 - current temperature
+26 - the lower limit of the temperature
+27 - temperature correction
+29 - current temperature Fahrenheit
+36 - state of the valve
+101 - floor temperature
+102 - floor temperature (Fahrenheit?)
+39 - factory data Reset
+103 - freeze  protection 
+40 - child lock
+104 - programming mode
+105 - temperature calibration
+106 - temperature difference Start
+43 - sensor selection
+107 - temperature difference Start ????
+108 - programming 
+45 - fault alarm 
+
+

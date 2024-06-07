@@ -24,9 +24,7 @@
  *                                   TODO: updated() does not send the preferences ?
  */
 
-/* groovylint-disable-next-line ImplicitReturnStatement */
 static String version() { '3.2.0' }
-/* groovylint-disable-next-line ImplicitReturnStatement */
 static String timeStamp() { '2024/05/21 5:27 PM' }
 
 @Field static final boolean _DEBUG = false
