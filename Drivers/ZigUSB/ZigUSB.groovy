@@ -16,14 +16,14 @@
  * ver. 1.0.0  2024-02-25 kkossev  - first test version - decoding success! refresh() and configure();
  * ver. 1.0.1  2024-04-01 kkossev  - commonLib 3.0.4 alligned
  * ver. 1.0.2  2024-04-06 kkossev  - (dev. branch) more GroovyLint fixes; created energyLib.groovy library;
- * ver. 3.2.0  2024-05-25 kkossev  - (dev. branch) commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-06-09 kkossev  - (dev. branch) commonLib 3.2.0 allignment
  *
  *                                   TODO: power/voltage/amperage info logs are duplicated
  *                                   TODO: individual thresholds for each attribute
  */
 
 static String version() { '3.2.0' }
-static String timeStamp() { '2024/05/25 10:45 AM' }
+static String timeStamp() { '2024/06/09 10:06 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -65,11 +65,12 @@ metadata {
         }
     }
 }
-
+/*
 @Field static final int    DEFAULT_REPORTING_TIME = 30
 @Field static final int    DEFAULT_PRECISION = 3           // 3 decimal places
 @Field static final BigDecimal DEFAULT_DELTA = 0.001
 @Field static final int    MAX_POWER_LIMIT = 999
+*/
 
 /**
  * ZigUSB has a really wierd way of reporting the on/off state back to the hub...

@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy', documentationLink: '',
-    version: '3.2.1'
+    version: '3.3.0'
 )
 /*
  *  Device Profile Library
@@ -26,20 +26,23 @@ library(
  * ver. 3.1.2  2024-05-05 kkossev  - (dev. branch) added isSpammyDeviceProfile()
  * ver. 3.1.3  2024-05-21 kkossev  - skip processClusterAttributeFromDeviceProfile if cluster or attribute or value is missing
  * ver. 3.2.0  2024-05-25 kkossev  - commonLib 3.2.0 allignment;
- * ver. 3.2.1  2024-06-06 kkossev  - (dev. branch) Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent); getDeviceProfilesMap bug fix; forcedProfile is always shown in preferences;
+ * ver. 3.2.1  2024-06-06 kkossev  - Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent); getDeviceProfilesMap bug fix; forcedProfile is always shown in preferences;
+ * ver. 3.3.0  2024-06-08 kkossev  - (dev. branch) empty preferences bug fix;
  *
- *                                   TODO - remove 2-in-1 patch !
+ *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
  *                                   TODO - updateStateUnknownDPs !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  *                                   TODO - check why the forcedProfile preference is not initialized?
  *                                   TODO - when [refresh], send Info logs for parameters that are not events or preferences
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
+ *                                   TODO: add _DEBUG command (for temporary switching the debug logs on/off)
+ *                                   TODO: allow NULL parameters default values in the device profiles
  *                                   TODO: handle preferences of a type TEXT
  *
 */
 
-static String deviceProfileLibVersion()   { '3.2.1' }
-static String deviceProfileLibStamp() { '2024/06/06 5:43 PM' }
+static String deviceProfileLibVersion()   { '3.3.0' }
+static String deviceProfileLibStamp() { '2024/06/08 11:11 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -180,7 +183,7 @@ Map getAttributesMap(String attribName, boolean debug=false) {
  * Resets the device preferences to their default values.
  * @param debug A boolean indicating whether to output debug information.
  */
-void resetPreferencesToDefaults(boolean debug=true) {
+void resetPreferencesToDefaults(boolean debug=false) {
     logDebug "resetPreferencesToDefaults: DEVICE=${DEVICE?.description} preferences=${DEVICE?.preferences}"
     Map preferences = DEVICE?.preferences
     if (preferences == null || preferences.isEmpty()) { logDebug 'Preferences not found!' ; return }
@@ -441,7 +444,7 @@ public boolean setPar(final String parPar=null, final String val=null ) {
     if (val == null) { logInfo "setPar: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return false }
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def scaledValue = validateAndScaleParameterValue(dpMap, val as String)      // convert the val to the correct type and scale it if needed
-    if (scaledValue == null) { logInfo "setPar: invalid parameter value <b>${val}</b>. Must be in the range ${dpMap.min} to ${dpMap.max}"; return false }
+    if (scaledValue == null) { logInfo "setPar: invalid parameter ${par} value <b>${val}</b>. Must be in the range ${dpMap.min} to ${dpMap.max}"; return false }
 
     // if there is a dedicated set function, use it
     String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1]
@@ -563,9 +566,10 @@ public boolean sendAttribute(String par=null, val=null ) {
     List<String> cmds = []
     //Boolean validated = false
     logDebug "sendAttribute(${par}, ${val})"
-    if (par == null || DEVICE?.preferences == null || DEVICE?.preferences == [:]) { return false }
+    if (par == null || DEVICE?.preferences == null || DEVICE?.preferences == [:]) { logDebug "DEVICE.preferences is empty!" ; return false }
 
     Map dpMap = getAttributesMap(par, false)                                   // get the map for the attribute
+    l//log.trace "sendAttribute: dpMap=${dpMap}"
     if (dpMap == null || dpMap.isEmpty()) { logWarn "sendAttribute: map not found for parameter <b>${par}</b>"; return false }
     if (val == null) { logWarn "sendAttribute: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return false }
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
@@ -1225,7 +1229,7 @@ private boolean processFoundItem(final Map descMap, final Map foundItem, int val
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def preferenceValue = null   // preference value
     //log.trace "settings=${settings}"
-    boolean preferenceExists = DEVICE?.preferences?.containsKey(foundItem.name)         // check if there is an existing preference for this clusterAttribute
+    boolean preferenceExists = (DEVICE?.preferences != null &&  !DEVICE?.preferences.isEmpty()) ? DEVICE?.preferences?.containsKey(foundItem.name) : false         // check if there is an existing preference for this clusterAttribute
     //log.trace "preferenceExists=${preferenceExists}"
     boolean isAttribute = device.hasAttribute(foundItem.name)    // check if there is such a attribute for this clusterAttribute
     boolean isEqual = false
@@ -1332,6 +1336,7 @@ private boolean processFoundItem(final Map descMap, final Map foundItem, int val
 }
 
 // not used ? (except for debugging)? TODO
+public boolean validateAndFixPreferences(String debugStr) { return validateAndFixPreferences(debugStr.toBoolean() as boolean) }
 public boolean validateAndFixPreferences(boolean debug=false) {
     //debug = true
     if (debug) { logTrace "validateAndFixPreferences: preferences=${DEVICE?.preferences}" }

@@ -34,7 +34,7 @@ metadata {
     capability 'Actuator'
     capability 'Color Control'
     capability 'ColorMode'
-    capability 'Refresh'
+    //capability 'Refresh'  // already defined in commonLib
     capability 'Switch'
     capability 'Light'
 

@@ -25,7 +25,7 @@
 static String version() { "3.2.0" }
 static String timeStamp() {"2024/05/28 1:34 PM"}
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 
 #include kkossev.commonLib
 #include kkossev.buttonLib
@@ -65,6 +65,7 @@ metadata {
                     
         if (_DEBUG) {
             command 'getAllProperties',       [[name: 'Get All Properties']]
+            command 'test',                    [[name: 'Test']]
         }
     }
     preferences {
@@ -72,5 +73,63 @@ metadata {
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
     }
 }
+
+
+import groovy.json.JsonSlurper
+import groovy.util.XmlSlurper
+
+void test() {
+    String shortZigbeeId = device.id.toString().substring(0, 4)
+    //String lastMessage = getLastMessage('0x0000')
+    getLastMessage('')
+}
+
+String getLastMessage(String shortZigbeeId) {
+    params = [
+        uri    : "http://127.0.0.1:8080",
+        path   : "/hub/zigbeeDetails/json",
+        //headers: ["Cookie": cookie]
+    ]
+    if (debugEnabled) log.debug params
+    asynchttpGet("getCpuTemperature", params) 
+/*
+    def xml = new XmlSlurper().parse('http://127.0.0.1/hub/zigbeeDetails/json')
+    def json = new JsonSlurper().parseText(xml.text())
+    def lastMessage = null
+
+    json.devices.each { device ->
+        if (device.shortZigbeeId == shortZigbeeId) {
+            lastMessage = device.lastMessage
+        }
+    }
+
+    return lastMessage
+    */
+}
+
+
+void getCpuTemperature(resp, data) {
+  //  try {
+        if(resp.getStatus() == 200 || resp.getStatus() == 207) {
+            Double tempWork = new Double(resp.data.toString())
+            if(tempWork > 0) {
+                log.debug tempWork
+                /*
+                if (location.temperatureScale == "F")
+                    updateAttr("temperature",String.format("%.1f", celsiusToFahrenheit(tempWork)),"°F")
+                else
+                    updateAttr("temperature",String.format("%.1f",tempWork),"°C")
+
+                updateAttr("temperatureF",String.format("%.1f",celsiusToFahrenheit(tempWork))+ " °F")
+                updateAttr("temperatureC",String.format("%.1f",tempWork)+ " °C")
+                */
+            }
+        }
+ //   } catch(ignored) {
+ //       def respStatus = resp.getStatus()
+ //       if (!warnSuppress) log.warn "getTemp httpResp = $respStatus but returned invalid data, will retry next cycle"
+ //   } 
+}
+
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////

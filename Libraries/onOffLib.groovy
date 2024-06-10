@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee OnOff Cluster Library', name: 'onOffLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/onOffLib.groovy', documentationLink: '',
-    version: '3.2.0'
+    version: '3.2.1'
 )
 /*
  *  Zigbee OnOff Cluster Library
@@ -17,12 +17,13 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.2.0  2024-06-04 kkossev  - commonLib 3.2.1 allignment; if isRefresh then sendEvent with isStateChange = true
+ * ver. 3.2.1  2024-06-07 kkossev  - the advanced options are excpluded for DEVICE_TYPE Thermostat
  *
  *                                   TODO:
 */
 
-static String onOffLibVersion()   { '3.2.0' }
-static String onOffLibStamp() { '2024/06/04 1:54 PM' }
+static String onOffLibVersion()   { '3.2.1' }
+static String onOffLibStamp() { '2024/06/07 10:13 AM' }
 
 @Field static final Boolean _THREE_STATE = true
 
@@ -34,7 +35,7 @@ metadata {
     }
     // no commands
     preferences {
-        if (settings?.advancedOptions == true && device != null && DEVICE_TYPE != 'Device') {
+        if (settings?.advancedOptions == true && device != null && !(DEVICE_TYPE in ['Device', 'Thermostat'])) {
             input(name: 'ignoreDuplicated', type: 'bool', title: '<b>Ignore Duplicated Switch Events</b>', description: 'Some switches and plugs send periodically the switch status as a heart-beet ', defaultValue: true)
             input(name: 'alwaysOn', type: 'bool', title: '<b>Always On</b>', description: 'Disable switching OFF for plugs that must be always On', defaultValue: false)
             if (_THREE_STATE == true) {
