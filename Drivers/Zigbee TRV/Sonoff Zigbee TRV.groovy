@@ -15,7 +15,7 @@
  *
  * ver. 3.3.0  2024-06-08 kkossev  - (dev. branch) searate new driver for TRVZB thermostat
  *
- *                                   TODO: Separate new driver for TRVZB thermostat
+ *                                   TODO: sonoff - the battery is reported twice, and too often
  *                                   TODO: add powerSource capability
  *                                   TODO: add Info dummy preference to the driver with a hyperlink
  *                                   TODO: add state.thermostat for storing last attributes

@@ -14,7 +14,12 @@
  *     for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.3.0  2024-06-09 kkossev  - (dev. branch) first Namron Zigbee Thermostat version
+ * ver. 3.3.1  2024-06-10 kkossev  - (dev. branch) 
  *
+ *                                   TODO: warning Info message (permanent) when both model and manufacturer are missing (commonLib)
+ *                                   TODO: warning Info message (temporary when device is unknown.
+ *                                   TODO: deviceProfileV3 - default configuration if not found
+ *                                   TODO: energy automatic reporting configuration (this driver)
  *                                   TODO: add powerSource capability
  *                                   TODO: add Info dummy preference to the driver with a hyperlink
  *                                   TODO: add state.thermostat for storing last attributesthermostatOperatingState 
@@ -27,8 +32,8 @@
  *                                   TODO: separate the autoPoll commands from the refresh commands (lite)
  */
 
-static String version() { '3.3.0' }
-static String timeStamp() { '2024/06/09 10:34 PM' }
+static String version() { '3.3.1' }
+static String timeStamp() { '2024/06/10 8:01 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -144,7 +149,7 @@ metadata {
                 [at:'0x0201:0x1008',  name:'temperatureDisplayMode',   type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'1',   step:1,  scale:1,    map:[0: 'Room Temp', 1: 'Floor Temp'], unit:'',  title: '<b>Temperature Display</b>',description:'Temperature Display'],                // ^^^ (ENUM8,reportable) TODO: check dt!!! TemperatureDisplay Value=0 : Room Temp (Default) Value=1 : Floor Temp
                 [at:'0x0201:0x1009',  name:'windowOpenCheck',          type:'decimal', dt:'0x21',  mfgCode:'0x1224', rw: 'rw', min:0.3, max:8.0, defVal:0, step:0.5, scale:10,  unit:'', title: '<b>Window Open Check</b>', description:'The threshold to detect open window, 0 means disabled'],                // ^^^ (INT8U,reportable) TODO: check dt!!!    WindowOpenCheck The threshold to detect open window, range is 0.3-8, unit is 0.5ºC, 0 means disabled, default is 0
                 [at:'0x0201:0x100A',  name:'hysteresis',               type:'decimal', dt:'0x21',  mfgCode:'0x1224', rw: 'rw', min:5.0, max:20.0, defVal:5.0, step:0.5, scale:10,  unit:'', title: '<b>Hysteresis</b>', description:'Hysteresis'],                // ^^^ (INT8U,reportable) TODO: check dt!!!  TODO - check the scailing !!!  Hysteresis setting, range is 5-20, unit is 0.1ºC, default value is 5
-                [at:'0x0201:0x100B',  name:'displayAutoOffEnable',     type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'1',   step:1,  scale:1,    map:[0: 'Disabled', 1: 'Enabled'], unit:'',  title: '<b>Display Auto Off Enable</b>',description:'Display Auto Off Enable'],                // ^^^ (ENUM8,reportable) TODO: check dt!!!  DisplayAutoOffEnable 0, disable Display Auto Off function 1, enable Display Auto Off function
+                [at:'0x0201:0x100B',  name:'displayAutoOffEnable',     type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'1',   step:1,  scale:1,    map:[0: 'Disabled', 1: 'Enabled'], unit:'',  title: '<b>Display Auto Off</b>',description:'Display Auto Off disable/enable'],                // ^^^ (ENUM8,reportable) TODO: check dt!!!  DisplayAutoOffEnable 0, disable Display Auto Off function 1, enable Display Auto Off function
                 [at:'0x0201:0x2001',  name:'alarmAirTempOverValue',    type:'decimal', dt:'0x21',  mfgCode:'0x1224', rw: 'rw', min:0.2, max:6.0, defVal:4.5, step:0.1, scale:10,  unit:'', title: '<b>Alarm Air Temp Over Value</b>', description:'Alarm Air Temp Over Value, 0 means disabled,'],                // ^^^ (INT8U,reportable) TODO: check dt!!!  TODO - check the scailing !!!  AlarmAirTempOverValue Room temp alarm threshold, range is 0.20-60, unit is 1ºC,0 means disabled, default is 45
                 [at:'0x0201:0x2002',  name:'awayModeSet',              type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'0',   step:1,  scale:1,    map:[0: 'Not away', 1: 'Away'], unit:'',  title: '<b>Away Mode Set</b>',description:'Away Mode Set'],                // ^^^ (ENUM8,reportable) TODO: check dt!!!  Away Mode Set: Value=1: away Value=0: not away (default)
                 // Command supported  !!!!!!!!!! TODO !!!!!!!!!!!! not attribute, but a command !!!!!!!!!!!!!!!!
