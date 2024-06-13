@@ -4,7 +4,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLib.groovy",
       "id": 142,
       "codeType": "library",
-      "version": 510
+      "version": 519
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/rgbLib.groovy",
@@ -34,7 +34,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 530
+      "version": 532
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/groupsLib.groovy",

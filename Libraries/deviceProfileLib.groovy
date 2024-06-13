@@ -353,7 +353,9 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
     //logDebug "validateAndScaleParameterValue: dpMap=${dpMap} val=${val}"
     switch (dpMap.type) {
         case 'number' :
-            value = safeToInt(val, -1)
+            // TODO - negative values !
+            // TODO - better conversion to integer!
+            value = safeToInt(val, 0)
             //scaledValue = value
             // scale the value - added 10/26/2023 also for integer values !
             if (dpMap.scale != null) {
@@ -365,7 +367,7 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
             break
 
         case 'decimal' :
-            value = safeToDouble(val, -1.0)
+            value = safeToDouble(val, 0.0)
             // scale the value
             if (dpMap.scale != null) {
                 scaledValue = (value * dpMap.scale) as Integer
@@ -513,8 +515,9 @@ public boolean setPar(final String parPar=null, final String val=null ) {
     }
     else if (dpMap.at != null) {
         // cluster:attribute
-        logDebug "setPar: found at=${dpMap.at} dt=${dpMap.dt} mapMfCode=${dpMap.mapMfCode} scaledValue=${scaledValue}  (val=${val})"
-        cmds = zclWriteAttribute(dpMap, scaledValue)
+        logDebug "setPar: found at=${dpMap.at} dt=${dpMap.dt} mfgCode=${dpMap.mfgCode} scaledValue=${scaledValue}  (val=${val})"
+        int signedIntScaled = convertSignedInts(scaledValue, dpMap)
+        cmds = zclWriteAttribute(dpMap, signedIntScaled)
         if (cmds == null || cmds == []) {
             logWarn "setPar: failed to write cluster:attribute ${dpMap.at} value ${scaledValue}"
             return false
@@ -559,6 +562,18 @@ List<String> sendTuyaParameter( Map dpMap, String par, tuyaValue) {
         cmds = sendTuyaCommand( dp, dpType, dpValHex)
     }
     return cmds
+}
+
+int convertSignedInts(int val, Map dpMap) {
+    if (dpMap.dt == '0x28') {
+        if (val > 127) { return (val as int) - 256 }
+        else { return (val as int) }
+    }
+    else if (dpMap.dt == '0x29') {
+        if (val > 32767) { return (val as int) - 65536 }
+        else { return (val as int) }
+    }
+    else { return (val as int) }
 }
 
 /* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
@@ -1174,6 +1189,7 @@ public boolean processClusterAttributeFromDeviceProfile(final Map descMap) {
         logTrace "processClusterAttributeFromDeviceProfile: clusterAttribute ${clusterAttribute} was not found in the attributes list for this deviceProfile ${DEVICE?.description}"
         return false
     }
+    value = convertSignedInts(value, foundItem)
     return processFoundItem(descMap, foundItem, value, isSpammyDPsToNotTrace(descMap))
 }
 
