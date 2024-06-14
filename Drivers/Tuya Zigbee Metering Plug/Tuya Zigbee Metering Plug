@@ -253,10 +253,9 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,FC57,FCA0', outClusters:'0019', model:'Z111PL0H-1JX', manufacturer:'SONOFF', deviceJoinName: 'SONOFF smart plug' // https://community.hubitat.com/t/help-getting-started-with-a-smart-plug-driver/109480/5?u=kkossev           // https://community.hubitat.com/t/frient-energy-monitor-driver/89327/28?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,FC57,FCA0', outClusters:'0019', model:'Z111PL0H-1JX', manufacturer:'Woolley', deviceJoinName: 'Woolley smart plug' // not tested
         fingerprint profileId:'C05E', endpointId:'0D', inClusters:'1000', outClusters:'1000', model:'unknown', manufacturer:'unknown', deviceJoinName: 'SONOFF smart plug'                                   // SONOFF Z111PL0H-1JX
-        // 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0B04", outClusters:"0019", model:"3RSP02028BZ", manufacturer:"Third Reality, Inc", deviceJoinName: "Third Reality Smart Plug US"                 // https://community.hubitat.com/t/request-to-add-support-for-new-device/110003/3?u=kkossev
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FF03,0003,0004,0005,0006,0B04,0702", outClusters:"0019", model:"3RSPE01044BZ", manufacturer:"Third Reality, Inc", deviceJoinName: "Third Reality Smart Plug US"           // https://community.hubitat.com/t/thirdreality-products-available-in-eu-uk-and-au/137539/1
-
+        //
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,1000,0B04', outClusters:'0019', model:'3RSP02028BZ', manufacturer:'Third Reality, Inc', deviceJoinName: 'Third Reality Smart Plug US'                 // https://community.hubitat.com/t/request-to-add-support-for-new-device/110003/3?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,FF03,0003,0004,0005,0006,0B04,0702', outClusters:'0019', model:'3RSPE01044BZ', manufacturer:'Third Reality, Inc', deviceJoinName: 'Third Reality Smart Plug US'           // https://community.hubitat.com/t/thirdreality-products-available-in-eu-uk-and-au/137539/1
     }
 
     preferences {

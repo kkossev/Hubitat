@@ -23,7 +23,9 @@
  * ver. 1.2.0  2024-05-23 kkossev  - Groovy linting; setDeviceName() bug fix; added lastBattery attribute; added ThirdReality 3RDS17BZ fingerprint; added Xfinity XHS2-UE fingerprint; 
  *                                   the configuration attempts are not repeated, if error code is returned; added setOpen and setClosed commands (for tests); added pollBatteryStatus option for devices that do not report the battery level automatically
  * ver. 1.2.1  2024-06-03 kkossev  - added resetStats command
+ * ver. 1.2.2  2024-06-13 kkossev  - added ThirdReality tilt sensor 3RDTS01056Z; new _TZE200_pay2byax fingerprint; 
  *
+ *                                   TODO: preference to disable illuminance @Big_Bruin
  *                                   TODO: handle the case when 'lastBattery' is missing!
  *                                   TODO: filter duplicated open/close messages when 'Poll Contact Status' option is enabled
  *                                   TODO: Add stat.stats for contact, battery, reJoin, ZDO
@@ -34,8 +36,8 @@
  *                                   TODO: refactor - use libraries !
  */
 
-static String version() { '1.2.1' }
-static String timeStamp() { '2024/06/03 7:52 AM' }
+static String version() { '1.2.2' }
+static String timeStamp() { '2024/06/13 9:17 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -79,6 +81,7 @@ metadata {
 
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0004,0005,EF00', outClusters: '0019,000A', model: 'TS0601', manufacturer: '_TZE200_nvups4nh', deviceJoinName: 'Tuya Contact and T/H Sensor'
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0500,0000', outClusters: '0019,000A', model: 'TS0601', manufacturer: '_TZE200_pay2byax', deviceJoinName: 'Tuya Contact and Illuminance Sensor'
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0500,0000", outClusters: "0019,000A", model:"TS0601", manufacturer: "_TZE200_pay2byax", controllerType: "ZGB", deviceJoinName: 'Tuya Contact and Illuminance Sensor'     
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0500,0000', outClusters: '0019,000A', model: 'TS0601', manufacturer: '_TZE200_n8dljorx', deviceJoinName: 'Tuya Contact and Illuminance Sensor'                           // Model ZG-102ZL
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0003,0500,0000', outClusters: '0003,0004,0005,0006,0008,1000,0019,000A', model: 'TS0203', manufacturer: '_TZ3000_26fmupbb', deviceJoinName: 'Tuya Contact Sensor'        // KK; https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/30?u=kkossev
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0003,0500,0000', outClusters: '0003,0004,0005,0006,0008,1000,0019,000A', model: 'TS0203', manufacturer: '_TZ3000_n2egfsli', deviceJoinName: 'Tuya Contact Sensor'        // https://community.hubitat.com/t/tuya-zigbee-door-contact/95698/5?u=kkossev
@@ -97,6 +100,7 @@ metadata {
 
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0003,0500,0001', outClusters: '0003', model: 'DS01', manufacturer: 'eWeLink', deviceJoinName: 'Sonoff Contact Sensor'
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,FF01,FF00,0001,0500', outClusters: '0019', model: '3RDS17BZ', manufacturer: 'Third Reality, Inc', deviceJoinName: 'Third Reality Contact Sensor' 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,FFF1", outClusters:"0019", model:"3RDTS01056Z", manufacturer:"Third Reality, Inc", controllerType: "ZGB", deviceJoinName: 'Third Reality Tilt Sensor'         
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0003,0020,0402,0500,0B05', outClusters: '0019', model: 'URC4460BC0-X-R', manufacturer: 'Universal Electronics Inc', deviceJoinName: 'Xfinity/Visonic MCT-350 Zigbee Contact Sensor'   
     }
     preferences {
@@ -629,7 +633,7 @@ def processTuyaDP(descMap, dp, dp_id, fncmd) {
             break
         case 0x65 :    // (101)
             logDebug "(dp=$dp) illuminance event fncmd = ${fncmd}"
-            illuminanceEventLux(fncmd) // illuminance for TS0601 ContactSensor with LUX
+            illuminanceEventTuya(fncmd) // illuminance for TS0601 ContactSensor with illuminance sensor - changed 06/13/2024 
             break
         case 0x66 :     // (102)
             logDebug "(dp=$dp) battery event fncmd = ${fncmd}"
@@ -802,6 +806,12 @@ void motionEvent(value) {
     sendEvent(map)
 }
 
+void illuminanceEventTuya(int illuminance, boolean isDigital = false) {
+    //Integer lux = illuminance > 0 ? Math.round(Math.pow(10, (illuminance)) * 10000.0 + 1) : 0
+    Integer lux = illuminance > 0 ? Math.round(Math.pow(10, (illuminance / 10000.0))) + 1 : 0
+    sendEvent('name': 'illuminance', 'value': lux, 'type': isDigital == true ? 'digital' : 'physical', 'unit': 'lx')
+    logInfo "illuminance is ${lux} Lux"
+}
 void illuminanceEvent(int illuminance, boolean isDigital = false) {
     Integer lux = illuminance > 0 ? Math.round(Math.pow(10, (illuminance / 10000))) : 0
     sendEvent('name': 'illuminance', 'value': lux, 'type': isDigital == true ? 'digital' : 'physical', 'unit': 'lx')
