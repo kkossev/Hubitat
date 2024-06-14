@@ -23,10 +23,9 @@
  * ver. 1.2.0  2024-05-23 kkossev  - Groovy linting; setDeviceName() bug fix; added lastBattery attribute; added ThirdReality 3RDS17BZ fingerprint; added Xfinity XHS2-UE fingerprint; 
  *                                   the configuration attempts are not repeated, if error code is returned; added setOpen and setClosed commands (for tests); added pollBatteryStatus option for devices that do not report the battery level automatically
  * ver. 1.2.1  2024-06-03 kkossev  - added resetStats command
- * ver. 1.2.2  2024-06-13 kkossev  - added ThirdReality tilt sensor 3RDTS01056Z; new _TZE200_pay2byax fingerprint; 
+ * ver. 1.2.2  2024-06-14 kkossev  - added ThirdReality tilt sensor 3RDTS01056Z; new _TZE200_pay2byax fingerprint; added preference to disable illuminance @Big_Bruin
  *
- *                                   TODO: preference to disable illuminance @Big_Bruin
- *                                   TODO: handle the case when 'lastBattery' is missing!
+ *                                   TODO: handle the case when 'lastBattery' is missing.
  *                                   TODO: filter duplicated open/close messages when 'Poll Contact Status' option is enabled
  *                                   TODO: Add stat.stats for contact, battery, reJoin, ZDO
  *                                   TODO: Sonoff contact sensor is not reporting the battery - add an battery configuration option like in TS004F driver
@@ -37,7 +36,7 @@
  */
 
 static String version() { '1.2.2' }
-static String timeStamp() { '2024/06/13 9:17 PM' }
+static String timeStamp() { '2024/06/14 7:05 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -104,22 +103,27 @@ metadata {
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0003,0020,0402,0500,0B05', outClusters: '0019', model: 'URC4460BC0-X-R', manufacturer: 'Universal Electronics Inc', deviceJoinName: 'Xfinity/Visonic MCT-350 Zigbee Contact Sensor'   
     }
     preferences {
-        input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: '<i>Display measured values in HE log page. Recommended value is <b>true</b></i>', defaultValue: true)
-        input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: '<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>', defaultValue: true)
+        input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: 'Display measured values in HE log page. Recommended value is <b>true</b>', defaultValue: true)
+        input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: 'Debug information, useful for troubleshooting. Recommended value is <b>false</b>', defaultValue: true)
         if (isConfigurable()) {
             input(title: 'To configure a sleepy device, try any of the methods below :', description: '<b>* Change open/closed state<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>', type: 'paragraph', element: 'paragraph')
         }
         input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', defaultValue: false)
         if (advancedOptions == true) {
-            input(name: 'offlineThreshold', type: 'number', title: '<b>HealthCheck Offline Threshold</b>', description: '<i>HealthCheck Offline Threshold, hours.<br> Zero value disables the Healtch Check</i>', range:'0..24', defaultValue: presenceCountDefaultThreshold)
+            input(name: 'offlineThreshold', type: 'number', title: '<b>HealthCheck Offline Threshold</b>', description: 'HealthCheck Offline Threshold, hours.<br> Zero value disables the Healtch Check', range:'0..24', defaultValue: presenceCountDefaultThreshold)
             if (isBatteryConfigurable()) {
                 input name: 'batteryReporting', type: 'enum', title: '<b>Battery Reporting Interval</b>', options: batteryReportingOptions.options, defaultValue: batteryReportingOptions.defaultValue, description: \
-                    '<i>Keep the battery reporting interval to <b>Default</b>, except when battery level is not reported at all for a long period.</i>'
+                    'Keep the battery reporting interval to <b>Default</b>, except when battery level is not reported at all for a long period.'
             }
-            input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: '<i>Convert battery voltage to battery Percentage remaining.</i>'
-            input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between non-contact reports</b>', description: '<i>Minimum time between non-contact reporting (humidity, illuminance), seconds</i>', defaultValue: 10, range: '1..3600'
-            input name: 'pollContactStatus', type: 'bool', title: '<b>Poll Contact Status</b>', description: '<i>Poll the contact status every time the device is awake (check for outOfSync)</i>', defaultValue: false
-            input name: 'pollBatteryStatus', type: 'bool', title: '<b>Poll Battery Status</b>', description: '<i>Poll the battery status when no recent battery reports are received</i>', defaultValue: false
+            input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: 'Convert battery voltage to battery Percentage remaining.'
+            input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between non-contact reports</b>', description: 'Minimum time between non-contact reporting (humidity, illuminance), seconds', defaultValue: 10, range: '1..3600'
+            input name: 'pollContactStatus', type: 'bool', title: '<b>Poll Contact Status</b>', description: 'Poll the contact status every time the device is awake (check for outOfSync)', defaultValue: false
+            input name: 'pollBatteryStatus', type: 'bool', title: '<b>Poll Battery Status</b>', description: 'Poll the battery status when no recent battery reports are received', defaultValue: false
+            if (device) {
+                if (hasIlliminance()) {
+                    input name: 'disableIlluminance', type: 'bool', title: '<b>Disable Illuminance Reports</b>', defaultValue: false, description: 'Disable/Enable the illuminance (lux) events.'
+                }
+            }
         }
     }
 }
@@ -246,6 +250,7 @@ String getModelGroup()         { return (state.deviceProfile as String) ?: 'UNKN
 boolean isConfigurable(model)   { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
 boolean isConfigurable()        { String model = getModelGroup(); return isConfigurable(model) }
 boolean isBatteryConfigurable() { deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true }
+boolean hasIlliminance()        { deviceProfiles[getModelGroup()]?.capabilities?.IlluminanceMeasurement?.value == true }
 
 @Field static final Integer MaxRetries = 3
 @Field static final Integer ConfigTimer = 15
@@ -628,12 +633,22 @@ def processTuyaDP(descMap, dp, dp_id, fncmd) {
             humidityEvent(fncmd)
             break
         case 0x0C : // (12)
-            logDebug "(dp=$dp) illuminance event fncmd = ${fncmd}"
-            illuminanceEventLux( fncmd )
+            if (settings?.disableIlluminance != true) {
+                logDebug "(dp=$dp) illuminance event fncmd = ${fncmd}"
+                illuminanceEventLux( fncmd )
+            }
+            else {
+                if (settings?.logEnable) { log.debug "${device.displayName} illuminance reporting is disabled (raw={$fncmd})" }
+            }
             break
         case 0x65 :    // (101)
-            logDebug "(dp=$dp) illuminance event fncmd = ${fncmd}"
-            illuminanceEventTuya(fncmd) // illuminance for TS0601 ContactSensor with illuminance sensor - changed 06/13/2024 
+            if (settings?.disableIlluminance != true) {
+                logDebug "(dp=$dp) illuminance event fncmd = ${fncmd}"
+                illuminanceEventLux(fncmd) // illuminance for TS0601 ContactSensor with illuminance sensor - made optional 06/14/2024 
+            }
+            else {
+                if (settings?.logEnable) { log.debug "${device.displayName} illuminance reporting is disabled (raw={$fncmd})" }
+            }
             break
         case 0x66 :     // (102)
             logDebug "(dp=$dp) battery event fncmd = ${fncmd}"
@@ -847,6 +862,9 @@ void updated() {
         unschedule('logsOff')
     }
     scheduleDeviceHealthCheck()
+    if (settings?.disableIlluminance == true && device.currentValue('illuminance') != null) {
+        device.deleteCurrentState("illuminance")
+    }
 
     if (isBatteryConfigurable()) {
         int batteryReportinginterval = (settings.batteryReporting as Integer) ?: 0
@@ -1101,6 +1119,7 @@ void initializeVars(boolean fullInit = true) {
     if (fullInit == true || settings?.batteryReporting == null) { device.updateSetting('batteryReporting', [value: batteryReportingOptions.defaultValue.toString(), type: 'enum']) }
     if (fullInit == true || settings?.pollContactStatus == null) { device.updateSetting('pollContactStatus', false) }
     if (fullInit == true || settings?.pollBatteryStatus == null) { device.updateSetting('pollBatteryStatus', false) }
+    if (fullInit == true || settings?.disableIlluminance == null) { device.updateSetting('disableIlluminance', false) }   
 }
 
 def tuyaBlackMagic() {
