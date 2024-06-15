@@ -13,7 +13,7 @@
  *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *     for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.3.0  2024-06-07 kkossev  - (dev. branch) separate new driver for Tuya Thermostats
+ * ver. 3.3.0  2024-06-07 kkossev  - (dev. branch) separate new 'Tuya Zigbee Thermostat' driver for Tuya Thermostats and TRVs.
  *
  *                                   TODO: BEOK - needs retries, the first command is lost sometimes! :( 
  *                                   TODO: BEOK: check calibration and correction DPs !!!
