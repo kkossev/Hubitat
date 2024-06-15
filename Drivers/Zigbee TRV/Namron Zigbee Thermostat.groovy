@@ -14,7 +14,7 @@
  *     for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.3.0  2024-06-09 kkossev  - (dev. branch) first Namron Zigbee Thermostat version
- * ver. 3.3.1  2024-06-12 kkossev  - (dev. branch) calibrationTemp negative values bug fix; added hysteresis, floorCalibrationTemp, powerUpStatus, emergencyHeatTime, modeAfterDry, controlType, floorSensorType
+ * ver. 3.3.1  2024-06-14 kkossev  - (dev. branch) calibrationTemp negative values bug fix; added hysteresis, floorCalibrationTemp, powerUpStatus, emergencyHeatTime, modeAfterDry, controlType, floorSensorType
  *
  *                                   TODO: childLock, cluster 0x0204
  *                                   TODO: research how the Namron internal clock is set (Zigbee2MQTT sniff)?
@@ -42,7 +42,7 @@
  */
 
 static String version() { '3.3.1' }
-static String timeStamp() { '2024/06/12 4:30 PM' }
+static String timeStamp() { '2024/06/14 7:17 PM' }
 
 @Field static final Boolean _DEBUG = false
 
