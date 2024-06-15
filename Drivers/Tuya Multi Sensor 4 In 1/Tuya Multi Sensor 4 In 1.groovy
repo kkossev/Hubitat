@@ -55,46 +55,30 @@
  * ver. 1.5.2  2023-09-14 kkossev  - TS0601_IJXVKHD0_RADAR ignore dp1 dp2; Distance logs changed to Debug; Refresh() updates driver version;
  * ver. 1.5.3  2023-09-30 kkossev  - humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR; tuyaVersion is updated on Refresh; LINPTECH: added existance_time event; illuminance parsing exception changed to debug level; leave_time changed to fadingTime; fadingTime configuration
  *
- * ver. 1.6.0  2023-10-08 kkossev  - (dev. branch) major refactoring of the preferences input; all preference settings are reset to defaults when changing device profile; added 'all' attribute; present state 'motionStarted' in a human-readable form.
+ * ver. 1.6.0  2023-10-08 kkossev  - major refactoring of the preferences input; all preference settings are reset to defaults when changing device profile; added 'all' attribute; present state 'motionStarted' in a human-readable form.
  *                                   setPar and sendCommand major refactoring +parameters changed from enum to string; TS0601_KAPVNNLK_RADAR parameters support;
- * ver. 1.6.1  2023-10-12 kkossev  - (dev. branch) TS0601_KAPVNNLK_RADAR TS0225_HL0SS9OA_RADAR TS0225_2AAELWXK_RADAR TS0601_RADAR_MIR-HE200-TY TS0601_YXZBRB58_RADAR TS0601_SXM7L9XA_RADAR TS0601_IJXVKHD0_RADAR TS0601_YENSYA2C_RADAR TS0601_SBYX0LM6_RADAR TS0601_PIR_AIR TS0601_PIR_PRESENCE refactoring; radar enum preferences;
- * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defVal; TS0601_PIR_PRESENCE - preference inductionTime changed to fadingTime, humanMotionState sent as event; TS0225_2AAELWXK_RADAR - preferences setting; _TZE204_ijxvkhd0 fixes; Linptech fixes; added radarAlarmMode radarAlarmVolume;
- * ver. 1.6.3  2023-10-15 kkossev  - (dev. branch) setPar() and preferences updates bug fixes; automatic fix for preferences which type was changed between the versions, including bool;
- * ver. 1.6.4  2023-10-18 kkossev  - (dev. branch) added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
- * ver. 1.6.5  2023-10-23 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!; do not try to input preferences of a type bool
+ * ver. 1.6.1  2023-10-12 kkossev  - TS0601_KAPVNNLK_RADAR TS0225_HL0SS9OA_RADAR TS0225_2AAELWXK_RADAR TS0601_RADAR_MIR-HE200-TY TS0601_YXZBRB58_RADAR TS0601_SXM7L9XA_RADAR TS0601_IJXVKHD0_RADAR TS0601_YENSYA2C_RADAR TS0601_SBYX0LM6_RADAR TS0601_PIR_AIR TS0601_PIR_PRESENCE refactoring; radar enum preferences;
+ * ver. 1.6.2  2023-10-14 kkossev  - LINPTECH preferences changed to enum type; enum preferences - set defVal; TS0601_PIR_PRESENCE - preference inductionTime changed to fadingTime, humanMotionState sent as event; TS0225_2AAELWXK_RADAR - preferences setting; _TZE204_ijxvkhd0 fixes; Linptech fixes; added radarAlarmMode radarAlarmVolume;
+ * ver. 1.6.3  2023-10-15 kkossev  - setPar() and preferences updates bug fixes; automatic fix for preferences which type was changed between the versions, including bool;
+ * ver. 1.6.4  2023-10-18 kkossev  - added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
+ * ver. 1.6.5  2023-10-23 kkossev  - bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!; do not try to input preferences of a type bool
  *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors; added _TZE200_ppuj1vem 3-in-1; TS0601_3IN1 refactoring; added _TZ3210_0aqbrnts 4in1;
  * ver. 1.6.6  2023-11-02 kkossev  - _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; number type pars are scalled also!; _TZE204_ijxvkhd0 sensitivity settings changes; added preProc function; TS0601_IJXVKHD0_RADAR - removed multiplying by 10
- * ver. 1.6.7  2023-11-09 kkossev  - (dev. branch) divideBy10 fix for TS0601_IJXVKHD0_RADAR; added new TS0202_MOTION_IAS_CONFIGURABLE group
+ * ver. 1.6.7  2023-11-09 kkossev  - divideBy10 fix for TS0601_IJXVKHD0_RADAR; added new TS0202_MOTION_IAS_CONFIGURABLE group
  * ver. 1.6.8  2023-11-20 kkossev  - SONOFF SNZB-06P RADAR bug fixes; added radarSensitivity and fadingTime preferences; update parameters for Tuya radars bug fix;
- * ver. 1.7.0  2024-01-14 kkossev  - (dev.branch) Groovy linting; added TS0225_O7OE4N9A_RADAR TS0225 _TZFED8_o7oe4n9a for tests; TS0601 _TZE200_3towulqd new fingerprint @JdThomas24
- * ver. 1.8.0  2024-03-23 kkossev  - (dev.branch) more Groovy linting; fixed 'This driver requires HE version 2.2.7 (May 2021) or newer!' bug; device.latestState('battery') exception bug fixes;
- * ver. 1.8.1  2024-04-16 kkossev  - (dev.branch) tuyaDPs list of maps bug fixes; added _TZE204_kyhbrfyl; added smallMotionDetectionSensitivity;
+ * ver. 1.7.0  2024-01-14 kkossev  - Groovy linting; added TS0225_O7OE4N9A_RADAR TS0225 _TZFED8_o7oe4n9a for tests; TS0601 _TZE200_3towulqd new fingerprint @JdThomas24
+ * ver. 1.8.0  2024-03-23 kkossev  - more Groovy linting; fixed 'This driver requires HE version 2.2.7 (May 2021) or newer!' bug; device.latestState('battery') exception bug fixes;
+ * ver. 1.8.1  2024-04-16 kkossev  - tuyaDPs list of maps bug fixes; added _TZE204_kyhbrfyl; added smallMotionDetectionSensitivity;
  * ver. 1.9.0  2024-05-06 kkossev  - depricated all radars except Linptech;
+ * ver. 1.9.1  2024-05-25 kkossev  - preferences are not sent for depricated devices.
+ * ver. 1.9.2  2024-06-15 kkossev  - (dev.branch) deviceProfile drop-down list bug fix; added quickRef link to GitHub WiKi page for PIR sensors;
  *
  *                                   TODO: Implement ping() for all devices
- *                                   TODO: W.I.P. TS0202_4IN1 refactoring
- *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
- *                                   TODO: ignore invalid humidity reprots (>100 %)
- *                                   TODO: publish examples of SetPar usage : https://community.hubitat.com/t/4-in-1-parameter-for-adjusting-reporting-time/115793/12?u=kkossev
- *                                   TODO: quickRef
- *                                   TODO: delete all previous preferencies when changing the device profile ?
- *                                   TODO: do not show errors/warnings for  new settings ie breath , led etc if the preferences setsetare not set and saved - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
- *                                   TODO: check why only voltage is reported for SONOFF_MOTION_IAS;
- *                                   TODO: hide motionKeepTime and motionSensitivity for SONOFF_MOTION_IAS;
- *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
- *                                   TODO: TS0202_MOTION_IAS missing sensitivity and retrigger time settings bug fix;
- *                                   TODO: add Sensitivity Levels Presets
- *                                   TODO: when device rejoins the network, read the battry percentage again!
- *                                   TOOD: Tuya 2in1 illuminance_interval (dp=102) !
- *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time ! ( 2-in-1 time is wrong)
- *                                   TODO: add to state 'last battery' the time when the battery was last reported.
- *                                   TODO: check the bindings commands in configure()
- *                                   TODO: implement getActiveEndpoints()
+ *                                   TODO: transit to V3 (W.I.P)
 */
 
-/* groovylint-disable-next-line ImplicitReturnStatement */
-static String version() { '1.9.0' }
-static String timeStamp() { '2024/05/06 10:39 AM' }
+static String version() { '1.9.2' }
+static String timeStamp() { '2024/06/15 9:01 AM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -181,6 +165,9 @@ metadata {
             if (DEVICE?.device.isDepricated == true) {
                 input(name: 'depricated',  type: 'hidden', title: "$ttStyleStr<a href='https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1' target='_blank'><b>This driver is depricated</b><br> for use with <b>${state.deviceProfile}</b> devices!<br><br><i>Please change to the new driver as per the instructions in this link!</i></a>")
             }
+            else {
+                input(name: 'info',    type: 'hidden', title: "<a href='https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1' target='_blank'><i>For more info, click on this link to visit the WiKi page</i></a>")
+            }
             input(name: 'txtEnable', type: 'bool',   title: '<b>Description text logging</b>', description: '<i>Display sensor states on HE log page. The recommended value is <b>true</b></i>', defaultValue: true)
             input(name: 'logEnable', type: 'bool',   title: '<b>Debug logging</b>', description: '<i>Debug information, useful for troubleshooting. The recommended value is <b>false</b></i>', defaultValue: true)
 
@@ -189,11 +176,6 @@ metadata {
                 if (motionReset.value == true) {
                     input('motionResetTimer', 'number', title: '<b>Motion Reset Timer</b>', description: '<i>After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds</i>', range: '0..7200', defaultValue: 60)
                 }
-            }
-            /* groovylint-disable-next-line ConstantIfExpression */
-            if (false) {    // TODO!
-                input('temperatureOffset', 'decimal', title: 'Temperature offset', description: 'Select how many degrees to adjust the temperature.', range: '-100..100', defaultValue: 0.0)
-                input('humidityOffset', 'decimal', title: 'Humidity offset', description: 'Enter a percentage to adjust the humidity.', range: '-50..50',  defaultValue: 0.0)
             }
         }
         if (('reportingTime4in1' in DEVICE?.preferences)) {    // 4in1()
@@ -207,9 +189,9 @@ metadata {
                 input('luxThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: 5)
                 input name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: '<i>Illuminance correction coefficient, range (0.10..10.00)</i>', range: '0.10..10.00', defaultValue: 1.00
             }
-        }
-        if (('DistanceMeasurement' in DEVICE?.capabilities)) {
-            input(name: 'ignoreDistance', type: 'bool', title: '<b>Ignore distance reports</b>', description: 'If not used, ignore the distance reports received every 1 second!', defaultValue: true)
+            if (('DistanceMeasurement' in DEVICE?.capabilities)) {
+                input(name: 'ignoreDistance', type: 'bool', title: '<b>Ignore distance reports</b>', description: 'If not used, ignore the distance reports received every 1 second!', defaultValue: true)
+            }
         }
 
         // itterate over DEVICE.preferences map and inputIt all!
@@ -276,12 +258,11 @@ Map getKeepTimeOpts() { return is4in1() ? keepTime4in1Opts : is3in1() ? keepTime
 String getDeviceProfile()     { state.deviceProfile ?: 'UNKNOWN' }
 Map getDEVICE()          { deviceProfilesV2[getDeviceProfile()] }
 List<String> getDeviceProfiles()      { deviceProfilesV2.keySet() }
-//List<String> getDeviceProfilesMap()   { deviceProfilesV2.values().description as List<String> }
 List<String> getDeviceProfilesMap()   {
     List<String> activeProfiles = []
     deviceProfilesV2.each { profileName, profileMap ->
-        if (profileMap.device?.isDepricated != true) {
-            activeProfiles.add(profileName)
+        if ((profileMap.device?.isDepricated ?: false) != true) {
+            activeProfiles.add(profileMap.description ?: '---')
         }
     }
     return activeProfiles
@@ -341,29 +322,21 @@ boolean isChattyRadarReport(final Map descMap) {
             ],
             tuyaDPs:        [
                 [dp:1,   name:'motion',          type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'<i>Motion</i>'],
-                // ??? check ^^
                 [dp:5,   name:'tamper',          type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'clear', 1:'detected'] ,   unit:'',  description:'<i>Tamper detection</i>'],
-                // ??? IAS cluster is used instead? {occupancy: (zoneStatus & 1) > 0, tamper: (zoneStatus & 4) > 0};
                 [dp:9,   name:'sensitivity',     type:'enum',    rw: 'rw', min:0,     max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'<i>PIR sensor sensitivity (update at the time motion is activated)</i>'],
-                // check ^^^^^ hasOwnProperty('currentZoneSensitivityLevel')    .read('ssIasZone', ['currentZoneSensitivityLevel', 61441, 'zoneStatus']
                 [dp:10,  name:'keepTime',        type:'enum',    rw: 'rw', min:0,     max:5,    defVal:'0',  unit:'seconds',    map:[0:'0 seconds', 1:'30 seconds', 2:'60 seconds', 3:'120 seconds', 4:'240 seconds', 5:'480 seconds'], title:'<b>Keep Time</b>',   description:'<i>PIR keep time in seconds (update at the time motion is activated)</i>'],
-                // check ^^^^^  hasOwnProperty('61441')
                 [dp:25,  name:'battery2',        type:'number',  rw: 'ro', min:0,     max:100,  defVal:100,  scale:1,  unit:'%',          description:'<i>Remaining battery 2 in %</i>'],
-                //            ^^^TODO^^^
                 [dp:102, name:'reportingTime4in1', type:'number', rw: 'ro', min:0, max:1440, defVal:10, step:5, scale:1, unit:'minutes', title:'<b>Reporting Interval</b>', description:'<i>Reporting interval in minutes</i>'],
                 [dp:104, name:'tempCalibration',  type:'decimal', rw:'ro', min:-2.0,  max:2.0,  defVal:0.0,  scale:10, unit:'deg.',  title:'<b>Temperature Calibration</b>',       description:'<i>Temperature calibration (-2.0...2.0)</i>'],
-                //           ^^^TODO^^ pre-process negative values !
                 [dp:105, name:'humiCalibration', type:'number',  rw: 'ro', min:-15,   max:15,   defVal:0,    scale:1,  unit:'%RH',    title:'<b>Huidity Calibration</b>',     description:'<i>Humidity Calibration</i>'],
                 [dp:106, name:'illumCalibration', type:'number', rw: 'ro', min:-20, max:20, defVal:0,        scale:1, unit:'Lx', title:'<b>Illuminance Calibration</b>', description:'<i>Illuminance calibration in lux/i>'],
                 [dp:107, name:'temperature',     type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0,  scale:10, unit:'deg.',       description:'<i>Temperature</i>'],
                 [dp:108, name:'humidity',        type:'number',  rw: 'ro', min:1,     max:100,  defVal:100,  scale:1,  unit:'%RH',        description:'<i>Humidity</i>'],
                 [dp:109, name:'pirSensorEnable', type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'1',  scale:1,  map:[0:'disabled', 1:'enabled'] ,   unit:'', title:'<b>MoPIR Sensor Enable</b>',  description:'<i>Enable PIR sensor</i>'],
                 [dp:110, name:'battery',         type:'number',  rw: 'ro', min:0,     max:100,  defVal:100,  scale:1,  unit:'%',          description:'<i>Battery level</i>'],
-                //            ^^^TODO^^^
                 [dp:111, name:'ledEnable',       type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'disabled', 1:'enabled'] ,   unit:'', title:'<b>LED Enable</b>',  description:'<i>Enable LED</i>'],
                 [dp:112, name:'reportingEnable', type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'disabled', 1:'enabled'] ,   unit:'', title:'<b>Reporting Enable</b>',  description:'<i>Enable reporting</i>'],
             ],
-
             deviceJoinName: 'Tuya Multi Sensor 4 In 1',
             configuration : ['battery': false]
     ],
@@ -580,6 +553,24 @@ boolean isChattyRadarReport(final Map descMap) {
             ]  // battery percentage, min 3600, max 7200, UINT8, delta 2
     ],
 
+    // isSiHAS()
+    'SIHAS_USM-300Z_4_IN_1' : [
+            description   : 'SiHAS USM-300Z 4-in-1',
+            models        : ['ShinaSystem'],
+            device        : [type: 'radar', powerSource: 'battery', isIAS:false, isSleepy:false],
+            capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'IlluminanceMeasurement': true, 'Battery': true],
+            preferences   : [:],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0400,0003,0406,0402,0001,0405,0500', outClusters:'0004,0003,0019', model:'USM-300Z', manufacturer:'ShinaSystem', deviceJoinName: 'SiHAS MultiPurpose Sensor']
+            ],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            tuyaDPs       : [:],
+            attributes    : [:],
+            deviceJoinName: 'SiHAS USM-300Z 4-in-1',
+            //configuration : ["0x0406":"bind"]     // TODO !!
+            configuration : [:]
+    ],
+
     'NONTUYA_MOTION_IAS'   : [
             description   : 'Other OEM Motion sensors (IAS)',
             models        : ['MOT003', 'XXX'],
@@ -597,13 +588,53 @@ boolean isChattyRadarReport(final Map descMap) {
             configuration : ['battery': false]
     ],
 
+    'UNKNOWN'             : [                        // the Device Profile key (shown in the State Variables)
+            description   : 'Unknown device',        // the Device Profile description (shown in the Preferences)
+            models        : ['UNKNOWN'],             // used to match a Device profile if the individuak fingerprints do not match
+            device        : [
+                type: 'PIR',         // 'PIR' or 'radar'
+                isIAS:true,                          // define it for PIR sensors only!
+                powerSource: 'dc',                   // determines the powerSource value - can be 'battery', 'dc', 'mains'
+                isSleepy:false                       // determines the update and ping behaviour
+            ],
+            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'Battery': true],
+            preferences   : ['motionReset':true],
+            commands      : ['resetSettings':'resetSettings', 'resetStats':'resetStats', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences' \
+            ],
+            //fingerprints  : [
+            //    [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0406", outClusters:"0003", model:"model", manufacturer:"manufacturer"]
+            //],
+            tuyaDPs:        [
+                [
+                    dp:1,
+                    name:'motion',
+                    type:'enum',
+                    rw: 'ro',
+                    min:0,
+                    max:1,
+                    map:[0:'inactive', 1:'active'],
+                    description:'Motion state'
+                ]
+            ],
+            deviceJoinName: 'Unknown device',        // used during the inital pairing, if no individual fingerprint deviceJoinName was found
+            configuration : ['battery': true],
+            batteries     : 'unknown'
+    ],
+
     '---'   : [
-            description   : '--------------------------------------',
+            description   : '---------------------------------------------------------------------------------------',
             models        : [],
             fingerprints  : [],
     ],
 
-// ------------------------------------------- mmWave Radars ------------------------------------------------//
+    '----'  : [
+            description   : 'Tuya radars are supported in the new Tuya mmWave Sensor driver',
+            models        : [],
+            fingerprints  : [],
+    ],
+
+
+// ------------------------------------------- mmWave Radars - OBSOLETE !------------------------------------------------//
 
     'TS0601_TUYA_RADAR'   : [        // isZY_M100Radar()        // spammy devices!
             description   : 'Tuya Human Presence mmWave Radar ZY-M100',
@@ -773,7 +804,7 @@ boolean isChattyRadarReport(final Map descMap) {
     'TS0225_LINPTECH_RADAR'   : [
             description   : 'Tuya TS0225_LINPTECH 24GHz Radar',
             models        : ['TS0225'],
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
             preferences   : ['fadingTime':'101', 'motionDetectionDistance':'0xE002:0xE00B', 'motionDetectionSensitivity':'0xE002:0xE004', 'staticDetectionSensitivity':'0xE002:0xE005'],
             fingerprints  : [
@@ -799,7 +830,7 @@ boolean isChattyRadarReport(final Map descMap) {
     'TS0225_EGNGMRZH_RADAR'   : [
             description   : 'Tuya TS0225_EGNGMRZH 24GHz Radar',
             models        : ['TS0225'],
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
             fingerprints  : [[manufacturer:'_TZFED8_egngmrzh']],
             // uses IAS for occupancy!
@@ -842,79 +873,11 @@ boolean isChattyRadarReport(final Map descMap) {
             fingerprints  : [
                 [manufacturer:'SONOFF']      // Depricated!
             ]
-    ],
-
-    // isSiHAS()
-    'SIHAS_USM-300Z_4_IN_1' : [
-            description   : 'SiHAS USM-300Z 4-in-1',
-            models        : ['ShinaSystem'],
-            device        : [type: 'radar', powerSource: 'battery', isIAS:false, isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'IlluminanceMeasurement': true, 'Battery': true],
-            preferences   : [:],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0400,0003,0406,0402,0001,0405,0500', outClusters:'0004,0003,0019', model:'USM-300Z', manufacturer:'ShinaSystem', deviceJoinName: 'SiHAS MultiPurpose Sensor']
-            ],
-            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
-            tuyaDPs       : [:],
-            attributes    : [:],
-            deviceJoinName: 'SiHAS USM-300Z 4-in-1',
-            //configuration : ["0x0406":"bind"]     // TODO !!
-            configuration : [:]
-    ],
-
-    'UNKNOWN'             : [                        // the Device Profile key (shown in the State Variables)
-            description   : 'Unknown device',        // the Device Profile description (shown in the Preferences)
-            models        : ['UNKNOWN'],             // used to match a Device profile if the individuak fingerprints do not match
-            device        : [
-                type: 'PIR',         // 'PIR' or 'radar'
-                isIAS:true,                          // define it for PIR sensors only!
-                powerSource: 'dc',                   // determines the powerSource value - can be 'battery', 'dc', 'mains'
-                isSleepy:false                       // determines the update and ping behaviour
-            ],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'Battery': true],
-            preferences   : ['motionReset':true],
-            commands      : ['resetSettings':'resetSettings', 'resetStats':'resetStats', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences' \
-            ],
-            //fingerprints  : [
-            //    [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0406", outClusters:"0003", model:"model", manufacturer:"manufacturer"]
-            //],
-            tuyaDPs:        [
-                [
-                    dp:1,
-                    name:'motion',
-                    type:'enum',
-                    rw: 'ro',
-                    min:0,
-                    max:1,
-                    map:[0:'inactive', 1:'active'],
-                    description:'Motion state'
-                ]
-            ],
-            deviceJoinName: 'Unknown device',        // used during the inital pairing, if no individual fingerprint deviceJoinName was found
-            configuration : ['battery': true],
-            batteries     : 'unknown'
     ]
-
 ]
 
 // ---------------------------------- deviceProfilesV2 helper functions --------------------------------------------
 
-/**
- * Returns the profile key for a given profile description.
- * @param valueStr The profile description to search for.
- * @return The profile key if found, otherwise null.
- */
- /*
-String getProfileKey(final String valueStr) {
-    String key = null
-    deviceProfilesV2.each {  profileName, profileMap ->
-        if (profileMap.description == valueStr) {
-            key = profileName
-        }
-    }
-    return key
-}
-*/
 String getProfileKey(final String valueStr) {
     String key = deviceProfilesV2.find { _, profileMap -> profileMap.description == valueStr }?.key
     return key
@@ -2225,7 +2188,7 @@ void updated() {
     //logDebug "forcedProfile is not set"
     }
 
-    if (DEVICE?.device?.depricated == true) {
+    if (DEVICE?.device?.isDepricated == true) {
         logWarn 'The use of this driver with this device is depricated. Please update to the new driver!'
         return
     }
@@ -3561,27 +3524,6 @@ Long formattedDate2unix(final String formattedDate) {
     }
 }
 
-/*
-@Field static final Map<Integer, Map> SettableParsFieldMap = new ConcurrentHashMap<>().withDefault {
-    new ConcurrentHashMap<Integer, Map>()
-}
-
-List<String> getSettableParsList() {
-    if (device?.id == null) {
-        return ['SEE LOGS']
-    }
-    if (SettableParsFieldMap.get(device?.id)) {
-        return SettableParsFieldMap.get(device?.id).pars.keySet().toList()
-    }
-    // put a map in the SettableParsFieldMap for the device.id if it doesn't exist, containing the settable parameters
-    Map settableParsMap = [:]
-    settableParsMap['pars'] = DEVICE?.preferences
-    SettableParsFieldMap.put(device?.id, settableParsMap)
-    List<String> result = SettableParsFieldMap.get(device?.id).pars.keySet().toList()
-    log.warn "stored ${SettableParsFieldMap.get(device?.id)}"
-    return result
-}
-*/
 
 void validateAndFixPreferences() {
     //logDebug "validateAndFixPreferences: preferences=${DEVICE?.preferences}"
