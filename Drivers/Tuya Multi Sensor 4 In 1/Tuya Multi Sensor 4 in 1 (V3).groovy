@@ -22,17 +22,32 @@
  *                                   TODO: temperature and humidity thresholds SIHAS exception : List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes // library marker kkossev.deviceProfileLib, line 1118
  *                                   TODO: battery events delay
  *                                   TODO: add powerSource attribute
- *                                   TODO: 'all' status preference and attribute
+ *                                   TODO: 'all' status preference and attribute (allStatusTextEnable)
  *                                   TODO: temperature and humidity calibration (offsets)
  *                                   TODO: for 4IN1 (Fantem) - add in refresh() : cmds += zigbee.command(0xEF00, 0x07, '00')    // Fantem Tuya Magic
+ *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
  *                                   TODO: for Tuya- add in refresh() : cmds += zigbee.command(0xEF00, 0x03)
  *                                   TODO: battery level for TS0202 and TS0601 2in1 ; battery1 for Fantem 4-in-1 (100% or 0% ) Battery level for _TZE200_3towulqd (2in1)
  *                                   TODO: https://community.hubitat.com/t/moes-tuya-motion-sensor-distance-issue-ts0202-have-to-be-ridiculously-close-to-detect-movement/109917/8?u=kkossev 
+ *                                   TODO: publish examples of SetPar usage : https://community.hubitat.com/t/4-in-1-parameter-for-adjusting-reporting-time/115793/12?u=kkossev
  *                                   TODO: make new GitHub WiKi 
+ *                                   TODO: check why only voltage is reported for SONOFF_MOTION_IAS;
+ *                                   TODO: hide motionKeepTime and motionSensitivity for SONOFF_MOTION_IAS;
+ *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
+ *                                   TODO: TS0202_MOTION_IAS missing sensitivity and retrigger time settings bug fix;
+ *                                   TODO: add Sensitivity Levels Presets
+ *                                   TODO: when device rejoins the network, read the battry percentage again!
+ *                                   TOOD: Tuya 2in1 illuminance_interval (dp=102) !
+ *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time ! ( 2-in-1 time is wrong)
+ *                                   TODO: check the bindings commands in configure()
+ *                                   TODO: implement getActiveEndpoints()
+ *                                   TODO: ignore invalid humidity reprots (>100 %)
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
+ *                                   TODO: delete all previous preferencies when changing the device profile ?
  *                                   TODO: cleanup the 4-in-1 state variables.
  *                                   TODO: illumState default value is 0 - should be 'unknown' ?
  *                                   TODO: Motion reset to inactive after 43648s - convert to H:M:S
+ *                                   TODO: check temperatureOffset and humidityOffset
 */
 
 static String version() { "3.2.1" }
