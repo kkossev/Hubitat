@@ -27,7 +27,7 @@ library(
  * ver. 3.1.3  2024-05-21 kkossev  - skip processClusterAttributeFromDeviceProfile if cluster or attribute or value is missing
  * ver. 3.2.0  2024-05-25 kkossev  - commonLib 3.2.0 allignment;
  * ver. 3.2.1  2024-06-06 kkossev  - Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent); getDeviceProfilesMap bug fix; forcedProfile is always shown in preferences;
- * ver. 3.3.0  2024-06-08 kkossev  - (dev. branch) empty preferences bug fix;
+ * ver. 3.3.0  2024-06-15 kkossev  - (dev. branch) empty preferences bug fix; zclWriteAttribute delay 50 ms;
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
@@ -42,7 +42,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.3.0' }
-static String deviceProfileLibStamp() { '2024/06/08 11:11 AM' }
+static String deviceProfileLibStamp() { '2024/06/15 12:36 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -283,7 +283,9 @@ public void updateAllPreferences() {
                 // scale the value
                 preferenceValue = (safeToDouble(preferenceValue) / safeToInt(foundMap.scale)) as double
             }
-            if (preferenceValue != null) { setPar(name, preferenceValue.toString()) }
+            if (preferenceValue != null) { 
+                setPar(name, preferenceValue.toString()) 
+            }
             else { logDebug "updateAllPreferences: preference ${name} is not set (preferenceValue was null)" ;  return }
         }
         else { logDebug "warning: couldn't find map for preference ${name}" ; return }
@@ -309,6 +311,7 @@ int invert(int val) {
     else { return val }
 }
 
+// called from setPar and sendAttribite methods for non-Tuya DPs
 List<String> zclWriteAttribute(Map attributesMap, int scaledValue) {
     if (attributesMap == null || attributesMap == [:]) { logWarn "attributesMap=${attributesMap}" ; return [] }
     List<String> cmds = []
@@ -328,10 +331,10 @@ List<String> zclWriteAttribute(Map attributesMap, int scaledValue) {
     }
     if (map.mfgCode != null && map.mfgCode != '') {
         Map mfgCode = map.mfgCode != null ? ['mfgCode':map.mfgCode] : [:]
-        cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, mfgCode, delay = 200)
+        cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, mfgCode, delay = 50)
     }
     else {
-        cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, [:], delay = 200)
+        cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, [:], delay = 50)
     }
     return cmds
 }

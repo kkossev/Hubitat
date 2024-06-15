@@ -14,9 +14,8 @@
  *     for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.3.0  2024-06-09 kkossev  - (dev. branch) first Namron Zigbee Thermostat version
- * ver. 3.3.1  2024-06-14 kkossev  - (dev. branch) calibrationTemp negative values bug fix; added hysteresis, floorCalibrationTemp, powerUpStatus, emergencyHeatTime, modeAfterDry, controlType, floorSensorType
+ * ver. 3.3.1  2024-06-15 kkossev  - (dev. branch) calibrationTemp negative values bug fix; added hysteresis, floorCalibrationTemp, powerUpStatus, emergencyHeatTime, modeAfterDry, controlType, floorSensorType, childLock
  *
- *                                   TODO: childLock, cluster 0x0204
  *                                   TODO: research how the Namron internal clock is set (Zigbee2MQTT sniff)?
  *                                   TODO: add a link to GitHub WiKi 
  *                                   TODO: add factoryReset command
@@ -27,6 +26,7 @@
  *                                   TODO: add all other Namron models fingerprints
  *                                   TODO: warning Info message (permanent) when both model and manufacturer are missing (commonLib)
  *                                   TODO: warning Info message (temporary when device is unknown.
+ *                                   TODO: cluster 0x0204  improve the logging  Namron setPar: (3) successfluly executed setPar customSetCalibrationTemp(-1) - without customSet prefix
  *                                   TODO: deviceProfileV3 - default configuration if not found
  *                                   TODO: energy automatic reporting configuration (this driver)
  *                                   TODO: add powerSource capability
@@ -42,7 +42,7 @@
  */
 
 static String version() { '3.3.1' }
-static String timeStamp() { '2024/06/14 7:17 PM' }
+static String timeStamp() { '2024/06/15 12:50 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -74,11 +74,12 @@ metadata {
         attribute 'occupancy', 'enum', ['away', 'heat']       // NAMRON
         attribute 'away', 'enum', ['off', 'on']               // Tuya Saswell, AVATTO, NAMRON
         attribute 'awaySetPoint', 'number'                    // NAMRON
-        attribute 'batteryVoltage', 'number'
+        //attribute 'batteryVoltage', 'number'
         attribute 'boostTime', 'number'                             // BRT-100
-        attribute 'calibrated', 'enum', ['false', 'true']           // Aqara E1
+        //attribute 'calibrated', 'enum', ['false', 'true']           // Aqara E1
         attribute 'calibrationTemp', 'number'                       // BRT-100, Sonoff, NAMRON
         attribute 'controlType', 'enum', ['Room sensor', 'floor sensor', 'Room+floor sensor']  // NAMRON
+        attribute 'displayAutoOff', 'enum', ['disabled', 'enabled']  // NAMRON
         attribute 'emergencyHeatTime', 'number'                     // NAMRON
         attribute 'floorCalibrationTemp', 'number'                  // NAMRON
         attribute 'childLock', 'enum', ['off', 'on']                // BRT-100, Aqara E1, Sonoff, AVATTO
@@ -132,7 +133,7 @@ metadata {
             description   : 'NAMRON Thermostat',
             device        : [manufacturers: ['NAMRON AS'], type: 'TRV', powerSource: 'mains', isSleepy:false],
             capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
-            preferences   : [calibrationTemp: '0x0201:0x0010', awaySetPoint: '0x0201:0x0014', lcdBrightnesss:'0x0201:0x1000', temperatureDisplayMode:'0x0201:0x1008', displayAutoOffEnable:'0x0201:0x100B', childLock:'0x0204:0x0001',
+            preferences   : [calibrationTemp: '0x0201:0x0010', awaySetPoint: '0x0201:0x0014', lcdBrightnesss:'0x0201:0x1000', temperatureDisplayMode:'0x0201:0x1008', displayAutoOff:'0x0201:0x100B', childLock:'0x0204:0x0001',
                              floorSensorType:'0x0201:0x1002', controlType:'0x0201:0x1003', powerUpStatus:'0x0201:0x1004', floorCalibrationTemp:'0x0201:0x1005', emergencyHeatTime:'0x0201:0x1006', modeAfterDry:'0x0201:0x1007', /*windowOpenCheck:'0x0201:0x1009',*/ hysteresis:'0x0201:0x100A',
                              /*alarmAirTempOverValue:'0x0201:0x2001', awayModeSet:'0x0201:0x2002'*/
                              ],
@@ -167,7 +168,7 @@ metadata {
                 [at:'0x0201:0x1008',  name:'temperatureDisplayMode',   type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'1',   step:1,  scale:1,    map:[0: 'Room Temp', 1: 'Floor Temp'], unit:'',  title: '<b>Temperature Display</b>',description:'Temperature Display'],                // ^^^ (ENUM8,reportable) TODO: check dt!!! TemperatureDisplay Value=0 : Room Temp (Default) Value=1 : Floor Temp
                 [at:'0x0201:0x1009',  name:'windowOpenCheck',          type:'decimal', dt:'0x21',  mfgCode:'0x1224', rw: 'rw', min:0.3, max:8.0, defVal:0, step:0.5, scale:10,  unit:'', title: '<b>Window Open Check</b>', description:'The threshold to detect open window, 0 means disabled'],                // ^^^ (INT8U,reportable) TODO: check dt!!!    WindowOpenCheck The threshold to detect open window, range is 0.3-8, unit is 0.5ºC, 0 means disabled, default is 0
                 [at:'0x0201:0x100A',  name:'hysteresis',               type:'decimal', dt:'0x20',  mfgCode:'0x1224', rw: 'rw', min:0.5, max:2.0, defVal:0.5, step:0.1, scale:10,  unit:'', title: '<b>Hysteresis</b>', description:'Hysteresis'],                // ^^^ (INT8U,reportable) TODO: check dt!!!  TODO - check the scailing !!!  Hysteresis setting, range is 5-20, unit is 0.1ºC, default value is 5
-                [at:'0x0201:0x100B',  name:'displayAutoOffEnable',     type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'1',   step:1,  scale:1,    map:[0: 'Disabled', 1: 'Enabled'], unit:'',  title: '<b>Display Auto Off</b>',description:'Display Auto Off disable/enable'],                // ^^^ (ENUM8,reportable) TODO: check dt!!!  DisplayAutoOffEnable 0, disable Display Auto Off function 1, enable Display Auto Off function
+                [at:'0x0201:0x100B',  name:'displayAutoOff',           type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'1',   step:1,  scale:1,    map:[0: 'disabled', 1: 'enabled'], unit:'',  title: '<b>Display Auto Off</b>',description:'Display Auto Off disable/enable'],                // ^^^ (ENUM8,reportable) TODO: check dt!!!  DisplayAutoOffEnable 0, disable Display Auto Off function 1, enable Display Auto Off function
                 [at:'0x0201:0x2001',  name:'alarmAirTempOverValue',    type:'decimal', dt:'0x21',  mfgCode:'0x1224', rw: 'rw', min:0.2, max:6.0, defVal:4.5, step:0.1, scale:10,  unit:'', title: '<b>Alarm Air Temp Over Value</b>', description:'Alarm Air Temp Over Value, 0 means disabled,'],                // ^^^ (INT8U,reportable) TODO: check dt!!!  TODO - check the scailing !!!  AlarmAirTempOverValue Room temp alarm threshold, range is 0.20-60, unit is 1ºC,0 means disabled, default is 45
                 [at:'0x0201:0x2002',  name:'awayModeSet',              type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'0',   step:1,  scale:1,    map:[0: 'Not away', 1: 'Away'], unit:'',  title: '<b>Away Mode Set</b>',description:'Away Mode Set'],                // ^^^ (ENUM8,reportable) TODO: check dt!!!  Away Mode Set: Value=1: away Value=0: not away (default)
                 // Command supported  !!!!!!!!!! TODO !!!!!!!!!!!! not attribute, but a command !!!!!!!!!!!!!!!!
