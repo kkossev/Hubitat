@@ -27,7 +27,7 @@ library(
  * ver. 3.1.3  2024-05-21 kkossev  - skip processClusterAttributeFromDeviceProfile if cluster or attribute or value is missing
  * ver. 3.2.0  2024-05-25 kkossev  - commonLib 3.2.0 allignment;
  * ver. 3.2.1  2024-06-06 kkossev  - Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent); getDeviceProfilesMap bug fix; forcedProfile is always shown in preferences;
- * ver. 3.3.0  2024-06-15 kkossev  - (dev. branch) empty preferences bug fix; zclWriteAttribute delay 50 ms;
+ * ver. 3.3.0  2024-06-16 kkossev  - (dev. branch) empty preferences bug fix; zclWriteAttribute delay 50 ms; added advanced check in inputIt()
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
@@ -42,7 +42,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.3.0' }
-static String deviceProfileLibStamp() { '2024/06/15 12:36 PM' }
+static String deviceProfileLibStamp() { '2024/06/16 8:10 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -760,48 +760,24 @@ Map inputIt(String paramPar, boolean debug = false) {
     String param = paramPar.trim()
     Map input = [:]
     Map foundMap = [:]
-    if (!(param in DEVICE?.preferences)) {
-        if (debug) { log.warn "inputIt: preference ${param} not defined for this device!" }
-        return [:]
-    }
+    if (!(param in DEVICE?.preferences)) { if (debug) { log.warn "inputIt: preference ${param} not defined for this device!" } ; return [:] }
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def preference
-    try {
-        preference = DEVICE?.preferences["$param"]
-    }
-    catch (e) {
-        if (debug) { log.warn "inputIt: exception ${e} caught while parsing preference ${param} value ${preference}" }
-        return [:]
-    }
+    try { preference = DEVICE?.preferences["$param"] }
+    catch (e) { if (debug) { log.warn "inputIt: exception ${e} caught while parsing preference ${param} value ${preference}" } ; return [:] }
     //  check for boolean values
-    try {
-        if (preference in [true, false]) {
-            if (debug) { log.warn "inputIt: preference ${param} is boolean value ${preference} - skipping it for now!" }
-            return [:]
-        }
-    }
-    catch (e) {
-        if (debug) { log.warn "inputIt: exception ${e} caught while checking for boolean values preference ${param} value ${preference}" }
-        return [:]
-    }
-
-    try {
-        isTuyaDP = preference.isNumber()
-    }
-    catch (e) {
-        if (debug) { log.warn "inputIt: exception ${e} caught while checking isNumber() preference ${param} value ${preference}" }
-        return [:]
-    }
-
+    try { if (preference in [true, false]) { if (debug) { log.warn "inputIt: preference ${param} is boolean value ${preference} - skipping it for now!" } ; return [:] } }
+    catch (e) { if (debug) { log.warn "inputIt: exception ${e} caught while checking for boolean values preference ${param} value ${preference}" } ; return [:] }
+    // TODO - check if this is neccessary? isTuyaDP is not defined!
+    try { isTuyaDP = preference.isNumber() }
+    catch (e) { if (debug) { log.warn "inputIt: exception ${e} caught while checking isNumber() preference ${param} value ${preference}" } ; return [:]  }
     //if (debug) log.debug "inputIt: preference ${param} found. value is ${preference} isTuyaDP=${isTuyaDP}"
     foundMap = getPreferencesMapByName(param)
     //if (debug) log.debug "foundMap = ${foundMap}"
-    if (foundMap?.isEmpty()) {
-        if (debug) { log.warn "inputIt: map not found for param '${param}'!" }
-        return [:]
-    }
-    if (foundMap.rw != 'rw') {
-        if (debug) { log.warn "inputIt: param '${param}' is read only!" }
+    if (foundMap?.isEmpty()) { if (debug) { log.warn "inputIt: map not found for param '${param}'!" } ; return [:]  }
+    if (foundMap.rw != 'rw') { if (debug) { log.warn "inputIt: param '${param}' is read only!" } ; return [:]  }
+    if (foundMap.advanced != null && foundMap.advanced == true && settings.advancedOptions != true) {
+        if (debug) { log.debug "inputIt: param '${param}' is advanced!" }
         return [:]
     }
     input.name = foundMap.name
@@ -1346,7 +1322,7 @@ private boolean processFoundItem(final Map descMap, final Map foundItem, int val
             // no custom handler - send the event as usual
             sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
             if (!doNotTrace) {
-                logTrace "event ${name} sent w/ value ${valueScaled}"
+                logTrace "event ${name} sent w/ valueScaled ${valueScaled}"
                 logInfo "${descText}"   // TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
             }
         }

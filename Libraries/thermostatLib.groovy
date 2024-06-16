@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Thermostat Library', name: 'thermostatLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy', documentationLink: '',
-    version: '3.3.0'
+    version: '3.3.1'
     
 )
 /*
@@ -17,13 +17,14 @@ library(
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.3.0  2024-06-09 kkossev  - (dev.branch) added thermostatLib.groovy
+ * ver. 3.3.0  2024-06-09 kkossev  - added thermostatLib.groovy
+ * ver. 3.3.1  2024-06-16 kkossev  - (dev.branch) added factoryResetThermostat() command
  *
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
-static String thermostatLibVersion()   { '3.3.0' }
-static String illuminanceLibStamp() { '2024/06/09 7:49 PM' }
+static String thermostatLibVersion()   { '3.3.1' }
+static String illuminanceLibStamp() { '2024/06/16 8:59 AM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib
@@ -43,7 +44,7 @@ metadata {
     //    command 'setTemperature', ['NUMBER']                        // Virtual thermostat  TODO - decide if it is needed
 
     preferences {
-        if (advancedOptions == true) { // TODO -  move it to the deviceProfile preferences
+        if (settings?.advancedOptions == true) { // TODO -  move it to the deviceProfile preferences
             input name: 'temperaturePollingInterval', type: 'enum', title: '<b>Temperature polling interval</b>', options: TrvTemperaturePollingIntervalOpts.options, defaultValue: TrvTemperaturePollingIntervalOpts.defaultValue, required: true, description: 'Changes how often the hub will poll the TRV for faster temperature reading updates and nice looking graphs.'
         }
     }
@@ -270,9 +271,13 @@ void setThermostatMode(final String requestedMode) {
             }
             break
         case 'eco':
-            if (device.currentValue('ecoMode') != null)  {
+            if (device.hasAttribute('ecoMode')) {   // changed 06/16/2024 : was : (device.currentValue('ecoMode') != null)  {
                 logDebug 'setThermostatMode: pre-processing: switching the eco mode on'
                 sendAttribute('ecoMode', 1)
+                return
+            }
+            else {
+                logWarn "setThermostatMode: pre-processing: switching to 'eco' mode is not supported by this device!"
                 return
             }
             break
@@ -359,79 +364,18 @@ void sendSupportedThermostatModes(boolean debug = false) {
 
 
 void standardHandleThermostatEvent(int value, boolean isDigital=false) {
-    logDebug "standardHandleThermostatEvent()..."
-    /*
-    Map eventMap = [:]
-    if (state.stats != null) { state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 } else { state.stats = [:] }
-    eventMap.name = 'illuminance'
-    Integer illumCorrected = Math.round((illuminance * ((settings?.illuminanceCoeff ?: 1.00) as float)))
-    eventMap.value  = illumCorrected
-    eventMap.type = isDigital ? 'digital' : 'physical'
-    eventMap.unit = 'lx'
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
-    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now())) / 1000)
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
-    Integer timeRamaining = (minTime - timeElapsed) as Integer
-    Integer lastIllum = device.currentValue('illuminance') ?: 0
-    Integer delta = Math.abs(lastIllum - illumCorrected)
-    if (delta < ((settings?.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD) as int)) {
-        logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${settings?.illuminanceThreshold} (lastIllum=${lastIllum})"
-        return
-    }
-    if (timeElapsed >= minTime) {
-        logInfo "${eventMap.descriptionText}"
-        unschedule('sendDelayedIllumEvent')        //get rid of stale queued reports
-        state.lastRx['illumTime'] = now()
-        sendEvent(eventMap)
-    }
-    else {         // queue the event
-        eventMap.type = 'delayed'
-        logDebug "${device.displayName} <b>delaying ${timeRamaining} seconds</b> event : ${eventMap}"
-        runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap])
-    }
-    */
+    logWarn "standardHandleThermostatEvent()... NOT IMPLEMENTED!"
 }
 
 /* groovylint-disable-next-line UnusedPrivateMethod */
 private void sendDelayedThermostatEvent(Map eventMap) {
-    logDebug "${device.displayName} <b>delaying ${timeRamaining} seconds</b> event : ${eventMap}"
-/*    
-    logInfo "${eventMap.descriptionText} (${eventMap.type})"
-    state.lastRx['illumTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
-    sendEvent(eventMap)
-*/    
+    logWarn "${device.displayName} NOT IMPLEMENTED! <b>delaying ${timeRamaining} seconds</b> event : ${eventMap}"
 }
 
 
 /* groovylint-disable-next-line UnusedMethodParameter */
 void thermostatProcessTuyaDP(final Map descMap, int dp, int dp_id, int fncmd) {
-    logDebug "thermostatProcessTuyaDP()... dp=${dp} dp_id=${dp_id} fncmd=${fncmd}"
-/*    
-    switch (dp) {
-        case 0x01 : // on/off
-            if (DEVICE_TYPE in  ['LightSensor']) {
-                logDebug "LightSensor BrightnessLevel = ${tuyaIlluminanceOpts[fncmd as int]} (${fncmd})"
-            }
-            else {
-                sendSwitchEvent(fncmd)
-            }
-            break
-        case 0x02 :
-            if (DEVICE_TYPE in  ['LightSensor']) {
-                handleIlluminanceEvent(fncmd)
-            }
-            else {
-                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
-            }
-            break
-        case 0x04 : // battery
-            sendBatteryPercentageEvent(fncmd)
-            break
-        default :
-            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
-            break
-    }
-*/    
+    logWarn "thermostatProcessTuyaDP()... NOT IMPLEMENTED! dp=${dp} dp_id=${dp_id} fncmd=${fncmd}"
 }
 
 
@@ -524,15 +468,18 @@ void thermostatInitEvents(final boolean fullInit=false) {
 }
 
 /*
-  Reset to Factory Defaults Command
+  Reset to Factory Defaults Command - TODO!
   On receipt of this command, the device resets all the attributes of all its clusters to their factory defaults.
   Note that networking functionality, bindings, groups, or other persistent data are not affected by this command
 */
 void factoryResetThermostat() {
     logDebug 'factoryResetThermostat() called!'
-    //List<String> cmds = []
-    // TODO
-    logWarn 'factoryResetThermostat: NOT IMPLEMENTED'
+    List<String> cmds  = zigbee.command(0x0000, 0x00)
+    sendZigbeeCommands(cmds)
+    sendInfoEvent 'The thermostat parameters were FACTORY RESET!'
+    if (this.respondsTo('refreshAll')) {
+        runIn(3, 'refreshAll')
+    }
 }
 
 // ========================================= Virtual thermostat functions  =========================================
