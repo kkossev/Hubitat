@@ -26,6 +26,7 @@
  * ver. 3.2.0  2024-05-24 kkossev  - commonLib 3.2.0 allignment
  * ver. 3.2.1  2024-05-25 kkossev  - Tuya radars bug fix
  * ver. 3.2.2  2024-06-04 kkossev  - commonLib 3.2.1 allignment; deviceProfile preference bug fix.
+ * ver. 3.2.3  2024-06-21 kkossev  - (dev. branch) added _TZE204_nbkshs6k and _TZE204_dapwryy7 @CheesyPotato 
  *                                   
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
  *                                   TODO: cleanup the 4-in-1 state variables.
@@ -42,8 +43,8 @@
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
 */
 
-static String version() { "3.2.2" }
-static String timeStamp() {"2024/06/04 8:36 PM"}
+static String version() { "3.2.3" }
+static String timeStamp() {"2024/06/21 7:46 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -753,7 +754,66 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             ],
             spammyDPsToIgnore : [19], spammyDPsToNotTrace : [19],
             deviceJoinName: 'Tuya Human Presence Detector MUVJRJR5'
-    ]
+    ],
+
+    'TS0601_NBKSHS6K_RADAR'   : [        //5GHz Tuya Thick White Square with Sqr Button
+                description   : '5GHz Tuya Generic White Square Basic',
+                models        : ['TS0601'],
+                device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+                capabilities  : ['MotionSensor': true],
+                preferences   : ["unknownDP12":"12"],
+                commands      : ['resetStats':'resetStats'],
+                fingerprints  : [
+                    [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_nbkshs6k', deviceJoinName: '5GHz Tuya Generic White Square Basic']
+                ],
+                tuyaDPs:        [
+                    [dp:1,   name:'motion',         type:'enum',   rw: 'ro', min:0, max:1,    defVal: '0', map:[0:'active', 1:'inactive'],     description:'Presence'],
+                    //[dp:12,   name:'unknownDP12',         type:'number',   rw: 'rw', min:0, max:9999,    defVal: 1,      description:'UnknownDP12'],
+
+                ],
+                spammyDPsToIgnore : [],           
+                spammyDPsToNotTrace : [],    
+                deviceJoinName: '5GHz Tuya Generic White Square Basic'
+        ],
+
+'TS0601_DAPWRYY7_RADAR'   : [        //5GHz Tuya Thick White Square with Sqr Button
+            description   : '5GHz Tuya Thick White Square with Sqr Button',
+            models        : ['TS0601'],
+            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            capabilities  : ['MotionSensor': true, 'DistanceMeasurement':true, 'IlluminanceMeasurement': true],
+            preferences   : ['fadingTime':'103', 'radarSensitivity':'105', 'maximumDistance':'107'], //BUG? - the dp103 is tested to set the fading time or motion reset with outbound commands BUT it is also the inbound illuminance dp
+            commands      : ['resetStats':'resetStats'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_dapwryy7', deviceJoinName: '5GHz Tuya Thick White Square with Sqr Button']
+            ],
+            tuyaDPs:        [
+                [dp:1,   name:'motion',         type:'enum',   rw: 'ro', min:0, max:4,    defVal: '0', map:[0:'inactive', 4:'active'],     description:'Presence'],
+                [dp:101, name:'distance', type:'decimal', rw: 'ro', min:0.0, max:9999.0, scale:100,   unit:'m',    description:'Distance'],
+                [dp:103, name:'illuminance',            type:'number',  rw: 'ro',                     scale:1,    unit:'lx',       description:'Illuminance'], // BUG? - see above preferences
+
+                //[dp:102, name:'unknownDP102', type:'number', rw: 'ro', min:0, max:9999, scale:1, unit:'', description:''],
+                //[dp:104, name:'unknownDP104', type:'number', rw: 'ro', min:0, max:9999, scale:1, unit:'', description:''],
+
+                [dp:105,   name:'radarSensitivity',       type:'number',  rw: 'rw', min:1,   max:9 ,    defVal:5,    scale:1,    unit:'',        title:'<b>Radar Sensitivity</b>',    description:'<i>Sensitivity of the radar</i>'],
+                //[dp:106,   name:'minimumDistance',        type:'decimal', rw: 'ro', min:0.0, max:10.0,  defVal:0.1,  scale:100,  unit:'meters',   title:'<b>Minimum distance</b>',     description:'<i>Minimum detection distance</i>'],
+                [dp:107,   name:'maximumDistance',        type:'decimal', rw: 'rw', min:0.0, max:10.0,  defVal:10.0,  scale:100,  unit:'meters',   title:'<b>Maximum distance</b>',     description:'<i>Maximum detection distance</i>'],
+                
+                //[dp:108, name:'unknownDP108', type:'number', rw: 'ro', min:0, max:9999, scale:1, unit:'', description:'Unkown DP108'],
+                //[dp:109, name:'unknownDP109', type:'number', rw: 'ro', min:0, max:9999, scale:1, unit:'', description:'Unkown DP109'],
+                //[dp:110, name:'unknownDP110', type:'number', rw: 'ro', min:0, max:9999, scale:1, unit:'', description:'Unkown DP110'],
+                
+                //[dp:114, name:'unknownDP114', type:'number', rw: 'rw', min:0, max:9999, scale:1, unit:'', description:'Unkown DP114'],
+                //[dp:115, name:'unknownDP115', type:'number', rw: 'ro', min:0, max:9999, scale:1, unit:'', description:'Unkown DP115'],
+                //[dp:116, name:'unknownDP116', type:'number', rw: 'ro', min:0, max:9999, scale:1, unit:'', description:'Unkown DP116'],
+                //[dp:117, name:'unknownDP117', type:'number', rw: 'ro', min:0, max:9999, scale:1, unit:'', description:'Unkown DP117'],
+                //[dp:118, name:'unknownDP118', type:'number', rw: 'ro', min:0, max:9999, scale:1, unit:'', description:'Unkown DP118'],
+                //[dp:119, name:'unknownDP119', type:'number', rw: 'ro', min:0, max:9999, scale:1, unit:'', description:'Unkown DP119'],
+
+            ],
+            spammyDPsToIgnore : [],           
+            spammyDPsToNotTrace : [],    
+            deviceJoinName: '5GHz Tuya Thick White Square with Sqr Button'
+    ]        
 ]
 
 // called from processFoundItem() for Linptech radar
