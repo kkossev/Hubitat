@@ -51,7 +51,7 @@
  * ver. 2.7.0 2024-03-06 kkossev     - Groovy lint; added TS0021 _TZ3210_3ulg9kpo
  * ver. 2.7.1 2024-04-23 kkossev     - added _TZ3000_wkai4ga5 to the needsDebouncing() list; added TS004F _TZ3000_b3mgfu0d and _TZ3000_czuyt8lz;
  * ver. 2.7.2 2024-05-06 kkossev     - bug fix: TS0044 _TZ3000_vp6clf9d _TZ3000_ur5fpg7p _TZ3000_wkai4ga5 needed to be pushed twice to active a button; Configure button will reset the statistics; 
- * ver. 2.7.3 2024-06-21 kkossev     - (dev. branch) added TS0041 _TZ3000_s0i14ubi
+ * ver. 2.7.3 2024-06-22 kkossev     - (dev. branch) added TS0041 _TZ3000_s0i14ubi; added TS0041 _TZ3000_mrpevh8p
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: batteryReporting is not initialized!
@@ -71,7 +71,7 @@
  */
 
 static String version() { '2.7.3' }
-static String timeStamp() { '2024/06/21 7:14 AM' }
+static String timeStamp() { '2024/06/22 10:48 PM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -121,6 +121,7 @@ metadata {
         fingerprint inClusters: '0000,0001,0006', outClusters: '0019', manufacturer: '_TYZB02_key8kk7r', model: 'TS0041', deviceJoinName: 'Zigbee Tuya 1 Button'
         fingerprint profileId: '0104', endpointId:'01', inClusters:'0001,0006,E000,0000', outClusters:'0019,000A', model:'TS0041', manufacturer:'_TZ3000_fa9mlvja'    // https://www.aliexpress.com/item/1005005363529624.html
         fingerprint profileId: '0104', endpointId:'01', inClusters:'0001,0006,E000,0000', outClusters:'0019,000A', model:'TS0041', manufacturer:'_TZ3000_s0i14ubi'    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/231?u=kkossev https://www.aliexpress.us/item/2255800908957715.html
+        fingerprint profileId: '0104', endpointId:'01', inClusters:'0001,0006,E000,0000', outClusters:'0019,000A', model:'TS0041', manufacturer:'_TZ3000_mrpevh8p'    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/236?u=kkossev
 
         fingerprint inClusters: '0000,0001,0003,0004,0006,1000,E001', outClusters: '0019,000A,0003,0004,0006,0008,1000', manufacturer: '_TZ3000_ja5osu5g', model: 'TS004F', deviceJoinName: 'MOES Smart Button (ZT-SY-SR-MS)' // MOES ZigBee IP55 Waterproof Smart Button Scene Switch & Wireless Remote Dimmer (ZT-SY-SR-MS)
         fingerprint inClusters: '0000,0001,0003,0004,0006,1000,E001', outClusters: '0019,000A,0003,0004,0005,0006,0008,1000', manufacturer: '_TZ3000_rco1yzb1', model: 'TS004F', deviceJoinName: 'LIDL Smart Button SSBM A1'
