@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee IASLibrary', name: 'iasLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/iasLib.groovy', documentationLink: '',
-    version: '3.2.0'
+    version: '3.2.1'
 
 )
 /*
@@ -18,12 +18,13 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.2.0  2024-05-27 kkossev  - added iasLib.groovy
+ * ver. 3.2.1  2024-06-22 kkossev  - (dev. branch)
  *
  *                                   TODO:
 */
 
-static String iasLibVersion()   { '3.2.0' }
-static String iasLibStamp() { '2024/05/27 10:13 PM' }
+static String iasLibVersion()   { '3.2.1' }
+static String iasLibStamp() { '2024/06/22 8:06 PM' }
 
 metadata {
     // no capabilities
@@ -71,66 +72,75 @@ metadata {
 ]
 
 public void standardParseIASCluster(final Map descMap) {
+    logDebug "standardParseIASCluster: cluster=${descMap} attrInt=${descMap.attrInt} value=${descMap.value}"
     if (descMap.cluster != '0500') { return } // not IAS cluster
     if (descMap.attrInt == null) { return } // missing attribute
-    String zoneSetting = IAS_ATTRIBUTES[descMap.attrInt]
+    //String zoneSetting = IAS_ATTRIBUTES[descMap.attrInt]
     if ( IAS_ATTRIBUTES[descMap.attrInt] == null ) {
         logWarn "standardParseIASCluster: Unknown IAS attribute ${descMap?.attrId} (value:${descMap?.value})"
-        return 
+        return
     } // unknown IAS attribute
+    /*
     logDebug "standardParseIASCluster: Don't know how to handle IAS attribute 0x${descMap?.attrId} '${zoneSetting}' (value:${descMap?.value})!"
     return
-/*
+    */
+
     String clusterInfo = 'standardParseIASCluster:'
 
     if (descMap?.cluster == '0500' && descMap?.command in ['01', '0A']) {    //IAS read attribute response
         logDebug "${standardParseIASCluster} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
         if (descMap?.attrId == '0000') {
             int value = Integer.parseInt(descMap?.value, 16)
-            logInfo "${clusterInfo} IAS Zone State repot is '${ZONE_STATE[value]}' (${value})"
-            } else if (descMap?.attrId == '0001') {
+            String status = "${ZONE_STATE[value]}"
+            if (value == 0 ) { status = "<b>${status}</b>" ; logWarn "${clusterInfo} is NOT ENROLLED!"}
+            logInfo "${clusterInfo} IAS Zone State report is '${status}' (${value})"
+        }
+        else if (descMap?.attrId == '0001') {
             int value = Integer.parseInt(descMap?.value, 16)
-            logInfo "${clusterInfo} IAS Zone Type repot is '${ZONE_TYPE[value]}' (${value})"
-            } else if (descMap?.attrId == '0002') {
-            logDebug "${clusterInfo} IAS Zone status repoted: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}"
-            handleMotion(Integer.parseInt(descMap?.value, 16) ? true : false)
-            } else if (descMap?.attrId == '0010') {
-            logDebug "${clusterInfo} IAS Zone Address received (bitmap = ${descMap?.value})"
-            } else if (descMap?.attrId == '0011') {
-            logDebug "${clusterInfo} IAS Zone ID: ${descMap.value}"
-            } else if (descMap?.attrId == '0012') {
-            logDebug "${clusterInfo} IAS Num zone sensitivity levels supported: ${descMap.value}"
-            } else if (descMap?.attrId == '0013') {
+            logInfo "${clusterInfo} IAS Zone Type report is '${ZONE_TYPE[value]}' (${value})"
+        }
+        else if (descMap?.attrId == '0002') {
+            logInfo "${clusterInfo} IAS Zone status repoted: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}"
+        }
+        else if (descMap?.attrId == '0010') {
+            logInfo "${clusterInfo} IAS Zone Address received (bitmap = ${descMap?.value})"
+        }
+        else if (descMap?.attrId == '0011') {
+            logInfo "${clusterInfo} IAS Zone ID: ${descMap.value}"
+        }
+        else if (descMap?.attrId == '0012') {
+            logInfo "${clusterInfo} IAS Num zone sensitivity levels supported: ${descMap.value}"
+        }
+        else if (descMap?.attrId == '0013') {
             int value = Integer.parseInt(descMap?.value, 16)
             //logInfo "${clusterInfo} IAS Current Zone Sensitivity Level = ${sensitivityOpts.options[value]} (${value})"
             logInfo "${clusterInfo} IAS Current Zone Sensitivity Level = (${value})"
         // device.updateSetting('settings.sensitivity', [value:value.toString(), type:'enum'])
         }
-            else if (descMap?.attrId == 'F001') {    // [raw:7CC50105000801F02000, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:F001, encoding:20, command:0A, value:00, clusterInt:1280, attrInt:61441]
+        else if (descMap?.attrId == 'F001') {    // [raw:7CC50105000801F02000, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:F001, encoding:20, command:0A, value:00, clusterInt:1280, attrInt:61441]
             int value = Integer.parseInt(descMap?.value, 16)
             //String str   = getKeepTimeOpts().options[value]
             //logInfo "${clusterInfo} Current IAS Zone Keep-Time =  ${str} (${value})"
             logInfo "${clusterInfo} Current IAS Zone Keep-Time =  (${value})"
-            //device.updateSetting('keepTime', [value: value.toString(), type: 'enum'])
-            }
-            else {
-            logDebug "${clusterInfo} Zone status attribute ${descMap?.attrId}: NOT PROCESSED ${descMap}"
-            }
-        } // if IAS read attribute response
-        else if (descMap?.clusterId == '0500' && descMap?.command == '04') {    //write attribute response (IAS)
-        logDebug "${clusterInfo} AS write attribute response is ${descMap?.data[0] == '00' ? 'success' : '<b>FAILURE</b>'}"
+        //device.updateSetting('keepTime', [value: value.toString(), type: 'enum'])
         }
         else {
-        logDebug "${clusterInfo} NOT PROCESSED ${descMap}"
+            logDebug "${clusterInfo} Zone status attribute ${descMap?.attrId}: <b>NOT PROCESSED</b> ${descMap}"
         }
-*/
+    } // if IAS read attribute response
+    else if (descMap?.clusterId == '0500' && descMap?.command == '04') {    //write attribute response (IAS)
+        logDebug "${clusterInfo} AS write attribute response is ${descMap?.data[0] == '00' ? 'success' : '<b>FAILURE</b>'}"
+    }
+    else {
+        logDebug "${clusterInfo} <b>NOT PROCESSED</b> ${descMap}"
+    }
 }
 
 List<String> refreshAllIas() {
-    logDebug "refreshAllIas()"
+    logDebug 'refreshAllIas()'
     List<String> cmds = []
     IAS_ATTRIBUTES.each { key, value ->
         cmds += zigbee.readAttribute(0x0500, key, [:], delay = 199)
-    }        
+    }
     return cmds
 }
