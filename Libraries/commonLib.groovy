@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy', documentationLink: '',
-    version: '3.2.2'
+    version: '3.3.0'
 )
 /*
   *  Common ZCL Library
@@ -35,7 +35,8 @@ library(
   * ver. 3.1.1  2024-05-05 kkossev  - getTuyaAttributeValue bug fix; added customCustomParseIlluminanceCluster method
   * ver. 3.2.0  2024-05-23 kkossev  - standardParse____Cluster and customParse___Cluster methods; moved onOff methods to a new library; rename all custom handlers in the libs to statdndardParseXXX
   * ver. 3.2.1  2024-06-05 kkossev  - 4 in 1 V3 compatibility; added IAS cluster; setDeviceNameAndProfile() fix;
-  * ver. 3.2.2  2024-06-12 kkossev  - (dev. branch) removed isAqaraTRV_OLD() and isAqaraTVOC_OLD() dependencies from the lib; added timeToHMS(); metering and electricalMeasure clusters swapped bug fix; added cluster 0x0204;
+  * ver. 3.2.2  2024-06-12 kkossev  - removed isAqaraTRV_OLD() and isAqaraTVOC_OLD() dependencies from the lib; added timeToHMS(); metering and electricalMeasure clusters swapped bug fix; added cluster 0x0204;
+  * ver. 3.3.0  2024-06-23 kkossev  - (dev. branch)
   *
   *                                   TODO: MOVE ZDO counters to health state;
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
@@ -45,8 +46,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.2.2' }
-String commonLibStamp() { '2024/06/12 4:32 PM' }
+String commonLibVersion() { '3.3.0' }
+String commonLibStamp() { '2024/06/23 9:19 AM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction

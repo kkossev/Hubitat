@@ -22,7 +22,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/xiaomiLib.groovy",
       "codeType": "library",
       "id": 165,
-      "version": 21
+      "version": 25
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/energyLib.groovy",
@@ -34,7 +34,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 532
+      "version": 534
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/groupsLib.groovy",
@@ -88,7 +88,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/iasLib.groovy",
       "id": 178,
       "codeType": "library",
-      "version": 27
+      "version": 28
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/temperatureLib.groovy",

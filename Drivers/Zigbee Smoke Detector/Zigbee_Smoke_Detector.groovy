@@ -14,23 +14,24 @@
  *     for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.3.0  2024-06-22 kkossev  - (dev. branch) new driver for Aqara Smoke Detector
+ * ver. 3.3.1  2024-06-23 kkossev  - (dev. branch) xiaomi tags debug decoding; added alarmSelfTest command; smoke state is derived from 0xFCC0:0x013A,
  *
- *                                   TODO: battery reporting
+ *                                   TODO: refresh the smoke custom cluster state and publish the first alpha version!
+ *                                   TODO: mute() command (mute the buzzer)
+ *                                   TODO: buzz() command (alarm the buzzer)
+ *                                   TODO: setAlarm() command
+ *                                   TODO: setClear() command
+ *                                   TODO: handle the battery reporting (convert to percentage)
  */
 
-static String version() { '3.3.0' }
-static String timeStamp() { '2024/06/22 11:59 PM' }
+static String version() { '3.3.1' }
+static String timeStamp() { '2024/06/23 7:35 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
 
 import groovy.transform.Field
-//import hubitat.device.HubMultiAction
-//import hubitat.device.Protocol
 import hubitat.zigbee.zcl.DataType
-//import java.util.concurrent.ConcurrentHashMap
-//import groovy.json.JsonOutput
-//import java.math.RoundingMode
 
 #include kkossev.commonLib
 #include kkossev.batteryLib
@@ -49,27 +50,30 @@ metadata {
     {
         capability 'SmokeDetector'
 
-        // smoke - ENUM ["clear", "tested", "detected"]
+        
         // Aqaura Smoke Detectot attributes
-                                                                // 0xA0 (160) 'Smoke alarm status'
-        attribute 'smokeDensity', 'number'                      // 0xA1 (161) 'Value of smoke concentration'
-        attribute 'smokeDensityDbm', 'number'                   // 'Value of smoke concentration in dBm'
-        attribute 'selfTest', 'enum', ['clear', 'selfTest']         // 0xA2 (162) Starts the self-test process (checking the indicator + light and buzzer work properly)'
-        attribute 'test', 'enum', ['false', 'true']                 // 'Self-test in progress'
+        // smoke - ENUM ["clear", "tested", "detected"]                     // 0xA0 (160) 'Smoke alarm status'
+        attribute 'smokeDensity', 'number'                                  // 0xA1 (161) 'Value of smoke concentration'
+        attribute 'smokeDensityDbm', 'number'                               // 'Value of smoke concentration in dBm'
+        attribute 'alarmSelfTest', 'enum', ['clear', 'selfTest']                 // 0xA2 (162) Starts the self-test process (checking the indicator + light and buzzer work properly)'
+        attribute 'test', 'enum', ['false', 'true']                         // 'Self-test in progress'
         attribute 'buzzer', 'enum', ['mute', 'alarm']
                 // 'The buzzer can be muted and alarmed manually. During a smoke alarm, the buzzer can be manually muted for 80 seconds ("mute") and unmuted ("alarm").
                 // The buzzer cannot be pre-muted, as this function only works during a smoke alarm. During the absence of a smoke alarm, the buzzer can be manually alarmed ("alarm") and disalarmed ("mute"),
                 // but for this "linkage_alarm" option must be enabled'
-        attribute 'buzzerManualAlarm', 'enum', ['false', 'true']   // 'Buzzer alarmed (manually)'
-        attribute 'buzzerManualMute', 'enum', ['false', 'true']    // 0xA3 (163) 'Buzzer muted (manually)'
-        attribute 'heartbeatIndicator', 'enum', ['false', 'true']   // 0xA4 (164) 'When this option is enabled then in the normal monitoring state, the green indicator light flashes every 60 seconds'
-        attribute 'linkageAlarm', 'enum', ['false', 'true']         // 0xA5 (165)
+        attribute 'buzzerManualAlarm', 'enum', ['false', 'true']            // 'Buzzer alarmed (manually)'
+        attribute 'buzzerManualMute', 'enum', ['false', 'true']             // 0xA3 (163) 'Buzzer muted (manually)'
+        attribute 'heartbeatIndicator', 'enum', ['disabled', 'enabled']     // 0xA4 (164) 'When this option is enabled then in the normal monitoring state, the green indicator light flashes every 60 seconds'
+        attribute 'linkageAlarm', 'enum', ['disabled', 'enabled']           // 0xA5 (165)
                 // 'When this option is enabled and a smoke alarm has occurred, then "linkage_alarm_state"=true,
                 // and when the smoke alarm has ended or the buzzer has been manually muted, then "linkage_alarm_state"=false'
         attribute 'linkageAlarmState', 'enum', ['false', 'true']    // ''"linkageAlarm" is triggered'
         // TODO: Xiaomi struct battery, battery_voltage, power_outage_count(false)
 
         command 'refreshAll'
+        command 'alarmSelfTest'
+        command 'mute'        // 
+        command 'buzz'        // 
         if (_DEBUG) { command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  }
 
         // itterate through all the figerprints and add them on the fly
@@ -92,7 +96,7 @@ metadata {
 @Field static final Map deviceProfilesV3 = [
     //
     // https://github.com/Koenkk/zigbee-herdsman-converters/blob/da65b1aeffd96527df02725b49de61e453fee059/src/devices/lumi.ts#L1708
-    'AQARA_SMOKE_DETECTOR'   : [
+    'AQARA_SMART_SMOKE_DETECTOR'   : [
             description   : 'Aqara Smart Smoke Detector',   // 'JY-GZ-01AQ',
             device        : [manufacturers: ['LUMI'], type: 'ALARM', powerSource: 'battery', isSleepy:false],
             capabilities  : ['SmokeDetector': true, 'Battery': true],
@@ -100,33 +104,27 @@ metadata {
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0500,0003,0001", outClusters:"0019", model:"lumi.sensor_smoke.acn03", manufacturer:"LUMI", controllerType: "ZGB", deviceJoinName: 'Aqara Smoke Detector']
             ],
-            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            commands      : ['alarmSelfTest':'alarmSelfTest','resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             // must be commands: buzzer
             attributes    : [
                 [at:'0x0500:0x0002',  name:'smokeIAS',              type:'enum',    dt:'0x20',                    rw: 'ro', map:[0: 'clear', 1: 'detected'],  description:'Smoke IAS State'],
-                //[at:'0xFCC0:0x040A',  name:'smokeState',            type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', map:[0: 'clear', 1: 'detected'],  description:'Smoke Aqara State'],
-                // ??????????
-                [at:'0xFCC0:0x013C',  name:'heartbeatIndicator',    type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', map:[0: 'false', 1: 'true'],      title: '<b>Heartbeat Indicator</b>',   description:'When this option is enabled then in the normal monitoring state, the green indicator light flashes every 60 seconds'],
-                [at:'0xFCC0:0x013E',  name:'buzzer',                type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', map:[0: 'mute', 1: 'alarm'],      title: '<b>Buzzer</b>',   description:'Buzzer'],
+                [at:'0xFCC0:0x013C',  name:'heartbeatIndicator',    type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', map:[0: 'disabled', 1: 'enabled'],      title: '<b>Heartbeat Indicator</b>',   description:'When this option is enabled then in the normal monitoring state, the green indicator light flashes every 60 seconds'],
+                [at:'0xFCC0:0x013E',  name:'buzzer',                type:'enum',    dt:'0x23', mfgCode:'0x115f',  rw: 'rw', map:[0: 'mute', 1: 'alarm'],      title: '<b>Buzzer</b>',   description:'Buzzer'],
                 // https://github.com/Koenkk/zigbee-herdsman-converters/blob/da65b1aeffd96527df02725b49de61e453fee059/src/lib/lumi.ts#L4250
                 [at:'0xFCC0:0x0126',  name:'buzzerManualMute',      type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', map:[0: 'false', 1: 'true'],      description:'Buzzer muted (manually)'],
                 [at:'0xFCC0:0x013D',  name:'buzzerManualAlarm',     type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', map:[0: 'false', 1: 'true'],      description:'Buzzer alarmed (manually)'],
-                [at:'0xFCC0:0x0127',  name:'selfTest',              type:'enum',    dt:'0x10', mfgCode:'0x115f',  rw: 'ro', map:[0: 'clear', 1: 'selfTest'],  description:'Starts the self-test process (checking the indicator + light and buzzer work properly)'],
-                [at:'0xFCC0:0x014B',  name:'linkageAlarm',          type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', defVal: 1, map:[0: 'false', 1: 'true'],      title: '<b>Linkage Alarm</b>',   description:'Linkage Alarm'],
+                [at:'0xFCC0:0x0127',  name:'alarmSelfTest',         type:'enum',    dt:'0x10', mfgCode:'0x115f',  rw: 'rw', map:[0: 'clear', 1: 'selfTest'],  description:'Starts the self-test process (checking the indicator + light and buzzer work properly)'],
+                [at:'0xFCC0:0x014B',  name:'linkageAlarm',          type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', defVal: 1, map:[0: 'disabled', 1: 'enabled'],      title: '<b>Linkage Alarm</b>',   description:'Linkage Alarm'],
                 [at:'0xFCC0:0x0139',  name:'linkageAlarmState',     type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', map:[0: 'false', 1: 'true'],      description:'linkageAlarm is triggered'],
-                [at:'0xFCC0:0x013A',  name:'smokeX',                type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', map:[0: 'clear', 1: 'detected'],  description:'SmokeX'],
-                // or smoke ??????????????????????????????? Subscribe !!
+                [at:'0xFCC0:0x013A',  name:'smoke',                 type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', map:[0: 'clear', 1: 'detected'],  description:'Smoke'],
                 [at:'0xFCC0:0x013B',  name:'smokeDensity',          type:'number',  dt:'0x23', mfgCode:'0x115f',  rw: 'ro', unit:'-',                         description:'Smoke density'],
-                [at:'0xFCC0:0x014C',  name:'smoke',                 type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', map:[0: 'clear', 1: 'detected'],  description:'Smoke'],
-                // subscribe !!
-
+                [at:'0xFCC0:0x014C',  name:'smokeX',                type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', map:[0: 'clear', 1: 'detected'],  description:'SmokeX'],
             ],
             refresh: ['refreshAqara'],
             deviceJoinName: 'Aqara Smart Smoke Detector',
             configuration : [:]
     ]
 ]
-
 
 void customParseIASCluster(final Map descMap) {
     logDebug "customParseIASCluster: cluster=${descMap} attrInt=${descMap.attrInt} value=${descMap.value}"
@@ -145,7 +143,7 @@ void customParseXiaomiFCC0Cluster(final Map descMap) {
     logDebug "customParseXiaomiFCC0Cluster: zigbee received cluster 0xFCC0 attribute 0x${descMap.attrId} (raw value = ${descMap.value})"
     if ((descMap.attrInt as Integer) == 0x00F7 ) {      // XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes
         final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value)
-        parseXiaomiClusterThermostatTags(tags)
+        customParseXiaomiClusterTags(tags)
         return
     }
     Boolean result = processClusterAttributeFromDeviceProfile(descMap)
@@ -154,76 +152,63 @@ void customParseXiaomiFCC0Cluster(final Map descMap) {
     }
 }
 
-// XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes
-// called from parseXiaomiClusterThermostatLib
+// XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes and when the smoke alarm button is pressed
+// called from customParseXiaomiFCC0Cluster
 //
-void parseXiaomiClusterThermostatTags(final Map<Integer, Object> tags) {
-    logDebug "parseXiaomiClusterThermostatTags: tags=${tags}"
+void customParseXiaomiClusterTags(final Map<Integer, Object> tags) {
+    final String funcName = 'customParseXiaomiClusterTags'
+    logDebug "${funcName}: tags=${tags}"
     tags.each { final Integer tag, final Object value ->
         switch (tag) {
-            case 0x01:    // battery voltage
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value / 1000}V (raw=${value})"
+            case 0x04:  // unknown
+            case 0x0C:  // (12)  unknown
+            case 0x66:  // (102) unknown
+            case 0x67:  // (103) unknown
+            case 0x68:  // (104) unknown
+                logDebug "${funcName} unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
                 break
-            case 0x03:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device internal chip temperature is ${value}&deg; (ignore it!)"
+            case 0xA0:  // (160) smoke
+            case 0x13A: // (314)
+                logDebug "${funcName} smoke: 0x${intToHexStr(tag, 1)}=${value}"
                 break
-            case 0x05:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} RSSI is ${value}"
+            case 0xA1:  // (161) smokeDensity       //smoke_density_dbm = getFromLookup(value, {0: 0, 1: 0.085, 2: 0.088, 3: 0.093, 4: 0.095, 5: 0.100, 6: 0.105, 7: 0.110, 8: 0.115, 9: 0.120, 10: 0.125});
+            case 0x13B: // (315)
+                logDebug "${funcName} smokeDensity: 0x${intToHexStr(tag, 1)}=${value}"
                 break
-            case 0x06:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} LQI is ${value}"
+            case 0xA2:  // (162) self_test
+            case 0x127: // (295)
+                logDebug "${funcName} selfTest: 0x${intToHexStr(tag, 1)}=${value}"
                 break
-            case 0x08:            // SWBUILD_TAG_ID:
-                final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0')
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})"
-                device.updateDataValue('aqaraVersion', swBuild)
+            case 0xA3:  // (163) buzzer_manual_mute
+            case 0x126: // (294) 
+                logDebug "${funcName} buzzerManualMute: 0x${intToHexStr(tag, 1)}=${value}"
                 break
-            case 0x0a:
-                String nwk = intToHexStr(value as Integer, 2)
-                if (state.health == null) { state.health = [:] }
-                String oldNWK = state.health['parentNWK'] ?: 'n/a'
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${nwk}</b>"
-                if (oldNWK != nwk ) {
-                    logWarn "parentNWK changed from ${oldNWK} to ${nwk}"
-                    state.health['parentNWK']  = nwk
-                    state.health['nwkCtr'] = (state.health['nwkCtr'] ?: 0) + 1
-                }
+            case 0xA4:  // (164) heartbeat_indicator
+            case 0x13C: // (316)
+                logDebug "${funcName} heartbeatIndicator: 0x${intToHexStr(tag, 1)}=${value}"
                 break
-            case 0x0d:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
+            case 0xA5:  // (165) linkage_alarm
+            case 0x14B: // (331)
+                logDebug "${funcName} linkageAlarm: 0x${intToHexStr(tag, 1)}=${value}"
                 break
-            case 0x11:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
+            case 0xA6:  // (166) unknown
+            case 0x14C: // (332) linkage_alarm_state
+                logDebug "${funcName} linkageAlarmState: 0x${intToHexStr(tag, 1)}=${value}"
                 break
-            case 0x64:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value / 100} (raw ${value})" / Aqara TVOC
+            case 0x13D: // (317) buzzer_manual_alarm
+                logDebug "${funcName} buzzerManualAlarm: 0x${intToHexStr(tag, 1)}=${value}"
                 break
-            case 0x65:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
-                break
-            case 0x66:
-                logDebug "xiaomi decode E1 thermostat temperature tag: 0x${intToHexStr(tag, 1)}=${value}"
-                //handleTemperatureEvent(value / 100.0)
-                break
-            case 0x67:
-                logDebug "xiaomi decode E1 thermostat heatingSetpoint tag: 0x${intToHexStr(tag, 1)}=${value}"
-                break
-            case 0x68:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
-                break
-            case 0x69:
-                logDebug "xiaomi decode E1 thermostat battery tag: 0x${intToHexStr(tag, 1)}=${value}"
-                break
-            case 0x6a:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
+            case 0x13E: // (318) buzzer
+                logDebug "${funcName} buzzer: 0x${intToHexStr(tag, 1)}=${value}"
                 break
             default:
-                logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
+                // no Smoke Detector specific tag - call the common parseXiaomiClusterTags method in the xiaomiLib
+                parseXiaomiClusterSingeTag(tag, value)
         }
     }
 }
 
-XiaomiFCC0
+
 /*
  * -----------------------------------------------------------------------------
  * thermostat cluster 0x0201
@@ -269,8 +254,8 @@ void customUpdated() {
 //
 List<String> refreshAqara() {
     List<String> cmds = []
+    cmds += zigbee.readAttribute(0xFCC0, [0x013A, 0x013B, 0x013C, 0x013D, 0x0126, 0x014C, 0x014B], [mfgCode: 0x115F], delay = 500)  // 0x14C - smokeX; 0x13B - smokeDensity
     cmds += zigbee.readAttribute(0x0500, 0x0002, [:], delay = 200)
-    cmds += zigbee.readAttribute(0xFCC0, [0x013A, 0x013B, 0x013C, 0x013D, 0x0126, 0x014B], [mfgCode: 0x115F], delay = 500)
     return cmds
 }
 
@@ -304,7 +289,7 @@ List<String> customConfigure() {
 List<String> initializeAqara() {
     List<String> cmds = []
     logDebug 'configuring Aqara ...'
-    cmds =  ["zdo bind 0x${device.deviceNetworkId} 1 1 0x0500 {${device.zigbeeId}} {}", "delay 200" ] 
+    cmds =  ["zdo bind 0x${device.deviceNetworkId} 1 1 0x0500 {${device.zigbeeId}} {}", "delay 200" ]
     cmds += zigbee.configureReporting(0x0500, 0x0002, 0x19, 0, 3600, 0x00, [:], delay=201)
     cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}", 'delay 202']        // 'delay 251', ]
     cmds += zigbee.configureReporting(0xFCC0, 0x013A, 0x20, 0, 3600, 0x00, [mfgCode:0x115f], delay=203)
@@ -344,7 +329,6 @@ void customInitEvents(final boolean fullInit=false) {
     sendEvent(name: 'smoke', value: 'unknown', type: 'digital')
 }
 
-
 List<String> customAqaraBlackMagic() {
     List<String> cmds = []
     cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", 'delay 200',]
@@ -354,7 +338,6 @@ List<String> customAqaraBlackMagic() {
     logDebug 'customAqaraBlackMagic()'
     return cmds
 }
-
 
 // called from processFoundItem  (processTuyaDPfromDeviceProfile and ) processClusterAttributeFromDeviceProfile in deviceProfileLib when a Zigbee message was found defined in the device profile map
 //
@@ -369,20 +352,6 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
         case 'temperature' :
             handleTemperatureEvent(valueScaled as Float)
             break
-        case 'heatingSetpoint' :
-            sendHeatingSetpointEvent(valueScaled)
-            break
-        case 'systemMode' : // Aqara E1 and AVATTO thermostat (off/on)
-            sendEvent(eventMap)
-            logInfo "${descText}"
-            if (valueScaled == 'on') {  // should be initialized with 'unknown' value
-                String lastThermostatMode = state.lastThermostatMode
-                sendEvent(name: 'thermostatMode', value: lastThermostatMode, isStateChange: true, description: 'TRV systemMode is on', type: 'digital')
-            }
-            else {
-                sendEvent(name: 'thermostatMode', value: 'off', isStateChange: true, description: 'TRV systemMode is off', type: 'digital')
-            }
-            break
             */
         default :
             sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
@@ -394,12 +363,36 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
     }
 }
 
+void alarmSelfTest(Number par) {
+    logDebug "alarmSelfTest(${par})"
+    ping()  // make the device awake
+    List<String> cmds = []
+    cmds += zigbee.writeAttribute(0xFCC0, 0x0127, 0x10, 1, [mfgCode:0x115f], delay=200)
+    sendZigbeeCommands(cmds)
+}
+
+void mute() {
+    logDebug "mute()"
+    ping()
+    List<String> cmds = []
+    cmds += zigbee.writeAttribute(0xFCC0, 0x013E, 0x23, 15360, [mfgCode:0x115f], delay=200)
+    sendZigbeeCommands(cmds)
+}
+
+void buzz() {
+    logDebug "buzz()"
+    ping()
+    List<String> cmds = []
+    cmds += zigbee.writeAttribute(0xFCC0, 0x013E, 0x23, 15361, [mfgCode:0x115f], delay=200)
+    sendZigbeeCommands(cmds)
+}
+
 void test(String par) {
     List<String> cmds = []
     //cmds += zigbee.configureReporting(0xFCC0, 0x013A, 0x20, 0, 3600, 0x00, [mfgCode:0x115f], delay=203)
     //cmds += zigbee.configureReporting(0xFCC0, 0x013B, 0x23, 0, 3600, 0x00, [mfgCode:0x115f], delay=204)
     cmds += zigbee.configureReporting(0xFCC0, 0x013C, 0x23, 0, 3600, 0x00, [:], delay=204)
-    
+
     sendZigbeeCommands(cmds)
 }
 
