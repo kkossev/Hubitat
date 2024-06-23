@@ -1,6 +1,6 @@
 /* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateMapLiteral, DuplicateStringLiteral, ImplicitClosureParameter, LineLength, MethodCount, MethodSize, NglParseError, NoDouble, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessarySetter, UnusedImport */
 /**
- *  Aqara E1 Thermostat - Device Driver for Hubitat Elevation
+ *  Zigbee Smoke Detector - Device Driver for Hubitat Elevation
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
  *
@@ -19,9 +19,9 @@
  */
 
 static String version() { '3.3.0' }
-static String timeStamp() { '2024/06/22 9:21 PM' }
+static String timeStamp() { '2024/06/22 11:59 PM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
 
 import groovy.transform.Field
