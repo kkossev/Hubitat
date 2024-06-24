@@ -31,3 +31,5 @@ Drivers/Tuya Zigbee Switch/scratchPad.txt
 Drivers/Tuya Multi Sensor 4 In 1/scratchPad.txt
 Drivers/Zigbee TRV/scratchPad.txt
 Drivers/Tuya Zigbee Metering Plug/.hubitat/metadata.json
+*.log
+Drivers/Zigbee Smoke Detector/scratchPad.txt
