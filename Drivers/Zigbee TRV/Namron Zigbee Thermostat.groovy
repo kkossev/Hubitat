@@ -17,9 +17,9 @@
  * ver. 3.3.1  2024-06-15 kkossev  - (dev. branch) calibrationTemp negative values bug fix; added hysteresis, floorCalibrationTemp, powerUpStatus, emergencyHeatTime, modeAfterDry, controlType, floorSensorType, childLock
  * ver. 3.3.2  2024-06-16 kkossev  - (dev. branch) added windowOpenCheck preference (not working?); added 'auto' mode, added emergency heat' mode; modeAfterDry default changed to 'heat'; added 'advanced:true' to the attributes map
  *                                    added 'eco' (away) mode; added overHeatAlarm advanced attribute; displayAutoOff is disabled by default; added refreshAll command; added add factoryReset command; fixed energy reporting configuration
- * ver. 3.3.3  2024-06-21 kkossev  - (dev. branch) 
+ * ver. 3.3.3  2024-06-23 kkossev  - (dev. branch) release 3.3.3
  *
- *                                   TODO: prepare release 3.3.3
+ *                                   TODO: prepare 
  *                                   TODO: Alexa compatibility
  *                                   TODO: Google Home compatibility
  *                                   TODO: modeAfterDry preference is not saved?
@@ -45,7 +45,7 @@
  */
 
 static String version() { '3.3.3' }
-static String timeStamp() { '2024/06/21 10:57 AM' }
+static String timeStamp() { '2024/06/23 8:03 PM' }
 
 @Field static final Boolean _DEBUG = false
 
