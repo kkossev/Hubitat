@@ -17,15 +17,14 @@
  * ver. 3.3.1  2024-06-15 kkossev  - (dev. branch) calibrationTemp negative values bug fix; added hysteresis, floorCalibrationTemp, powerUpStatus, emergencyHeatTime, modeAfterDry, controlType, floorSensorType, childLock
  * ver. 3.3.2  2024-06-16 kkossev  - (dev. branch) added windowOpenCheck preference (not working?); added 'auto' mode, added emergency heat' mode; modeAfterDry default changed to 'heat'; added 'advanced:true' to the attributes map
  *                                    added 'eco' (away) mode; added overHeatAlarm advanced attribute; displayAutoOff is disabled by default; added refreshAll command; added add factoryReset command; fixed energy reporting configuration
- * ver. 3.3.3  2024-06-23 kkossev  - (dev. branch) release 3.3.3
+ * ver. 3.3.3  2024-06-25 kkossev  - release 3.3.3
  *
- *                                   TODO: prepare 
- *                                   TODO: Alexa compatibility
- *                                   TODO: Google Home compatibility
+ *                                   TODO: add a link to GitHub WiKi
+ *                                   TODO: test Alexa compatibility
+ *                                   TODO: test Google Home compatibility
  *                                   TODO: modeAfterDry preference is not saved?
  *                                   TODO: research how the Namron internal clock is set (Zigbee2MQTT sniff)?
- *                                   TODO: add a link to GitHub WiKi
- *                                   TODO: add all other Namron models fingerprints
+ *                                   TODO: add other Namron models fingerprints
  *                                   TODO: improve the 'controlSequenceOfOperation is 2 'info log
  *                                   TODO: warning Info message (permanent) when both model and manufacturer are missing (commonLib)
  *                                   TODO: warning Info message (temporary when device is unknown.
@@ -45,7 +44,7 @@
  */
 
 static String version() { '3.3.3' }
-static String timeStamp() { '2024/06/23 8:03 PM' }
+static String timeStamp() { '2024/06/25 8:00 AM' }
 
 @Field static final Boolean _DEBUG = false
 
