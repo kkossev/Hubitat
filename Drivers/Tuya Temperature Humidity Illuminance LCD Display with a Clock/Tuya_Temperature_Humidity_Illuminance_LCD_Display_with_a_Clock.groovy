@@ -46,7 +46,7 @@
  * ver. 1.5.2  2024-05-14 kkossev - added _TZE204_upagmta9 and _TZE200_upagmta9 to TS0601_Tuya_2 group; healthStatus initialized as 'unknown';
  * ver. 1.6.0  2024-05-19 kkossev - added the correct NOUS TS0601 _TZE200_nnrfa68v fingerprint to group 'TS0601_Tuya'; all Current States and Preferences are cleared on initialize command;
  * ver. 1.6.1  2024-06-10 kkossev - added ThirdReality 3RTHS0224Z and 3RTHS24BZ
- * ver. 1.6.2  2024-06-24 kkossev - (dev. branch) added TS000F _TZ3218_7fiyo3kv in DS18B20 group (temperature only)
+ * ver. 1.6.2  2024-06-26 kkossev - (dev. branch) added TS000F _TZ3218_7fiyo3kv in DS18B20 group (temperature only); added Tuya cluster command '06' processing; added description in the debug logs
  *
  *                                  TODO: queryOnDeviceAnnounce for TS0601_Tuya_2 group
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
@@ -57,7 +57,7 @@
 */
 
 @Field static final String VERSION = '1.6.2'
-@Field static final String TIME_STAMP = '2024/06/24 9:48 AM'
+@Field static final String TIME_STAMP = '2024/06/26 8:08 AM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -167,7 +167,7 @@ metadata {
         input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: '<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>', defaultValue: true)
         input(name: 'modelGroupPreference', type: 'enum', title: '<b>Model Group</b>', description:'Recommended value is <b>Auto detect</b></i>', defaultValue: 0, options:
                ['Auto detect':'Auto detect', 'TS0601_Tuya':'TS0601_Tuya', 'TS0601_Tuya_2':'TS0601_Tuya_2', 'TS0601_Haozee':'TS0601_Haozee', 'TS0601_AUBESS':'TS0601_AUBESS', 'TS0201':'TS0201', 'TS0222':'TS0222', 'TS0201_LCZ030': 'TS0201_LCZ030',
-                'TS0222_2':'TS0222_2', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON'])
+                'TS0222_2':'TS0222_2', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
         input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', description: 'May not be supported by all devices!', defaultValue: false)
         if (advancedOptions == true) {
             if (isConfigurableSleepyDevice()) {
@@ -347,7 +347,7 @@ def parse(String description) {
     checkDriverVersion()
     setPresent()
     Map statsMap = stringToJsonMap(state.stats); try { statsMap['rxCtr']++ } catch (e) { statsMap['rxCtr'] = 1 }; state.stats = mapToJsonString(statsMap)
-    if (settings?.logEnable) { log.debug "${device.displayName} parse() descMap = ${zigbee.parseDescriptionAsMap(description)}" }
+    if (settings?.logEnable) { log.debug "${device.displayName} parse() descMap =${zigbee.parseDescriptionAsMap(description)} description = ${description}" }
     if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
         Map descMap = zigbee.parseDescriptionAsMap(description)
         if (descMap.clusterInt == 0x0001 && descMap.commandInt != 0x07 && descMap?.value) {
@@ -598,7 +598,7 @@ def processTuyaCluster( descMap ) {
             if (settings?.logEnable) { log.warn "${device.displayName} ATTENTION! manufacturer = ${device.getDataValue('manufacturer')} group = ${getModelGroup()} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!" }
         }
     }
-    else if ((descMap?.clusterInt == CLUSTER_TUYA) && (descMap?.command == '01' || descMap?.command == '02')) {
+    else if ((descMap?.clusterInt == CLUSTER_TUYA) && (descMap?.command == '01' || descMap?.command == '02' || descMap?.command == '06')) {   // added command 06 - 06/26/2024
         def dataLen = descMap?.data.size()
         //log.warn "dataLen=${dataLen}"
         //def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
@@ -614,6 +614,9 @@ def processTuyaCluster( descMap ) {
         }
     //log.warn "##### end of parsing ####"
     } // if (descMap?.command == "01" || descMap?.command == "02")
+    else {
+        if (settings?.logEnable) { log.warn "${device.displayName} Unprocessed Tuya cluster command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}" }
+    }
 }
 
 def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
@@ -1601,6 +1604,10 @@ def zTest( dpCommand, dpValue, dpTypeString ) {
 
 def test( String description) {
     log.warn "parising : ${description}"
+    // "profileId:0104, clusterId:EF00, clusterInt:61184, sourceEndpoint:01, destinationEndpoint:01, options:0040, messageType:00, dni:B2BA, isClusterSpecific:true, isManufacturerSpecific:false, manufacturerId:0000, command:06, direction:01, data:[06, 2D, 66, 02, 00, 04, 00, 00, 01, 5A]"
     parse( description)
+
 }
+
 // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/5483
+
