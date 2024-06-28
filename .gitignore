@@ -33,3 +33,4 @@ Drivers/Zigbee TRV/scratchPad.txt
 Drivers/Tuya Zigbee Metering Plug/.hubitat/metadata.json
 *.log
 Drivers/Zigbee Smoke Detector/scratchPad.txt
+Drivers/ZigBee Window Shade/scratchPad.txt
