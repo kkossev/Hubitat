@@ -38,7 +38,8 @@
  * ver. 1.4.0 2023-03-17 kkossev  - *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added 'Works with ...'; added ping() and RTT
  * ver. 1.4.1 2023-04-21 kkossev  - exception prevented when application string is enormously long; italic font bug fix; lumi.sen_ill.agl01 initialization and bug fixes; light sensor delta = 5 lux; removed MCCGQ14LM
  * ver. 1.4.2 2023-05-21 kkossev  - lumi.sen_ill.agl01 initialization fixes; removed the E1 contact sensor driver code; trace logs cleanup; added reporting time configuration for the Lux sensors; Lux sensors preferences are NOT reset to defaults when paired again; removed powerSource manipulation; periodic job renamed to deviceHealthCheck()
- * ver. 1.5.0 2024-02-29 kkossev  - (dev. branch) Groovy Lint; 
+ * ver. 1.5.0 2024-02-29 kkossev  - (dev. branch) Groovy Lint
+ * ver. 1.6.0 2024-06-27 kkossev  - (dev. branch) added state.health 'parentNWK' and 'nwkCtr'; added attribute parentNWK; added @dandanache 'Zigbee Pairing Helper' code;
  * 
  *                                 TODO: WARN log, when the device model is not registered during the pairing !!!!!!!!
  *                                 TODO: automatic logsOff() is not working sometimes!
@@ -51,8 +52,8 @@
  *
  */
 
-static String version() { "1.5.0" }
-static String timeStamp() {"2024/02/29 8:50 PM"}
+static String version() { "1.6.0" }
+static String timeStamp() {"2024/06/27 10:19 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -84,6 +85,7 @@ metadata {
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute "batteryVoltage", "string"
         attribute "rtt", "number" 
+        attribute "parentNWK", "string"
         attribute "roomState", "enum", [
             "unoccupied",
             "occupied"
@@ -108,6 +110,8 @@ metadata {
         
         command "configure", [[name: "Initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
+        command "zigbeePairingHelper", [[name: "Zigbee Pairing Helper" ]]
+
         if (_DEBUG) {
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "0001"]]
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
@@ -159,6 +163,9 @@ metadata {
             if (internalTemperature == true) {
                 input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "<i>Select how many degrees to adjust the temperature.</i>", range: "-100..100", defaultValue: 0)
             }
+
+            input(name: "deviceNetworkId", type: "enum", title: "Router Device", description: "<small>Select a mains-powered device that you want to put in pairing mode.</small>", options: [ "0000":"👑 Hubitat Hub" ] + getDevices(), required: true)
+            
         }
     }
 }
@@ -574,6 +581,17 @@ def decodeAqaraStruct( description )
                         break
                     case 0x0A : // Parent NWK
                         if (logEnable) log.debug "Parent NWK is ${valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]}"
+                        String nwk = intToHexStr(rawValue as Integer, 2)
+                        if (state.health == null) { state.health = [:] }
+                        String oldNWK = state.health['parentNWK'] ?: 'n/a'
+                        logDebug "<b>Parent NWK is ${nwk}</b>"
+                        if (oldNWK != nwk || device.currentState('parentNWK')?.value != nwk) {
+                            String descriptionText = "parentNWK changed from ${oldNWK} to ${nwk}"
+                            state.health['parentNWK']  = nwk
+                            state.health['nwkCtr'] = (state.health['nwkCtr'] ?: 0) + 1
+                            sendEvent(name: "parentNWK", value: nwk, descriptionText: description, type: "digital")
+                            logWarn "${descriptionText}"
+                        }
                         break
                     case 0x0B : // lightlevel 
                         if (logEnable) log.debug "lightlevel is ${rawValue}"
@@ -1196,11 +1214,12 @@ void setDeviceName() {
 
 void initializeVars(boolean fullInit = false) {
     if (logEnable==true) { log.info "${device.displayName} InitializeVars... fullInit = ${fullInit} (driver version ${driverVersionAndTimeStamp()})" }
-    if (fullInit == true ) {
+    if (fullInit == true) {
         state.clear()
         setDeviceName()
         state.driverVersion = driverVersionAndTimeStamp()
     }
+    if (fullInit == true || state.health == null) { state.health = [:] }
     if (fullInit == true || state.rxCounter == null) { state.rxCounter = 0 }
     if (fullInit == true || state.txCounter == null) { state.txCounter = 0 }
     if (fullInit == true || state.notPresentCounter == null) { state.notPresentCounter = 0 }
@@ -1222,6 +1241,7 @@ void initializeVars(boolean fullInit = false) {
     }
     if (fullInit == true || settings.tempOffset == null) { device.updateSetting("tempOffset", 0) }
     if (fullInit == true ) { powerSourceEvent() }
+    if (fullInit == true ) { sendEvent(name: "parentNWK", value: "unknown", descriptionText: "parentNWK is unknown", type: "digital") }
     
     updateAqaraVersion()
 }
@@ -1439,6 +1459,41 @@ List<String> configureIlluminance() {
     cmds += zigbee.reportingConfiguration(0x0400, 0x0000, [:], 203)
     return cmds 
 }
+
+// all credits @dandanache  importUrl:"https://raw.githubusercontent.com/dan-danache/hubitat/master/zigbee-pairing-helper-driver/zigbee-pairing-helper.groovy"
+private Map<String, String> getDevices() {
+    try {
+        httpGet([ uri:"http://127.0.0.1:8080/hub/zigbee/getChildAndRouteInfoJson" ]) { response ->
+            if (response?.status != 200) {
+                return ["ZZZZ": "Invalid response: ${response}"]
+            }
+            return response.data.devices
+                .sort { it.name }
+                .collectEntries { ["${it.zigbeeId}", "${it.name}"] }
+        }
+    } catch (Exception ex) {
+        return ["ZZZZ": "Exception: ${ex}"]
+    }
+}
+
+void zigbeePairingHelper() {
+    logDebug "zigbeePairingHelper()..."
+    if (settings?.deviceNetworkId == null || settings?.deviceNetworkId == "ZZZZ") {
+        log.error("Invalid Device Network ID: ${settings?.deviceNetworkId}")
+        return 
+    }
+
+    log.info "Stopping Zigbee pairing on all devices. Please wait 5 seconds ..."
+    sendHubCommand new hubitat.device.HubMultiAction(["he raw 0xFFFC 0x00 0x00 0x0036 {42 0001} {0x0000}"], hubitat.device.Protocol.ZIGBEE)
+    runIn(5, "startDeviceZigbeePairing")    
+}
+
+private startDeviceZigbeePairing() {
+    log.info "Starting Zigbee pairing on device ${settings?.deviceNetworkId} for 90 seconds..."
+    sendHubCommand new hubitat.device.HubMultiAction(["he raw 0x${settings?.deviceNetworkId} 0x00 0x00 0x0036 {43 5A01} {0x0000}"], hubitat.device.Protocol.ZIGBEE)
+    log.warn "<b>Now is the right moment to put the device you want to join in pairing mode!</b>"
+}
+
 
 void test(String description ) {
         List<String> cmds = []

@@ -36,8 +36,11 @@ library(
   * ver. 3.2.0  2024-05-23 kkossev  - standardParse____Cluster and customParse___Cluster methods; moved onOff methods to a new library; rename all custom handlers in the libs to statdndardParseXXX
   * ver. 3.2.1  2024-06-05 kkossev  - 4 in 1 V3 compatibility; added IAS cluster; setDeviceNameAndProfile() fix;
   * ver. 3.2.2  2024-06-12 kkossev  - removed isAqaraTRV_OLD() and isAqaraTVOC_OLD() dependencies from the lib; added timeToHMS(); metering and electricalMeasure clusters swapped bug fix; added cluster 0x0204;
-  * ver. 3.3.0  2024-06-25 kkossev  - (dev. branch) bug fix  No such property: cluster for class: java.lang.String on line 984 (method parse); added cluster 0xE001; 
+  * ver. 3.3.0  2024-06-25 kkossev  - (dev. branch) fixed exception for unknown clusters; added cluster 0xE001; added powerSource - if 5 minutes after initialize() the powerSource is still unknown, query the device for the powerSource
   *
+  *                                   TODO: offlineCtr is not increasing! (ZBMicro)
+  *                                   TODO: refresh() to include updating the softwareBuild data version
+  *                                   TODO: map the ZCL powerSource options to Hubitat powerSource options
   *                                   TODO: MOVE ZDO counters to health state;
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: Versions of the main module + included libraries
@@ -47,7 +50,7 @@ library(
 */
 
 String commonLibVersion() { '3.3.0' }
-String commonLibStamp() { '2024/06/25 10:47 PM' }
+String commonLibStamp() { '2024/06/26 10:47 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -74,6 +77,7 @@ metadata {
         capability 'Configuration'
         capability 'Refresh'
         capability 'Health Check'
+        capability 'Power Source'       // powerSource - ENUM ["battery", "dc", "mains", "unknown"]
 
         // common attributes for all device types
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
@@ -540,7 +544,11 @@ void standardParseBasicCluster(final Map descMap) {
         case 0x0007:
             String powerSourceReported = powerSourceOpts.options[descMap?.value as int]
             logDebug "received Power source <b>${powerSourceReported}</b> (${descMap?.value})"
-            //powerSourceEvent( powerSourceReported )
+            String currentPowerSource = device.getDataValue('powerSource')
+            if (currentPowerSource == null || currentPowerSource == 'unknown') {
+                logInfo "updating device powerSource from ${currentPowerSource} to ${powerSourceReported}"
+                sendEvent(name: 'powerSource', value: powerSourceReported, type: 'physical')
+            }
             break
         case 0xFFDF:
             logDebug "Tuya check-in (Cluster Revision=${descMap?.value})"
@@ -1200,6 +1208,11 @@ void installed() {
     sendEvent(name: 'powerSource',  value: 'unknown', type: 'digital')
     sendInfoEvent('installed')
     runIn(3, 'updated')
+    runIn(5, 'queryPowerSource')
+}
+
+void queryPowerSource() {
+    sendZigbeeCommands(zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x0007, [:], 0))
 }
 
  // Invoked when the initialize button is clicked

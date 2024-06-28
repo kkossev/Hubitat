@@ -13,15 +13,16 @@
  *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *     for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.3.0  2024-06-25 kkossev  - (dev. branch) new driver for Zigbee Shade Controller
+ * ver. 3.3.0  2024-06-25 kkossev  - (dev. branch) new driver for Zigbee Shade Controller : TUYA_TS130F_MODULE
+ * ver. 3.3.1  2024-06-26 kkossev  - (dev. branch) 
  *
- *                                   TODO: new shade / curtain driver
+ *                                   TODO: make different preferences  - softwareInvertDirection, hardwareInvertDirection
  */
 
-static String version() { '3.3.0' }
-static String timeStamp() { '2024/06/25 10:22 PM' }
+static String version() { '3.3.1' }
+static String timeStamp() { '2024/06/26 11:16 PM' }
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
 
 import groovy.transform.Field
@@ -29,8 +30,6 @@ import hubitat.zigbee.zcl.DataType
 
 #include kkossev.commonLib
 #include kkossev.batteryLib
-//#include kkossev.iasLib
-//#include kkossev.xiaomiLib
 #include kkossev.deviceProfileLib
 
 deviceType = 'Curtain'
@@ -45,7 +44,7 @@ metadata {
         capability 'WindowShade'    // Attributes: position - NUMBER, unit:% windowShade - ENUM ["opening", "partially open", "closed", "open", "closing", "unknown"]
                                     // Commands: close(); open(); setPosition(position) position required (NUMBER) - Shade position (0 to 100);
                                     //           startPositionChange(direction): direction required (ENUM) - Direction for position change request ["open", "close"]
-                                    //            stopPositionChange()
+                                    //           stopPositionChange()
 
         attribute 'targetPosition', 'number'            // ZemiSmart M1 is updating this attribute, not the position :(
         attribute 'operationalStatus', 'number'         // 'enum', ['unknown', 'open', 'closed', 'opening', 'closing', 'partially open']
@@ -78,11 +77,13 @@ metadata {
         // the rest of the preferences are inputed from the deviceProfile maps in the deviceProfileLib
         section {
             //input name: "helpInfo", type: "hidden", title: fmtHelpInfo("Community Link")
-            input name: 'maxTravelTime', type: 'number', title: '<b>Maximum travel time</b>', description: '<i>The maximum time to fully open or close (Seconds)</i>', required: false, defaultValue: MAX_TRAVEL_TIME
-            input name: 'deltaPosition', type: 'number', title: '<b>Position delta</b>', description: '<i>The maximum error step reaching the target position</i>', required: false, defaultValue: POSITION_DELTA
-            input name: 'substituteOpenClose', type: 'bool', title: '<b>Substitute Open/Close w/ setPosition</b>', description: '<i>Non-standard Zemismart motors</i>', required: false, defaultValue: false
-            input name: 'invertPosition', type: 'bool', title: '<b>Reverse Position Reports</b>', description: '<i>Non-standard Zemismart motors</i>', required: false, defaultValue: false
-            input name: 'targetAsCurrentPosition', type: 'bool', title: '<b>Reverse Target and Current Position</b>', description: '<i>Non-standard Zemismart motors</i>', required: false, defaultValue: false
+            input name: 'maxTravelTime', type: 'number', title: '<b>Maximum travel time</b>', description: 'The maximum time to fully open or close (Seconds)', required: false, defaultValue: DEFAULT_MAX_TRAVEL_TIME
+            input name: 'deltaPosition', type: 'number', title: '<b>Position delta</b>', description: 'The maximum error step reaching the target position', required: false, defaultValue: DEFAULT_POSITION_DELTA
+            if (settings?.advancedOptions == true) {
+                input name: 'substituteOpenClose', type: 'bool', title: '<b>Substitute Open/Close w/ setPosition</b>', description: 'Non-standard Zemismart motors', required: false, defaultValue: false
+                input name: 'invertPosition', type: 'bool', title: '<b>Reverse Position Reports</b>', description: 'Non-standard Zemismart motors', required: false, defaultValue: false
+                input name: 'targetAsCurrentPosition', type: 'bool', title: '<b>Reverse Target and Current Position</b>', description: 'Non-standard Zemismart motors', required: false, defaultValue: false
+            }
         }
 
     }
@@ -92,19 +93,23 @@ metadata {
 @Field static final String libWindowShadeVersion = '1.0.0'
 @Field static final String libWindowShadeStamp   = '2024/03/16 9:29 AM'
 
-private getCLUSTER_WINDOW_COVERING() { 0x0102 }
-private getCOMMAND_OPEN() { 0x00 }
-private getCOMMAND_CLOSE() { 0x01 }
-private getCOMMAND_PAUSE() { 0x02 }
-private getCOMMAND_GOTO_LIFT_PERCENTAGE() { 0x05 }
-private getATTRIBUTE_POSITION_LIFT() { 0x0008 }
-private getATTRIBUTE_CURRENT_LEVEL() { 0x0000 }
-private getCOMMAND_MOVE_LEVEL_ONOFF() { 0x04 }
+private getCLUSTER_WINDOW_COVERING()        { 0x0102 }
 
-@Field static final Integer OPEN   = 0      // this is the standard!  Hubitat is inverted?
-@Field static final Integer CLOSED = 100    // this is the standard!  Hubitat is inverted?
-@Field static final Integer POSITION_DELTA = 5
-@Field static final Integer MAX_TRAVEL_TIME = 15
+private getCOMMAND_OPEN()                   { 0x00 }
+private getCOMMAND_CLOSE()                  { 0x01 }
+private getCOMMAND_PAUSE()                  { 0x02 }
+private getCOMMAND_MOVE_LEVEL_ONOFF()       { 0x04 }      // Go To Lift Value
+private getCOMMAND_GOTO_LIFT_PERCENTAGE()   { 0x05 }      // Go to Lift Percentage
+private getCOMMAND_GOTO_TILT_VALUE()        { 0x07  }     // Go To Tilt Value
+private getCOMMAND_GOTO_TILT_PERCENTAGE()   { 0x08 }      // Go to Tilt Percentage
+
+private getATTRIBUTE_POSITION_LIFT()        { 0x0008 }
+private getATTRIBUTE_CURRENT_LEVEL()        { 0x0000 }
+
+@Field static final Integer DEFAULT_OPEN   = 0      // this is the standard!  Hubitat is inverted?
+@Field static final Integer DEFAULT_CLOSED = 100    // this is the standard!  Hubitat is inverted?
+@Field static final Integer DEFAULT_POSITION_DELTA = 5          //settings.deltaPosition , percentage
+@Field static final Integer DEFAULT_MAX_TRAVEL_TIME = 15        //settings.maxTravelTime , seconds
 
 @Field static final String DRIVER = 'Matter Advanced Bridge'
 @Field static final String COMPONENT = 'Matter Generic Component Window Shade'
@@ -123,13 +128,16 @@ String fmtHelpInfo(String str) {
 		"<div style='text-align: center; position: absolute; top: 46px; right: 60px; padding: 0px;'><ul class='nav'><li>${topLink}</ul></li></div>"
 }
 
-int getDelta() { return settings?.deltaPosition != null ? settings?.deltaPosition as int : POSITION_DELTA }
-//int getFullyOpen()   { return settings?.invertOpenClose ? CLOSED : OPEN }
-//int getFullyClosed() { return settings?.invertOpenClose ? OPEN : CLOSED }
-//int getFullyOpen()   { return settings?.invertPosition ? CLOSED : OPEN }
-//int getFullyClosed() { return settings?.invertPosition ? OPEN : CLOSED }
-int getFullyOpen()   { return  OPEN }
-int getFullyClosed() { return CLOSED }
+int getDelta() { return settings?.deltaPosition != null ? settings?.deltaPosition as int : DEFAULT_POSITION_DELTA }
+
+//int getFullyOpen()   { return settings?.invertOpenClose ? DEFAULT_CLOSED : DEFAULT_OPEN }
+//int getFullyClosed() { return settings?.invertOpenClose ? DEFAULT_OPEN : DEFAULT_CLOSED }
+//int getFullyOpen()   { return settings?.invertPosition ? DEFAULT_CLOSED : DEFAULT_OPEN }
+//int getFullyClosed() { return settings?.invertPosition ? DEFAULT_OPEN : DEFAULT_CLOSED }
+
+int getFullyOpen()   { return  DEFAULT_OPEN }
+int getFullyClosed() { return DEFAULT_CLOSED }
+
 boolean isFullyOpen(int position)   { return Math.abs(position - getFullyOpen()) < getDelta() }
 boolean isFullyClosed(int position) { return Math.abs(position - getFullyClosed()) < getDelta() }
 
@@ -182,6 +190,34 @@ int getDpCommandClose() {
 
 @Field static final Map deviceProfilesV3 = [
     //
+    'ZEMISMART_ZM85EL_1X'   : [
+            description   : 'Zemismart ZM85EL_1x',   //
+            device        : [type: 'COVERING', powerSource: 'battery', isSleepy:false],
+            capabilities  : ['Battery': false],
+            preferences   : ['motorDirection':'5', 'bestPosition':'19'],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_68nvbio9", controllerType: "ZGB"]
+            ],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            tuyaDPs:        [
+                [dp:1,   name:'control',             type:'enum',    rw: 'rw', min:0,   max:2 ,    defVal:'0',  scale:1,   map:[0:'stop', 1:'open', 2:'close'] , description:'Shade control'],
+                [dp:2,   name:'positionSetting',     type:'number',  rw: 'ro', min:0,   max:100,   defVal:0,    description:'curtain position setting'],
+                [dp:3,   name:'currentPosition',     type:'number',  rw: 'ro', min:0,   max:100,   defVal:0,    description:'curtain current position'],
+                [dp:4,   name:'mode',                type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'mode1', 1:'mode2', 2:'mode3'] , description:'mode'],
+                [dp:5,   name:'motorDirection',      type:'enum',    rw: 'rw', min:0,   max:2 ,    defVal:'0',  scale:1,   map:[0:'forward', 1:'backward'] , title:'<b>Motor Direction</b>',  description:'mode'],
+                [dp:7,   name:'workState',           type:'enum',    rw: 'ro', map:[0:'opening', 1:'closing'] , title:'<b>Work State/b>',  description:'work state'],
+                [dp:11,  name:'situationSet',        type:'number',  rw: 'ro', description:'situation set'],
+                [dp:12,  name:'fault',               type:'enum',    rw: 'ro', map:[0:'code0', 1:'code1'] ,     description:'fault code'],
+                [dp:13,  name:'battery',             type:'number',  rw: 'ro', min:0,   max:100,   defVal:100,  scale:1,   unit:'%',  description:'battery percentage'],
+                [dp:16,  name:'border',              type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'border1', 1:'border2'] , description:'border setting'],
+                [dp:19,  name:'bestPosition',        type:'number',  rw: 'rw', min:0,   max:100,   defVal:50,   scale:1,   unit:'%', title:'<b>Best Position</b>', description:'best position'],
+                [dp:20,  name:'clickControl',        type:'enum',    rw: 'rw', min:0,   max:2 ,    defVal:'0',  scale:1,   map:[0:'down', 1:'up'] , title:'<b>Click Control</b>' , description:'Shade control'],
+            ],
+            //refresh: ['refreshTS130F'],
+            //refresh: ['position', 'positionState', 'upDownConfirm', 'controlBack', 'scheduleTime', '0xE001:0x0000'],
+            deviceJoinName: 'Zemismart ZM85EL_1x',
+            configuration : [:]
+    ],
     //
     'TUYA_TS130F_MODULE'   : [
             description   : 'Tuya TS130F Module',   //
@@ -192,9 +228,8 @@ int getDpCommandClose() {
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,0006,0102,E001,0000", outClusters:"0019,000A", model:"TS130F", manufacturer:"_TZ3000_e3vhyirx", controllerType: "ZGB"]
             ],
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
-            // must be commands: buzzer
             attributes    : [
-                [at:'0x0102:0x0000',  name:'currentLevel',          type:'number',  dt:'0x23', rw: 'ro',            description:'currentLevel (0x0102:0x0000)'],   // uint8
+                // [at:'0x0102:0x0000',  name:'currentLevel',          type:'number',  dt:'0x23', rw: 'ro',            description:'currentLevel (0x0102:0x0000)'],   // uint8
                 [at:'0x0102:0x0008',  name:'position',              type:'number',  dt:'0x23', rw: 'rw', unit:'%',  description:'Current Position Lift Percentage'],
                 [at:'0x0102:0x8000',  name:'0x0102:0x8000',         type:'enum',    dt:'0x20', rw: 'rw', map:[0: 'disabled', 1: 'enabled'], title: '<b>0x0102:0x8000</b>',   description:'0x0102:0x8000'], // enum8
                 [at:'0x0102:0xF000',  name:'positionState',         type:'enum',    dt:'0x20', rw: 'rw', map:[0: 'up/open', 1: 'stop', 2: 'down/close' ], title: '<b>Position State</b>',   description:'position state (0x0102:0xF000)'],
@@ -208,7 +243,54 @@ int getDpCommandClose() {
             refresh: ['position', 'positionState', 'upDownConfirm', 'controlBack', 'scheduleTime', '0xE001:0x0000'],
             deviceJoinName: 'Tuya TS130F Module',
             configuration : [:]
+    ],
+
+    'OTHER_ZCL_WINDOW_COVERING'   : [
+            description   : 'Other ZCL Window Covering',
+            device        : [type: 'COVERING', powerSource: 'ac', isSleepy:false],
+            capabilities  : ['Battery': false],
+            //preferences   : ['invertPosition':'invertPosition', 'custom1':'0xFCC0:0x014B'],
+            fingerprints  : [
+                [profileId: "0104", inClusters: "0000,0003,0004,0102", outClusters: "0019", model: "E2B0-KR000Z0-HA", deviceJoinName: "eZEX Window Treatment"],                                                       // SY-IoT201-BD //SOMFY Blind Controller/eZEX
+                [profileId: "0104", inClusters: "0000,0003,0004,0005,0006,0008,0102", outClusters: "000A", manufacturer: "Feibit Co.Ltd", model: "FTB56-ZT218AK1.6", deviceJoinName: "Wistar Window Treatment"],   //Wistar Curtain Motor(CMJ)
+                [profileId: "0104", inClusters: "0000,0003,0004,0005,0006,0008,0102", outClusters: "000A", manufacturer: "Feibit Co.Ltd", model: "FTB56-ZT218AK1.8", deviceJoinName: "Wistar Window Treatment"],   //Wistar Curtain Motor(CMJ)
+                [profileId: "0104", inClusters: "0000,0003,0004,0005,0102", outClusters: "0003", manufacturer: "REXENSE", model: "KG0001", deviceJoinName: "Window Treatment"],                                      //Smart Curtain Motor(BCM300D)
+                [profileId: "0104", inClusters: "0000,0003,0004,0005,0102", outClusters: "0003", manufacturer: "REXENSE", model: "DY0010", deviceJoinName: "Window Treatment"],                                      //Smart Curtain Motor(DT82TV)
+                [profileId: "0104", inClusters: "0000,0003,0004,0005,0102", outClusters: "0003", manufacturer: "SOMFY", model: "Glydea Ultra Curtain", deviceJoinName: "Somfy Window Treatment"],                    //Somfy Glydea Ultra
+                [profileId: "0104", inClusters: "0000,0003,0004,0005,0020,0102", outClusters: "0003", manufacturer: "SOMFY", model: "Sonesse 30 WF Roller", deviceJoinName: "Somfy Window Treatment"],              // Somfy Sonesse 30 Zigbee LI-ION Pack
+            ],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            attributes    : [
+                [at:'0x0102:0x0000',  name:'windowCoveringType',    type:'enum',    dt:'0x20', rw: 'ro',            description:'windowCoveringType (0x0102:0x0000)'],   // enum8
+                [at:'0x0102:0x0007',  name:'configStatus',          type:'enum',    dt:'0x20', rw: 'ro',            description:'windowCoveringType (0x0102:0x0007)'],   // map8 0b0xxx xxxx
+                [at:'0x0102:0x0008',  name:'position',              type:'number',  dt:'0x23', rw: 'rw', unit:'%',  description:'Current Position Lift Percentage'],    // uint8   0-0x64 
+                [at:'0x0102:0x0008',  name:'tilt',                  type:'number',  dt:'0x23', rw: 'rw', unit:'%',  description:'Current Position Tilt Percentage'],     // uint8   0-0x64 
+            ],
+            refresh: ['position'],
+            deviceJoinName: 'Other ZCL Window Covering',
+            configuration : [:]
+    ],
+
+    'DEFAULT_ZCL_WINDOW_COVERING'   : [
+            description   : 'Default ZCL Window Covering',
+            device        : [type: 'COVERING', powerSource: 'ac', isSleepy:false],
+            capabilities  : ['Battery': false],
+            //preferences   : ['invertPosition':'invertPosition', 'custom1':'0xFCC0:0x014B'],
+            fingerprints  : [
+                //[profileId:"0104", endpointId:"01", inClusters:"0004,0005,0006,0102,E001,0000", outClusters:"0019,000A", model:"TS130F", manufacturer:"_TZ3000_e3vhyirx", controllerType: "ZGB"]
+            ],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            attributes    : [
+                [at:'0x0102:0x0000',  name:'windowCoveringType',    type:'enum',    dt:'0x20', rw: 'ro',            description:'windowCoveringType (0x0102:0x0000)'],   // enum8
+                [at:'0x0102:0x0007',  name:'configStatus',          type:'enum',    dt:'0x20', rw: 'ro',            description:'windowCoveringType (0x0102:0x0007)'],   // map8 0b0xxx xxxx
+                [at:'0x0102:0x0008',  name:'position',              type:'number',  dt:'0x23', rw: 'rw', unit:'%',  description:'Current Position Lift Percentage'],    // uint8   0-0x64 
+                [at:'0x0102:0x0008',  name:'tilt',                  type:'number',  dt:'0x23', rw: 'rw', unit:'%',  description:'Current Position Tilt Percentage'],     // uint8   0-0x64 
+            ],
+            refresh: ['position'],
+            deviceJoinName: 'Default ZCL Window Covering',
+            configuration : [:]
     ]
+
 ]
 
 
@@ -366,7 +448,9 @@ void test(String par) {
     //cmds += zigbee.configureReporting(0xFCC0, 0x013B, 0x23, 0, 3600, 0x00, [mfgCode:0x115f], delay=204)
     cmds += zigbee.configureReporting(0xFCC0, 0x013C, 0x23, 0, 3600, 0x00, [:], delay=204)
 
-    sendZigbeeCommands(cmds)
+    //sendZigbeeCommands(cmds)
+
+    queryPowerSource()
 }
 
 void testT(String par) {
@@ -562,7 +646,7 @@ void sendOpen(Object device) { // 100 %
 // command to open device
 void open() {
     if (txtEnable) { log.info "${device.displayName} opening" }
-    sendEvent(name: 'targetPosition', value: OPEN, descriptionText: "targetPosition set to ${OPEN}", type: 'digital')
+    sendEvent(name: 'targetPosition', value: DEFAULT_OPEN, descriptionText: "targetPosition set to ${DEFAULT_OPEN}", type: 'digital')
     if (settings?.substituteOpenClose == false) {
         sendOpen(device)
     }
@@ -602,7 +686,7 @@ void sendClose(Object device) {     // 0 %
 // command to close device
 void close() {
     if (logEnable) { log.debug "${device.displayName} closing [digital]" }
-    sendEvent(name: 'targetPosition', value: CLOSED, descriptionText: "targetPosition set to ${CLOSED}", type: 'digital')
+    sendEvent(name: 'targetPosition', value: DEFAULT_CLOSED, descriptionText: "targetPosition set to ${DEFAULT_CLOSED}", type: 'digital')
     if (settings?.substituteOpenClose == false) {
         if (logEnable) { log.debug "${device.displayName} sending sendClose() command" }
         sendClose(device)
@@ -654,10 +738,21 @@ void startPositionChange(String change) {
     }
 }
 
+void sendStopPositionChange(Object device) {
+    int dpCommandStop = getDpCommandStop()
+    logDebug "sending command stopPositionChange (${dpCommandStop})"
+    if (isTS130F()) {
+        sendZigbeeCommands(zigbee.command(0x0102, dpCommandStop as int, [:], delay = 200))
+    }
+    else {
+        sendTuyaCommand(DP_ID_COMMAND, DP_TYPE_ENUM, dpCommandStop, 2)
+    }
+}
+
 // Component command to start position change of device
 void stopPositionChange() {
-    if (logEnable) { log.debug "${device.displayName} stopPositionChange" }
-    parent?.componentStopPositionChange(device)
+    logDebug "stopPositionChange" 
+    sendStopPositionChange(device)
 }
 
 
@@ -665,7 +760,7 @@ void stopPositionChange() {
 // TODO !
 void refreshMatter() {
     if (txtEnable) { log.info "${device.displayName} refreshing ..." }
-    state.standardOpenClose = 'OPEN = 0% CLOSED = 100%'
+    state.standardOpenClose = 'DEFAULT_OPEN = 0% DEFAULT_CLOSED = 100%'
     state.driverVersion = matterComponentWindowShadeVersion + ' (' + matterComponentWindowShadeStamp + ')'
     parent?.componentRefresh(device)
 }

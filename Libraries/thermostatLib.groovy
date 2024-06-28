@@ -3,7 +3,7 @@ library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Thermostat Library', name: 'thermostatLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy', documentationLink: '',
     version: '3.3.1'
-    
+
 )
 /*
  *  Zigbee Thermostat Library
@@ -78,7 +78,7 @@ void customOn()  { setThermostatMode('heat') }   // invoked from the common libr
  * thermostat cluster 0x0201
  * -----------------------------------------------------------------------------
 */
-// * should be implemented in the custom driver code ... 
+// * should be implemented in the custom driver code ...
 void standardParseThermostatCluster(final Map descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "standardParseThermostatCluster: zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
@@ -92,7 +92,6 @@ void standardParseThermostatCluster(final Map descMap) {
     // try to process the attribute value
     standardHandleThermostatEvent(value)
 }
-
 
 //  setHeatingSetpoint thermostat capability standard command
 //  1°C steps. (0.5°C setting on the TRV itself, rounded for zigbee interface)
@@ -158,7 +157,6 @@ void setCoolingSetpoint(Number temperaturePar) {
     sendEvent(name: 'coolingSetpoint', value: temperature, unit: '\u00B0C', descriptionText: descText, type: 'digital')
     logInfo "${descText}"
 }
-
 
 // TODO - use for all events sent by this driver !!
 /* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
@@ -340,7 +338,6 @@ void setThermostatMode(final String requestedMode) {
     return
 }
 
-
 void sendSupportedThermostatModes(boolean debug = false) {
     List<String> supportedThermostatModes = []
     supportedThermostatModes = ['off', 'heat', 'auto', 'emergency heat']
@@ -361,8 +358,6 @@ void sendSupportedThermostatModes(boolean debug = false) {
     }
 }
 
-
-
 void standardHandleThermostatEvent(int value, boolean isDigital=false) {
     logWarn "standardHandleThermostatEvent()... NOT IMPLEMENTED!"
 }
@@ -372,13 +367,10 @@ private void sendDelayedThermostatEvent(Map eventMap) {
     logWarn "${device.displayName} NOT IMPLEMENTED! <b>delaying ${timeRamaining} seconds</b> event : ${eventMap}"
 }
 
-
 /* groovylint-disable-next-line UnusedMethodParameter */
 void thermostatProcessTuyaDP(final Map descMap, int dp, int dp_id, int fncmd) {
     logWarn "thermostatProcessTuyaDP()... NOT IMPLEMENTED! dp=${dp} dp_id=${dp_id} fncmd=${fncmd}"
 }
-
-
 
 /**
  * Schedule thermostat polling
@@ -436,7 +428,6 @@ void sendDigitalEventIfNeeded(final String eventName) {
         logDebug "pollTuya: ${eventName} was sent less than ${settings.temperaturePollingInterval} seconds ago, skipping"
     }
 }
-
 
 void thermostatInitializeVars( boolean fullInit = false ) {
     logDebug "thermostatInitializeVars()... fullInit = ${fullInit}"
@@ -499,14 +490,13 @@ void setTemperature(temperature) {
     }
 }
 
-
 List<String> thermostatRefresh() {
     logDebug "thermostatRefresh()..."
-/*    
+/*
     List<String> cmds = []
     cmds = zigbee.readAttribute(0x0400, 0x0000, [:], delay = 200) // illuminance
     return cmds
-*/    
+*/
 }
 
 // TODO - configure in the deviceProfile
@@ -518,4 +508,3 @@ List pollThermostatCluster() {
 List pollBatteryPercentage() {
     return zigbee.readAttribute(0x0001, 0x0021, [:], delay = 200)                          // battery percentage
 }
-
