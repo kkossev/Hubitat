@@ -27,9 +27,8 @@ library(
  * ver. 3.1.3  2024-05-21 kkossev  - skip processClusterAttributeFromDeviceProfile if cluster or attribute or value is missing
  * ver. 3.2.0  2024-05-25 kkossev  - commonLib 3.2.0 allignment;
  * ver. 3.2.1  2024-06-06 kkossev  - Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent); getDeviceProfilesMap bug fix; forcedProfile is always shown in preferences;
- * ver. 3.3.0  2024-06-26 kkossev  - (dev. branch) empty preferences bug fix; zclWriteAttribute delay 50 ms; added advanced check in inputIt()
+ * ver. 3.3.0  2024-06-29 kkossev  - (dev. branch) empty preferences bug fix; zclWriteAttribute delay 50 ms; added advanced check in inputIt(); fixed 'Cannot get property 'rw' on null object' bug
  *
- *                                   TODO - fix the 'Cannot get property 'rw' on null object' bug
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
  *                                   TODO - updateStateUnknownDPs !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -43,7 +42,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.3.0' }
-static String deviceProfileLibStamp() { '2024/06/26 8:10 AM' }
+static String deviceProfileLibStamp() { '2024/06/29 9:31 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -187,7 +186,7 @@ Map getAttributesMap(String attribName, boolean debug=false) {
 void resetPreferencesToDefaults(boolean debug=false) {
     logDebug "resetPreferencesToDefaults: DEVICE=${DEVICE?.description} preferences=${DEVICE?.preferences}"
     Map preferences = DEVICE?.preferences
-    if (preferences == null || preferences.isEmpty()) { logDebug 'Preferences not found!' ; return }
+    if (preferences == null || preferences?.isEmpty()) { logDebug 'Preferences not found!' ; return }
     Map parMap = [:]
     preferences.each { parName, mapValue ->
         if (debug) { log.trace "$parName $mapValue" }
@@ -196,9 +195,9 @@ void resetPreferencesToDefaults(boolean debug=false) {
             return // continue
         }
         parMap = getPreferencesMapByName(parName, false)    // the individual preference map
-        if (parMap?.isEmpty()) { logDebug "Preference ${parName} not found in tuyaDPs or attributes map!";  return }    // continue
+        if (parMap == null || parMap?.isEmpty()) { logDebug "Preference ${parName} not found in tuyaDPs or attributes map!";  return }    // continue
         // at:'0x0406:0x0020', name:'fadingTime', type:'enum', dt: '0x21', rw: 'rw', min:15, max:999, defVal:'30', scale:1, unit:'seconds', map:[15:'15 seconds', 30:'30 seconds', 60:'60 seconds', 120:'120 seconds', 300:'300 seconds'], title:'<b>Fading Time</b>',   description:'Radar fading time in seconds</i>'],
-        if (parMap.defVal == null) { logDebug "no default value for preference ${parName} !" ; return }     // continue
+        if (parMap?.defVal == null) { logDebug "no default value for preference ${parName} !" ; return }     // continue
         if (debug) { log.info "setting par ${parMap.name} defVal = ${parMap.defVal} (type:${parMap.type})" }
         String str = parMap.name
         device.updateSetting("$str", [value:parMap.defVal as String, type:parMap.type])
@@ -589,7 +588,7 @@ public boolean sendAttribute(String par=null, val=null ) {
 
     Map dpMap = getAttributesMap(par, false)                                   // get the map for the attribute
     l//log.trace "sendAttribute: dpMap=${dpMap}"
-    if (dpMap == null || dpMap.isEmpty()) { logWarn "sendAttribute: map not found for parameter <b>${par}</b>"; return false }
+    if (dpMap == null || dpMap?.isEmpty()) { logWarn "sendAttribute: map not found for parameter <b>${par}</b>"; return false }
     if (val == null) { logWarn "sendAttribute: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return false }
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def scaledValue = validateAndScaleParameterValue(dpMap, val as String)      // convert the val to the correct type and scale it if needed
@@ -696,7 +695,7 @@ public boolean sendCommand(final String command_orig=null, final String val_orig
     final String val = val_orig?.trim()
     List<String> cmds = []
     Map supportedCommandsMap = DEVICE?.commands as Map
-    if (supportedCommandsMap?.isEmpty()) {
+    if (supportedCommandsMap == null || supportedCommandsMap?.isEmpty()) {
         logInfo "sendCommand: no commands defined for device profile ${getDeviceProfile()} !"
         return false
     }
@@ -732,16 +731,14 @@ public boolean sendCommand(final String command_orig=null, final String val_orig
         if (cmds != null && cmds != []) {
             sendZigbeeCommands( cmds )
         }
-    } else {
+    }
+    else if (funcResult == null) {
+        return false
+    }
+     else {
         logDebug "sendCommand: <b>$func</b>(${val}) returned <b>${funcResult}</b> instead of a list of commands!"
         return false
     }
-    /*
-    cmds = funcResult
-    if (cmds != null && cmds != []) {
-        sendZigbeeCommands( cmds )
-    }
-    */
     return true
 }
 
@@ -775,7 +772,7 @@ Map inputIt(String paramPar, boolean debug = false) {
     //if (debug) log.debug "inputIt: preference ${param} found. value is ${preference} isTuyaDP=${isTuyaDP}"
     foundMap = getPreferencesMapByName(param)
     //if (debug) log.debug "foundMap = ${foundMap}"
-    if (foundMap?.isEmpty()) { if (debug) { log.warn "inputIt: map not found for param '${param}'!" } ; return [:]  }
+    if (foundMap == null || foundMap?.isEmpty()) { if (debug) { log.warn "inputIt: map not found for param '${param}'!" } ; return [:]  }
     if (foundMap.rw != 'rw') { if (debug) { log.warn "inputIt: param '${param}' is read only!" } ; return [:]  }
     if (foundMap.advanced != null && foundMap.advanced == true && settings.advancedOptions != true) {
         if (debug) { log.debug "inputIt: param '${param}' is advanced!" }
@@ -1150,7 +1147,7 @@ public boolean processClusterAttributeFromDeviceProfile(final Map descMap) {
     if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return false }
 
     List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes
-    if (attribMap == null || attribMap.isEmpty()) { return false }    // no any attributes are defined in the Device Profile
+    if (attribMap == null || attribMap?.isEmpty()) { return false }    // no any attributes are defined in the Device Profile
 
     String clusterAttribute = "0x${descMap.cluster}:0x${descMap.attrId}"
     int value
@@ -1225,7 +1222,7 @@ private boolean processFoundItem(final Map descMap, final Map foundItem, int val
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def preferenceValue = null   // preference value
     //log.trace "settings=${settings}"
-    boolean preferenceExists = (DEVICE?.preferences != null &&  !DEVICE?.preferences.isEmpty()) ? DEVICE?.preferences?.containsKey(foundItem.name) : false         // check if there is an existing preference for this clusterAttribute
+    boolean preferenceExists = (DEVICE?.preferences != null &&  !DEVICE?.preferences?.isEmpty()) ? DEVICE?.preferences?.containsKey(foundItem.name) : false         // check if there is an existing preference for this clusterAttribute
     //log.trace "preferenceExists=${preferenceExists}"
     boolean isAttribute = device.hasAttribute(foundItem.name)    // check if there is such a attribute for this clusterAttribute
     boolean isEqual = false
