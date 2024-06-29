@@ -535,7 +535,7 @@ public boolean setPar(final String parPar=null, final String val=null ) {
 // function to send a Tuya command to data point taken from dpMap with value tuyaValue and type taken from dpMap
 // TODO - reuse it !!!
 /* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
-List<String> sendTuyaParameter( Map dpMap, String par, tuyaValue) {
+public List<String> sendTuyaParameter( Map dpMap, String par, tuyaValue) {
     //logDebug "sendTuyaParameter: trying to send parameter ${par} value ${tuyaValue}"
     List<String> cmds = []
     if (dpMap == null) { logWarn "sendTuyaParameter: tuyaDPs map not found for parameter <b>${par}</b>" ; return [] }

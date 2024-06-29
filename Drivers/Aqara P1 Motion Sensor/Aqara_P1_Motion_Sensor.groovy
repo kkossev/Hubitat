@@ -41,6 +41,7 @@
  * ver. 1.5.0 2024-02-29 kkossev  - (dev. branch) Groovy Lint
  * ver. 1.6.0 2024-06-29 kkossev  - (dev. branch) added state.health 'parentNWK' and 'nwkCtr'; added attribute parentNWK;
  * 
+ *                                 TODO: powerSource 'unknown' fix
  *                                 TODO: WARN log, when the device model is not registered during the pairing !!!!!!!!
  *                                 TODO: automatic logsOff() is not working sometimes!
  *                                 TODO: configure to clear the current states and events
@@ -53,7 +54,7 @@
  */
 
 static String version() { "1.6.0" }
-static String timeStamp() {"2024/06/29 11:05 AM"}
+static String timeStamp() {"2024/06/29 11:06 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol

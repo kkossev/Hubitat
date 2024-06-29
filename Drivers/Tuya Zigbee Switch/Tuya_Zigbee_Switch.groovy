@@ -26,6 +26,7 @@
  * ver. 3.0.7  2024-04-18 kkossev  - commonLib 3.0.7 and groupsLib allignment
  * ver. 3.1.1  2024-05-15 kkossev  - added SONOFF ZBMicro; commonLib 3.1.1 allignment; Groovy linting;
  * ver. 3.2.1  2024-06-04 kkossev  - commonLib 3.2.1 allignment; ZBMicro - do a refresh() after saving the preferences;
+ * ver. 3.2.2  2024-06-29 kkossev  - (dev.branch) added zigbeePairingHelper code - credits @dandanache; added on/off control for SWITCH_GENERIC_EF00_TUYA 'switch' dp;
  *
  *                                   TODO: Sonof ZBMINIL2 :zigbee read BASIC_CLUSTER attribute 0x0001 error: Unsupported Attribute
  *                                   TODO: add toggle() command; initialize 'switch' to unknown
@@ -34,8 +35,8 @@
  *                                   TODO: add Info dummy preference w/ link to Hubitat forum page
  */
 
-static String version() { '3.2.1' }
-static String timeStamp() { '2024/06/05 2:46 PM' }
+static String version() { '3.2.2' }
+static String timeStamp() { '2024/06/29 12:24 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -51,8 +52,8 @@ deviceType = 'Switch'
 @Field static final String DEVICE_TYPE = 'Switch'
 
 #include kkossev.commonLib
-#include kkossev.deviceProfileLib
 #include kkossev.onOffLib
+#include kkossev.deviceProfileLib
 #include kkossev.reportingLib
 #include kkossev.groupsLib
 
@@ -81,6 +82,9 @@ metadata {
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables command logging.'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: 'Turns on debug logging for 24 hours.'
+        //
+        //input(name: "deviceNetworkId", type: "enum", title: "Router Device", description: "<small>Select a mains-powered device that you want to put in pairing mode.</small>", options: [ "0000":"👑 Hubitat Hub" ] + getDevices(), required: true)
+
     }
 }
 
@@ -107,24 +111,27 @@ boolean isZBMINIL2()   { return (device?.getDataValue('model') ?: 'n/a') in ['ZB
             deviceJoinName: 'Generic Zigbee Switch (ZCL)'
     ],
 
-    'SWITCH_GENERIC_TUYA' : [
+    'SWITCH_GENERIC_EF00_TUYA' : [
             description   : 'Generic Tuya Switch (0xEF00)',
-            models        : ['GenericModel'],
+            models        : ['TS0601'],
             device        : [type: 'switch', powerSource: 'mains', isSleepy:false],
             capabilities  : ['Switch': true],
             preferences   : ['powerOnBehavior':'0x0006:0x4003'],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0004,0005,0006,EF00', outClusters:'000A,0019', model:'Tuya', manufacturer:'Tuya', deviceJoinName: 'Generic Tuya Switch (0xEF00)']
+            fingerprints  : [   // Tuya EF00 single gang switches
+                [profileId:'0104', endpointId:'01', inClusters:'EF00', outClusters:'000A,0019', model:'Tuya', manufacturer:'Tuya', deviceJoinName: 'MOES dimmer/switch for TESTS (0xEF00)'],
+                [profileId:'0104', model:'TS0601', manufacturer:'_TZE200_amp6tsvy', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', application:'42', deviceJoinName: 'Moes 1-Gang Switch / ZTS-EU1'],
+                [profileId:'0104', model:'TS0601', manufacturer:'_TZE200_oisqyl4o', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', application:'42', deviceJoinName: 'No Neutral Push Button Light Switch 1 Gang'],
+                [profileId:'0104', model:'TS0601', manufacturer:'_TZE200_wfxuhoea', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', application:'42', deviceJoinName: 'No Neutral Push Button Light Switch 1 Gang'],
+                [profileId:'0104', model:'TS0601', manufacturer:'_TZE200_gbagoilo', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', application:'46', deviceJoinName: 'OZ Smart Single Light Switch'],
             ],
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             tuyaDPs:        [
-                [dp:1,   name:'switch',                                type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'off', 1:'on'] ,   unit:'',  description:'switch']
+                [dp:1,   name:'switch',  type:'enum', dt:'01',  rw: 'rw',  min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'off', 1:'on'] ,   unit:'',  description:'switch']
             ],
             attributes    : [
                 [at:'0x0006:0x4003', name:'powerOnBehavior', /*enum8*/ type:'enum',   rw: 'rw', min:0,   max:255,    defVal:'255',   scale:1,    map:[0:'Turn power Off', 1:'Turn power On', 255:'Restore previous state'], title:'<b>Power On Behavior</b>', description:'Power On Behavior']
             ],
             refresh       : [ 'powerOnBehavior'],
-            //configuration : ["0x0406":"bind"]     // TODO !!
             configuration : [:],
             deviceJoinName: 'Generic Tuya Switch (0xEF00)'
     ],
@@ -219,7 +226,6 @@ boolean isZBMINIL2()   { return (device?.getDataValue('model') ?: 'n/a') in ['ZB
     ],
 
 ]
-
 
 void customUpdated() {
     logDebug "customUpdated()"
@@ -333,6 +339,40 @@ void customParseFC11Cluster(final Map descMap) {
     if (result == false) {
         logWarn "customParseFC11Cluster: received unknown 0xFC11 attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
+}
+
+// all credits @dandanache  importUrl:"https://raw.githubusercontent.com/dan-danache/hubitat/master/zigbee-pairing-helper-driver/zigbee-pairing-helper.groovy"
+private Map<String, String> getDevices() {
+    try {
+        httpGet([ uri:"http://127.0.0.1:8080/hub/zigbee/getChildAndRouteInfoJson" ]) { response ->
+            if (response?.status != 200) {
+                return ["ZZZZ": "Invalid response: ${response}"]
+            }
+            return response.data.devices
+                .sort { it.name }
+                .collectEntries { ["${it.zigbeeId}", "${it.name}"] }
+        }
+    } catch (Exception ex) {
+        return ["ZZZZ": "Exception: ${ex}"]
+    }
+}
+
+void zigbeePairingHelper() {
+    logDebug "zigbeePairingHelper()..."
+    if (settings?.deviceNetworkId == null || settings?.deviceNetworkId == "ZZZZ") {
+        log.error("Invalid Device Network ID: ${settings?.deviceNetworkId}")
+        return
+    }
+
+    log.info "Stopping Zigbee pairing on all devices. Please wait 5 seconds ..."
+    sendHubCommand new hubitat.device.HubMultiAction(["he raw 0xFFFC 0x00 0x00 0x0036 {42 0001} {0x0000}"], hubitat.device.Protocol.ZIGBEE)
+    runIn(5, "startDeviceZigbeePairing")
+}
+
+private startDeviceZigbeePairing() {
+    log.info "Starting Zigbee pairing on device ${settings?.deviceNetworkId} for 90 seconds..."
+    sendHubCommand new hubitat.device.HubMultiAction(["he raw 0x${settings?.deviceNetworkId} 0x00 0x00 0x0036 {43 5A01} {0x0000}"], hubitat.device.Protocol.ZIGBEE)
+    log.warn "<b>Now is the right moment to put the device you want to join in pairing mode!</b>"
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////

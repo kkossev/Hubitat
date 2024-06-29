@@ -757,7 +757,7 @@ void syncTuyaDateTime() {
     logDebug "Tuya device time synchronized to ${unix2formattedDate(now())} (${cmds})"
 }
 
-// called from the main parse method when the cluster is 0xEF00
+// called from the main parse method when the cluster is 0xEF00 and no custom handler is defined
 void standardParseTuyaCluster(final Map descMap) {
     if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '24') {        //getSETTIME
         syncTuyaDateTime()
