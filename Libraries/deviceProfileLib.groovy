@@ -684,7 +684,7 @@ public boolean sendAttribute(String par=null, val=null ) {
 }
 
 /**
- * Sends a command to the device.
+ * Returns a list of Zigbee commands to be sent to the device.
  * @param command - The command to send. Must be one of the commands defined in the DEVICE.commands map.
  * @param val     - The value to send with the command, can be null.
  * @return true on success, false otherwise.

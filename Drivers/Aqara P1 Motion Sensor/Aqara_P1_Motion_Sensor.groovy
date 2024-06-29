@@ -39,7 +39,7 @@
  * ver. 1.4.1 2023-04-21 kkossev  - exception prevented when application string is enormously long; italic font bug fix; lumi.sen_ill.agl01 initialization and bug fixes; light sensor delta = 5 lux; removed MCCGQ14LM
  * ver. 1.4.2 2023-05-21 kkossev  - lumi.sen_ill.agl01 initialization fixes; removed the E1 contact sensor driver code; trace logs cleanup; added reporting time configuration for the Lux sensors; Lux sensors preferences are NOT reset to defaults when paired again; removed powerSource manipulation; periodic job renamed to deviceHealthCheck()
  * ver. 1.5.0 2024-02-29 kkossev  - (dev. branch) Groovy Lint
- * ver. 1.6.0 2024-06-27 kkossev  - (dev. branch) added state.health 'parentNWK' and 'nwkCtr'; added attribute parentNWK; added @dandanache 'Zigbee Pairing Helper' code;
+ * ver. 1.6.0 2024-06-29 kkossev  - (dev. branch) added state.health 'parentNWK' and 'nwkCtr'; added attribute parentNWK;
  * 
  *                                 TODO: WARN log, when the device model is not registered during the pairing !!!!!!!!
  *                                 TODO: automatic logsOff() is not working sometimes!
@@ -53,7 +53,7 @@
  */
 
 static String version() { "1.6.0" }
-static String timeStamp() {"2024/06/27 10:19 AM"}
+static String timeStamp() {"2024/06/29 11:05 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -162,10 +162,7 @@ metadata {
             input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "<i>The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b></i>", defaultValue: false)
             if (internalTemperature == true) {
                 input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "<i>Select how many degrees to adjust the temperature.</i>", range: "-100..100", defaultValue: 0)
-            }
-
-            input(name: "deviceNetworkId", type: "enum", title: "Router Device", description: "<small>Select a mains-powered device that you want to put in pairing mode.</small>", options: [ "0000":"👑 Hubitat Hub" ] + getDevices(), required: true)
-            
+            }            
         }
     }
 }
@@ -1459,41 +1456,6 @@ List<String> configureIlluminance() {
     cmds += zigbee.reportingConfiguration(0x0400, 0x0000, [:], 203)
     return cmds 
 }
-
-// all credits @dandanache  importUrl:"https://raw.githubusercontent.com/dan-danache/hubitat/master/zigbee-pairing-helper-driver/zigbee-pairing-helper.groovy"
-private Map<String, String> getDevices() {
-    try {
-        httpGet([ uri:"http://127.0.0.1:8080/hub/zigbee/getChildAndRouteInfoJson" ]) { response ->
-            if (response?.status != 200) {
-                return ["ZZZZ": "Invalid response: ${response}"]
-            }
-            return response.data.devices
-                .sort { it.name }
-                .collectEntries { ["${it.zigbeeId}", "${it.name}"] }
-        }
-    } catch (Exception ex) {
-        return ["ZZZZ": "Exception: ${ex}"]
-    }
-}
-
-void zigbeePairingHelper() {
-    logDebug "zigbeePairingHelper()..."
-    if (settings?.deviceNetworkId == null || settings?.deviceNetworkId == "ZZZZ") {
-        log.error("Invalid Device Network ID: ${settings?.deviceNetworkId}")
-        return 
-    }
-
-    log.info "Stopping Zigbee pairing on all devices. Please wait 5 seconds ..."
-    sendHubCommand new hubitat.device.HubMultiAction(["he raw 0xFFFC 0x00 0x00 0x0036 {42 0001} {0x0000}"], hubitat.device.Protocol.ZIGBEE)
-    runIn(5, "startDeviceZigbeePairing")    
-}
-
-private startDeviceZigbeePairing() {
-    log.info "Starting Zigbee pairing on device ${settings?.deviceNetworkId} for 90 seconds..."
-    sendHubCommand new hubitat.device.HubMultiAction(["he raw 0x${settings?.deviceNetworkId} 0x00 0x00 0x0036 {43 5A01} {0x0000}"], hubitat.device.Protocol.ZIGBEE)
-    log.warn "<b>Now is the right moment to put the device you want to join in pairing mode!</b>"
-}
-
 
 void test(String description ) {
         List<String> cmds = []
