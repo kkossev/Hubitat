@@ -17,22 +17,21 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-11-04 kkossev  - added deviceProfileLib (based on Tuya 4 In 1 driver)
- * ver. 3.0.0  2023-11-27 kkossev  - (dev. branch) fixes for use with commonLib; added processClusterAttributeFromDeviceProfile() method; added validateAndFixPreferences() method;  inputIt bug fix; signedInt Preproc method;
- * ver. 3.0.1  2023-12-02 kkossev  - (dev. branch) release candidate
- * ver. 3.0.2  2023-12-17 kkossev  - (dev. branch) inputIt moved to the preferences section; setfunction replaced by customSetFunction; Groovy Linting;
- * ver. 3.0.4  2024-03-30 kkossev  - (dev. branch) more Groovy Linting; processClusterAttributeFromDeviceProfile exception fix;
- * ver. 3.1.0  2024-04-03 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
- * ver. 3.1.1  2024-04-21 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix; resetPreferencesToDefaults bug fix;
- * ver. 3.1.2  2024-05-05 kkossev  - (dev. branch) added isSpammyDeviceProfile()
+ * ver. 3.0.0  2023-11-27 kkossev  - fixes for use with commonLib; added processClusterAttributeFromDeviceProfile() method; added validateAndFixPreferences() method;  inputIt bug fix; signedInt Preproc method;
+ * ver. 3.0.1  2023-12-02 kkossev  - release candidate
+ * ver. 3.0.2  2023-12-17 kkossev  - inputIt moved to the preferences section; setfunction replaced by customSetFunction; Groovy Linting;
+ * ver. 3.0.4  2024-03-30 kkossev  - more Groovy Linting; processClusterAttributeFromDeviceProfile exception fix;
+ * ver. 3.1.0  2024-04-03 kkossev  - more Groovy Linting; deviceProfilesV3, enum pars bug fix;
+ * ver. 3.1.1  2024-04-21 kkossev  - deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix; resetPreferencesToDefaults bug fix;
+ * ver. 3.1.2  2024-05-05 kkossev  - added isSpammyDeviceProfile()
  * ver. 3.1.3  2024-05-21 kkossev  - skip processClusterAttributeFromDeviceProfile if cluster or attribute or value is missing
  * ver. 3.2.0  2024-05-25 kkossev  - commonLib 3.2.0 allignment;
  * ver. 3.2.1  2024-06-06 kkossev  - Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent); getDeviceProfilesMap bug fix; forcedProfile is always shown in preferences;
- * ver. 3.3.0  2024-06-29 kkossev  - (dev. branch) empty preferences bug fix; zclWriteAttribute delay 50 ms; added advanced check in inputIt(); fixed 'Cannot get property 'rw' on null object' bug
+ * ver. 3.3.0  2024-06-29 kkossev  - (dev. branch) empty preferences bug fix; zclWriteAttribute delay 50 ms; added advanced check in inputIt(); fixed 'Cannot get property 'rw' on null object' bug; fixed enum attributes first event numeric value bug;
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
- *                                   TODO - updateStateUnknownDPs !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- *                                   TODO - check why the forcedProfile preference is not initialized?
+ *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
  *                                   TODO - when [refresh], send Info logs for parameters that are not events or preferences
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
  *                                   TODO: add _DEBUG command (for temporary switching the debug logs on/off)
@@ -42,7 +41,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.3.0' }
-static String deviceProfileLibStamp() { '2024/06/29 9:31 AM' }
+static String deviceProfileLibStamp() { '2024/06/29 3:01 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -1089,9 +1088,9 @@ List<Object> compareAndConvertTuyaToHubitatEventValue(Map foundItem, int fncmd, 
             logTrace "compareAndConvertTuyaToHubitatEventValue: enum: foundItem.scale=${foundItem.scale}, fncmd=${fncmd}, device.currentValue(${foundItem.name})=${(device.currentValue(foundItem.name))} map=${foundItem.map}"
             Object latestEvent = device.currentState(foundItem.name)
             String dataType = latestEvent?.dataType
-            logTrace "latestEvent is dataType is ${dataType}"
+            logTrace "latestEvent is ${latestEvent} dataType is ${dataType}"
             // if the attribute is of a type enum, the value is a string. Compare the string values!
-            if (dataType == 'ENUM') {
+            if (dataType == null || dataType == 'ENUM') {
                 (isEqual, hubitatEventValue) = compareAndConvertStrings(foundItem, foundItem.map[fncmd as int] ?: 'unknown', device.currentValue(foundItem.name) ?: 'unknown')
             }
             else {
@@ -1289,6 +1288,9 @@ private boolean processFoundItem(final Map descMap, final Map foundItem, int val
         if (isEqual && !wasChanged) {                        // this DP report has the same value as the last one - just send a debug log and move along!
             if (!doNotTrace) {
                 if (settings.logEnable) { logDebug "${descText } (no change)" }
+            }
+            if (foundItem.processDuplicated == true) {
+                logDebug 'processDuplicated=true -> continue'
             }
 
             // patch for inverted motion sensor 2-in-1
