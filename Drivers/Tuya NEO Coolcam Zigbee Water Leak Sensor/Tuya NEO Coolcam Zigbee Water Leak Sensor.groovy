@@ -25,7 +25,7 @@
  * ver. 1.0.8 2023-05-13 kkossev  -  'unprocessed water event unknown' fix; lastWaterWet update bug fix;
  * ver. 1.1.0 2023-07-11 kkossev  - replaced Presence w/ healthStatus; added TS0207 _TZ3000_js34cuma; removed manipulating the powerSource and dropping the battery level 0% when offline.
  * ver. 1.1.1 2023-07-28 kkossev  - added ping rtt; added zigbee.enrollResponse() in the configuration; added TS0207 _TZ3000_2wcynpml
- * ver. 1.1.2 2024-05-11 kkossev  - (dev. branch) added ThirdReality 3RWS18BZ 
+ * ver. 1.1.2 2024-05-11 kkossev  - added ThirdReality 3RWS18BZ 
   *
  *                                  TODO:  scheduleCommandTimeoutCheck()
  *                                  TODO: check why Neo Coolcam is not sending actual battery reports : https://community.hubitat.com/t/release-tuya-neo-coolcam-zigbee-water-leak-sensor/91370/86?u=kkossev 
