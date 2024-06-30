@@ -13,17 +13,16 @@
  *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *     for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.3.0  2024-06-25 kkossev  - (dev. branch) new driver for Zigbee Shade Controller : TUYA_TS130F_MODULE
- * ver. 3.3.1  2024-06-29 kkossev  - (dev. branch) 
+ * ver. 3.3.0  2024-06-25 kkossev  - (dev. branch) new driver for Zigbee Shade Controller : TUYA_TS130F_MODULE DEFAULT_ZCL_WINDOW_COVERING
+ * ver. 3.3.1  2024-06-30 kkossev  - (dev. branch) added TUYA_SLIDING_WINDOW_PUSHER for tests; added ZEMISMART_ZM85EL_1X ZEMISMART_M515EGB
  *
- *                                   TODO: Add Advanced parametres - openCode, closeCode, stopCode, continueCode
- *                                   TODO: make different preferences  - softwareInvertDirection, hardwareInvertDirection
+ *                                   TODO: make the invert option different preferences  - softwareInvertDirection, hardwareInvertDirection
  */
 
 static String version() { '3.3.1' }
-static String timeStamp() { '2024/06/30 5:08 PM' }
+static String timeStamp() { '2024/06/30 11:22 PM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
 
 import groovy.transform.Field
@@ -42,10 +41,7 @@ metadata {
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Zigbee%20Window%20Shade/Zigbee_Window_Shade_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
-        capability 'WindowShade'    // Attributes: position - NUMBER, unit:% windowShade - ENUM ["opening", "partially open", "closed", "open", "closing", "unknown"]
-                                    // Commands: close(); open(); setPosition(position) position required (NUMBER) - Shade position (0 to 100);
-                                    //           startPositionChange(direction): direction required (ENUM) - Direction for position change request ["open", "close"]
-                                    //           stopPositionChange()
+        capability 'WindowShade'
 
         attribute 'targetPosition', 'number'            // ZemiSmart M1 is updating this attribute, not the position :(
         attribute 'operationalStatus', 'number'         // 'enum', ['unknown', 'open', 'closed', 'opening', 'closing', 'partially open']
@@ -80,16 +76,16 @@ metadata {
        // section {
             input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables command logging.'
             input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_DEBUG_LOGGING, description: 'Turns on debug logging for 24 hours.'
-            input name: "helpInfo", type: "hidden", title: fmtHelpInfo("Community Link")
+            //input name: "helpInfo", type: "hidden", title: fmtHelpInfo("Community Link")
       //  }
         // the rest of the preferences are inputed from the deviceProfile maps in the deviceProfileLib
         //section {
             input name: 'maxTravelTime', type: 'number', title: '<b>Maximum travel time</b>', description: 'The maximum time to fully open or close (Seconds).', required: false, defaultValue: DEFAULT_MAX_TRAVEL_TIME
             input name: 'deltaPosition', type: 'number', title: '<b>Position delta</b>', description: 'The maximum error step reaching the target position.', required: false, defaultValue: DEFAULT_POSITION_DELTA
             if (settings?.advancedOptions == true) {
-                input name: 'commandOpenCode', type: 'number', title: '<b>Open Command Code</b>', description: 'The standard Open command code is 0.<br>Don\'t change these codes, except you are sure what you are doing.', required: true, defaultValue: COMMAND_OPEN
-                input name: 'commandCloseCode', type: 'number', title: '<b>Close Command Code</b>', description: 'The standard Close command code is 1.<br>Zemismart OEMs are making fun by changing these numbers.', required: true, defaultValue: COMMAND_CLOSE
-                input name: 'commandStopCode', type: 'number', title: '<b>Stop Command Code</b>', description: 'The standard Stop (Pause) command code is 2.<br>Don\'t do like Zemismart OEM\'s!', required: true, defaultValue: COMMAND_PAUSE
+                input name: 'commandOpenCode', type: 'number', title: '<b>Open Command Code</b>', description: 'The standard Open command code is 0.<br>Don\'t change these codes, except you are sure what you are doing.', required: true, defaultValue: DEFAULT_COMMAND_OPEN
+                input name: 'commandCloseCode', type: 'number', title: '<b>Close Command Code</b>', description: 'The standard Close command code is 1.<br>Zemismart OEMs are making fun by changing these numbers.', required: true, defaultValue: DEFAULT_COMMAND_CLOSE
+                input name: 'commandStopCode', type: 'number', title: '<b>Stop Command Code</b>', description: 'The standard Stop (Pause) command code is 2.<br>Don\'t do like Zemismart OEM\'s!', required: true, defaultValue: DEFAULT_COMMAND_PAUSE
                 input name: 'substituteOpenClose', type: 'bool', title: '<b>Substitute Open/Close w/ setPosition</b>', description: 'Some Zemismart OEMs do not accept the Open/Close commands... :( ', required: true, defaultValue: false
                 input name: 'invertPosition', type: 'bool', title: '<b>Reverse Position Reports</b>', description: 'Some Zemismart OEMs don\'t know what is up and what is down...', required: true, defaultValue: false
                 input name: 'targetAsCurrentPosition', type: 'bool', title: '<b>Reverse Target and Current Position</b>', description: 'Non-standard Zemismart motors<br>Hopefully we can get rid of this option.', required: false, defaultValue: false
@@ -151,6 +147,42 @@ boolean isAM02()   { return device.getDataValue('manufacturer') in ['_TZE200_ios
             //refresh: ['refreshTS130F'],
             //refresh: ['position', 'positionState', 'upDownConfirm', 'controlBack', 'scheduleTime', '0xE001:0x0000'],
             deviceJoinName: 'Zemismart ZM85EL_1x',
+            configuration : [:]
+    ],
+
+    'ZEMISMART_M515EGB'   : [   // not fully working yet!
+            description   : 'Zemismart M515EGB',   //
+            device        : [type: 'COVERING', powerSource: 'battery', isSleepy:false, isTuyaEF00:true],
+            capabilities  : ['Battery': false],
+            preferences   : ['motorDirection':'5'],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_xuzcvlku", controllerType: "ZGB"], // inverted
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_wmcdj3aq", controllerType: "ZGB"],  // inverted
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TYST11_wmcdj3aq", controllerType: "ZGB"],  // inverted
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TYST11_xu1rkty3", controllerType: "ZGB"],  // inverted
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_xaabybja", controllerType: "ZGB"], // inverted
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_nogaemzt", controllerType: "ZGB"], // inverted
+
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_gubdgai2", controllerType: "ZGB"],
+            ],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            tuyaDPs:        [
+                [dp:1,   name:'control',             type:'enum',    rw: 'rw', min:0,   max:2 ,    defVal:'0',  scale:1,   map:[0:'close', 1:'stop', 2:'open'] , description:'Shade control'],        // control
+                [dp:2,   name:'position',            type:'number',  rw: 'ro', min:0,   max:100,   defVal:0,    description:'curtain position setting'],            // percent_control
+                [dp:3,   name:'currentPosition',     type:'number',  rw: 'ro', min:0,   max:100,   defVal:0,    description:'curtain current position'],            // current_position
+                //[dp:4,   name:'mode',                type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'morning', 1:'night'] ,  title:'<bMode</b>',description:'mode'],
+                [dp:5,   name:'motorDirection', dt:'04',     type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'forward', 1:'backward'] , title:'<b>Motor Direction</b>',  description:'Motor direction'],  //control_back_mode
+                [dp:7,   name:'workState',           type:'enum',    rw: 'ro', processDuplicated:true, map:[0:'moving', 1:'idle'] , description:'work state'],      // work_state - was 'opening' and 'closing'
+                //[dp:11,  name:'situationSet',        type:'number',  rw: 'ro', map:[0:'fully_open', 1:'fully_close'], description:'situation set'],                 // situation_set
+                [dp:12,  name:'fault',               type:'enum',    rw: 'ro', map:[0:'clear', 1:'motor_fault'] ,     description:'fault code'],                    // fault
+                //[dp:13,  name:'battery',             type:'number',  rw: 'ro', min:0,   max:100,   defVal:100,  scale:1,   unit:'%',  description:'battery percentage'],
+                //[dp:16,  name:'limits',              type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'up', 1:'down', 2:'up_delete', 3:'down_delete', 4:'remove_top_bottom'], title:'<Limits</b>', description:'Limits setting'],      // border
+                //[dp:19,  name:'bestPosition',  dt:'02',      type:'number',  rw: 'rw', min:0,   max:100,   defVal:50,   scale:1,   unit:'%', title:'<b>Best Position</b>', description:'best position'],            // best_position    
+                //[dp:20,  name:'clickControl',        type:'enum',    rw: 'rw', min:0,   max:2 ,    defVal:'0',  scale:1,   map:[0:'up', 1:'down'] , title:'<b>Click Control</b>' , description:'Shade control'],
+            ],
+            //refresh: ['refreshTS130F'],
+            //refresh: ['position', 'positionState', 'upDownConfirm', 'controlBack', 'scheduleTime', '0xE001:0x0000'],
+            deviceJoinName: 'Zemismart M515EGB',
             configuration : [:]
     ],
 
@@ -340,17 +372,34 @@ List<String> customInitializeDevice() {
 }
 
 void customInitializeVars(final boolean fullInit=false) {
-    //logDebug "customInitializeVars(${fullInit})"
+    logDebug "customInitializeVars(${fullInit})"
     if (state.deviceProfile == null) { setDeviceNameAndProfile() }               // in deviceProfileiLib.groovy
     if (fullInit == true) { resetPreferencesToDefaults() }                      // in deviceProfileiLib.groovy
     if (fullInit || settings?.maxTravelTime == null) { device.updateSetting('maxTravelTime',[value:DEFAULT_MAX_TRAVEL_TIME, type:'number'])  }
     if (fullInit || settings?.deltaPosition == null) { device.updateSetting('deltaPosition',[value:DEFAULT_POSITION_DELTA, type:'number'])  }
-    if (fullInit || settings?.commandOpenCode == null) { device.updateSetting('commandOpenCode',[value:COMMAND_OPEN, type:'number'])  }
-    if (fullInit || settings?.commandCloseCode == null) { device.updateSetting('commandCloseCode',[value:COMMAND_CLOSE, type:'number'])  }
-    if (fullInit || settings?.commandStopCode == null) { device.updateSetting('commandStopCode',[value:COMMAND_PAUSE, type:'number'])  }
+    if (fullInit || settings?.commandOpenCode == null) { device.updateSetting('commandOpenCode',[value:DEFAULT_COMMAND_OPEN, type:'number'])  }
+    if (fullInit || settings?.commandCloseCode == null) { device.updateSetting('commandCloseCode',[value:DEFAULT_COMMAND_CLOSE, type:'number'])  }
+    if (fullInit || settings?.commandStopCode == null) { device.updateSetting('commandStopCode',[value:DEFAULT_COMMAND_PAUSE, type:'number'])  }
     if (fullInit || settings?.substituteOpenClose == null) { device.updateSetting('substituteOpenClose',[value:false, type:'bool'])  }
     if (fullInit || settings?.invertPosition == null) { device.updateSetting('invertPosition',[value:false, type:'bool'])  }
     if (fullInit || settings?.targetAsCurrentPosition == null) { device.updateSetting('targetAsCurrentPosition',[value:false, type:'bool'])  }
+    if (fullInit) {
+        Map mapAttr = DEVICE?.tuyaDPs?.find { it.name == 'control' }
+        if (mapAttr == null) { mapAttr = DEVICE?.attributes?.find { it.name == 'control' } }
+        //logDebug "customInitializeVars: control attribute mapAttr: ${mapAttr}"
+        if (mapAttr != null) {
+            Map map = mapAttr.map
+            //logDebug "customInitializeVars: map: ${map}"
+            if (map != null) {
+                Integer commandValue = (map.find { entry -> entry.value == 'open' }?.key) ; if (commandValue == null) { commandValue = DEFAULT_COMMAND_OPEN }
+                device.updateSetting('commandOpenCode',[value: commandValue, type:'number']) 
+                commandValue = (map.find { entry -> entry.value == 'close' }?.key) ; if (commandValue == null) { commandValue = DEFAULT_COMMAND_CLOSE }
+                device.updateSetting('commandCloseCode',[value: commandValue, type:'number']) 
+                commandValue = (map.find { entry -> entry.value == 'stop' }?.key) ; if (commandValue == null) { commandValue = DEFAULT_COMMAND_PAUSE }
+                device.updateSetting('commandStopCode',[value: commandValue, type:'number']) 
+            }
+        }
+    }
     
     logDebug "customInitializeVars: (${fullInit}) settings = ${settings}"
 }
@@ -412,28 +461,6 @@ void alarmSelfTest(Number par) {
 //////////////////////////////////// Matter Generic Component Window Shade'//////////////////////////////////////
 
 
-
-
-// parse commands from parent
-void parseShade(List<Map> description) {
-    if (logEnable) { log.debug "parse: ${description}" }
-    description.each { d ->
-        if (d?.name == 'position') {
-            processCurrentPositionBridgeEvent(d)
-        }
-        else if (d?.name == 'targetPosition') {
-            processTargetPositionBridgeEvent(d)
-        }
-        else if (d?.name == 'operationalStatus') {
-            processOperationalStatusBridgeEvent(d)
-        }
-        else {
-            if (d?.descriptionText && txtEnable) { log.info "${d.descriptionText}" }
-            log.trace "parse: ${d}"
-            sendEvent(d)
-        }
-    }
-}
 
 int invertPositionIfNeeded(int position) {
     int value =  (settings?.invertPosition ?: false) ? (100 - position) as Integer : position
@@ -563,69 +590,12 @@ void processOperationalStatusBridgeEvent(Map d) {
 
 
 
-void sendSetPosition(Object device, final BigDecimal positionParam) {
-    int position = positionParam as Integer
-    if (position == null || position < 0 || position > 100) {
-        throw new Exception("Invalid position ${position}. Position must be between 0 and 100 inclusive.")
-    }
-    logDebug("setPosition: target is ${position}, currentPosition=${device.currentValue('position')}")
-    if (settings?.invertPosition == true) {
-        position = 100 - position
-    }
-    if (isTS130F()) {
-        sendZigbeeCommands(zigbee.command(CLUSTER_WINDOW_COVERING, COMMAND_GOTO_LIFT_PERCENTAGE, zigbee.convertToHexString(position, 2)))
-    }
-    else {
-        sendTuyaCommand(DP_ID_TARGET_POSITION, DP_TYPE_VALUE, position.intValue(), 8)
-    }
-}
-
-// Component command to set position of device
-void setPosition(BigDecimal targetPosition) {
-    if (txtEnable) { log.info "${device.displayName} setting target position ${targetPosition}% (current position is ${device.currentValue('position')})" }
-    sendEvent(name: 'targetPosition', value: targetPosition as Integer, descriptionText: "targetPosition set to ${targetPosition}", type: 'digital')
-    updateWindowShadeStatus(device?.currentValue('position') as Integer, targetPosition as Integer, isFinal = false, isDigital = true)
-    BigDecimal componentTargetPosition = invertPositionIfNeeded(targetPosition as Integer)
-    if (logEnable) { log.debug "inverted componentTargetPosition: ${componentTargetPosition}" }
-    sendSetPosition(device, componentTargetPosition)
-    startOperationTimeoutTimer()
-}
-
-// Component command to start position change of device
-void startPositionChange(String change) {
-    if (logEnable) { log.debug "${device.displayName} startPositionChange ${change}" }
-    if (change == 'open') {
-        open()
-    }
-    else {
-        close()
-    }
-}
-
-void sendStopPositionChange(Object device) {
-    int dpCommandStop = getDpCommandStop()
-    logDebug "sending command stopPositionChange (${dpCommandStop})"
-    if (isTS130F()) {
-        sendZigbeeCommands(zigbee.command(0x0102, dpCommandStop as int, [:], delay = 200))
-    }
-    else {
-        sendTuyaCommand('01', DP_TYPE_ENUM, dpCommandStop, 2)
-    }
-}
-
-// Component command to start position change of device
-void stopPositionChange() {
-    logDebug "stopPositionChange" 
-    sendStopPositionChange(device)
-    startOperationTimeoutTimer()
-}
-
 
 // Component command to refresh the device
 // TODO !
 void refreshMatter() {
     if (txtEnable) { log.info "${device.displayName} refreshing ..." }
-    state.standardOpenClose = 'DEFAULT_OPEN = 0% DEFAULT_CLOSED = 100%'
+    state.standardOpenClose = 'DEFAULT_OPEN_PERCENT = 0% DEFAULT_CLOSED_PERCENT = 100%'
     state.driverVersion = matterComponentWindowShadeVersion + ' (' + matterComponentWindowShadeStamp + ')'
     parent?.componentRefresh(device)
 }
@@ -664,34 +634,6 @@ void updatedMatter() {
 }
 
 
-/*
-void parseTest(description) {
-    log.warn "parseTest: ${description}"
-    //String str = "name:position, value:0, descriptionText:Bridge#4266 Device#32 (tuya CURTAIN) position is is reported as 0 (to be re-processed in the child driver!) [refresh], unit:null, type:physical, isStateChange:true, isRefresh:true"
-    String str = description
-    // Split the string into key-value pairs
-    List<String> pairs = str.split(', ')
-    Map map = [:]
-    pairs.each { pair ->
-        // Split each pair into a key and a value
-        List<String> keyValue = pair.split(':')
-        String key = keyValue[0]
-        String value = keyValue[1..-1].join(':') // Join the rest of the elements in case the value contains colons
-        // Try to convert the value to a boolean or integer if possible
-        if (value == 'true' || value == 'false' || value == true || value == false) {
-            value = Boolean.parseBoolean(value)
-        } else if (value.isInteger()) {
-            value = Integer.parseInt(value)
-        } else if (value == 'null') {
-            value = null
-        }
-        // Add the key-value pair to the map
-        map[key] = value
-    }
-    log.debug map
-    parse([map])
-}
-*/
 
 void test(String par) {
     List<String> cmds = []
@@ -724,32 +666,33 @@ void testT(String par) {
 
 private getCLUSTER_WINDOW_COVERING()        { 0x0102 }
 
-private getCOMMAND_OPEN()                   { 0x00 }
-private getCOMMAND_CLOSE()                  { 0x01 }
-private getCOMMAND_PAUSE()                  { 0x02 }
+private getDEFAULT_COMMAND_OPEN()                   { 0x00 }
+private getDEFAULT_COMMAND_CLOSE()                  { 0x01 }
+private getDEFAULT_COMMAND_PAUSE()                  { 0x02 }
+
 private getCOMMAND_MOVE_LEVEL_ONOFF()       { 0x04 }      // Go To Lift Value
 private getCOMMAND_GOTO_LIFT_PERCENTAGE()   { 0x05 }      // Go to Lift Percentage
-private getCOMMAND_GOTO_TILT_VALUE()        { 0x07  }     // Go To Tilt Value
+private getCOMMAND_GOTO_TILT_VALUE()        { 0x07 }     // Go To Tilt Value
 private getCOMMAND_GOTO_TILT_PERCENTAGE()   { 0x08 }      // Go to Tilt Percentage
 
 private getATTRIBUTE_POSITION_LIFT()        { 0x0008 }
 private getATTRIBUTE_CURRENT_LEVEL()        { 0x0000 }
 
-@Field static final Integer DEFAULT_OPEN   = 0      // this is the standard!  Hubitat is inverted?
-@Field static final Integer DEFAULT_CLOSED = 100    // this is the standard!  Hubitat is inverted?
+@Field static final Integer DEFAULT_OPEN_PERCENT   = 0      // this is the standard!  Hubitat is inverted?
+@Field static final Integer DEFAULT_CLOSED_PERCENT = 100    // this is the standard!  Hubitat is inverted?
 
 @Field static final Integer DEFAULT_POSITION_DELTA = 2          //settings.deltaPosition , percentage
 @Field static final Integer DEFAULT_MAX_TRAVEL_TIME = 30        //settings.maxTravelTime , seconds
 
 int getDelta() { return settings?.deltaPosition != null ? settings?.deltaPosition as int : DEFAULT_POSITION_DELTA }
 
-//int getFullyOpen()   { return settings?.invertOpenClose ? DEFAULT_CLOSED : DEFAULT_OPEN }
-//int getFullyClosed() { return settings?.invertOpenClose ? DEFAULT_OPEN : DEFAULT_CLOSED }
-//int getFullyOpen()   { return settings?.invertPosition ? DEFAULT_CLOSED : DEFAULT_OPEN }
-//int getFullyClosed() { return settings?.invertPosition ? DEFAULT_OPEN : DEFAULT_CLOSED }
+//int getFullyOpen()   { return settings?.invertOpenClose ? DEFAULT_CLOSED_PERCENT : DEFAULT_OPEN_PERCENT }
+//int getFullyClosed() { return settings?.invertOpenClose ? DEFAULT_OPEN_PERCENT : DEFAULT_CLOSED_PERCENT }
+//int getFullyOpen()   { return settings?.invertPosition ? DEFAULT_CLOSED_PERCENT : DEFAULT_OPEN_PERCENT }
+//int getFullyClosed() { return settings?.invertPosition ? DEFAULT_OPEN_PERCENT : DEFAULT_CLOSED_PERCENT }
 
-int getFullyOpen()   { return  DEFAULT_OPEN }
-int getFullyClosed() { return DEFAULT_CLOSED }
+int getFullyOpen()   { return DEFAULT_OPEN_PERCENT }
+int getFullyClosed() { return DEFAULT_CLOSED_PERCENT }
 
 boolean isFullyOpen(int position)   { return Math.abs(position - getFullyOpen()) < getDelta() }
 boolean isFullyClosed(int position) { return Math.abs(position - getFullyClosed()) < getDelta() }
@@ -803,6 +746,20 @@ public void operationTimeoutTimer() {
                                     //           startPositionChange(direction): direction required (ENUM) - Direction for position change request ["open", "close"]
                                     //           stopPositionChange()
 
+String getTuyaDPbyCommandName(String commandName) {
+    Map mapAttr = DEVICE?.tuyaDPs?.find { it.name == commandName }
+    if (mapAttr == null) { mapAttr = DEVICE?.attributes?.find { it.name == commandName } }
+    logDebug "getTuyaDPbyCommandName: mapAttr: ${mapAttr}"
+    if (mapAttr != null) {
+        Integer dp = mapAttr.dp
+        if (dp != null) {
+            logDebug "getTuyaDPbyCommandName: dp: ${zigbee.convertToHexString(dp, 2)}"
+            return zigbee.convertToHexString(dp, 2)
+        }
+    }
+    return null
+}
+
 void sendOpen() { // open is 100 %
     logDebug "sendOpen() dpCommandOpen = ${settings?.commandOpenCode}"
     Integer dpCommandOpen = settings?.commandOpenCode
@@ -811,7 +768,7 @@ void sendOpen() { // open is 100 %
     List<String> cmds = []
 
     if (DEVICE?.device?.isTuyaEF00 == true) {
-        cmds = getTuyaCommand('01', DP_TYPE_ENUM, zigbee.convertToHexString(dpCommandOpen as int, 2))
+        cmds = getTuyaCommand(getTuyaDPbyCommandName('control'), DP_TYPE_ENUM, zigbee.convertToHexString(dpCommandOpen as int, 2))
     }
     else {
         cmds = zigbee.command(0x0102, dpCommandOpen as int, [:], delay = 200)
@@ -847,7 +804,7 @@ void sendClose() {     // close is 0 %
     List<String> cmds = []
 
     if (DEVICE?.device?.isTuyaEF00 == true) {
-        cmds = getTuyaCommand('01', DP_TYPE_ENUM, zigbee.convertToHexString(dpCommandClose as int, 2))
+        cmds = getTuyaCommand(getTuyaDPbyCommandName('control'), DP_TYPE_ENUM, zigbee.convertToHexString(dpCommandClose as int, 2))
     }
     else {
         cmds = zigbee.command(0x0102, dpCommandClose as int, [:], delay = 200)
@@ -876,6 +833,76 @@ void close() {
     startOperationTimeoutTimer()
     sendWindowShadeEvent('closing', "${device.displayName} windowShade is closing [digital]")
 }
+
+void sendStopPositionChange() {
+    int dpCommandStop = settings?.commandStopCode
+    logDebug "sendStopPositionChange: sending command (${dpCommandStop})"
+    List<String> cmds = []
+    if (DEVICE?.device?.isTuyaEF00 == true) {
+        cmds = getTuyaCommand(getTuyaDPbyCommandName('control'), DP_TYPE_ENUM, zigbee.convertToHexString(dpCommandStop as int, 2))
+    }
+    else {
+        cmds = zigbee.command(0x0102, dpCommandStop as int, [:], delay = 200)
+    }
+
+    if (cmds != null && cmds != []) {
+        sendZigbeeCommands(cmds)
+    }
+    else {
+        logWarn "sendStopPositionChange: no cmds!"
+    }
+}
+
+// Component command to start position change of device
+void stopPositionChange() {
+    logDebug "stopPositionChange:" 
+    sendStopPositionChange()
+    startOperationTimeoutTimer()
+}
+
+
+void sendSetPosition(final BigDecimal positionParam) {
+    int position = positionParam as Integer
+    if (position == null || position < 0 || position > 100) {
+        throw new Exception("Invalid position ${position}. Position must be between 0 and 100 inclusive.")
+    }
+    logDebug "setPosition: target is ${position}, currentPosition=${device.currentValue('position')}"
+    if (settings?.invertPosition == true) {
+        position = 100 - position
+    }
+    List<String> cmds = []
+    if (DEVICE?.device?.isTuyaEF00 == true) {
+        cmds = getTuyaCommand(getTuyaDPbyCommandName('position'), DP_TYPE_VALUE, zigbee.convertToHexString(position as int, 8))
+    }
+    else {
+        cmds = zigbee.command(CLUSTER_WINDOW_COVERING, COMMAND_GOTO_LIFT_PERCENTAGE, zigbee.convertToHexString(position, 2))
+    }
+    if (cmds != null && cmds != []) {
+        sendZigbeeCommands(cmds)
+    }
+    else {
+        logWarn "sendStopPositionChange: no cmds!"
+    }
+}
+
+// Standard command to set position of device
+void setPosition(BigDecimal targetPosition) {
+    logInfo "setting target position ${targetPosition}% (current position is ${device.currentValue('position')})"
+    sendEvent(name: 'targetPosition', value: targetPosition as Integer, descriptionText: "targetPosition set to ${targetPosition}", type: 'digital')
+    updateWindowShadeStatus(device?.currentValue('position') as Integer, targetPosition as Integer, isFinal = false, isDigital = true)
+    BigDecimal componentTargetPosition = invertPositionIfNeeded(targetPosition as Integer)
+    logDebug "setPosition: inverted componentTargetPosition: ${componentTargetPosition}"
+    sendSetPosition(componentTargetPosition)
+    startOperationTimeoutTimer()
+}
+
+// Standard command to start position change of device
+void startPositionChange(String change) {
+    logDebug "startPositionChange: ${change}"
+    if (change == 'open') { open() }
+    else { close() }
+}
+
 
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
