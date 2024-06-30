@@ -20,7 +20,7 @@
  */
 
 static String version() { '3.3.1' }
-static String timeStamp() { '2024/06/30 11:22 PM' }
+static String timeStamp() { '2024/06/30 11:30 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
@@ -38,7 +38,7 @@ deviceType = 'Curtain'
 metadata {
     definition(
         name: 'Zigbee Window Shade',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Zigbee%20Window%20Shade/Zigbee_Window_Shade_lib_included.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/ZigBee%20Window%20Shade/Zigbee_Window_Shade_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
         capability 'WindowShade'
