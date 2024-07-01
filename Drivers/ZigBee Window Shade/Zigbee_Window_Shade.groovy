@@ -13,14 +13,16 @@
  *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *     for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.3.0  2024-06-25 kkossev  - (dev. branch) new driver for Zigbee Shade Controller : TUYA_TS130F_MODULE DEFAULT_ZCL_WINDOW_COVERING
- * ver. 3.3.1  2024-06-30 kkossev  - (dev. branch) added TUYA_SLIDING_WINDOW_PUSHER for tests; added ZEMISMART_ZM85EL_1X ZEMISMART_M515EGB
+ * ver. 3.3.0  2024-06-25 kkossev  - new driver for Zigbee Shade Controller : TUYA_TS130F_MODULE DEFAULT_ZCL_WINDOW_COVERING
+ * ver. 3.3.1  2024-06-30 kkossev  - added TUYA_SLIDING_WINDOW_PUSHER for tests; added ZEMISMART_ZM85EL_1X ZEMISMART_M515EGB
+ * ver. 3.3.2  2024-07-01 kkossev  - added preferences 'slowStop', 'manualMode'; added attributes 'control', 'chargeState', 'motorTimeout', 'windowDetection'
  *
- *                                   TODO: make the invert option different preferences  - softwareInvertDirection, hardwareInvertDirection
+ *                                   TODO: make the invert option different preferences  - softwareInvertDirection, hardwareInvertDirection;
+ *                                   TODO: hide Battery Voltage to Percentage preference
  */
 
-static String version() { '3.3.1' }
-static String timeStamp() { '2024/06/30 11:30 PM' }
+static String version() { '3.3.2' }
+static String timeStamp() { '2024/07/01 8:19 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
@@ -52,12 +54,17 @@ metadata {
         attribute 'scheduleTime', 'number'                                  // TUYA_TS130F_MODULE
         attribute 'clickControl', 'enum', ['up', 'down']                    // Zemismart ZM85EL_1x
         attribute 'bestPosition', 'number'                                  // Zemismart ZM85EL_1x
-        attribute 'workState', 'enum', ['moving', 'idle']                  // Zemismart ZM85EL_1x
+        attribute 'workState', 'enum', ['moving', 'idle']                   // Zemismart ZM85EL_1x
         attribute 'mode', 'enum', ['morning', 'night']                      // Zemismart ZM85EL_1x
         attribute 'motorDirection', 'enum', ['forward', 'backward', 'left', 'right']         // Zemismart ZM85EL_1x, TUYA_SLIDING_WINDOW_PUSHER
         attribute 'situationSet', 'enum', ['fully_open', 'fully_close']     // Zemismart ZM85EL_1x
         attribute 'fault', 'enum', ['clear', 'motor_fault']                 // Zemismart ZM85EL_1x, TUYA_SLIDING_WINDOW_PUSHER
-        
+        attribute 'slowStop', 'enum', ['enabled', 'disabled']               // TUYA_SLIDING_WINDOW_PUSHER
+        attribute 'manualMode', 'enum', ['enabled', 'disabled']             // TUYA_SLIDING_WINDOW_PUSHER
+        attribute 'chargeState', 'enum', ['charging', 'discharging']        // TUYA_SLIDING_WINDOW_PUSHER
+        attribute 'motorTimeout', 'number'                                  // TUYA_SLIDING_WINDOW_PUSHER
+        attribute 'windowDetection', 'enum', ['true', 'false']              // TUYA_SLIDING_WINDOW_PUSHER
+        attribute 'control', 'enum', ['open', 'close', 'stop']              // TUYA_SLIDING_WINDOW_PUSHER
 
         command 'refreshAll'
         if (_DEBUG) { command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  }
@@ -111,13 +118,6 @@ String fmtHelpInfo(String str) {
 		"<div style='text-align: center; position: absolute; top: 46px; right: 60px; padding: 0px;'><ul class='nav'><li>${topLink}</ul></li></div>"
 }
 
-/*
-String getModelX()  { return settings?.forcedTS130F == true ? 'TS130F' : device.getDataValue('model') }
-boolean isTS130F() { return getModelX() == 'TS130F' }
-boolean isZM85EL() { return device.getDataValue('manufacturer') in ['_TZE200_cf1sl3tj'] }
-boolean isAM43()   { return device.getDataValue('manufacturer') in ['_TZE200_zah67ekd'] }
-boolean isAM02()   { return device.getDataValue('manufacturer') in ['_TZE200_iossyxra', '_TZE200_cxu0jkjk'] }
-*/
 
 @Field static final Map deviceProfilesV3 = [
     //
@@ -134,7 +134,7 @@ boolean isAM02()   { return device.getDataValue('manufacturer') in ['_TZE200_ios
                 [dp:1,   name:'control',             type:'enum',    rw: 'rw', min:0,   max:3 ,    defVal:'0',  scale:1,   map:[0:'open', 1:'stop', 2:'close', 3:'continue'] , description:'Shade control'],        // control
                 [dp:2,   name:'positionSetting',     type:'number',  rw: 'ro', min:0,   max:100,   defVal:0,    description:'curtain position setting'],            // percent_control
                 [dp:3,   name:'position',            type:'number',  rw: 'ro', min:0,   max:100,   defVal:0,    description:'curtain current position'],            // current_position
-                [dp:4,   name:'mode',                type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'morning', 1:'night'] ,  title:'<bMode</b>',description:'mode'],
+                [dp:4,   name:'mode',                type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'morning', 1:'night'] ,  title:'<bMode</b>', description:'mode'],
                 [dp:5,   name:'motorDirection', dt:'04',     type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'forward', 1:'backward'] , title:'<b>Motor Direction</b>',  description:'Motor direction'],  //control_back_mode
                 [dp:7,   name:'workState',           type:'enum',    rw: 'ro', processDuplicated:true, map:[0:'moving', 1:'idle'] , description:'work state'],      // work_state - was 'opening' and 'closing'
                 [dp:11,  name:'situationSet',        type:'number',  rw: 'ro', map:[0:'fully_open', 1:'fully_close'], description:'situation set'],                 // situation_set
@@ -190,26 +190,26 @@ boolean isAM02()   { return device.getDataValue('manufacturer') in ['_TZE200_ios
             description   : 'Tuya Sliding Window Pusher',   //
             device        : [type: 'COVERING', powerSource: 'battery', isSleepy:false, isTuyaEF00:true],
             capabilities  : ['Battery': true],
-            preferences   : ['motorDirection':'109'],
+            preferences   : ['motorDirection':'109', 'slowStop':'110', 'manualMode':'106'],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500,EF00", outClusters:"000A,0019", model:"TS0601", manufacturer:"_TZ3210_5rta89nj", controllerType: "ZGB"]
             ],
             commands      : ['resetStats':'resetStats', 'refresh':'refresh'],
             tuyaDPs:        [
                 [dp:4,   name:'battery',             type:'number',  rw: 'ro', min:0,   max:100,   defVal:100,  scale:1,   unit:'%',  description:'Battery percentage'],
-                [dp:102, name:'control',             type:'enum',    rw: 'rw', min:0,   max:2 ,    defVal:'0',  scale:1,   map:[0:'open', 1:'close', 2:'stop'] , description:'Shade control'],        // control
-                [dp:103, name:'alarmMode',           type:'enum',    rw: 'ro', map:[0:'true', 1:'false'] ,      description:'Alarm Mode'],                          // alarm_mode security_mode
+                [dp:102, name:'control',             type:'enum',    rw: 'rw', min:0,   max:2 ,    defVal:'0',  scale:1,   map:[0:'open', 1:'close', 2:'stop'] , description:'Window control'],        // control
+                [dp:103, name:'alarmMode',           type:'enum',    rw: 'ro', map:[0:'enabled', 1:'disabled'] ,      description:'Alarm Mode'],                          // alarm_mode security_mode
                 [dp:104, name:'position',            type:'number',  rw: 'ro', min:0,   max:100,   defVal:0,    description:'Curtain current position'],            // coverPosition  ratio of opening
-                [dp:105, name:'chargeState',         type:'enum',    rw: 'ro', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'true', 1:'false'],  description:'Charge state'],
-                [dp:106, name:'manualMode',          type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'true', 1:'false'],  description:'Manual mode'],
+                [dp:105, name:'chargeState',         type:'enum',    rw: 'ro', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'charging', 1:'discharging'],  description:'Charge state'],
+                [dp:106, name:'manualMode',          type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'enabled', 1:'disabled'], title:'<b>Manual Mode</b>', description:'Pushing the window causes the motor to run in the push direction'],
                 [dp:107, name:'fault',               type:'enum',    rw: 'ro', map:[0:'motor_fault', 1:'clear'] ,  description:'Fault code'],                       // alarm_mode
-                [dp:108, name:'calibration',         type:'number',  rw: 'ro', min:0,   max:100,   defVal:0,    scale:1,   unit:'%',  description:'Calibration'],   // motor_calibration
-                [dp:109, name:'motorDirection', dt:'04',  type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'left', 1:'right'] , title:'<b>Motor Direction</b>',  description:'Motor direction'],  //control_back_mode installation_type
-                [dp:110, name:'slowStop',            type:'enum',    rw: 'ro', map:[0:'true', 1:'false'] ,      description:'Slow stop'],                           // slow_stop
-                [dp:111, name:'solarEnergyCurrent',  type:'number',  rw: 'ro', min:0,   max:99999, defVal:0,    scale:1,   unit:'%',  description:'Solar Energy Current'],   // solar_energy_current
-                [dp:112, name:'fixedWinodw',         type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'true', 1:'false'],  description:'Window detection'], // fixed_window_sash
-                [dp:113, name:'countdown',           type:'number',  rw: 'ro', min:0,   max:99999, defVal:0,    description:'Countdown'],                           // motor_timeout 
-                [dp:114, name:'windowDetection',     type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'true', 1:'false'],  description:'Window detection'],
+                [dp:108, name:'calibration',         type:'number',  rw: 'rw', min:10,   max:90,   defVal:15,    scale:1,   unit:'seconds',  title:'<b>Motor Calibration</b>', description:'Motor calibration'],   // motor_calibration
+                [dp:109, name:'motorDirection', dt:'04',  type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'left', 1:'right'] , title:'<b>Motor Direction</b>',  description:'Motor direction install side'],  //control_back_mode installation_type
+                [dp:110, name:'slowStop',            type:'enum',    rw: 'rw', map:[0:'enabled', 1:'disabled'],  title:'<b>Slow Stop</b>',    description:'Enable/disable the slow stop function'],                           // slow_stop
+                [dp:111, name:'solarEnergyCurrent',  type:'number',  rw: 'ro', min:0,   max:99999, defVal:0,    scale:1,   description:'Solar Energy Current'],   // solar_energy_current
+                [dp:112, name:'fixedWindowSash',     type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'true', 1:'false'],  description:'Window detection'], // fixed_window_sash
+                [dp:113, name:'motorTimeout',        type:'number',  rw: 'rw', min:10,  max:90,    defVal:30,   title:'<b>Motor Timeout</b>', description:'Motor timeout'],                           // motor_timeout 
+                [dp:114, name:'windowDetection',     type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'true', 1:'false'],  title:'<b>Window Detection</b>', description:'Window detection'],
             ],
             //refresh: ['refreshTS130F'],
             //refresh: ['position', 'positionState', 'upDownConfirm', 'controlBack', 'scheduleTime', '0xE001:0x0000'],
@@ -383,6 +383,8 @@ void customInitializeVars(final boolean fullInit=false) {
     if (fullInit || settings?.substituteOpenClose == null) { device.updateSetting('substituteOpenClose',[value:false, type:'bool'])  }
     if (fullInit || settings?.invertPosition == null) { device.updateSetting('invertPosition',[value:false, type:'bool'])  }
     if (fullInit || settings?.targetAsCurrentPosition == null) { device.updateSetting('targetAsCurrentPosition',[value:false, type:'bool'])  }
+    // TUYA pusher specific
+    //
     if (fullInit) {
         Map mapAttr = DEVICE?.tuyaDPs?.find { it.name == 'control' }
         if (mapAttr == null) { mapAttr = DEVICE?.attributes?.find { it.name == 'control' } }
