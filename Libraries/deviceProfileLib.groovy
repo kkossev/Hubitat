@@ -80,14 +80,14 @@ metadata {
     }
 }
 
-boolean is2in1() { return getDeviceProfile().contains('TS0601_2IN1') }    // patch removed 05/29/2024
+private boolean is2in1() { return getDeviceProfile().contains('TS0601_2IN1') }    // patch removed 05/29/2024
 
-String  getDeviceProfile()       { state?.deviceProfile ?: 'UNKNOWN' }
-Map     getDEVICE()              { deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : deviceProfilesV2 != null ? deviceProfilesV2[getDeviceProfile()] : [:] }
-Set     getDeviceProfiles()      { deviceProfilesV3 != null ? deviceProfilesV3?.keySet() : deviceProfilesV2 != null ?  deviceProfilesV2?.keySet() : [] }
+public String  getDeviceProfile()       { state?.deviceProfile ?: 'UNKNOWN' }
+public Map     getDEVICE()              { deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : deviceProfilesV2 != null ? deviceProfilesV2[getDeviceProfile()] : [:] }
+public Set     getDeviceProfiles()      { deviceProfilesV3 != null ? deviceProfilesV3?.keySet() : deviceProfilesV2 != null ?  deviceProfilesV2?.keySet() : [] }
 //List<String> getDeviceProfilesMap()   { deviceProfilesV3 != null ? deviceProfilesV3.values().description as List<String> : deviceProfilesV2.values().description as List<String> }
 
-List<String> getDeviceProfilesMap()   {
+public List<String> getDeviceProfilesMap()   {
     if (deviceProfilesV3 == null) {
         if (deviceProfilesV2 == null) { return [] }
         return deviceProfilesV2.values().description as List<String>
@@ -683,7 +683,7 @@ public boolean sendAttribute(String par=null, val=null ) {
 }
 
 /**
- * Returns a list of Zigbee commands to be sent to the device.
+ * SENDS a list of Zigbee commands to be sent to the device.
  * @param command - The command to send. Must be one of the commands defined in the DEVICE.commands map.
  * @param val     - The value to send with the command, can be null.
  * @return true on success, false otherwise.

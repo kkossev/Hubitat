@@ -24,15 +24,16 @@
  *             2023-09-13 kkossev  - Added _TZ3210_j4pdtz9v Moes Zigbee Fingerbot
  * ver. 3.0.4  2024-03-29 kkossev  - Groovy Lint; new driver format and allignment w/commonLib ver 3.0.4; fingerBot mode setting bug fix; added touchButton attribute;
  *                                   push() toggles on/off;
- * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) commonLib 3.0.6
- * ver. 3.2.0  2024-04-06 kkossev  - (dev. branch) commonLib 3.2.0 allignment
+ * ver. 3.0.6  2024-04-06 kkossev  - commonLib 3.0.6
+ * ver. 3.2.0  2024-04-06 kkossev  - commonLib 3.2.0 allignment
+ * ver. 3.3.0  2024-07-01 kkossev  - (dev. branch) removed isFingerprint() dependency from the commonLib ver 3.3.1
  * 
  *
  *                                   TODO:
  */
 
-static String version() { '3.2.0' }
-static String timeStamp() { '2024/05/24 11:43 AM' }
+static String version() { '3.3.0' }
+static String timeStamp() { '2024/07/01 11:44 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -189,30 +190,30 @@ void customOn() {
 
 List<String> customConfigureDevice() {
     List<String> cmds = []
-
+    // 07/01/2024 removed isFingerbot() dependency by addin the optional parameter 0x04 when configuring the fingerbot device   
     final int mode = settings.fingerbotMode != null ? (settings.fingerbotMode as int) : FingerbotModeOpts.defaultValue
     logDebug "setting fingerbotMode to ${FingerbotModeOpts.options[mode as int]} (${mode})"
-    cmds = sendTuyaCommand('65', DP_TYPE_BOOL, zigbee.convertToHexString(mode as int, 2) )
+    cmds = sendTuyaCommand('65', DP_TYPE_BOOL, zigbee.convertToHexString(mode as int, 2), 0x04)
 
     final int duration = settings.pushTime != null ? (settings.pushTime as int) : 1
     logDebug "setting pushTime to ${duration} seconds)"
-    cmds += sendTuyaCommand('67', DP_TYPE_VALUE, zigbee.convertToHexString(duration as int, 8) )
+    cmds += sendTuyaCommand('67', DP_TYPE_VALUE, zigbee.convertToHexString(duration as int, 8), 0x04 )
 
     final int dnPos = settings.dnPosition != null ? (settings.dnPosition as int) : 100
     logDebug "setting dnPosition to ${dnPos} %"
-    cmds += sendTuyaCommand('66', DP_TYPE_VALUE, zigbee.convertToHexString(dnPos as int, 8) )
+    cmds += sendTuyaCommand('66', DP_TYPE_VALUE, zigbee.convertToHexString(dnPos as int, 8), 0x04 )
 
     final int upPos = settings.upPosition != null ? (settings.upPosition as int) : 0
     logDebug "setting upPosition to ${upPos} %"
-    cmds += sendTuyaCommand('6A', DP_TYPE_VALUE, zigbee.convertToHexString(upPos as int, 8) )
+    cmds += sendTuyaCommand('6A', DP_TYPE_VALUE, zigbee.convertToHexString(upPos as int, 8), 0x04 )
 
     final int dir = settings.direction != null ? (settings.direction as int) : FingerbotDirectionOpts.defaultValue
     logDebug "setting fingerbot direction to ${FingerbotDirectionOpts.options[dir]} (${dir})"
-    cmds += sendTuyaCommand('68', DP_TYPE_BOOL, zigbee.convertToHexString(dir as int, 2) )
+    cmds += sendTuyaCommand('68', DP_TYPE_BOOL, zigbee.convertToHexString(dir as int, 2), 0x04 )
 
     int button = settings.fingerbotButton != null ? (settings.fingerbotButton as int) : FingerbotButtonOpts.defaultValue
     logDebug "setting fingerbotButton to ${FingerbotButtonOpts.options[button as int]} (${button})"
-    cmds += sendTuyaCommand('6B', DP_TYPE_BOOL, zigbee.convertToHexString(button as int, 2) )
+    cmds += sendTuyaCommand('6B', DP_TYPE_BOOL, zigbee.convertToHexString(button as int, 2), 0x04 )
 
     logDebug "configureDeviceFingerbot() : ${cmds}"
     return cmds

@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy', documentationLink: '',
-    version: '3.3.0'
+    version: '3.3.1'
 )
 /*
   *  Common ZCL Library
@@ -36,7 +36,8 @@ library(
   * ver. 3.2.0  2024-05-23 kkossev  - standardParse____Cluster and customParse___Cluster methods; moved onOff methods to a new library; rename all custom handlers in the libs to statdndardParseXXX
   * ver. 3.2.1  2024-06-05 kkossev  - 4 in 1 V3 compatibility; added IAS cluster; setDeviceNameAndProfile() fix;
   * ver. 3.2.2  2024-06-12 kkossev  - removed isAqaraTRV_OLD() and isAqaraTVOC_OLD() dependencies from the lib; added timeToHMS(); metering and electricalMeasure clusters swapped bug fix; added cluster 0x0204;
-  * ver. 3.3.0  2024-06-25 kkossev  - (dev. branch) fixed exception for unknown clusters; added cluster 0xE001; added powerSource - if 5 minutes after initialize() the powerSource is still unknown, query the device for the powerSource
+  * ver. 3.3.0  2024-06-25 kkossev  - fixed exception for unknown clusters; added cluster 0xE001; added powerSource - if 5 minutes after initialize() the powerSource is still unknown, query the device for the powerSource
+  * ver. 3.3.1  2024-07-01 kkossev  - (dev.branch) removed isFingerbot() dependancy 
   *
   *                                   TODO: offlineCtr is not increasing! (ZBMicro)
   *                                   TODO: refresh() to include updating the softwareBuild data version
@@ -49,8 +50,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.3.0' }
-String commonLibStamp() { '2024/06/26 10:47 PM' }
+String commonLibVersion() { '3.3.1' }
+String commonLibStamp() { '2024/07/01 11:40 AM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -139,11 +140,7 @@ metadata {
 ]
 
 boolean isVirtual() { device.controllerType == null || device.controllerType == '' }
-/* groovylint-disable-next-line UnusedMethodParameter */
-//boolean isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
-//boolean isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
-//boolean isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
-boolean isFingerbot()  { DEVICE_TYPE == 'Fingerbot' ? isFingerbotFingerot() : false }
+//boolean isFingerbot()  { DEVICE_TYPE == 'Fingerbot' ? isFingerbotFingerot() : false }
 
 /**
  * Parse Zigbee message
@@ -828,14 +825,21 @@ private int getTuyaAttributeValue(final List<String> _data, final int index) {
     return retValue
 }
 
-private List<String> getTuyaCommand(String dp, String dp_type, String fncmd) { return sendTuyaCommand(dp, dp_type, fncmd) }
+public List<String> getTuyaCommand(String dp, String dp_type, String fncmd, int tuyaCmdDefault = SETDATA) { return sendTuyaCommand(dp, dp_type, fncmd, tuyaCmdDefault) }
 
-private List<String> sendTuyaCommand(String dp, String dp_type, String fncmd, int tuyaCmdDefault = SETDATA) {
+public List<String> sendTuyaCommand(String dp, String dp_type, String fncmd, int tuyaCmdDefault = SETDATA) {
     List<String> cmds = []
     int ep = safeToInt(state.destinationEP)
     if (ep == null || ep == 0) { ep = 1 }
     //int tuyaCmd = isFingerbot() ? 0x04 : SETDATA
-    int tuyaCmd = isFingerbot() ? 0x04 : tuyaCmdDefault // 0x00 is the default command for most of the Tuya devices, except some ..
+    int tuyaCmd
+    // added 07/01/2024 - deviceProfilesV3 device key tuyaCmd:04 : owerwrite all sendTuyaCommand calls for a specfic device profile, if specified!\
+    if (this.respondsTo('getDEVICE') && DEVICE?.device?.tuyaCmd != null) {
+        tuyaCmd = DEVICE?.device?.tuyaCmd
+    }
+    else {
+        tuyaCmd = /*isFingerbot() ? 0x04 : */ tuyaCmdDefault // 0x00 is the default command for most of the Tuya devices, except some ..
+    }
     cmds = zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], delay = 201, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd )
     logDebug "${device.displayName} getTuyaCommand (dp=$dp fncmd=$fncmd dp_type=$dp_type) = ${cmds}"
     return cmds
@@ -1383,29 +1387,24 @@ void initializeVars( boolean fullInit = false ) {
     executeCustomHandler('customInitEvents', fullInit)
 
     final String mm = device.getDataValue('model')
-    if ( mm != null) { logTrace " model = ${mm}" }
+    if (mm != null) { logTrace " model = ${mm}" }
     else { logWarn ' Model not found, please re-pair the device!' }
     final String ep = device.getEndpointId()
-    if ( ep  != null) {
+    if ( ep  != null) { 
         //state.destinationEP = ep
         logTrace " destinationEP = ${ep}"
     }
     else {
         logWarn ' Destination End Point not found, please re-pair the device!'
-    //state.destinationEP = "01"    // fallback
+        //state.destinationEP = "01"    // fallback
     }
 }
 
+// not used!?
 void setDestinationEP() {
     String ep = device.getEndpointId()
-    if (ep != null && ep != 'F2') {
-        state.destinationEP = ep
-        logDebug "setDestinationEP() destinationEP = ${state.destinationEP}"
-    }
-    else {
-        logWarn "setDestinationEP() Destination End Point not found or invalid(${ep}), activating the F2 bug patch!"
-        state.destinationEP = '01'    // fallback EP
-    }
+    if (ep != null && ep != 'F2') { state.destinationEP = ep ; logDebug "setDestinationEP() destinationEP = ${state.destinationEP}" }
+    else { logWarn "setDestinationEP() Destination End Point not found or invalid(${ep}), activating the F2 bug patch!" ; state.destinationEP = '01' }   // fallback EP
 }
 
 void logDebug(final String msg) { if (settings?.logEnable)   { log.debug "${device.displayName} " + msg } }
@@ -1415,24 +1414,14 @@ void logTrace(final String msg) { if (settings?.traceEnable) { log.trace "${devi
 
 // _DEBUG mode only
 void getAllProperties() {
-    log.trace 'Properties:'
-    device.properties.each { it ->
-        log.debug it
-    }
-    log.trace 'Settings:'
-    settings.each { it ->
-        log.debug "${it.key} =  ${it.value}"    // https://community.hubitat.com/t/how-do-i-get-the-datatype-for-an-app-setting/104228/6?u=kkossev
-    }
-    log.trace 'Done'
+    log.trace 'Properties:' ; device.properties.each { it -> log.debug it }
+    log.trace 'Settings:' ;  settings.each { it -> log.debug "${it.key} =  ${it.value}" }    // https://community.hubitat.com/t/how-do-i-get-the-datatype-for-an-app-setting/104228/6?u=kkossev
 }
 
 // delete all Preferences
 void deleteAllSettings() {
     String preferencesDeleted = ''
-    settings.each { it ->
-        preferencesDeleted += "${it.key} (${it.value}), "
-        device.removeSetting("${it.key}")
-    }
+    settings.each { it -> preferencesDeleted += "${it.key} (${it.value}), " ; device.removeSetting("${it.key}") }
     logDebug "Deleted settings: ${preferencesDeleted}"
     logInfo  'All settings (preferences) DELETED'
 }
@@ -1457,10 +1446,7 @@ void deleteAllScheduledJobs() {
 }
 
 void deleteAllChildDevices() {
-    getChildDevices().each { child ->
-        log.info "${device.displayName} Deleting ${child.deviceNetworkId}"
-        deleteChildDevice(child.deviceNetworkId)
-    }
+    getChildDevices().each { child -> log.info "${device.displayName} Deleting ${child.deviceNetworkId}" ; deleteChildDevice(child.deviceNetworkId) }
     sendInfoEvent 'All child devices DELETED'
 }
 
