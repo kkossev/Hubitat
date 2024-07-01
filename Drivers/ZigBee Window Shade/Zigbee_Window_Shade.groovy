@@ -16,13 +16,14 @@
  * ver. 3.3.0  2024-06-25 kkossev  - new driver for Zigbee Shade Controller : TUYA_TS130F_MODULE DEFAULT_ZCL_WINDOW_COVERING
  * ver. 3.3.1  2024-06-30 kkossev  - added TUYA_SLIDING_WINDOW_PUSHER for tests; added ZEMISMART_ZM85EL_1X ZEMISMART_M515EGB
  * ver. 3.3.2  2024-07-01 kkossev  - added preferences 'slowStop', 'manualMode'; added attributes 'control', 'chargeState', 'motorTimeout', 'windowDetection'
+ * ver. 3.3.3  2024-07-01 kkossev  - (dev. branch) added tuyaCmd=04 in the deviceProfile map and commonLib
  *
  *                                   TODO: make the invert option different preferences  - softwareInvertDirection, hardwareInvertDirection;
  *                                   TODO: hide Battery Voltage to Percentage preference
  */
 
-static String version() { '3.3.2' }
-static String timeStamp() { '2024/07/01 8:19 AM' }
+static String version() { '3.3.3' }
+static String timeStamp() { '2024/07/01 8:03 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
@@ -188,7 +189,7 @@ String fmtHelpInfo(String str) {
 
     'TUYA_SLIDING_WINDOW_PUSHER'   : [
             description   : 'Tuya Sliding Window Pusher',   //
-            device        : [type: 'COVERING', powerSource: 'battery', isSleepy:false, isTuyaEF00:true],
+            device        : [type: 'COVERING', powerSource: 'battery', isSleepy:false, isTuyaEF00:true, tuyaCmd:04],
             capabilities  : ['Battery': true],
             preferences   : ['motorDirection':'109', 'slowStop':'110', 'manualMode':'106'],
             fingerprints  : [

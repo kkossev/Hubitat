@@ -26,14 +26,14 @@
  *                                   push() toggles on/off;
  * ver. 3.0.6  2024-04-06 kkossev  - commonLib 3.0.6
  * ver. 3.2.0  2024-04-06 kkossev  - commonLib 3.2.0 allignment
- * ver. 3.3.0  2024-07-01 kkossev  - (dev. branch) removed isFingerprint() dependency from the commonLib ver 3.3.1
+ * ver. 3.3.0  2024-07-01 kkossev  - (dev. branch) removed isFingerbot() dependency from the commonLib ver 3.3.1
  * 
  *
  *                                   TODO:
  */
 
 static String version() { '3.3.0' }
-static String timeStamp() { '2024/07/01 11:44 AM' }
+static String timeStamp() { '2024/07/01 11:45 AM' }
 
 @Field static final Boolean _DEBUG = false
 
