@@ -64,7 +64,7 @@
  *  ver. 1.9.4 2024-04-14 kkossev - added for tests: TS0601 _TZE204_ves1ycwx _TZE200_ves1ycwx _TZE200_v9hkz2yn Zemismart Real-time Smart Energy Monitors - ONE CHANNEL ONLY!
  *  ver. 1.9.5 2024-05-16 kkossev - added ThirdReality 3RSPE01044BZ Smart Plug E2 (European socket!)
  *  ver. 1.9.6 2024-06-04 kkossev - added setEnergy() command
- *  ver. 1.9.7 2024-07-03 kkossev - (dev.branch) W.I.P. - added SPM01 TS0601 _TZE200_qhlxve78
+ *  ver. 1.9.7 2024-07-03 kkossev - (dev.branch) W.I.P. - added SPM01 TS0601 _TZE200_qhlxve78 and _TZE200_bcusnqt8
  *
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
  *                                 TODO: add rtt measurement in ping()
@@ -88,7 +88,7 @@ import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
 static String version() { '1.9.7' }
-static String timeStamp() { '2024/07/03 7:44 AM' }
+static String timeStamp() { '2024/07/03 8:13 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -373,14 +373,14 @@ static int getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
 
 private boolean isTuyaSpecificCluster() { device.getDataValue('model') in ['TS0601'] }
 private boolean isCircuitBreaker()      { device.getDataValue('manufacturer') in ['_TZ3000_ky0fq4ho'] }
-private boolean isRTXCircuitBreaker()   { device.getDataValue('manufacturer') in ['_TZE200_abatw3kj', /*'_TZE200_bcusnqt8',*/ '_TZE204_ves1ycwx', '_TZE200_ves1ycwx', '_TZE200_v9hkz2yn'] }
+private boolean isRTXCircuitBreaker()   { device.getDataValue('manufacturer') in ['_TZE200_abatw3kj', '_TZE204_ves1ycwx', '_TZE200_ves1ycwx', '_TZE200_v9hkz2yn'] }
 private boolean isDinRail()             { device.getDataValue('manufacturer') in ['_TZE200_eaac7dkw', '_TZE200_bkkmqmyo', '_TZE200_lsanae15'] }
 private boolean isHEProblematic()       { device.getDataValue('manufacturer') in ['_TZ3000_okaz9tjs', '_TZ3000_r6buo8ba', '_TZ3000_cfnprab5', 'SONOFF', 'Woolley', 'unknown'] }
 private boolean isHoch()                { device.getDataValue('manufacturer') in ['_TZE200_hkdl5fmv'] }
 private boolean isTongouSY1()           { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3000_qeuvnohg', '_TZ3000_8bxrzyxz'] }    // TS011F
 private boolean isTongouSY2()           { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3000_cayepv1a', '_TZ3000_lepzuhto', '_TZ3000_qystbcjg'] }    // Din rail switch with power monitoring and threshold settings
 private boolean isPJ1203A()             { device.getDataValue('manufacturer') in ['_TZE204_81yrt3lo', '_TZE200_rks0sgb7'] }     // Bidirectional energy meter with 80A current clamp
-private boolean isSPM01()               { device.getDataValue('manufacturer') in ['_TZE200_bcusnqt8'] }     // Zemismart Single phase energy meter
+private boolean isSPM01()               { device.getDataValue('manufacturer') in ['_TZE200_bcusnqt8', '_TZE200_qhlxve78'] }     // Zemismart Single phase energy meter
 
 private boolean isSmartThingsOutlet() { (device.getDataValue('manufacturer') in ['SmartThings']) || (device.getDataValue('model') in ['outletv4']) }
 private boolean isSengledOutlet() { device.getDataValue('model') == 'E1C-NB7' }
