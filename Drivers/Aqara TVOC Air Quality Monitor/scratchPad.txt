@@ -407,3 +407,19 @@ https://github.com/SwoopX/deconz-rest-plugin/blob/4194873b3a65c805c792fb9fb653d4
     }
   ]
 }
+
+
+
+
+Manufacturer:	frient A/S
+Endpoint 26 endpointId:	26
+Endpoint 26 idAsInt:	38
+Endpoint 26 inClusters:	0000,0001,0003,0020,0402,0405,042E,FC03
+Endpoint 26 initialized:	true
+Endpoint 26 manufacturer:	frient A/S
+Endpoint 26 model:	AQSZB-110
+Endpoint 26 outClusters:	0003,000A,0019
+Endpoint 26 profileId:	0104
+Endpoint 26 stage:	4
+
+

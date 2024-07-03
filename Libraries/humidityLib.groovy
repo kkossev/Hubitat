@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Humidity Library', name: 'humidityLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/humidityLib.groovy', documentationLink: '',
-    version: '3.2.0'
+    version: '3.2.2'
 )
 /*
  *  Zigbee Humidity Library
@@ -18,12 +18,13 @@ library(
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added humidityLib.groovy
  * ver. 3.2.0  2024-05-29 kkossev  - commonLib 3.2.0 allignment; added humidityRefresh()
+ * ver. 3.2.2  2024-07-02 kkossev  - (dev.branch) fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug 
  *
  *                                   TODO:
 */
 
-static String humidityLibVersion()   { '3.2.0' }
-static String humidityLibStamp() { '2024/05/29 9:09 PM' }
+static String humidityLibVersion()   { '3.2.2' }
+static String humidityLibStamp() { '2024/07/02 11:17 PM' }
 
 metadata {
     capability 'RelativeHumidityMeasurement'
@@ -35,8 +36,13 @@ metadata {
 
 void standardParseHumidityCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    final int value = hexStrToUnsignedInt(descMap.value)
-    handleHumidityEvent(value / 100.0F as BigDecimal)
+    if (descMap.attrId == '0000') {
+        final int value = hexStrToUnsignedInt(descMap.value)
+        handleHumidityEvent(value / 100.0F as BigDecimal)
+    }
+    else {
+        logWarn "standardParseHumidityCluster() - unknown attribute ${descMap.attrId} value=${descMap.value}"
+    }
 }
 
 void handleHumidityEvent(BigDecimal humidityPar, Boolean isDigital=false) {

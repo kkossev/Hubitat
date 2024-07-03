@@ -37,7 +37,7 @@ library(
   * ver. 3.2.1  2024-06-05 kkossev  - 4 in 1 V3 compatibility; added IAS cluster; setDeviceNameAndProfile() fix;
   * ver. 3.2.2  2024-06-12 kkossev  - removed isAqaraTRV_OLD() and isAqaraTVOC_OLD() dependencies from the lib; added timeToHMS(); metering and electricalMeasure clusters swapped bug fix; added cluster 0x0204;
   * ver. 3.3.0  2024-06-25 kkossev  - fixed exception for unknown clusters; added cluster 0xE001; added powerSource - if 5 minutes after initialize() the powerSource is still unknown, query the device for the powerSource
-  * ver. 3.3.1  2024-07-01 kkossev  - (dev.branch) removed isFingerbot() dependancy 
+  * ver. 3.3.1  2024-07-02 kkossev  - (dev.branch) removed isFingerbot() dependancy; added FC03 cluster (Frient)
   *
   *                                   TODO: offlineCtr is not increasing! (ZBMicro)
   *                                   TODO: refresh() to include updating the softwareBuild data version
@@ -51,7 +51,7 @@ library(
 */
 
 String commonLibVersion() { '3.3.1' }
-String commonLibStamp() { '2024/07/01 11:40 AM' }
+String commonLibStamp() { '2024/07/02 11:23 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -216,7 +216,7 @@ void parse(final String description) {
     0x0000: 'Basic',                0x0001: 'Power',            0x0003: 'Identify',         0x0004: 'Groups',           0x0005: 'Scenes',       0x000C: 'AnalogInput',
     0x0006: 'OnOff',                0x0008: 'LevelControl',     0x0012: 'MultistateInput',  0x0102: 'WindowCovering',   0x0201: 'Thermostat',   0x0204: 'ThermostatConfig',/*0x0300: 'ColorControl',*/
     0x0400: 'Illuminance',          0x0402: 'Temperature',      0x0405: 'Humidity',         0x0406: 'Occupancy',        0x042A: 'Pm25',         0x0500: 'IAS',             0x0702: 'Metering',
-    0x0B04: 'ElectricalMeasure',    0xE001: 'E0001',            0xE002: 'E002',             0xEC03: 'EC03',             0xEF00: 'Tuya',         0xFC11: 'FC11',            0xFC7E: 'AirQualityIndex', // Sensirion VOC index
+    0x0B04: 'ElectricalMeasure',    0xE001: 'E0001',            0xE002: 'E002',             0xEC03: 'EC03',             0xEF00: 'Tuya',         0xFC03: 'FC03',            0xFC11: 'FC11',            0xFC7E: 'AirQualityIndex', // Sensirion VOC index
     0xFCC0: 'XiaomiFCC0',
 ]
 

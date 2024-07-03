@@ -63,9 +63,9 @@
  *  ver. 1.9.3 2024-04-07 kkossev - setEnergyPrice() bug fix;
  *  ver. 1.9.4 2024-04-14 kkossev - added for tests: TS0601 _TZE204_ves1ycwx _TZE200_ves1ycwx _TZE200_v9hkz2yn Zemismart Real-time Smart Energy Monitors - ONE CHANNEL ONLY!
  *  ver. 1.9.5 2024-05-16 kkossev - added ThirdReality 3RSPE01044BZ Smart Plug E2 (European socket!)
- *  ver. 1.9.6 2024-06-04 kkossev - (dev. branch) - added setEnergy() command
+ *  ver. 1.9.6 2024-06-04 kkossev - added setEnergy() command
+ *  ver. 1.9.7 2024-07-03 kkossev - (dev.branch) W.I.P. - added SPM01 TS0601 _TZE200_qhlxve78
  *
- *                                 TODO: add TS0601 _TZE200_qhlxve78 (no info on this device yet)
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
  *                                 TODO: add rtt measurement in ping()
  *                                 TODO: add toggle() command
@@ -87,8 +87,8 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
-static String version() { '1.9.6' }
-static String timeStamp() { '2024/06/04 10:12 AM' }
+static String version() { '1.9.7' }
+static String timeStamp() { '2024/07/03 7:44 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -373,13 +373,14 @@ static int getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
 
 private boolean isTuyaSpecificCluster() { device.getDataValue('model') in ['TS0601'] }
 private boolean isCircuitBreaker()      { device.getDataValue('manufacturer') in ['_TZ3000_ky0fq4ho'] }
-private boolean isRTXCircuitBreaker()   { device.getDataValue('manufacturer') in ['_TZE200_abatw3kj', '_TZE200_bcusnqt8', '_TZE204_ves1ycwx', '_TZE200_ves1ycwx', '_TZE200_v9hkz2yn'] }    // TODO - _TZE200_bcusnqt8 matches only partially !
+private boolean isRTXCircuitBreaker()   { device.getDataValue('manufacturer') in ['_TZE200_abatw3kj', /*'_TZE200_bcusnqt8',*/ '_TZE204_ves1ycwx', '_TZE200_ves1ycwx', '_TZE200_v9hkz2yn'] }
 private boolean isDinRail()             { device.getDataValue('manufacturer') in ['_TZE200_eaac7dkw', '_TZE200_bkkmqmyo', '_TZE200_lsanae15'] }
 private boolean isHEProblematic()       { device.getDataValue('manufacturer') in ['_TZ3000_okaz9tjs', '_TZ3000_r6buo8ba', '_TZ3000_cfnprab5', 'SONOFF', 'Woolley', 'unknown'] }
 private boolean isHoch()                { device.getDataValue('manufacturer') in ['_TZE200_hkdl5fmv'] }
 private boolean isTongouSY1()           { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3000_qeuvnohg', '_TZ3000_8bxrzyxz'] }    // TS011F
 private boolean isTongouSY2()           { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3000_cayepv1a', '_TZ3000_lepzuhto', '_TZ3000_qystbcjg'] }    // Din rail switch with power monitoring and threshold settings
 private boolean isPJ1203A()             { device.getDataValue('manufacturer') in ['_TZE204_81yrt3lo', '_TZE200_rks0sgb7'] }     // Bidirectional energy meter with 80A current clamp
+private boolean isSPM01()               { device.getDataValue('manufacturer') in ['_TZE200_bcusnqt8'] }     // Zemismart Single phase energy meter
 
 private boolean isSmartThingsOutlet() { (device.getDataValue('manufacturer') in ['SmartThings']) || (device.getDataValue('model') in ['outletv4']) }
 private boolean isSengledOutlet() { device.getDataValue('model') == 'E1C-NB7' }
@@ -403,7 +404,7 @@ private int getEnergyDiv() { isThirdRealityEU() ? 3600000 : (isSengledOutlet() |
 // Tuya :  currentDiv = 1000 ThirdReality: 1000
 private int getCurrentDiv() { (isHeiman() || isDevelco() || isSiHAS() || device.getDataValue('model') in ['3200-Sgb']) ? 100 : 1000 }
 // Tuya EF00 cluster voltage divider is 10 !
-private int getVoltageDiv() { (isFrientOutlet() || isHeiman()) ? 100 : isSercomm() ? 125 : (isTuyaSpecificCluster() || isSmartThingsOutlet() || isSiHAS()) || isThirdRealityUS() || isThirdRealityEU() || isPJ1203A() ? 10 : 1 }
+private int getVoltageDiv() { (isFrientOutlet() || isHeiman()) ? 100 : isSercomm() ? 125 : (isTuyaSpecificCluster() || isSmartThingsOutlet() || isSiHAS()) || isThirdRealityUS() || isThirdRealityEU() || isPJ1203A() || isSPM01() ? 10 : 1 }
 private int getFrequencyDiv() { isFrientOutlet() ? 1000F : isTuyaSpecificCluster() ? 100F : isThirdRealityUS() || isThirdRealityEU() ? 1F : 10F }
 private int getPowerFactorDiv() { (isDinRail() || isRTXCircuitBreaker()) ? 1000 : 100 }
 
@@ -1121,13 +1122,21 @@ void parseZHAcommand(Map descMap) {
                         String cmd = descMap.data[2]
                         switch (cmd) { // code : descMap.data[2]    ; attrId = descMap.data[1] + descMap.data[0]
                             case '01' : // switch state on/of for all models except the DinRail and RTX
-                                if (isDinRail() || isRTXCircuitBreaker()) {
-                                    logInfo "(01) Forward/Real Energy : ${value} raw"
+                                if (isDinRail() || isRTXCircuitBreaker() || isSPM01()) {
+                                    logDebug "(01) Forward/Real Energy : ${value} raw"
                                     energyEvent(value / getEnergyDiv())    // should be 100
                                 }
                                 else {
                                     logDebug "Tuya switch event cmd=(01) value=${value}"
                                     switchEvent(value == 0 ? 'off' : 'on')
+                                }
+                                break
+                            case '02' :
+                                if (isSPM01()) {
+                                    logDebug "(02) Reverse Energy : ${value} raw"
+                                }
+                                else {
+                                    logDebug "dp=${cmd} value=${value}"
                                 }
                                 break
                             case '03' :    //  _TZE200_eaac7dkw
@@ -1153,19 +1162,19 @@ void parseZHAcommand(Map descMap) {
                                     //  current: (value[4] / 1000), voltage: (value[1]), power: value[7] ???
                                     // data:[38, C6, 06, 00, 00,     08,        09, 10,   00, 00,   00, 00,   00, 00]]
                                     //                               data len
-                                    //                                          0x910 = 2320 (dec)
+                                    //                                          0x910 = 2320 (dec)                          
                                     logDebug "RTX (06) Phase A combined reporting data: ${descMap.data}"
                                     // voltage: ((value[1] | value[0] << 8) / 10),   => 7, 6
                                     int voltageRaw = zigbee.convertHexToInt(descMap.data[7]) + zigbee.convertHexToInt(descMap.data[6]) * 256
-                                    logInfo "RTX (06) Phase A Voltage : ${voltageRaw / getVoltageDiv()} V (raw ${voltageRaw})"
+                                    logDebug "RTX (06) Phase A Voltage : ${voltageRaw / getVoltageDiv()} V (raw ${voltageRaw})"
                                     voltageEvent(voltageRaw / getVoltageDiv())
                                     // current: ((value[4] | value[3] << 8) / 1000), => 10, 9
                                     int currentRaw = zigbee.convertHexToInt(descMap.data[10]) + zigbee.convertHexToInt(descMap.data[9]) * 256
-                                    logInfo "RTX (06) Phase A Current : ${currentRaw / getCurrentDiv()} V (raw ${currentRaw})"
+                                    logDebug "RTX (06) Phase A Current : ${currentRaw / getCurrentDiv()} A (raw ${currentRaw})"
                                     amperageEvent(currentRaw / getCurrentDiv())
                                     // power: ((value[7] | value[6] << 8)),          => 13, 12
                                     int activePowerRaw = zigbee.convertHexToInt(descMap.data[13]) + zigbee.convertHexToInt(descMap.data[12]) * 256
-                                    logInfo "DinRail(06) Active. Power : ${activePowerRaw / getPowerDiv()} W  (raw ${activePowerRaw})"
+                                    logDebug "DinRail(06) Active. Power : ${activePowerRaw / getPowerDiv()} W  (raw ${activePowerRaw})"
                                     powerEvent(activePowerRaw / getPowerDiv())
                                 }
                                 else if (isDinRail()) { // _TZE200_eaac7dkw // https://user-images.githubusercontent.com/26296347/198841477-b80f0bda-2f3e-4f5e-96ba-4fcc87a094ec.png  - combined power, voltage, amperage, etc... event
@@ -1175,25 +1184,37 @@ void parseZHAcommand(Map descMap) {
                                     //                               |active power | |react. power |  PF    |00| current|Voltage
                                     logDebug "DinRail(06) combined reporting data: ${descMap.data}"
                                     int voltageRaw = zigbee.convertHexToInt(descMap.data[20]) + zigbee.convertHexToInt(descMap.data[19]) * 256
-                                    logInfo "DinRail(06) Voltage : ${voltageRaw / getVoltageDiv()} V (raw ${voltageRaw})"
+                                    logDebug "DinRail(06) Voltage : ${voltageRaw / getVoltageDiv()} V (raw ${voltageRaw})"
                                     voltageEvent(voltageRaw / getVoltageDiv())
                                     int currentRaw = zigbee.convertHexToInt(descMap.data[18]) + zigbee.convertHexToInt(descMap.data[17]) * 256
-                                    logInfo "DinRail(06) Current : ${currentRaw / getCurrentDiv()} V (raw ${currentRaw})"
+                                    logDebug "DinRail(06) Current : ${currentRaw / getCurrentDiv()} A (raw ${currentRaw})"
                                     amperageEvent(currentRaw / getCurrentDiv())
                                     int pfRaw = zigbee.convertHexToInt(descMap.data[15]) + zigbee.convertHexToInt(descMap.data[14]) * 256
-                                    logInfo "DinRail(06) PF : ${pfRaw / getPowerFactorDiv()}  (raw ${pfRaw})"
+                                    logDebug "DinRail(06) PF : ${pfRaw / getPowerFactorDiv()}  (raw ${pfRaw})"
                                     powerFactorEvent(pfRaw / getPowerFactorDiv())
                                     int reactivePowerRaw = zigbee.convertHexToInt(descMap.data[13]) + zigbee.convertHexToInt(descMap.data[12]) * 256
-                                    logInfo "DinRail(06) React. Power : ${reactivePowerRaw / getPowerDiv()} W"
+                                    logDebug "DinRail(06) React. Power : ${reactivePowerRaw / getPowerDiv()} W"
                                     int activePowerRaw = zigbee.convertHexToInt(descMap.data[9]) + zigbee.convertHexToInt(descMap.data[8]) * 256
-                                    logInfo "DinRail(06) Active. Power : ${activePowerRaw / getPowerDiv()} W"
+                                    logDebug "DinRail(06) Active. Power : ${activePowerRaw / getPowerDiv()} W"
+                                    powerEvent(activePowerRaw / getPowerDiv())
+                                }
+                                else if (isSPM01()) {
+                                    logDebug "SPM01 combined reporting data: ${descMap.data}"
+                                    int voltageRaw = zigbee.convertHexToInt(descMap.data[7]) * 256 + zigbee.convertHexToInt(descMap.data[6])
+                                    logDebug "SPM01 Voltage : ${voltageRaw / getVoltageDiv()} V (raw ${voltageRaw})"
+                                    voltageEvent(voltageRaw / getVoltageDiv())
+                                    int currentRaw = (zigbee.convertHexToInt(descMap.data[5]) * 256 * 256) + (zigbee.convertHexToInt(descMap.data[4]) * 256) + zigbee.convertHexToInt(descMap.data[3])
+                                    logDebug "SPM01 Current : ${currentRaw / getCurrentDiv()} A (raw ${currentRaw})"
+                                    // power: ((value[7] | value[6] << 8)),          => 13, 12
+                                    int activePowerRaw = (zigbee.convertHexToInt(descMap.data[2]) * 256 * 256) + (zigbee.convertHexToInt(descMap.data[1]) * 256) + zigbee.convertHexToInt(descMap.data[0])
+                                    logDebug "SPM01 Active. Power : ${activePowerRaw / getPowerDiv()} W  (raw ${activePowerRaw})"
                                     powerEvent(activePowerRaw / getPowerDiv())
                                 }
                                 else if (isHoch()) {
-                                    logWarn "skipped dp=6 for Hoch() value = ${value}"
+                                    logDebug "skipped dp=6 for Hoch() data = ${descMap.data}"
                                 }
                                 else {
-                                    logInfo "(06) Phase A : ${value}"
+                                    logDebug "(06) unknown : ${value}"
                                 }
                                 break
                             case '09' : // (09)     // also hochCountdownTimer: 9
@@ -1213,14 +1234,22 @@ void parseZHAcommand(Map descMap) {
                             case '0B' : // (11) Frozen set _TZE200_eaac7dkw
                                 logInfo "Frozen set : ${value}"
                                 break
-                            case '10' : // (16) switch _TZE200_eaac7dkw
+                            case '0F' : // (15) // SPM01
+                                logDebug "(110) SPM01 power_factor : ${value / getPowerFactorDiv()} raw ($value)"
+                                powerFactorEvent(value / getPowerFactorDiv())
+                                break
+                            case '10' : // (16) switch _TZE200_eaac7dkw SPM01
                                 logDebug "(16) switch : ${value}"
                                 switchEvent(value == 0 ? 'off' : 'on')
                                 break
                             case '11' : // (17) Energy
                                 if (isDinRail() || isRTXCircuitBreaker()) {     // (17) Alarm Set _TZE200_eaac7dkw // { 0: 'not set', 1: 'Over current threshold', 3: 'Over voltage threshold' }
                                     logInfo "(17) AlarmSet1 : ${value}"
-                                } else {
+                                } 
+                                else if (isSPM01()) {
+                                    logDebug "skipped dp=17 for SPM01 data = ${descMap.data}"                                
+                                }
+                                else {
                                     energyEvent(value / getEnergyDiv())
                                 }
                                 break
@@ -1248,6 +1277,9 @@ void parseZHAcommand(Map descMap) {
                                     thState = descMap.data[15] == '01' ? 'ON' : 'OFF'
                                     thValue = zigbee.convertHexToInt(descMap.data[17]) + zigbee.convertHexToInt(descMap.data[16]) * 256
                                     if (settings.logEnable) { logInfo "${thName} is ${thValue} enabled:${thState}" }
+                                }
+                                else if (isSPM01()) {
+                                    logDebug "skipped dp=18 for SPM01 data = ${descMap.data}"                                
                                 }
                                 else {      // including _TZE204_cjbofhxw
                                     amperageEvent(value / getCurrentDiv())
@@ -1291,6 +1323,10 @@ void parseZHAcommand(Map descMap) {
                                     logInfo "(101) PJ1203A power_a : ${value / getPowerDiv()} raw ($value)"
                                     powerEvent(value / getPowerDiv())
                                 }
+                                else if (isSPM01()) {
+                                    logDebug "(101) SPM01 frequency : ${value} raw (${value / getFrequencyDiv()}) Hz"
+                                    frequencyEvent(value / getFrequencyDiv())
+                                }
                                 else {
                                     logDebug "unknown Tuya cmd = ${cmd}  value = ${value}"
                                 }
@@ -1304,18 +1340,32 @@ void parseZHAcommand(Map descMap) {
                                 else if (isPJ1203A()) {   // {'consuming': 0, 'producing': 1}
                                     logInfo "(102) PJ1203A energy_flow_a : raw ($value)"
                                 }
+                                else if (isSPM01()) {
+                                    logDebug "(102) SPM01 voltage : ${value / getVoltageDiv()} raw ($value)"
+                                    voltageEvent(value / getVoltageDiv())
+                                }
                                 else {
                                     logInfo "(102) Produced Energy : ${value} kWh  (raw ${value} )"
                                 }
                                 break
                             case '67' : // (103) hochActivePower: 103 Real Active Power [W]
-                                value = (zigbee.convertHexToInt(descMap.data[8]) + zigbee.convertHexToInt(descMap.data[7]) * 256)
-                                logInfo "(103) Real Active Power : ${value / 10.0} W (raw ${value})"
-                                powerEvent(value / 10.0F)
+                                if (isSPM01()) {
+                                    logDebug "(103) Amperage HOCH : ${(value / 1000.0F)} A (raw ${value})"
+                                    amperageEvent((value as Float) / 1000.0F)
+                                }
+                                else {
+                                    value = (zigbee.convertHexToInt(descMap.data[8]) + zigbee.convertHexToInt(descMap.data[7]) * 256)
+                                    logInfo "(103) Real Active Power : ${value / 10.0} W (raw ${value})"
+                                    powerEvent(value / 10.0F)
+                                }
                                 break
                             case '68' : // (104) hochLeakageCurrent: 104
                                 if (isPJ1203A()) {   // {'consuming': 0, 'producing': 1}
                                     logDebug "(102) PJ1203A energy_flow_b : raw ($value)"
+                                }
+                                else if (isSPM01()) {
+                                    logDebug "(104) SPM01 power : ${value / getPowerDiv()} raw ($value)"
+                                    powerEvent(value / getPowerDiv())
                                 }
                                 else {
                                     logInfo "(104) Hoch Leakage Current is : ${value / getCurrentDiv()} raw (${value}) A"

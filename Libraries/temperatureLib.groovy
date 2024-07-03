@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Temperature Library', name: 'temperatureLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/temperatureLib.groovy', documentationLink: '',
-    version: '3.2.1'
+    version: '3.2.2'
 )
 /*
  *  Zigbee Temperature Library
@@ -19,7 +19,8 @@ library(
  * ver. 3.0.0  2024-04-06 kkossev  - added temperatureLib.groovy
  * ver. 3.0.1  2024-04-19 kkossev  - temperature rounding fix
  * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment; added temperatureRefresh()
- * ver. 3.2.1  2024-06-07 kkossev  - (dev. branch) excluded maxReportingTime for mmWaveSensor and Thermostat
+ * ver. 3.2.1  2024-06-07 kkossev  - excluded maxReportingTime for mmWaveSensor and Thermostat
+ * ver. 3.2.2  2024-07-02 kkossev  - (dev.branch) fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
  *
  *                                   TODO: check why  if (settings?.minReportingTime...) condition in the preferences ?
  *                                   TODO: add temperatureOffset
@@ -27,8 +28,8 @@ library(
  *                                   TODO: check for negative temperature values in standardParseTemperatureCluster()
 */
 
-static String temperatureLibVersion()   { '3.2.1' }
-static String temperatureLibStamp() { '2024/06/07 10:19 AM' }
+static String temperatureLibVersion()   { '3.2.2' }
+static String temperatureLibStamp() { '2024/07/02 11:14 PM' }
 
 metadata {
     capability 'TemperatureMeasurement'
@@ -45,8 +46,13 @@ metadata {
 
 void standardParseTemperatureCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    int value = hexStrToSignedInt(descMap.value)
-    handleTemperatureEvent(value / 100.0F as BigDecimal)
+    if (descMap.attrId == '0000') {
+        int value = hexStrToSignedInt(descMap.value)
+        handleTemperatureEvent(value / 100.0F as BigDecimal)
+    }
+    else {
+        logWarn "standardParseTemperatureCluster() - unknown attribute ${descMap.attrId} value=${descMap.value}"
+    }
 }
 
 void handleTemperatureEvent(BigDecimal temperaturePar, boolean isDigital=false) {
@@ -100,6 +106,7 @@ void sendDelayedTempEvent(Map eventMap) {
 List<String> temperatureLibInitializeDevice() {
     List<String> cmds = []
     cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1도*/)                // 402 - temperature
+    logDebug "temperatureLibInitializeDevice() cmds=${cmds}"
     return cmds
 }
 

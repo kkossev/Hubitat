@@ -15,17 +15,19 @@
  *
  * ver. 2.0.1  2023-05-27 kkossev  - Aqara TVOC Air Monitor driver first version
  * ver. 3.0.0  2023-12-03 kkossev  - transfer kkossev.airQualityLib into the refactored driver
- * ver. 3.0.5  2024-03-05 kkossev  - (dev. branch) commonLib 3.0.5 check; Groovy lint;
- * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) commonLib 3.0.6
- * ver. 3.2.0  2024-05-21 kkossev  - (dev. branch) commonLib 3.2.0
+ * ver. 3.0.5  2024-03-05 kkossev  - commonLib 3.0.5 check; Groovy lint;
+ * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0
+ * ver. 3.3.0  2024-06-28 maximus8907  - adopted Frient's VOC level ranges for the airQualityLevel attribute; Increased valid range to be reported from 999 to 9999
+ * ver. 3.3.1  2024-07-02 kkossev  - (dev.branch) added AQSZB-110 Develco/Frient Air Quality Sensor
  *
+ *                                   TODO: 
  *                                   TODO: move autoPoll() from the commonLib here ?
  *                                   TODO: code cleanup
  *                                   TODO: updated() does not send the preferences ?
  */
 
-static String version() { '3.2.0' }
-static String timeStamp() { '2024/05/21 5:27 PM' }
+static String version() { '3.3.1' }
+static String timeStamp() { '2024/07/02 9:40 PM' }
 
 @Field static final boolean _DEBUG = false
 
@@ -61,7 +63,7 @@ metadata {
 
         attribute 'pm25', 'number'
         attribute 'sensirionVOCindex', 'number'    // VINDSTYRKA used sensirionVOCindex instead of airQualityIndex
-        attribute 'airQualityLevel', 'enum', ['Good', 'Moderate', 'Unhealthy for Sensitive Groups', 'Unhealthy', 'Very Unhealthy', 'Hazardous']    // https://www.airnow.gov/aqi/aqi-basics/ **** for Aqara only! ***
+        attribute 'airQualityLevel', 'enum', ['Excellent', 'Good', 'Moderate', 'Poor', 'Unhealthy']    // https://www.airnow.gov/aqi/aqi-basics/ **** for Aqara only! ***
 
         if (isAqaraTVOC()) {
             capability 'Battery'
@@ -72,27 +74,34 @@ metadata {
 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0402,0405,FC57,FC7C,042A,FC7E', outClusters:'0003,0019,0020,0202', model:'VINDSTYRKA', manufacturer:'IKEA of Sweden', deviceJoinName: 'VINDSTYRKA Air Quality Monitor E2112'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0019', model:'lumi.airmonitor.acn01', manufacturer:'LUMI', deviceJoinName: 'Aqara TVOC Air Quality Monitor'
+        fingerprint profileId:'0104', endpointId:'26', inClusters:'0000,0001,0003,0020,0402,0405,042E,FC03', outClusters:'0003,000A,0019', model:'AQSZB-110', manufacturer:'frient A/S', deviceJoinName: 'Frient Air Quality Sensor'
     }
 
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
-        input name: 'pm25Threshold', type: 'number', title: '<b>PM 2.5 Reporting Threshold</b>', description: '<i>PM 2.5 reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>', range: '1..255', defaultValue: DEFAULT_PM25_THRESHOLD
-        if (isVINDSTYRKA()) {
-            //input name: 'airQualityIndexCheckInterval', type: 'enum', title: '<b>Air Quality Index check interval</b>', options: AirQualityIndexCheckIntervalOpts.options, defaultValue: AirQualityIndexCheckIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub retreives the Air Quality Index.</i>'
-            input name: 'airQualityIndexCheckInterval', type: 'enum', title: '<b>Sensirion VOC index check interval</b>', options: AirQualityIndexCheckIntervalOpts.options, defaultValue: AirQualityIndexCheckIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub retreives the Sensirion VOC index.</i>'
-            input name: 'airQualityIndexThreshold', type: 'number', title: '<b>Sensirion VOC index Reporting Threshold</b>', description: '<i>Sensirion VOC index reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>', range: '1..255', defaultValue: DEFAULT_AIR_QUALITY_INDEX_THRESHOLD
-        }
-        else  if (isAqaraTVOC()) {
-            input name: 'airQualityIndexThreshold', type: 'number', title: '<b>Air Quality Index Reporting Threshold</b>', description: '<i>Air quality index reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>', range: '1..255', defaultValue: DEFAULT_AIR_QUALITY_INDEX_THRESHOLD
-            input name: 'temperatureScale', type: 'enum', title: '<b>Temperaure Scale on the Screen</b>', options: TemperatureScaleOpts.options, defaultValue: TemperatureScaleOpts.defaultValue, required: true, description: '<i>Changes the temperature scale (Celsius, Fahrenheit) on the screen.</i>'
-            input name: 'tVocUnut', type: 'enum', title: '<b>tVOC unit on the Screen</b>', options: TvocUnitOpts.options, defaultValue: TvocUnitOpts.defaultValue, required: true, description: '<i>Changes the tVOC unit (mg/m³, ppb) on the screen.</i>'
+        if (device) {
+            if (isVINDSTYRKA() || isAqaraTVOC()) {
+                input name: 'pm25Threshold', type: 'number', title: '<b>PM 2.5 Reporting Threshold</b>', description: '<i>PM 2.5 reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>', range: '1..255', defaultValue: DEFAULT_PM25_THRESHOLD
+            }
+            if (isVINDSTYRKA()) {
+                //input name: 'airQualityIndexCheckInterval', type: 'enum', title: '<b>Air Quality Index check interval</b>', options: AirQualityIndexCheckIntervalOpts.options, defaultValue: AirQualityIndexCheckIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub retreives the Air Quality Index.</i>'
+                input name: 'airQualityIndexCheckInterval', type: 'enum', title: '<b>Sensirion VOC index check interval</b>', options: AirQualityIndexCheckIntervalOpts.options, defaultValue: AirQualityIndexCheckIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub retreives the Sensirion VOC index.</i>'
+                input name: 'airQualityIndexThreshold', type: 'number', title: '<b>Sensirion VOC index Reporting Threshold</b>', description: '<i>Sensirion VOC index reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>', range: '1..255', defaultValue: DEFAULT_AIR_QUALITY_INDEX_THRESHOLD
+            }
+            if (isAqaraTVOC()) {
+                input name: 'airQualityIndexThreshold', type: 'number', title: '<b>Air Quality Index Reporting Threshold</b>', description: '<i>Air quality index reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>', range: '1..255', defaultValue: DEFAULT_AIR_QUALITY_INDEX_THRESHOLD
+                input name: 'temperatureScale', type: 'enum', title: '<b>Temperaure Scale on the Screen</b>', options: TemperatureScaleOpts.options, defaultValue: TemperatureScaleOpts.defaultValue, required: true, description: '<i>Changes the temperature scale (Celsius, Fahrenheit) on the screen.</i>'
+                input name: 'tVocUnut', type: 'enum', title: '<b>tVOC unit on the Screen</b>', options: TvocUnitOpts.options, defaultValue: TvocUnitOpts.defaultValue, required: true, description: '<i>Changes the tVOC unit (mg/m³, ppb) on the screen.</i>'
+            }
+
         }
     }
 }
 
 boolean isVINDSTYRKA() { return (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
 boolean isAqaraTVOC()  { return (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
+boolean isFrient()     { return (device?.getDataValue('model') ?: 'n/a') in ['AQSZB-110'] }
 
 @Field static final Integer DEFAULT_PM25_THRESHOLD = 1
 @Field static final Integer DEFAULT_AIR_QUALITY_INDEX_THRESHOLD = 1
@@ -343,7 +352,7 @@ void handleAirQualityIndexEvent( Integer tVoc, Boolean isDigital=false ) {
     Map eventMap = [:]
     if (state.stats != null) { state.stats['tVocCtr'] = (state.stats['tVocCtr'] ?: 0) + 1 } else { state.stats = [:] }
     Integer tVocCorrected = safeToDouble(tVoc) + safeToDouble(settings?.tVocOffset ?: 0)
-    if (tVocCorrected < 0 || tVocCorrected > 999) {
+    if (tVocCorrected < 0 || tVocCorrected > 9999) {
         logWarn "ignored invalid tVoc ${tVoc} (${tVocCorrected})"
         return
     }
@@ -377,7 +386,7 @@ void handleAirQualityIndexEvent( Integer tVoc, Boolean isDigital=false ) {
         unschedule('sendDelayedtVocEvent')
         state.lastRx['tVocTime'] = now()
         sendEvent(eventMap)
-        if (isAqaraTVOC()) {
+        if (isAqaraTVOC() || isFrient()) {
             sendAirQualityLevelEvent(airQualityIndexToLevel(safeToInt(eventMap.value)))
         }
     }
@@ -423,13 +432,12 @@ private void sendAirQualityLevelEvent(final String level) {
 String airQualityIndexToLevel(final Integer index) {
     String level
     if (index < 0 )        { level = 'unknown' }
-    else if (index < 50)  { level = 'Good' }
-    else if (index < 100) { level = 'Moderate' }
-    else if (index < 150) { level = 'Unhealthy for Sensitive Groups' }
-    else if (index < 200) { level = 'Unhealthy' }
-    else if (index < 300) { level = 'Very Unhealthy' }
-    else if (index < 501) { level = 'Hazardous' }
-    else                  { level = 'Hazardous Out of Range' }
+    else if (index < 65)   { level = 'Excellent' }
+    else if (index < 220)  { level = 'Good' }
+    else if (index < 660)  { level = 'Moderate' }
+    else if (index < 2200) { level = 'Poor' }
+    else if (index < 5500) { level = 'Unhealthy' }
+    else                   { level = 'Hazardous Out of Range' }
 
     return level
 }
@@ -567,6 +575,36 @@ void testT(final String par) {
             result = inputIt(key, debug = true)
             logDebug "inputIt: ${result}"
         }
+    }
+}
+
+//////////////////////////////////// Fienet AQSZB-110 /////////////////////////////////////////
+/*
+ * ----------------------------------------------------------------------------- 
+ * Frient VOC Measurement – Cluster id 0xFC03
+ * ----------------------------------------------------------------------------- 
+ * Id#   Name              Type    Range                  Relevance and ref.
+ * 0x0000 MeasuredValue    Uint16  MinValue to MaxValue   VOC’s in parts per billion
+ * 0x0001 MinMeasuredValue Uint16  0 ppb
+ * 0x0002 MaxMeasuredValue Uint16  60000 ppb
+ * 0x0003 Resolution       Uint16  1 – 32 ppb
+ * 
+ * Default reporting is set to Min reporting interval: 60 sec
+ * **Max reporting interval: 600 sec
+ * Reportable Change: 10 ppb
+ * If the VOC value is stable it will be sent every 10 minutes.
+ * If the VOC changes more than 10 ppb it will be reported but not faster than every 1 minute since last reporting value.
+ */
+
+void customParseFC03Cluster(final Map descMap) {
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    if (descMap.attrId == '0000') {
+        int value = hexStrToUnsignedInt(descMap.value)
+        handleAirQualityIndexEvent(value)
+    }
+    else {
+        logWarn "customParseFC03Cluster: received unknown attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
 }
 
