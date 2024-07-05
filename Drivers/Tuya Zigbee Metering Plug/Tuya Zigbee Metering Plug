@@ -64,7 +64,7 @@
  *  ver. 1.9.4 2024-04-14 kkossev - added for tests: TS0601 _TZE204_ves1ycwx _TZE200_ves1ycwx _TZE200_v9hkz2yn Zemismart Real-time Smart Energy Monitors - ONE CHANNEL ONLY!
  *  ver. 1.9.5 2024-05-16 kkossev - added ThirdReality 3RSPE01044BZ Smart Plug E2 (European socket!)
  *  ver. 1.9.6 2024-06-04 kkossev - added setEnergy() command
- *  ver. 1.9.7 2024-07-03 kkossev - (dev.branch) W.I.P. - added SPM01 TS0601 _TZE200_qhlxve78 and _TZE200_bcusnqt8
+ *  ver. 1.9.7 2024-07-05 kkossev - (dev.branch) W.I.P. - added SPM01 TS0601 _TZE200_qhlxve78 and _TZE200_bcusnqt8
  *
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
  *                                 TODO: add rtt measurement in ping()
@@ -88,7 +88,7 @@ import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
 static String version() { '1.9.7' }
-static String timeStamp() { '2024/07/03 8:13 AM' }
+static String timeStamp() { '2024/07/05 7:56 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -398,7 +398,7 @@ private boolean isThirdRealityEU() { device.getDataValue('model') == '3RSPE01044
 private boolean isReportingConfigurable() { isSmartThingsOutlet() || isSengledOutlet() || isJascoProductsOutlet() || isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSercomm() || isDevelco() || isSiHAS() || isThirdRealityUS() || isThirdRealityEU() }
 
 // Tuya : default powerDiv = 1
-private int getPowerDiv() { (isThirdRealityUS() || isThirdRealityEU() || isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() || isPJ1203A() && !(isDinRail() || isRTXCircuitBreaker()))) ? 10 : 1 }
+private int getPowerDiv() { (isThirdRealityUS() || isThirdRealityEU() || isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() || isPJ1203A() && !(isDinRail() || isRTXCircuitBreaker() || isSPM01()))) ? 10 : 1 }
 // Tuya :  energyDiv = 100 ThirdReality: 3600000
 private int getEnergyDiv() { isThirdRealityEU() ? 3600000 : (isSengledOutlet() || isJascoProductsOutlet()) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isThirdRealityUS() ? 1000 : 100 }
 // Tuya :  currentDiv = 1000 ThirdReality: 1000
@@ -1199,14 +1199,16 @@ void parseZHAcommand(Map descMap) {
                                     powerEvent(activePowerRaw / getPowerDiv())
                                 }
                                 else if (isSPM01()) {
+                                    //                                 0   1   2   3   4   5     6   7       8   9  10    11  12  13 
+                                    // SPM01 combined reporting data: [00, 0A, 06, 00, 00, 08,   04, C8,    00, 00, 00,   00, 00, 00]
+                                    // ZHA :                                                     Vhi Vlo    AHH Ahi Alo   PPH PHi PLo
                                     logDebug "SPM01 combined reporting data: ${descMap.data}"
-                                    int voltageRaw = zigbee.convertHexToInt(descMap.data[7]) * 256 + zigbee.convertHexToInt(descMap.data[6])
+                                    int voltageRaw = zigbee.convertHexToInt(descMap.data[6]) * 256 + zigbee.convertHexToInt(descMap.data[7])
                                     logDebug "SPM01 Voltage : ${voltageRaw / getVoltageDiv()} V (raw ${voltageRaw})"
                                     voltageEvent(voltageRaw / getVoltageDiv())
-                                    int currentRaw = (zigbee.convertHexToInt(descMap.data[5]) * 256 * 256) + (zigbee.convertHexToInt(descMap.data[4]) * 256) + zigbee.convertHexToInt(descMap.data[3])
+                                    int currentRaw = (zigbee.convertHexToInt(descMap.data[8]) * 256 * 256) + (zigbee.convertHexToInt(descMap.data[9]) * 256) + zigbee.convertHexToInt(descMap.data[10])
                                     logDebug "SPM01 Current : ${currentRaw / getCurrentDiv()} A (raw ${currentRaw})"
-                                    // power: ((value[7] | value[6] << 8)),          => 13, 12
-                                    int activePowerRaw = (zigbee.convertHexToInt(descMap.data[2]) * 256 * 256) + (zigbee.convertHexToInt(descMap.data[1]) * 256) + zigbee.convertHexToInt(descMap.data[0])
+                                    int activePowerRaw = (zigbee.convertHexToInt(descMap.data[11]) * 256 * 256) + (zigbee.convertHexToInt(descMap.data[12]) * 256) + zigbee.convertHexToInt(descMap.data[13])
                                     logDebug "SPM01 Active. Power : ${activePowerRaw / getPowerDiv()} W  (raw ${activePowerRaw})"
                                     powerEvent(activePowerRaw / getPowerDiv())
                                 }
