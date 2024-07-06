@@ -2,8 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Illuminance Library', name: 'illuminanceLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/illuminanceLib.groovy', documentationLink: '',
-    version: '3.2.0'
-    
+    version: '3.2.1'
 )
 /*
  *  Zigbee Illuminance Library
@@ -19,20 +18,34 @@ library(
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added illuminanceLib.groovy
  * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment; added capability 'IlluminanceMeasurement'; added illuminanceRefresh()
+ * ver. 3.2.1  2024-07-06 kkossev  - (dev.branch) added illuminanceCoeff; added luxThreshold and illuminanceCoeff to preferences (if applicable)
  *
  *                                   TODO: illum threshold not working!
  *                                   TODO: check illuminanceInitializeVars() and illuminanceProcessTuyaDP() usage
 */
 
-static String illuminanceLibVersion()   { '3.2.0' }
-static String illuminanceLibStamp() { '2024/05/28 1:33 PM' }
+static String illuminanceLibVersion()   { '3.2.1' }
+static String illuminanceLibStamp() { '2024/07/06 1:34 PM' }
 
 metadata {
     capability 'IlluminanceMeasurement'
     // no attributes
     // no commands
     preferences {
-        // no prefrences
+        if (device) {
+            if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.illuminanceThreshold != false) && !(DEVICE?.device?.isDepricated == true)) {
+                input('illuminanceThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: 5)
+                if (advancedOptions) {
+                    input('illuminanceCoeff', 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: 'Illuminance correction coefficient, range (0.10..10.00)', range: '0.10..10.00', defaultValue: 1.00)
+                }
+            }
+            /*
+            if (device.hasCapability('IlluminanceMeasurement')) {
+                input 'minReportingTime', 'number', title: 'Minimum Reporting Time (sec)', description: 'Minimum time between illuminance reports', defaultValue: 60, required: false
+                input 'maxReportingTime', 'number', title: 'Maximum Reporting Time (sec)', description: 'Maximum time between illuminance reports', defaultValue: 3600, required: false
+            }
+            */
+        }
     }
 }
 
@@ -55,7 +68,7 @@ void handleIlluminanceEvent(int illuminance, boolean isDigital=false) {
     eventMap.unit = 'lx'
     eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
     Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now())) / 1000)
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
+    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME  // defined in commonLib
     Integer timeRamaining = (minTime - timeElapsed) as Integer
     Integer lastIllum = device.currentValue('illuminance') ?: 0
     Integer delta = Math.abs(lastIllum - illumCorrected)
@@ -116,7 +129,7 @@ void illuminanceProcessTuyaDP(final Map descMap, int dp, int dp_id, int fncmd) {
 void illuminanceInitializeVars( boolean fullInit = false ) {
     logDebug "customInitializeVars()... fullInit = ${fullInit}"
     if (device.hasCapability('IlluminanceMeasurement')) {
-        if (fullInit || settings?.minReportingTime == null) { device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number']) }
+        if (fullInit || settings?.minReportingTime == null) { device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number']) } // defined in commonLib
         if (fullInit || settings?.maxReportingTime == null) { device.updateSetting('maxReportingTime', [value:DEFAULT_MAX_REPORTING_TIME, type:'number']) }
     }
     if (device.hasCapability('IlluminanceMeasurement')) {

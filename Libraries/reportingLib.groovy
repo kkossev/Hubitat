@@ -3,7 +3,6 @@ library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Reporting Config Library', name: 'reportingLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/reportingLib.groovy', documentationLink: '',
     version: '3.0.0'
-   
 )
 /*
  *  Zigbee Reporting Config Library

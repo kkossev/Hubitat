@@ -17,12 +17,12 @@
  *
  * ver. 3.2.0  2024-05-26 kkossev  - first version, based on the mmWave radar driver code : depricated Linptech; added TS0202 add _TYZB01_vwqnz1sn; 
  * ver. 3.2.1  2024-05-31 kkossev  - commonLib ver 3.2.1 allignment; tested 2In1 _TZE200_3towulqd ; new device profile group 'RH3040_TUYATEC'; SiHAS; 
+ * ver. 3.2.2  2024-07-05 kkossev  - (dev.branch) created motionLib; restored 'all' attribute
  *                                   
+ *                                   TODO: Sensor 3in1 _warning: couldn't find map for preference motionReset
+ *                                   TODO: Sensor 3in1 _TZE200_7hfcudw5 - fix battery percentage (shows 4)
  *                                   TODO: test TUYATEC-53o41joc IAS - add refresh commands (battery not reported when paired!);
  *                                   TODO: temperature and humidity thresholds SIHAS exception : List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes // library marker kkossev.deviceProfileLib, line 1118
- *                                   TODO: battery events delay
- *                                   TODO: add powerSource attribute
- *                                   TODO: 'all' status preference and attribute (allStatusTextEnable)
  *                                   TODO: temperature and humidity calibration (offsets)
  *                                   TODO: for 4IN1 (Fantem) - add in refresh() : cmds += zigbee.command(0xEF00, 0x07, '00')    // Fantem Tuya Magic
  *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
@@ -30,28 +30,22 @@
  *                                   TODO: battery level for TS0202 and TS0601 2in1 ; battery1 for Fantem 4-in-1 (100% or 0% ) Battery level for _TZE200_3towulqd (2in1)
  *                                   TODO: https://community.hubitat.com/t/moes-tuya-motion-sensor-distance-issue-ts0202-have-to-be-ridiculously-close-to-detect-movement/109917/8?u=kkossev 
  *                                   TODO: publish examples of SetPar usage : https://community.hubitat.com/t/4-in-1-parameter-for-adjusting-reporting-time/115793/12?u=kkossev
- *                                   TODO: make new GitHub WiKi 
  *                                   TODO: check why only voltage is reported for SONOFF_MOTION_IAS;
  *                                   TODO: hide motionKeepTime and motionSensitivity for SONOFF_MOTION_IAS;
  *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
  *                                   TODO: TS0202_MOTION_IAS missing sensitivity and retrigger time settings bug fix;
- *                                   TODO: add Sensitivity Levels Presets
- *                                   TODO: when device rejoins the network, read the battry percentage again!
  *                                   TOOD: Tuya 2in1 illuminance_interval (dp=102) !
  *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time ! ( 2-in-1 time is wrong)
  *                                   TODO: check the bindings commands in configure()
- *                                   TODO: implement getActiveEndpoints()
  *                                   TODO: ignore invalid humidity reprots (>100 %)
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
  *                                   TODO: delete all previous preferencies when changing the device profile ?
- *                                   TODO: cleanup the 4-in-1 state variables.
- *                                   TODO: illumState default value is 0 - should be 'unknown' ?
  *                                   TODO: Motion reset to inactive after 43648s - convert to H:M:S
  *                                   TODO: check temperatureOffset and humidityOffset
 */
 
-static String version() { "3.2.1" }
-static String timeStamp() {"2024/05/31 5:29 PM"}
+static String version() { "3.2.2" }
+static String timeStamp() {"2024/07/04 11:22 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -74,6 +68,7 @@ import groovy.transform.CompileStatic
 #include kkossev.humidityLib
 #include kkossev.illuminanceLib
 #include kkossev.iasLib
+#include kkossev.motionLib
 
 deviceType = "MultiSensor4in1"
 @Field static final String DEVICE_TYPE = "MultiSensor4in1"
@@ -86,23 +81,24 @@ metadata {
     {
 
         capability 'MotionSensor'
+        //capability 'TamperAlert'
 
+        attribute 'all', 'string'                   // all attributes in one string
         attribute 'distance', 'number'              // Tuya Radar, obsolete
         attribute 'unacknowledgedTime', 'number'    // AIR models
         attribute 'keepTime', 'enum', ['10 seconds', '30 seconds', '60 seconds', '120 seconds']
         attribute 'motionDetectionDistance', 'decimal'  // changed 05/11/2024 - was 'number'
 
         attribute 'sensitivity', 'number'
-        //attribute 'detectionDelay', 'decimal'
         attribute 'fadingTime', 'decimal'
-        //attribute 'humanMotionState', 'enum', ['none', 'moving', 'small_move', 'stationary', 'static', 'presence', 'peaceful', 'large_move']
+        attribute 'humanMotionState', 'enum', ['none', 'moving', 'small_move', 'stationary', 'static', 'presence', 'peaceful', 'large_move']    // in use by the obsolete radars
         attribute 'illumState', 'enum', ['dark', 'light', 'unknown']
         attribute 'ledIndicator', 'number'
         attribute 'reportingTime4in1', 'number'
         attribute 'ledEnable', 'enum', ['disabled', 'enabled']
         attribute 'WARNING', 'string'
 
-        command 'setMotion', [[name: 'setMotion', type: 'ENUM', constraints: ['No selection', 'active', 'inactive'], description: 'Force motion active/inactive (for tests)']]
+       // command 'setMotion', [[name: 'setMotion', type: 'ENUM', constraints: ['No selection', 'active', 'inactive'], description: 'Force motion active/inactive (for tests)']]
 
         // itterate through all the figerprints and add them on the fly
         deviceProfilesV3.each { profileName, profileMap ->
@@ -121,32 +117,19 @@ metadata {
             if (DEVICE?.device?.isDepricated == true) {
                 input(name: 'depricated',  type: 'hidden', title: "$ttStyleStr<a href='https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1' target='_blank'><b>This is the right driver</b><br> for use with <b>${state.deviceProfile}</b> device!<br><br><i>Please change the driver to 'Tuya Zigbee mmWave Sensor' as per the instructions in this link!</i></a>")
             }
+            else {
+                input(name: 'info',    type: 'hidden', title: "<a href='https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1' target='_blank'><i>For more info, click on this link to visit the WiKi page</i></a>")
+            }
         }
-        input(name: 'info',    type: 'hidden', title: "<a href='https://github.com/kkossev/Hubitat/wiki/Tuya-Zigbee-mmWave-Sensor' target='_blank'><i>For more info, click on this link to visit the WiKi page</i></a>")
-        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
-        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_DEBUG_LOGGING, description: '<i>Turns on debug logging for 24 hours.</i>'
+        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables events logging.'
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_DEBUG_LOGGING, description: 'Turns on debug logging for 24 hours.'
         if (device) {
-            if (('motionReset' in DEVICE?.preferences) && (DEVICE?.preferences.motionReset == true)) {
-                input(name: 'motionReset', type: 'bool', title: '<b>Reset Motion to Inactive</b>', description: '<i>Software Reset Motion to Inactive after timeout. Recommended value is <b>false</b></i>', defaultValue: false)
-                if (settings?.motionReset?.value == true) {
-                    input('motionResetTimer', 'number', title: '<b>Motion Reset Timer</b>', description: '<i>After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds</i>', range: '0..7200', defaultValue: 60)
-                }
-            }
-            if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.luxThreshold != false) && !(DEVICE?.device?.isDepricated == true)) {
-                input('luxThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: 5)
-                input name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: '<i>Illuminance correction coefficient, range (0.10..10.00)</i>', range: '0.10..10.00', defaultValue: 1.00
-            }
             if (('DistanceMeasurement' in DEVICE?.capabilities)) {  // keep it because of the depricated mmWave sensors
                 input(name: 'ignoreDistance', type: 'bool', title: '<b>Ignore distance reports</b>', description: 'If not used, ignore the distance reports received every 1 second!', defaultValue: true)
             }
-            if (advancedOptions == true) {
-                if ('invertMotion' in DEVICE?.preferences) {
-                    input(name: 'invertMotion', type: 'bool', title: '<b>Invert Motion Active/Not Active</b>', description: '<i>Some Tuya motion sensors may report the motion active/inactive inverted...</i>', defaultValue: false)
-                }
-            }
         }
-
-        // the rest of the preferences are inputIt from the deviceProfileLib 
+        input(name: 'allStatusTextEnable', type:  'bool', title: "<b>Enable 'all' Status Attribute Creation?</b>",  description: 'Status attribute for Devices/Rooms', defaultValue: false)
+        // the rest of the preferences are inputIt from the deviceProfileLib and from the included libraries
     }
 }
 
@@ -164,7 +147,7 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             models        : ['TS0202'],         // model: 'ZB003-X'  vendor: 'Fantem'
             device        : [type: 'PIR', isIAS:true, powerSource: 'dc', isSleepy:false],    // check powerSource
             capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'IlluminanceMeasurement': true, 'tamper': true, 'Battery': true],
-            preferences   : ['motionReset':true, 'reportingTime4in1':'102', 'ledEnable':'111', 'keepTime':'0x0500:0xF001', 'sensitivity':'0x0500:0x0013'],
+            preferences   : ['motionReset':true, 'illuminanceThreshold':true, 'reportingTime4in1':'102', 'ledEnable':'111', 'keepTime':'0x0500:0xF001', 'sensitivity':'0x0500:0x0013'],
             commands      : ['reportingTime4in1':'reportingTime4in1', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences', 'printFingerprints':'printFingerprints', 'printPreferences':'printPreferences'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,EF00', outClusters:'0019,000A', model:'TS0202',  manufacturer:'_TZ3210_zmy9hjay', deviceJoinName: 'Tuya TS0202 Multi Sensor 4 In 1'],        // pairing: double click!
@@ -175,23 +158,23 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,EF00', outClusters:'0019,000A', model:'TS0202',  manufacturer:'_TZ3210_0aqbrnts', deviceJoinName: 'Tuya TS0202 Multi Sensor 4 In 1 is-thpl-zb']
             ],
             tuyaDPs:        [
-                [dp:1,   name:'motion',                                 type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'<i>Motion</i>'],
-                [dp:5,   name:'tamper',                                 type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'clear', 1:'detected'] ,   unit:'',  description:'<i>Tamper detection</i>'],
-                [dp:25,  name:'battery2',                               type:'number',  rw: 'ro', min:0,     max:100,  defVal:100,  scale:1,  unit:'%',          description:'<i>Remaining battery 2 in %</i>'],
-                [dp:102, name:'reportingTime4in1', dt:'02', tuyaCmd:04, type:'number',  rw: 'rw', min:0, max:240, defVal:10, step:5, scale:1, unit:'minutes', title:'<b>Reporting Interval</b>', description:'<i>Reporting interval in minutes</i>'],
-                [dp:104, name:'tempCalibration',                        type:'decimal', rw: 'ro', min:-2.0,  max:2.0,  defVal:0.0,  scale:10, unit:'deg.',  title:'<b>Temperature Calibration</b>',       description:'<i>Temperature calibration (-2.0...2.0)</i>'],
-                [dp:105, name:'humiCalibration',                        type:'number',  rw: 'ro', min:-15,   max:15,   defVal:0,    scale:1,  unit:'%RH',    title:'<b>Huidity Calibration</b>',     description:'<i>Humidity Calibration</i>'],
-                [dp:106, name:'illumCalibration',                       type:'number',  rw: 'ro', min:-20, max:20, defVal:0,        scale:1, unit:'Lx', title:'<b>Illuminance Calibration</b>', description:'<i>Illuminance calibration in lux/i>'],
-                [dp:107, name:'temperature',                            type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0,  scale:10, unit:'deg.',       description:'<i>Temperature</i>'],
-                [dp:108, name:'humidity',                               type:'number',  rw: 'ro', min:1,     max:100,  defVal:100,  scale:1,  unit:'%RH',        description:'<i>Humidity</i>'],
-                [dp:109, name:'pirSensorEnable',                        type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'1',  scale:1,  map:[0:'disabled', 1:'enabled'] ,   unit:'', title:'<b>MoPIR Sensor Enable</b>',  description:'<i>Enable PIR sensor</i>'],
-                [dp:110, name:'battery',                                type:'number',  rw: 'ro', min:0,     max:100,  defVal:100,  scale:1,  unit:'%',          description:'<i>Battery level</i>'],
-                [dp:111, name:'ledEnable',       dt:'01', tuyaCmd:04,   type:'enum',    rw: 'rw', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'disabled', 1:'enabled'] ,   unit:'', title:'<b>LED Enable</b>',  description:'<i>Enable LED</i>'],
-                [dp:112, name:'reportingEnable',                        type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'disabled', 1:'enabled'] ,   unit:'', title:'<b>Reporting Enable</b>',  description:'<i>Enable reporting</i>'],
+                [dp:1,   name:'motion',                                 type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'Motion'],
+                [dp:5,   name:'tamper',                                 type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'clear', 1:'detected'] ,   unit:'',  description:'Tamper detection'],
+                [dp:25,  name:'battery2',                               type:'number',  rw: 'ro', min:0,     max:100,  defVal:100,  scale:1,  unit:'%',          description:'Remaining battery 2 in %'],
+                [dp:102, name:'reportingTime4in1', dt:'02', tuyaCmd:04, type:'number',  rw: 'rw', min:0, max:240, defVal:10, step:5, scale:1, unit:'minutes', title:'<b>Reporting Interval</b>', description:'Reporting interval in minutes'],
+                [dp:104, name:'tempCalibration',                        type:'decimal', rw: 'ro', min:-2.0,  max:2.0,  defVal:0.0,  scale:10, unit:'deg.',  title:'<b>Temperature Calibration</b>',       description:'Temperature calibration (-2.0...2.0)'],
+                [dp:105, name:'humiCalibration',                        type:'number',  rw: 'ro', min:-15,   max:15,   defVal:0,    scale:1,  unit:'%RH',    title:'<b>Huidity Calibration</b>',     description:'Humidity Calibration'],
+                [dp:106, name:'illumCalibration',                       type:'number',  rw: 'ro', min:-20, max:20, defVal:0,        scale:1, unit:'Lx', title:'<b>Illuminance Calibration</b>', description:'Illuminance calibration in lux'],
+                [dp:107, name:'temperature',                            type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0,  scale:10, unit:'deg.',       description:'Temperature'],
+                [dp:108, name:'humidity',                               type:'number',  rw: 'ro', min:1,     max:100,  defVal:100,  scale:1,  unit:'%RH',        description:'Humidity'],
+                [dp:109, name:'pirSensorEnable',                        type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'1',  scale:1,  map:[0:'disabled', 1:'enabled'] ,   unit:'', title:'<b>MoPIR Sensor Enable</b>',  description:'Enable PIR sensor'],
+                [dp:110, name:'battery',                                type:'number',  rw: 'ro', min:0,     max:100,  defVal:100,  scale:1,  unit:'%',          description:'Battery level'],
+                [dp:111, name:'ledEnable',       dt:'01', tuyaCmd:04,   type:'enum',    rw: 'rw', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'disabled', 1:'enabled'] ,   unit:'', title:'<b>LED Enable</b>',  description:'Enable LED'],
+                [dp:112, name:'reportingEnable',                        type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'disabled', 1:'enabled'] ,   unit:'', title:'<b>Reporting Enable</b>',  description:'Enable reporting'],
             ],
             attributes:       [
-                [at:'0x0500:0x0013',  name:'sensitivity', type:'enum',    rw: 'rw', min:0,     max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'<i>PIR sensor sensitivity (update at the time motion is activated)</i>'],
-                [at:'0x0500:0xF001',  name:'keepTime',    type:'enum',    rw: 'rw', min:0,     max:5,    defVal:'0',  unit:'seconds',    map:[0:'0 seconds', 1:'30 seconds', 2:'60 seconds', 3:'120 seconds', 4:'240 seconds', 5:'480 seconds'], title:'<b>Keep Time</b>',   description:'<i>PIR keep time in seconds (update at the time motion is activated)</i>']
+                [at:'0x0500:0x0013',  name:'sensitivity', type:'enum',    rw: 'rw', min:0,     max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
+                [at:'0x0500:0xF001',  name:'keepTime',    type:'enum',    rw: 'rw', min:0,     max:5,    defVal:'0',  unit:'seconds',    map:[0:'0 seconds', 1:'30 seconds', 2:'60 seconds', 3:'120 seconds', 4:'240 seconds', 5:'480 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)']
             ],
             refresh:        ['refreshAllIas','sensitivity', 'keepTime', 'refreshFantem'],
             configuration : ['battery': false],
@@ -202,7 +185,7 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
     'TS0601_3IN1'  : [                                // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN
             description   : 'Tuya 3in1 (Motion/Temp/Humi) sensor',
             models        : ['TS0601'],
-            device        : [type: 'PIR', powerSource: 'dc', isSleepy:false],    //  powerSource changes batt/DC dynamically!
+            device        : [type: 'PIR', powerSource: 'dc', isSleepy: false],    //  powerSource changes batt/DC dynamically!
             capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'tamper': true, 'Battery': true],
             preferences   : ['motionReset':true],
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
@@ -211,20 +194,19 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ppuj1vem', deviceJoinName: 'Tuya NAS-PD07 Multi Sensor 3 In 1']
             ],
             tuyaDPs:        [
-                [dp:101, name:'motion',          type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'<i>Motion</i>'],
-                [dp:102, name:'battery',         type:'number',  rw: 'ro', min:0,     max:100,  defVal:100,  scale:1,  unit:'%',          description:'<i>Battery level</i>'],
-                //            ^^^TODO^^^ (preProc 0..3 -> 1..100)
-                [dp:103, name:'tamper',          type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'clear', 1:'detected'] ,   unit:'',  description:'<i>Tamper detection</i>'],
-                [dp:104, name:'temperature',     type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0,  scale:10, unit:'deg.',       description:'<i>Temperature</i>'],
-                [dp:105, name:'humidity',        type:'number',  rw: 'ro', min:1,     max:100,  defVal:100,  scale:1,  unit:'%RH',        description:'<i>Humidity</i>'],
-                [dp:106, name:'tempScale',       type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'Celsius', 1:'Fahrenheit'] ,   unit:'',  description:'<i>Temperature scale</i>'],
-                [dp:107, name:'minTemp',         type:'number',  rw: 'ro', min:-20,   max:80,   defVal:0,    scale:1,  unit:'deg.',       description:'<i>Minimal temperature</i>'],
-                [dp:108, name:'maxTemp',         type:'number',  rw: 'ro', min:-20,   max:80,   defVal:0,    scale:1,  unit:'deg.',       description:'<i>Maximal temperature</i>'],
-                [dp:109, name:'minHumidity',     type:'number',  rw: 'ro', min:0,     max:100,  defVal:0,    scale:1,  unit:'%RH',        description:'<i>Minimal humidity</i>'],
-                [dp:110, name:'maxHumidity',     type:'number',  rw: 'ro', min:0,     max:100,  defVal:0,    scale:1,  unit:'%RH',        description:'<i>Maximal humidity</i>'],
-                [dp:111, name:'tempAlarm',       type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'<i>Temperature alarm</i>'],
-                [dp:112, name:'humidityAlarm',   type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'<i>Humidity alarm</i>'],
-                [dp:113, name:'alarmType',       type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'type0', 1:'type1'] ,   unit:'',  description:'<i>Alarm type</i>'],
+                [dp:101, name:'motion',          type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'], description:'Motion'],
+                [dp:102, name:'battery', preProc:'tuyaToBatteryLevel', type:'number',  rw: 'ro', min:0,     max:100,  defVal:100,  scale:1,  unit:'%',          description:'Battery level'],
+                [dp:103, name:'tamper',          type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'clear', 1:'detected'] ,   unit:'',  description:'Tamper detection'],
+                [dp:104, name:'temperature',     type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0,  scale:10, unit:'deg.',       description:'Temperature'],
+                [dp:105, name:'humidity',        type:'number',  rw: 'ro', min:1,     max:100,  defVal:100,  scale:1,  unit:'%RH',        description:'Humidity'],
+                [dp:106, name:'tempScale',       type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'Celsius', 1:'Fahrenheit'] ,   unit:'',  description:'Temperature scale'],
+                [dp:107, name:'minTemp',         type:'number',  rw: 'ro', min:-20,   max:80,   defVal:0,    scale:1,  unit:'deg.',       description:'Minimal temperature'],
+                [dp:108, name:'maxTemp',         type:'number',  rw: 'ro', min:-20,   max:80,   defVal:0,    scale:1,  unit:'deg.',       description:'Maximal temperature'],
+                [dp:109, name:'minHumidity',     type:'number',  rw: 'ro', min:0,     max:100,  defVal:0,    scale:1,  unit:'%RH',        description:'Minimal humidity'],
+                [dp:110, name:'maxHumidity',     type:'number',  rw: 'ro', min:0,     max:100,  defVal:0,    scale:1,  unit:'%RH',        description:'Maximal humidity'],
+                [dp:111, name:'tempAlarm',       type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'Temperature alarm'],
+                [dp:112, name:'humidityAlarm',   type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'Humidity alarm'],
+                [dp:113, name:'alarmType',       type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'type0', 1:'type1'] ,   unit:'',  description:'Alarm type'],
             ],
             deviceJoinName: 'Tuya Multi Sensor 3 In 1',
             configuration : ['battery': false]
@@ -245,12 +227,12 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_1ibpyhdc', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL']          //
             ],
             tuyaDPs:        [
-                [dp:1,   name:'motion', /*preProc:'invert',*/ type:'enum',   rw: 'ro', min:0, max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'<i>Motion</i>'],
-                [dp:4,   name:'battery',                  type:'number', rw: 'ro', min:0, max:100,  defVal:100,  scale:1,  unit:'%',          title:'<b>Battery level</b>',              description:'<i>Battery level</i>'],
-                [dp:9,   name:'sensitivity',              type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'0 - low', 1:'1 - medium', 2:'2 - high'], title:'<b>Sensitivity</b>',   description:'<i>PIR sensor sensitivity (update at the time motion is activated)</i>'],
-                [dp:10,  name:'keepTime',                 type:'enum',   rw: 'rw', min:0, max:3,    defVal:'0',  unit:'seconds',    map:[0:'10 seconds', 1:'30 seconds', 2:'60 seconds', 3:'120 seconds'], title:'<b>Keep Time</b>',   description:'<i>PIR keep time in seconds (update at the time motion is activated)</i>'],
-                [dp:12,  name:'illuminance',              type:'number', rw: 'ro', min:0, max:1000, defVal:0,    scale:1,  unit:'lx',       title:'<b>illuminance</b>',     description:'<i>illuminance</i>'],
-                [dp:102, name:'illuminance_interval',     type:'number', rw: 'rw', min:1, max:720,  defVal:1,    scale:1,  unit:'minutes',  title:'<b>Illuminance Interval</b>',     description:'<i>Brightness acquisition interval (update at the time motion is activated)</i>'],
+                [dp:1,   name:'motion', /*preProc:'invert',*/ type:'enum',   rw: 'ro', min:0, max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'Motion'],
+                [dp:4,   name:'battery',                  type:'number', rw: 'ro', min:0, max:100,  defVal:100,  scale:1,  unit:'%',          title:'<b>Battery level</b>',              description:'Battery level'],
+                [dp:9,   name:'sensitivity',              type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'0 - low', 1:'1 - medium', 2:'2 - high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
+                [dp:10,  name:'keepTime',                 type:'enum',   rw: 'rw', min:0, max:3,    defVal:'0',  unit:'seconds',    map:[0:'10 seconds', 1:'30 seconds', 2:'60 seconds', 3:'120 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)'],
+                [dp:12,  name:'illuminance',              type:'number', rw: 'ro', min:0, max:1000, defVal:0,    scale:1,  unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance'],
+                [dp:102, name:'illuminance_interval',     type:'number', rw: 'rw', min:1, max:720,  defVal:1,    scale:1,  unit:'minutes',  title:'<b>Illuminance Interval</b>',     description:'Brightness acquisition interval (update at the time motion is activated)'],
 
             ],
             deviceJoinName: 'Tuya Multi Sensor 2 In 1',
@@ -331,8 +313,8 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
 
             ],
             attributes:       [
-                [at:'0x0500:0x0013', name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'<i>PIR sensor sensitivity (update at the time motion is activated)</i>'],
-                [at:'0x0500:0xF001', name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:2,    defVal:'0',  unit:'seconds',    map:[0:'30 seconds', 1:'60 seconds', 2:'120 seconds'], title:'<b>Keep Time</b>',   description:'<i>PIR keep time in seconds (update at the time motion is activated)</i>'],
+                [at:'0x0500:0x0013', name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
+                [at:'0x0500:0xF001', name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:2,    defVal:'0',  unit:'seconds',    map:[0:'30 seconds', 1:'60 seconds', 2:'120 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)'],
             ],
             deviceJoinName: 'Tuya TS0202 Motion Sensor configurable',
             configuration : ['battery': false]
@@ -350,8 +332,8 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
 
             ],
             tuyaDPs:        [
-                [dp:101, name:'pushed',         type:'enum',   rw: 'ro', min:0, max:2, defVal:'0',   scale:1,    map:[0:'pushed', 1:'doubleTapped', 2:'held'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
-                [dp:102, name:'illuminance',    type:'number', rw: 'ro', min:0, max:1, defVal:0,     scale:1,    unit:'lx',       title:'<b>illuminance</b>',     description:'<i>illuminance</i>'],
+                [dp:101, name:'pushed',         type:'enum',   rw: 'ro', min:0, max:2, defVal:'0',   scale:1,    map:[0:'pushed', 1:'doubleTapped', 2:'held'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
+                [dp:102, name:'illuminance',    type:'number', rw: 'ro', min:0, max:1, defVal:0,     scale:1,    unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance'],
 
             ],
             deviceJoinName: 'Tuya Motion Sensor and Scene Switch',
@@ -369,10 +351,10 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_9qayzqa8', deviceJoinName: 'Smart PIR Human Motion Presence Sensor (Black)']    // https://www.aliexpress.com/item/1005004296422003.html
             ],
             tuyaDPs:        [                                           // TODO - defaults !!
-                [dp:102, name:'fadingTime',          type:'number',  rw: 'rw', min:24,  max:300 ,  defVal:24,        scale:1,    unit:'seconds',      title:'<b>Fading time</b>',   description:'<i>Fading(Induction) time</i>'],
-                [dp:105, name:'distance',      type:'enum',    rw: 'rw', min:0,   max:9 ,    defVal:'6',       scale:1,    map:[0:'0.5 m', 1:'1.0 m', 2:'1.5 m', 3:'2.0 m', 4:'2.5 m', 5:'3.0 m', 6:'3.5 m', 7:'4.0 m', 8:'4.5 m', 9:'5.0 m'] ,   unit:'meters',     title:'<b>Target Distance</b>', description:'<i>Target Distance</i>'],
-                [dp:119, name:'motion',              type:'enum',    rw: 'ro', min:0,   max:1 ,    defVal:'0',       scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
-                [dp:141, name:'humanMotionState',    type:'enum',    rw: 'ro', min:0,   max:4 ,    defVal:'0',       scale:1,    map:[0:'none', 1:'presence', 2:'peaceful', 3:'small_move', 4:'large_move'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
+                [dp:102, name:'fadingTime',          type:'number',  rw: 'rw', min:24,  max:300 ,  defVal:24,        scale:1,    unit:'seconds',      title:'<b>Fading time</b>',   description:'Fading(Induction) time'],
+                [dp:105, name:'distance',      type:'enum',    rw: 'rw', min:0,   max:9 ,    defVal:'6',       scale:1,    map:[0:'0.5 m', 1:'1.0 m', 2:'1.5 m', 3:'2.0 m', 4:'2.5 m', 5:'3.0 m', 6:'3.5 m', 7:'4.0 m', 8:'4.5 m', 9:'5.0 m'] ,   unit:'meters',     title:'<b>Target Distance</b>', description:'Target Distance'],
+                [dp:119, name:'motion',              type:'enum',    rw: 'ro', min:0,   max:1 ,    defVal:'0',       scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
+                [dp:141, name:'humanMotionState',    type:'enum',    rw: 'ro', min:0,   max:4 ,    defVal:'0',       scale:1,    map:[0:'none', 1:'presence', 2:'peaceful', 3:'small_move', 4:'large_move'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
             ],
             deviceJoinName: 'Tuya PIR Human Motion Presence Sensor LQ-CG01-RDR',
             configuration : ['battery': false]
@@ -389,16 +371,16 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_auin8mzr', deviceJoinName: 'Tuya PIR Human Motion Presence Sensor AIR']        // Tuya LY-TAD-K616S-ZB
             ],
             tuyaDPs:        [                                           // TODO - defaults !!
-                [dp:101, name:'vSensitivity',        type:'enum',    rw: 'rw', min:0,   max:1,     defVal:'0', scale:1,    map:[0:'Speed Priority', 1:'Standard', 2:'Accuracy Priority'] ,   unit:'-',     title:'<b>vSensitivity options</b>', description:'<i>V-Sensitivity mode</i>'],
-                [dp:102, name:'oSensitivity',        type:'enum',    rw: 'rw', min:0,   max:1,     defVal:'0', scale:1,    map:[0:'Sensitive', 1:'Normal', 2:'Cautious'] ,   unit:'',     title:'<b>oSensitivity options</b>', description:'<i>O-Sensitivity mode</i>'],
-                [dp:103, name:'vacancyDelay',        type:'number',  rw: 'rw', min:0,   max:1000,  defVal:10,  scale:1,    unit:'seconds',        title:'<b>Vacancy Delay</b>',          description:'<i>Vacancy Delay</i>'],
-                [dp:104, name:'detectionMode',       type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0', scale:1,    map:[0:'General Model', 1:'Temporary Stay', 2:'Basic Detecton', 3:'PIR Sensor Test'] ,   unit:'',     title:'<b>Detection Mode</b>', description:'<i>Detection Mode</i>'],
-                [dp:105, name:'unacknowledgedTime',  type:'number',  rw: 'ro', min:0,   max:9 ,    defVal:7,   scale:1,    unit:'seconds',         description:'<i>unacknowledgedTime</i>'],
-                [dp:106, name:'illuminance',         type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>illuminance</b>',                description:'<i>illuminance</i>'],
-                [dp:107, name:'lightOnLuminance',    type:'number',  rw: 'rw', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>lightOnLuminance</b>',                description:'<i>lightOnLuminance</i>'],        // Ligter, Medium, ... ?// TODO =- check range 0 - 10000 ?
-                [dp:108, name:'lightOffLuminance',   type:'number',  rw: 'rw', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>lightOffLuminance</b>',                description:'<i>lightOffLuminance</i>'],
-                [dp:109, name:'luminanceLevel',      type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>luminanceLevel</b>',                description:'<i>luminanceLevel</i>'],            // Ligter, Medium, ... ?
-                [dp:110, name:'ledStatusAIR',        type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0', scale:1,    map:[0: 'Switch On', 1:'Switch Off', 2: 'Default'] ,   unit:'',     title:'<b>LED status</b>', description:'<i>Led status switch</i>'],
+                [dp:101, name:'vSensitivity',        type:'enum',    rw: 'rw', min:0,   max:1,     defVal:'0', scale:1,    map:[0:'Speed Priority', 1:'Standard', 2:'Accuracy Priority'] ,   unit:'-',     title:'<b>vSensitivity options</b>', description:'V-Sensitivity mode'],
+                [dp:102, name:'oSensitivity',        type:'enum',    rw: 'rw', min:0,   max:1,     defVal:'0', scale:1,    map:[0:'Sensitive', 1:'Normal', 2:'Cautious'] ,   unit:'',     title:'<b>oSensitivity options</b>', description:'O-Sensitivity mode'],
+                [dp:103, name:'vacancyDelay',        type:'number',  rw: 'rw', min:0,   max:1000,  defVal:10,  scale:1,    unit:'seconds',        title:'<b>Vacancy Delay</b>',          description:'Vacancy Delay'],
+                [dp:104, name:'detectionMode',       type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0', scale:1,    map:[0:'General Model', 1:'Temporary Stay', 2:'Basic Detecton', 3:'PIR Sensor Test'] ,   unit:'',     title:'<b>Detection Mode</b>', description:'Detection Mode'],
+                [dp:105, name:'unacknowledgedTime',  type:'number',  rw: 'ro', min:0,   max:9 ,    defVal:7,   scale:1,    unit:'seconds',         description:'unacknowledgedTime'],
+                [dp:106, name:'illuminance',         type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>illuminance</b>',                description:'illuminance'],
+                [dp:107, name:'lightOnLuminance',    type:'number',  rw: 'rw', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>lightOnLuminance</b>',                description:'lightOnLuminance'],        // Ligter, Medium, ... ?// TODO =- check range 0 - 10000 ?
+                [dp:108, name:'lightOffLuminance',   type:'number',  rw: 'rw', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>lightOffLuminance</b>',                description:'lightOffLuminance'],
+                [dp:109, name:'luminanceLevel',      type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>luminanceLevel</b>',                description:'luminanceLevel'],            // Ligter, Medium, ... ?
+                [dp:110, name:'ledStatusAIR',        type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0', scale:1,    map:[0: 'Switch On', 1:'Switch Off', 2: 'Default'] ,   unit:'',     title:'<b>LED status</b>', description:'Led status switch'],
             ],
             deviceJoinName: 'Tuya PIR Human Motion Presence Sensor AIR',
             configuration : ['battery': false]
@@ -435,7 +417,7 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             //tuyaDPs       : [:],
             attributes    : [
-                [at:'0x0406:0x0000', name:'motion',        type:'enum',   rw: 'ro', min:0,   max:1,    defVal:'0',   scale:1,    map:[0:'inactive', 1:'active'], title:'<b>Presence</b>', description:'<i>Presence state</i>']
+                [at:'0x0406:0x0000', name:'motion',        type:'enum',   rw: 'ro', min:0,   max:1,    defVal:'0',   scale:1,    map:[0:'inactive', 1:'active'], title:'<b>Presence</b>', description:'Presence state']
             ],
             refresh       : [ 'batteryRefresh', 'illuminanceRefresh', 'temperatureRefresh', 'humidityRefresh', 'motion'],
             //configuration : ["0x0406":"bind"]     // TODO !!
@@ -453,8 +435,8 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0400,0402,0500', outClusters:'0019', model:'MOT003', manufacturer:'HiveHome.com', deviceJoinName: 'Hive Motion Sensor']         // https://community.hubitat.com/t/hive-motion-sensors-can-we-get-custom-driver-sorted/108177?u=kkossev
             ],
             attributes:       [
-                [at:'0x0500:0x0013', name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'<i>PIR sensor sensitivity (update at the time motion is activated)</i>'],
-                [at:'0x0500:0xF001', name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:2,    defVal:'0',  unit:'seconds',    map:[0:'30 seconds', 1:'60 seconds', 2:'120 seconds'], title:'<b>Keep Time</b>',   description:'<i>PIR keep time in seconds (update at the time motion is activated)</i>'],
+                [at:'0x0500:0x0013', name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
+                [at:'0x0500:0xF001', name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:2,    defVal:'0',  unit:'seconds',    map:[0:'30 seconds', 1:'60 seconds', 2:'120 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)'],
             ],
             deviceJoinName: 'Other OEM Motion sensor (IAS)',
             configuration : ['battery': false]
@@ -466,93 +448,66 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             fingerprints  : [],
     ],
 
-// ------------------------------------------- mmWave Radars ------------------------------------------------//
+// ------------------------------------------- mmWave Radars - OBSOLETE ! => use the mmWave driver instead! ------------------------------------------------//
 
-    'TS0601_TUYA_RADAR'   : [        // isZY_M100Radar()        // spammy devices!
-            description   : 'Tuya Human Presence mmWave Radar ZY-M100',
-            models        : ['TS0601'],
-            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
+    'TS0601_TUYA_RADAR'   : [ 
+            description   : 'Tuya Human Presence mmWave Radar ZY-M100', models : ['TS0601'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
             fingerprints  : [
                 [manufacturer:'_TZE200_ztc6ggyl'], [manufacturer:'_TZE204_ztc6ggyl'], [manufacturer:'_TZE200_ikvncluo'], [manufacturer:'_TZE200_lyetpprm'], [manufacturer:'_TZE200_wukb7rhc'],
                 [manufacturer:'_TZE200_jva8ink8'], [manufacturer:'_TZE200_mrf6vtua'], [manufacturer:'_TZE200_ar0slwnd'], [manufacturer:'_TZE200_sfiy5tfs'], [manufacturer:'_TZE200_holel4dk'],
                 [manufacturer:'_TZE200_xpq2rzhq'], [manufacturer:'_TZE204_qasjif9e'], [manufacturer:'_TZE204_xsm7l9xa']
             ],
             tuyaDPs:        [
-                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', min:0,   max:1 ,    defVal:'0',  scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
-                [dp:9,   name:'distance',           type:'decimal', rw: 'ro', min:0.0, max:10.0 , defVal:0.0,  scale:100,  unit:'meters',   title:'<b>Distance</b>',                   description:'<i>detected distance</i>'],
-                [dp:104, name:'illuminance',        type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,    scale:1,    unit:'lx',       title:'<b>illuminance</b>',                description:'<i>illuminance</i>'],
+                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'Presence state'],
+                [dp:9,   name:'distance',           type:'decimal', rw: 'ro', scale:100,  unit:'meters',  description:'detected distance'],
+                [dp:104, name:'illuminance',        type:'number',  rw: 'ro', unit:'lx',  description:'illuminance'],
 
-            ],
-            spammyDPsToIgnore : [9], spammyDPsToNotTrace : [9, 103]
+            ], spammyDPsToIgnore : [9], spammyDPsToNotTrace : [9, 103]
     ],
 
-    'TS0601_KAPVNNLK_RADAR'   : [        // 24GHz spammy radar w/ battery backup - depricated
-            description   : 'Tuya TS0601_KAPVNNLK 24GHz Radar',
-            models        : ['TS0601'],
-            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'DistanceMeasurement':true],
+    'TS0601_KAPVNNLK_RADAR'   : [
+            description   : 'Tuya TS0601_KAPVNNLK 24GHz Radar', models : ['TS0601'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'DistanceMeasurement':true],
             fingerprints  : [[manufacturer:'_TZE204_kapvnnlk'], [manufacturer:'_TZE204_kyhbrfyl']],
             tuyaDPs:        [
-                [dp:1, name:'motion', type:'enum', rw: 'ro', min:0, max:1, defVal:'0',  scale:1,   map:[0:'inactive', 1:'active'] , unit:'', title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
-                [dp:19,  name:'distance', type:'decimal', rw: 'ro', min:0.0, max:10.0,  defVal:0.0,  scale:100, unit:'meters', title:'<b>Distance</b>', description:'<i>detected distance</i>']
+                [dp:1, name:'motion', type:'enum', rw: 'ro', map:[0:'inactive', 1:'active'], description:'Presence state'],
+                [dp:19,  name:'distance', type:'decimal', rw: 'ro', scale:100, unit:'meters', description:'detected distance']
 
-            ],
-            spammyDPsToIgnore : [19], spammyDPsToNotTrace : [19]
+            ], spammyDPsToIgnore : [19], spammyDPsToNotTrace : [19]
     ],
 
     'TS0601_RADAR_MIR-HE200-TY'   : [
-            description   : 'Tuya Human Presence Sensor MIR-HE200-TY',  // deprecated
-            models        : ['TS0601'],
-            device        : [isDepricated:true, type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true],
+            description   : 'Tuya Human Presence Sensor MIR-HE200-TY', models : ['TS0601'], device : [isDepricated:true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true],
             fingerprints  : [[manufacturer:'_TZE200_vrfecyku'], [manufacturer:'_TZE200_lu01t0zl'], [manufacturer:'_TZE200_ypprdwsl']],
             tuyaDPs:        [
-                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', min:0,   max:1,     defVal:'0', scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
-                [dp:102, name:'motionState',        type:'enum',    rw: 'ro', min:0,   max:1,     defVal:'0', scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Motion state</b>', description:'<i>Motion state (occupancy)</i>'],
+                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'Presence state'],
+                [dp:102, name:'motionState',        type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'Motion state (occupancy)'],
             ]
     ],
 
     'TS0601_BLACK_SQUARE_RADAR'   : [
-            description   : 'Tuya Black Square Radar',
-            models        : ['TS0601'],
-            device        : [isDepricated:true, type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor':true],
+            description   : 'Tuya Black Square Radar', models : ['TS0601'], device : [isDepricated:true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor':true],
             fingerprints  : [[manufacturer:'_TZE200_0u3bj3rc'], [manufacturer:'_TZE200_v6ossqfy'], [manufacturer:'_TZE200_mx6u6l4y']],
-            tuyaDPs:        [
-                [dp:1,   name:'motion',         type:'enum',   rw: 'ro', min:0, max:1,    defVal: '0', map:[0:'inactive', 1:'active'],     description:'Presence'],
-            ],
-            spammyDPsToIgnore : [103], spammyDPsToNotTrace : [1, 101, 102, 103]
+            tuyaDPs:        [[dp:1,   name:'motion',         type:'enum',   rw: 'ro', map:[0:'inactive', 1:'active'],     description:'Presence']], spammyDPsToIgnore : [103], spammyDPsToNotTrace : [1, 101, 102, 103]
     ],
 
     'TS0601_YXZBRB58_RADAR'   : [
-            description   : 'Tuya YXZBRB58 Radar',
-            models        : ['TS0601'],
-            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy: false],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
+            description   : 'Tuya YXZBRB58 Radar', models : ['TS0601'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy: false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
             fingerprints  : [[manufacturer:'_TZE204_sooucan5']],
             tuyaDPs:        [
-                [dp:1,   name:'motion',                 type:'enum',    rw: 'ro', min:0,   max:2,     defVal:'0',  map:[0:'inactive', 1:'active'],  description:'Presence state'],
-                [dp:101, name:'illuminance',            type:'number',  rw: 'ro',                     scale:1,    unit:'lx',       description:'Illuminance'],
-                [dp:105, name:'distance',               type:'decimal', rw: 'ro', min:0.0, max:10.0,  scale:100,  unit:'meters',   description:'Distance']
-            ],
-            spammyDPsToIgnore : [105], spammyDPsToNotTrace : [105]
+                [dp:1,   name:'motion',                 type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'],  description:'Presence state'],
+                [dp:101, name:'illuminance',            type:'number',  rw: 'ro', unit:'lx', description:'Illuminance'],
+                [dp:105, name:'distance',               type:'decimal', rw: 'ro', scale:100,  unit:'meters',   description:'Distance']
+            ], spammyDPsToIgnore : [105], spammyDPsToNotTrace : [105]
     ],
 
     'TS0601_SXM7L9XA_RADAR'   : [
-            description   : 'Tuya Human Presence Detector SXM7L9XA',
-            models        : ['TS0601'],
-            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
-            fingerprints  : [
-                [manufacturer:'_TZE204_sxm7l9xa'], [manufacturer:'_TZE204_e5m9c5hl']
-            ],
+            description   : 'Tuya Human Presence Detector SXM7L9XA', models : ['TS0601'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
+            fingerprints  : [[manufacturer:'_TZE204_sxm7l9xa'], [manufacturer:'_TZE204_e5m9c5hl']],
             tuyaDPs:        [
-                [dp:104, name:'illuminance',            type:'number',  rw: 'ro',                     scale:1, unit:'lx',          description:'illuminance'],
-                [dp:105, name:'motion',                 type:'enum',    rw: 'ro', min:0,   max:1,     defVal:'0', map:[0:'inactive', 1:'active'],  description:'Presence state'],
-                [dp:109, name:'distance',               type:'decimal', rw: 'ro', min:0.0, max:10.0,  scale:100,  unit:'meters',    description:'Distance']
-            ],
-            spammyDPsToIgnore : [109], spammyDPsToNotTrace : [109]
+                [dp:104, name:'illuminance',            type:'number',  rw: 'ro', unit:'lx', description:'illuminance'],
+                [dp:105, name:'motion',                 type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'],  description:'Presence state'],
+                [dp:109, name:'distance',               type:'decimal', rw: 'ro', scale:100,  unit:'meters',    description:'Distance']
+            ], spammyDPsToIgnore : [109], spammyDPsToNotTrace : [109]
     ],
 
     'TS0601_IJXVKHD0_RADAR'   : [
@@ -562,61 +517,46 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
             fingerprints  : [[manufacturer:'_TZE204_ijxvkhd0']],
             tuyaDPs:        [
-                [dp:104, name:'illuminance',            type:'number',  rw: 'ro',                    scale:1, unit:'lx',                  description:'illuminance'],
-                [dp:105, name:'humanMotionState',       type:'enum',    rw: 'ro', min:0,   max:2,    defVal:'0', map:[0:'none', 1:'present', 2:'moving'], description:'Presence state'],
-                [dp:109, name:'distance',               type:'decimal', rw: 'ro', min:0.0, max:10.0, defVal:0.0, scale:100, unit:'meters',             description:'Target distance'],
-                [dp:112, name:'motion',                 type:'enum',    rw: 'ro', min:0,   max:1,    defVal:'0',       scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
-                [dp:123, name:'presence',               type:'enum',    rw: 'ro', min:0,   max:1,    defVal:'0', map:[0:'none', 1:'presence'],            description:'Presence']    // TODO -- check if used?
-            ],
-            spammyDPsToIgnore : [109, 9], spammyDPsToNotTrace : [109, 104]
+                [dp:104, name:'illuminance',            type:'number',  rw: 'ro', unit:'lx', description:'illuminance'],
+                [dp:105, name:'humanMotionState',       type:'enum',    rw: 'ro', map:[0:'none', 1:'present', 2:'moving'], description:'Presence state'],
+                [dp:109, name:'distance',               type:'decimal', rw: 'ro', unit:'meters', description:'Target distance'],
+                [dp:112, name:'motion',                 type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'Presence state'],
+                [dp:123, name:'presence',               type:'enum',    rw: 'ro', map:[0:'none', 1:'presence'],   description:'Presence']
+            ], spammyDPsToIgnore : [109, 9], spammyDPsToNotTrace : [109, 104]
     ],
 
     'TS0601_YENSYA2C_RADAR'   : [
-            description   : 'Tuya Human Presence Detector YENSYA2C',
-            models        : ['TS0601'],
-            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy: false],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
+            description   : 'Tuya Human Presence Detector YENSYA2C', models : ['TS0601'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy: false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
             fingerprints  : [[manufacturer:'_TZE204_yensya2c'], [manufacturer:'_TZE204_mhxn2jso']],
             tuyaDPs:        [
-                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', min:0,   max:1,     defVal:'0', scale:1,   map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
-                [dp:19,  name:'distance',           type:'decimal', rw: 'ro', min:0.0, max:10.0,  defVal:0.0, scale:100, unit:'meters',  description:'Distance'],
-                [dp:20,  name:'illuminance',        type:'number',  rw: 'ro', min:0,   max:10000, scale:1,   unit:'lx',        description:'illuminance']
-            ],
-            spammyDPsToIgnore : [19], spammyDPsToNotTrace : [19]
+                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
+                [dp:19,  name:'distance',           type:'decimal', rw: 'ro', scale:100, unit:'meters',  description:'Distance'],
+                [dp:20,  name:'illuminance',        type:'number',  rw: 'ro', unit:'lx', description:'illuminance']
+            ], spammyDPsToIgnore : [19], spammyDPsToNotTrace : [19]
     ],
 
     'TS0225_HL0SS9OA_RADAR'   : [
-            description   : 'Tuya TS0225_HL0SS9OA Radar',
-            models        : ['TS0225'],
-            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'HumanMotionState':true],
+            description   : 'Tuya TS0225_HL0SS9OA Radar', models : ['TS0225'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'HumanMotionState':true],
             fingerprints  : [[manufacturer:'_TZE200_hl0ss9oa']],
             tuyaDPs:        [
-                [dp:1,   name:'motion',                          type:'enum',    rw: 'ro', min:0,    max:1,    defVal:'0',   scale:1,   map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
-                [dp:11,  name:'humanMotionState',                type:'enum',    rw: 'ro', min:0,    max:3,    defVal:'0',  map:[0:'none', 1:'large', 2:'small', 3:'static'],       description:'Human motion state'],
-                [dp:20,  name:'illuminance',                     type:'number',  rw: 'ro', scale:10,  unit:'lx',        description:'Illuminance']
-            ],
-            spammyDPsToIgnore : [], spammyDPsToNotTrace : [11]
+                [dp:1,   name:'motion',                          type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
+                [dp:11,  name:'humanMotionState',                type:'enum',    rw: 'ro', map:[0:'none', 1:'large', 2:'small', 3:'static'],       description:'Human motion state'],
+                [dp:20,  name:'illuminance',                     type:'number',  rw: 'ro', scale:10,  unit:'lx', description:'Illuminance']
+            ], spammyDPsToIgnore : [], spammyDPsToNotTrace : [11]
     ],
 
     'TS0225_2AAELWXK_RADAR'   : [
-            description   : 'Tuya TS0225_2AAELWXK 5.8 GHz Radar',
-            models        : ['TS0225'],
-            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'HumanMotionState':true],
+            description   : 'Tuya TS0225_2AAELWXK 5.8 GHz Radar', models : ['TS0225'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'HumanMotionState':true],
             fingerprints  : [[manufacturer:'_TZE200_2aaelwxk']],
             tuyaDPs:        [
-                [dp:1,   name:'motion',                          type:'enum',    rw: 'ro', min:0,    max:1,    defVal:'0',   scale:1,   map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
-                [dp:101, name:'humanMotionState',                type:'enum',    rw: 'ro', min:0,    max:3,    defVal:'0',  map:[0:'none', 1:'large', 2:'small', 3:'static'],       description:'Human motion state'],
-                [dp:106, name:'illuminance',                     type:'number',  rw: 'ro', scale:10,  unit:'lx',        description:'Illuminance']
+                [dp:1,   name:'motion',                          type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
+                [dp:101, name:'humanMotionState',                type:'enum',    rw: 'ro', map:[0:'none', 1:'large', 2:'small', 3:'static'],       description:'Human motion state'],
+                [dp:106, name:'illuminance',                     type:'number',  rw: 'ro', scale:10,  unit:'lx', description:'Illuminance']
             ]
     ],
 
     'TS0601_SBYX0LM6_RADAR'   : [
-            description   : 'Tuya Human Presence Detector SBYX0LM6',
-            models        : ['TS0601'],
-            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
+            description   : 'Tuya Human Presence Detector SBYX0LM6', models : ['TS0601'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
             fingerprints  : [
                 [manufacturer:'_TZE204_sbyx0lm6'], [manufacturer:'_TZE200_sbyx0lm6'], [manufacturer:'_TZE204_dtzziy1e'], [manufacturer:'_TZE200_dtzziy1e'], [manufacturer:'_TZE204_clrdrnya'], [manufacturer:'_TZE200_clrdrnya'],
                 [manufacturer:'_TZE204_cfcznfbz'], [manufacturer:'_TZE204_iaeejhvf'], [manufacturer:'_TZE204_mtoaryre'], [manufacturer:'_TZE204_8s6jtscb'], [manufacturer:'_TZE204_rktkuel1'], [manufacturer:'_TZE204_mp902om5'],
@@ -624,74 +564,45 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [manufacturer:'_TZE200_0wfzahlw'], [manufacturer:'_TZE204_0wfzahlw'], [manufacturer:'_TZE200_pfayrzcw'], [manufacturer:'_TZE204_pfayrzcw'], [manufacturer:'_TZE200_z4tzr0rg'], [manufacturer:'_TZE204_z4tzr0rg']
             ],
             tuyaDPs:        [
-                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', min:0,   max:1,     defVal:'0',   scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
-                [dp:9,   name:'distance',           type:'decimal', rw: 'ro', min:0.0, max:10.0,  defVal:0.0,   scale:100,  unit:'meters',   description:'<i>detected distance</i>'],
-                [dp:104, name:'illuminance',        type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,     scale:10,   unit:'lx',       title:'<b>illuminance</b>',                description:'<i>illuminance</i>']
-            ],
-            spammyDPsToIgnore : [9], spammyDPsToNotTrace : [9]
+                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
+                [dp:9,   name:'distance',           type:'decimal', rw: 'ro', scale:100,  unit:'meters',   description:'detected distance'],
+                [dp:104, name:'illuminance',        type:'number',  rw: 'ro', scale:10,   unit:'lx',       description:'illuminance']
+            ],  spammyDPsToIgnore : [9], spammyDPsToNotTrace : [9]
     ],
 
-    // isLINPTECHradar()
     'TS0225_LINPTECH_RADAR'   : [
-            description   : 'Tuya TS0225_LINPTECH 24GHz Radar',
-            models        : ['TS0225'],
-            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
-            fingerprints  : [
-                [manufacturer:'_TZ3218_awarhusb']
-            ],
-            tuyaDPs:       [                                           // the tuyaDPs revealed from iot.tuya.com are actually not used by the device! The only exception is dp:101
-                [dp:101,              name:'fadingTime',                      type:'number',                rw: 'rw', min:1,    max:9999, defVal:10,    scale:1,   unit:'seconds', title: '<b>Fading time</b>', description:'<i>Presence inactivity timer, seconds</i>']                                  // aka 'nobody time'
-            ],
-            deviceJoinName: 'Tuya TS0225_LINPTECH 24Ghz Human Presence Detector'
+            description   : 'Tuya TS0225_LINPTECH 24GHz Radar', models : ['TS0225'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
+            fingerprints  : [[manufacturer:'_TZ3218_awarhusb']],
+            tuyaDPs:       [ [dp:101, name:'fadingTime', type:'number', rw: 'rw', min:1, max:9999, defVal:10, scale:1, unit:'seconds', title: '<b>Fading time</b>', description:'Presence inactivity timer, seconds']]
     ],
 
     'TS0225_EGNGMRZH_RADAR'   : [
-            description   : 'Tuya TS0225_EGNGMRZH 24GHz Radar',
-            models        : ['TS0225'],
-            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
-            fingerprints  : [[manufacturer:'_TZFED8_egngmrzh']],
-            // uses IAS for occupancy!
+            description   : 'Tuya TS0225_EGNGMRZH 24GHz Radar', models : ['TS0225'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
+            fingerprints  : [[manufacturer:'_TZFED8_egngmrzh']],    // uses IAS for occupancy!
             tuyaDPs:        [
-                [dp:101, name:'illuminance',        type:'number',  rw: 'ro', min:0,  max:10000, scale:1,   unit:'lx'],
-                [dp:103, name:'distance',           type:'decimal', rw: 'ro', min:0.0,  max:10.0,  defVal:0.0, scale:10,  unit:'meters']
-            ],
-            spammyDPsToIgnore : [103], spammyDPsToNotTrace : [103]
+                [dp:101, name:'illuminance',        type:'number',  rw: 'ro', unit:'lx'],
+                [dp:103, name:'distance',           type:'decimal', rw: 'ro', scale:10,  unit:'meters']
+            ], spammyDPsToIgnore : [103], spammyDPsToNotTrace : [103]
     ],
 
-    'TS0225_O7OE4N9A_RADAR'   : [ // Aubess Zigbee-Human Presence Detector, Smart PIR Human Body Sensor, Wifi Radar, Microwave Motion Sensors, Tuya, 1/24/5G
-            description   : 'Tuya Human Presence Detector YENSYA2C',
-            models        : ['TS0225'],
-            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
+    'TS0225_O7OE4N9A_RADAR'   : [
+            description   : 'Tuya Human Presence Detector YENSYA2C', models : ['TS0225'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
             fingerprints  : [[manufacturer:'_TZFED8_o7oe4n9a']],
             tuyaDPs:        [
-                [dp:1,   name:'motion',                 type:'enum',    rw: 'ro', min:0,   max:1,     defVal:'0', scale:1,   map:[0:'inactive', 1:'active'] ,   unit:'',  title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
-                [dp:181, name:'illuminance',            type:'number',  rw: 'ro', min:0,   max:10000, scale:1,    unit:'lx', description:'illuminance'],
-                [dp:182, name:'distance',               type:'decimal', rw: 'ro', min:0.0, max:10.0,  defVal:0.0, scale:100, unit:'meters',  description:'Distance to target']
-            ]
-            //spammyDPsToIgnore : [182], //spammyDPsToNotTrace : [182],
+                [dp:1,   name:'motion',                 type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'Presence state'],
+                [dp:181, name:'illuminance',            type:'number',  rw: 'ro', unit:'lx', description:'illuminance'],
+                [dp:182, name:'distance',               type:'decimal', rw: 'ro', unit:'meters',  description:'Distance to target']
+            ], spammyDPsToIgnore : [182], spammyDPsToNotTrace : [182]
     ],
 
-    'OWON_OCP305_RADAR'   : [   // depricated
-            description   : 'OWON OCP305 Radar',
-            models        : ['OCP305'],
-            device        : [isDepricated:true, type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'Battery': true],
-            fingerprints  : [
-                [manufacturer:'OWON']   // depricated
-            ]
+    'OWON_OCP305_RADAR'   : [
+            description   : 'OWON OCP305 Radar', models : ['OCP305'], device: [isDepricated:true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities  : ['MotionSensor': true, 'Battery': true],
+            fingerprints  : [[manufacturer:'OWON']]
     ],
 
     'SONOFF_SNZB-06P_RADAR' : [ // Depricated
-            description   : 'SONOFF SNZB-06P RADAR',
-            models        : ['SNZB-06P'],
-            device        : [isDepricated:true, type: 'radar', powerSource: 'dc', isIAS:false, isSleepy:false],
-            capabilities  : ['MotionSensor': true],
-            fingerprints  : [
-                [manufacturer:'SONOFF']      // Depricated!
-            ]
+            description   : 'SONOFF SNZB-06P RADAR', models : ['SNZB-06P'], device : [isDepricated:true, type: 'radar', powerSource: 'dc', isIAS:false, isSleepy:false], capabilities : ['MotionSensor': true],
+            fingerprints  : [[manufacturer:'SONOFF']]
     ],
 
     'UNKNOWN'             : [                        // the Device Profile key (shown in the State Variables)
@@ -723,134 +634,22 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 ]
             ],
             configuration : ['battery': true],
-            batteries     : 'unknown',
             deviceJoinName: 'Unknown device'        // used during the inital pairing, if no individual fingerprint deviceJoinName was found
     ]
 
 ]
 
-// called from processFoundItem() for Linptech radar
-Integer skipIfDisabled(int val) {
-    if (settings.ignoreDistance == true) {
-        logTrace "skipIfDisabled: ignoring distance attribute"
-        return null
-    }
-    return val
-}
-
-// TODO - move to iasLib.groovy !!
-
-void parseIasMessage(final String description) {
-    // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn
+// this is a motion driver -> IAS events represent motion/occupancy
+public void customParseIasMessage(final String description) {
     Map zs = zigbee.parseZoneStatusChange(description)
     if (zs.alarm1Set == true) {
-        handleMotion(true)
+        logDebug "customParseIasMessage: Alarm 1 is set"
+        handleMotion(true)      // motionLib.groovy
     }
     else {
-        handleMotion(false)
+        logDebug "customParseIasMessage: Alarm 1 is cleared"
+        handleMotion(false)     // motionLib.groovy
     }
-}
-
-// TODO - move to motionLib.groovy !
-
-void handleMotion(final boolean motionActive, final boolean isDigital=false) {
-    boolean motionActiveCopy = motionActive
-    
-    if (settings.invertMotion == true) {    // patch!! fix it!
-        motionActiveCopy = !motionActiveCopy
-    }
-    
-    //log.trace "handleMotion: motionActive=${motionActiveCopy}, isDigital=${isDigital}"
-    if (motionActiveCopy) {
-        int timeout = motionResetTimer ?: 0
-        // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in code
-        if (settings.motionReset == true && timeout != 0) {
-            runIn(timeout, resetToMotionInactive, [overwrite: true])
-        }
-        if (device.currentState('motion')?.value != 'active') {
-            state.motionStarted = unix2formattedDate(now())
-        }
-    }
-    else {
-        if (device.currentState('motion')?.value == 'inactive') {
-            logDebug "ignored motion inactive event after ${getSecondsInactive()}s"
-            return      // do not process a second motion inactive event!
-        }
-    }
-    sendMotionEvent(motionActiveCopy, isDigital)
-}
-
-void sendMotionEvent(final boolean motionActive, boolean isDigital=false) {
-    String descriptionText = 'Detected motion'
-    if (motionActive) {
-        descriptionText = device.currentValue('motion') == 'active' ? "Motion is active ${getSecondsInactive()}s" : 'Detected motion'
-    }
-    else {
-        descriptionText = "Motion reset to inactive after ${getSecondsInactive()}s"
-    }
-    /*
-    if (isBlackSquareRadar() && device.currentValue("motion", true) == "active" && (motionActive as boolean) == true) {    // TODO - obsolete
-        return    // the black square radar sends 'motion active' every 4 seconds!
-    }
-    */
-    if (txtEnable) log.info "${device.displayName} ${descriptionText}"
-    sendEvent(
-            name            : 'motion',
-            value            : motionActive ? 'active' : 'inactive',
-            type            : isDigital == true ? 'digital' : 'physical',
-            descriptionText : descriptionText
-    )
-    //runIn(1, formatAttrib, [overwrite: true])
-}
-
-void resetToMotionInactive() {
-    if (device.currentState('motion')?.value == 'active') {
-        String descText = "Motion reset to inactive after ${getSecondsInactive()}s (software timeout)"
-        sendEvent(
-            name : 'motion',
-            value : 'inactive',
-            isStateChange : true,
-            type:  'digital',
-            descriptionText : descText
-        )
-        if (txtEnable) log.info "${device.displayName} ${descText}"
-    }
-    else {
-        if (txtEnable) log.debug "${device.displayName} ignored resetToMotionInactive (software timeout) after ${getSecondsInactive()}s"
-    }
-}
-
-void setMotion(String mode) {
-    if (mode == 'active') {
-        handleMotion(motionActive = true, isDigital = true)
-    } else if (mode == 'inactive') {
-        handleMotion(motionActive = false, isDigital = true)
-    } else {
-        if (settings?.txtEnable) {
-            log.warn "${device.displayName} please select motion action"
-        }
-    }
-}
-
-// battery level for TS0202 and TS0601 2in1 ; battery1 for Fantem 4-in-1 (100% or 0% ) Battery level for _TZE200_3towulqd (2in1)
-void handleTuyaBatteryLevel(int fncmd) {
-    int rawValue = fncmd
-    switch (fncmd) {
-        case 0: rawValue = 100; break // Battery Full
-        case 1: rawValue = 75;  break // Battery High
-        case 2: rawValue = 50;  break // Battery Medium
-        case 3: rawValue = 25;  break // Battery Low
-        case 4: rawValue = 100; break // Tuya 3 in 1 -> USB powered
-    }
-    getBatteryPercentageResult(rawValue * 2)
-}
-
-
-int getSecondsInactive() {
-    Long unixTime = 0
-    try { unixTime = formattedDate2unix(state.motionStarted) } catch (Exception e) { logWarn "getSecondsInactive: ${e}" }
-    if (unixTime) { return Math.round((now() - unixTime) / 1000) as int }
-    return settings?.motionResetTimer ?: 0
 }
 
 void customParseOccupancyCluster(final Map descMap) {
@@ -880,7 +679,86 @@ void customParseOccupancyCluster(final Map descMap) {
 
 }
 
-// called processFoundItem in the deviceProfileLib
+// called from standardProcessTuyaDP in the commonLib for each Tuya dp report in a Zigbee message
+// should always return true, as we are processing all the dp reports here
+boolean customProcessTuyaDp(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
+    logDebug "customProcessTuyaDp: dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len} descMap.data = ${descMap?.data}"
+    if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {
+        return true      // sucessfuly processed from the deviceProfile 
+    }
+
+    logWarn "<b>NOT PROCESSED from deviceProfile</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+    localProcessTuyaDP(descMap, dp, dp_id, fncmd, dp_len)
+    return true
+}
+
+void localProcessTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len) {
+    switch (dp) {
+        case 0x01 : // motion state for almost of the Tuya PIR sensors
+            logDebug "(DP=0x01) motion event fncmd = ${fncmd}"
+            handleMotion(fncmd ? true : false)
+            break
+        case 0x04 :    // battery level for TS0202 and TS0601 2in1 ; battery1 for Fantem 4-in-1 (100% or 0% ) Battery level for _TZE200_3towulqd (2in1)
+            logDebug "(DP=0x04) Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+            handleTuyaBatteryLevel(fncmd)
+            break
+        case 0x07 : // temperature for 4-in-1 (no data)
+            logDebug "(DP=0x07) unexpected 4-in-1 temperature (dp=07) is ${fncmd / 10.0 } ${fncmd}"
+            temperatureEvent(fncmd / getTemperatureDiv())
+            break
+        case 0x08 : // humidity for 4-in-1 (no data)
+            logDebug "(DP=0x08) unexpected 4-in-1 humidity (dp=08) is ${fncmd} ${fncmd}"
+            humidityEvent(fncmd / getHumidityDiv())
+            break
+        case 0x09 : // sensitivity for TS0202 4-in-1 and 2in1 _TZE200_3towulqd
+            logInfo "(DP=0x09) unexpected received sensitivity : ${sensitivityOpts.options[fncmd]} (${fncmd})"
+            //device.updateSetting('sensitivity', [value:fncmd.toString(), type:'enum'])
+            break
+        case 0x0A : // (10) keep time for TS0202 4-in-1 and 2in1 _TZE200_3towulqd
+            logInfo "(DP=0x0A) unexpected Keep Time (dp=0x0A) is ${keepTimeIASOpts.options[fncmd]} (${fncmd})"
+            //device.updateSetting('keepTime', [value:fncmd.toString(), type:'enum'])
+            break
+        case 0x19 : // (25)
+            logDebug "(DP=0x19) unexpected battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+            handleTuyaBatteryLevel(fncmd)
+            break
+        case 0x65 :    // (101)
+            //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
+            if (DEVICE?.device.isDepricated == true) {
+                logDebug '(DP=0x65) unexpected : ignored depricated device 0x65 event'
+            }
+            else {
+                logDebug "(DP=0x65) unexpected : motion event 0x65 fncmd = ${fncmd}"
+                handleMotion(fncmd ? true : false)
+            }
+            break
+        case 0x68 :     // (104)
+            // 4in1  0x68 temperature compensation
+            int val = fncmd
+            // for negative values produce complimentary hex (equivalent to negative values)
+            if (val > 4294967295) { val = val - 4294967295 }
+            logInfo "(DP=0x68) unexpected : 4-in-1 temperature calibration is ${val / 10.0}"
+            break
+        case 0x69 :    // (105)
+            // 4in1 0x69 humidity calibration (compensation)
+            int val = fncmd
+            if (val > 4294967295) val = val - 4294967295
+            logInfo "(DP=0x69) unexpected : 4-in-1 humidity calibration is ${val}"
+            break
+        case 0x6A : // (106)
+            // 4in1 0x6a lux calibration (compensation)
+            int val = fncmd
+            if (val > 4294967295) { val = val - 4294967295 }
+            logInfo "(DP=0x69) unexpected : 4-in-1 lux calibration is ${val}"
+            break
+        default :
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            break
+    }
+}
+
+
+// called from processFoundItem in the deviceProfileLib
 void customProcessDeviceProfileEvent(final Map descMap, final String name, valueScaled, final String unitText, final String descText) {
     logTrace "customProcessDeviceProfileEvent(${name}, ${valueScaled}) called"
     boolean doNotTrace = isSpammyDPsToNotTrace(descMap)
@@ -936,6 +814,9 @@ List<String> customRefresh() {
     if (devProfCmds != null && !devProfCmds.isEmpty()) {
         cmds += devProfCmds
     }
+    if (settings.allStatusTextEnable == true) {
+        runIn(3, 'formatAttrib', [overwrite: true])
+    }
     return cmds
 }
 
@@ -950,6 +831,9 @@ void customUpdated() {
         else {
             logDebug "customUpdated: ignoreDistance is ${settings?.ignoreDistance}"
         }
+    }
+    if (settings?.allStatusTextEnable == false) {
+        device.deleteCurrentState('all')
     }
 
     if (settings?.forcedProfile != null) {
@@ -985,6 +869,9 @@ void customUpdated() {
         setRefreshRequest() 
         runIn(2, customRefresh, [overwrite: true])
     }
+    if (settings.allStatusTextEnable == true) {
+        runIn(3, 'formatAttrib', [overwrite: true])
+    }
 }
 
 void customInitializeVars(final boolean fullInit=false) {
@@ -997,11 +884,9 @@ void customInitializeVars(final boolean fullInit=false) {
     }
     if (fullInit == true || settings?.ignoreDistance == null) { device.updateSetting('ignoreDistance', true) }
     if (fullInit == true || state.motionStarted == null) { state.motionStarted = unix2formattedDate(now()) }
-    if (fullInit == true || settings.motionReset == null) device.updateSetting('motionReset', false)
+    // overwrite the default value of the invertMotion setting if the device is 2in1
     if (fullInit == true || settings.invertMotion == null) device.updateSetting('invertMotion', is2in1() ? true : false)
-    if (fullInit == true || settings.motionResetTimer == null) device.updateSetting('motionResetTimer', 60)
-
-
+    if (fullInit == true || settings.allStatusTextEnable == null) device.updateSetting('allStatusTextEnable', false)
 }
 
 void customInitEvents(final boolean fullInit=false) {
@@ -1011,9 +896,6 @@ void customInitEvents(final boolean fullInit=false) {
     }
 }
 
-void customParseTuyaCluster(final Map descMap) {
-    standardParseTuyaCluster(descMap)  // process it first in commonLib, then come back ... :) 
-}
 
 void customParseIlluminanceCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
@@ -1034,11 +916,61 @@ void customParseIASCluster(final Map descMap) {
     }
 }
 
+// ------------------------- formatAttrib() methods for the 4-in-1 driver -------------------------
+
 void formatAttrib() {
-    logDebug "trapped formatAttrib() from the 4-in-1 driver..."
+    if (settings.allStatusTextEnable == false) {    // do not send empty html or text attributes
+        return
+    }
+    String attrStr = ''
+    attrStr += addToAttr('status', 'healthStatus')
+    attrStr += addToAttr('motion', 'motion')
+    if (DEVICE?.capabilities?.DistanceMeasurement == true && settings?.ignoreDistance == false) { attrStr += addToAttr('distance', 'distance') }
+    if (DEVICE?.capabilities?.Battery == true) { attrStr += addToAttr('battery', 'battery') }
+    if (DEVICE?.capabilities?.IlluminanceMeasurement == true) { attrStr += addToAttr('illuminance', 'illuminance') }
+    if (DEVICE?.capabilities?.TemperatureMeasurement == true) { attrStr += addToAttr('temperature', 'temperature') }
+    if (DEVICE?.capabilities?.RelativeHumidityMeasurement == true) { attrStr += addToAttr('humidity', 'humidity')  }
+    attrStr = attrStr.substring(0, attrStr.length() - 3)    // remove the ',  '
+    updateAttr('all', attrStr)
+    if (attrStr.length() > 64) {
+        updateAttr('all', "Max Attribute Size Exceeded: ${attrStr.length()}")
+    }
 }
 
-// ------------------------- end of Simon's tooltips methods -------------------------
+/* groovylint-disable-next-line UnusedMethodParameter */
+String addToAttr(String name, String key, String convert = 'none') {
+    String retResult = ''
+    String attrUnit = getUnitFromState(key)
+    if (attrUnit == null) { attrUnit = '' }
+    /* groovylint-disable-next-line NoDef */
+    def curVal = device.currentValue(key, true)
+    if (curVal != null) {
+        if (convert == 'int') {
+            retResult += safeToInt(curVal).toString() + '' + attrUnit
+        }
+        else if (convert == 'double') {
+            retResult += safeToDouble(curVal).toString() + '' + attrUnit
+        }
+        else {
+            retResult += curVal.toString() + '' + attrUnit
+        }
+    }
+    else {
+        retResult += 'n/a'
+    }
+    retResult += ',  '
+    return retResult
+}
+
+String getUnitFromState(String attrName) {
+    return device.currentState(attrName)?.unit
+}
+
+void updateAttr(String aKey, String aValue, String aUnit = '') {
+    sendEvent(name:aKey, value:aValue, unit:aUnit, type: 'digital')
+}
+
+// ------------------------- end of formatAttrib() methods -------------------------
 
 //@CompileStatic
 void testFunc( par) {

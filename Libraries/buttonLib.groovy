@@ -33,7 +33,7 @@ metadata {
     // capability 'DoubleTapableButton'
     // capability 'HoldableButton'
     // capability 'ReleasableButton'
-    
+
     // no attributes
     // no commands
     preferences {

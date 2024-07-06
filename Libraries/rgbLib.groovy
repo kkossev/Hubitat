@@ -28,6 +28,7 @@ library(
 def rgbLibVersion()   { '3.2.0' }
 def rgbLibStamp() { '2024/05/21 10:06 PM' }
 
+/* groovylint-disable-next-line UnusedImport */
 import hubitat.helper.ColorUtils
 
 metadata {
@@ -41,7 +42,6 @@ metadata {
     preferences {
     }
 }
-
 
 //
 // called from customUpdated() in the driver *Aqara_LED_Strip_T1.groovy*
@@ -120,7 +120,6 @@ void initEventsBulb(boolean fullInit=false) {
         sendEvent(name: 'level', value: 100)
     }
 }
-
 
 def testT(par) {
     logWarn "testT(${par})"

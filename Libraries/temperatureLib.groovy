@@ -7,20 +7,13 @@ library(
 /*
  *  Zigbee Temperature Library
  *
- *  Licensed Virtual the Apache License, Version 2.0 (the "License"); you may not use this file except
- *  in compliance with the License. You may obtain a copy of the License at:
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- *  for the specific language governing permissions and limitations under the License.
+ *  Licensed Virtual the Apache License, Version 2.0
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added temperatureLib.groovy
  * ver. 3.0.1  2024-04-19 kkossev  - temperature rounding fix
  * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment; added temperatureRefresh()
  * ver. 3.2.1  2024-06-07 kkossev  - excluded maxReportingTime for mmWaveSensor and Thermostat
- * ver. 3.2.2  2024-07-02 kkossev  - (dev.branch) fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
+ * ver. 3.2.2  2024-07-06 kkossev  - (dev.branch) fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
  *
  *                                   TODO: check why  if (settings?.minReportingTime...) condition in the preferences ?
  *                                   TODO: add temperatureOffset
@@ -29,13 +22,13 @@ library(
 */
 
 static String temperatureLibVersion()   { '3.2.2' }
-static String temperatureLibStamp() { '2024/07/02 11:14 PM' }
+static String temperatureLibStamp() { '2024/07/06 9:28 PM' }
 
 metadata {
     capability 'TemperatureMeasurement'
     // no commands
     preferences {
-        if (device) {
+        if (device && advancedOptions == true) {
             input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: 'Minimum reporting interval, seconds <i>(1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
             if (!(deviceType in ['mmWaveSensor', 'Thermostat'])) {
                 input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: 'Maximum reporting interval, seconds <i>(120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME

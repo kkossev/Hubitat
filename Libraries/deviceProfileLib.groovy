@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy', documentationLink: '',
-    version: '3.3.0'
+    version: '3.3.1'
 )
 /*
  *  Device Profile Library
@@ -27,7 +27,8 @@ library(
  * ver. 3.1.3  2024-05-21 kkossev  - skip processClusterAttributeFromDeviceProfile if cluster or attribute or value is missing
  * ver. 3.2.0  2024-05-25 kkossev  - commonLib 3.2.0 allignment;
  * ver. 3.2.1  2024-06-06 kkossev  - Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent); getDeviceProfilesMap bug fix; forcedProfile is always shown in preferences;
- * ver. 3.3.0  2024-06-29 kkossev  - (dev. branch) empty preferences bug fix; zclWriteAttribute delay 50 ms; added advanced check in inputIt(); fixed 'Cannot get property 'rw' on null object' bug; fixed enum attributes first event numeric value bug;
+ * ver. 3.3.0  2024-06-29 kkossev  - empty preferences bug fix; zclWriteAttribute delay 50 ms; added advanced check in inputIt(); fixed 'Cannot get property 'rw' on null object' bug; fixed enum attributes first event numeric value bug;
+ * ver. 3.3.1  2024-07-06 kkossev  - (dev. branch) added powerSource event in the initEventsDeviceProfile
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
@@ -40,8 +41,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.3.0' }
-static String deviceProfileLibStamp() { '2024/06/29 3:01 PM' }
+static String deviceProfileLibVersion()   { '3.3.1' }
+static String deviceProfileLibStamp() { '2024/07/06 10:02 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -912,7 +913,11 @@ public void deviceProfileInitializeVars(boolean fullInit=false) {
 }
 
 void initEventsDeviceProfile(boolean fullInit=false) {
-    logDebug "initEventsDeviceProfile(${fullInit})"
+    String ps = DEVICE?.device?.powerSource
+    logDebug "initEventsDeviceProfile(${fullInit}) for deviceProfile=${state.deviceProfile} DEVICE?.device?.powerSource=${ps} ps.isEmpty()=${ps.isEmpty()}"
+    if (ps != null && ps.isEmpty() == false) {
+        sendEvent(name: 'powerSource', value: ps, descriptionText: "Power Source set to '${ps}'", type: 'digital')
+    }
 }
 
 ///////////////////////////// Tuya DPs /////////////////////////////////

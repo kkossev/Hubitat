@@ -26,7 +26,8 @@
  * ver. 3.2.0  2024-05-24 kkossev  - commonLib 3.2.0 allignment
  * ver. 3.2.1  2024-05-25 kkossev  - Tuya radars bug fix
  * ver. 3.2.2  2024-06-04 kkossev  - commonLib 3.2.1 allignment; deviceProfile preference bug fix.
- * ver. 3.2.3  2024-06-21 kkossev  - (dev. branch) added _TZE204_nbkshs6k and _TZE204_dapwryy7 @CheesyPotato 
+ * ver. 3.2.3  2024-06-21 kkossev  - added _TZE204_nbkshs6k and _TZE204_dapwryy7 @CheesyPotato 
+ * ver. 3.2.4  2024-07-06 kkossev  - (dev.branch) using motionLib.groovy; 
  *                                   
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
  *                                   TODO: cleanup the 4-in-1 state variables.
@@ -43,8 +44,8 @@
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
 */
 
-static String version() { "3.2.3" }
-static String timeStamp() {"2024/06/21 7:46 AM"}
+static String version() { "3.2.4" }
+static String timeStamp() {"2024/07/04 7:18 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -62,6 +63,7 @@ import groovy.json.JsonOutput
 #include kkossev.commonLib
 #include kkossev.deviceProfileLib
 #include kkossev.illuminanceLib
+#include kkossev.motionLib
 
 deviceType = "mmWaveSensor"
 @Field static final String DEVICE_TYPE = "mmWaveSensor"
@@ -104,8 +106,6 @@ metadata {
         attribute 'illumState', 'enum', ['dark', 'light', 'unknown']
         attribute 'ledIndicator', 'number'
         attribute 'WARNING', 'string'
-
-        command 'setMotion', [[name: 'setMotion', type: 'ENUM', constraints: ['No selection', 'active', 'inactive'], description: 'Force motion active/inactive (for tests)']]
 
         if (_DEBUG) {
             command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]] 
@@ -826,7 +826,7 @@ Integer skipIfDisabled(int val) {
 }
 
 
-void parseIasMessage(final String description) {
+void customParseIasMessage(final String description) {
     // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn
     Map zs = zigbee.parseZoneStatusChange(description)
     if (zs.alarm1Set == true) {
@@ -837,92 +837,13 @@ void parseIasMessage(final String description) {
     }
 }
 
-void handleMotion(final boolean motionActive, final boolean isDigital=false) {
-    boolean motionActiveCopy = motionActive
-    if (settings.invertMotion == true) {
-        motionActiveCopy = !motionActiveCopy
-    }
-    if (motionActiveCopy) {
-        int timeout = motionResetTimer ?: 0
-        // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in code
-        if (settings.motionReset == true && timeout != 0) {
-            runIn(timeout, resetToMotionInactive, [overwrite: true])
-        }
-        if (device.currentState('motion')?.value != 'active') {
-            state.motionStarted = unix2formattedDate(now())
-        }
-    }
-    else {
-        if (device.currentState('motion')?.value == 'inactive') {
-            logDebug "ignored motion inactive event after ${getSecondsInactive()}s"
-            return      // do not process a second motion inactive event!
-        }
-    }
-    sendMotionEvent(motionActiveCopy, isDigital)
-}
-
-void sendMotionEvent(final boolean motionActive, boolean isDigital=false) {
-    String descriptionText = 'Detected motion'
-    if (motionActive) {
-        descriptionText = device.currentValue('motion') == 'active' ? "Motion is active ${getSecondsInactive()}s" : 'Detected motion'
-    }
-    else {
-        descriptionText = "Motion reset to inactive after ${getSecondsInactive()}s"
-    }
-    /*
-    if (isBlackSquareRadar() && device.currentValue("motion", true) == "active" && (motionActive as boolean) == true) {    // TODO - obsolete
-        return    // the black square radar sends 'motion active' every 4 seconds!
-    }
-    */
-    if (txtEnable) log.info "${device.displayName} ${descriptionText}"
-    sendEvent(
-            name            : 'motion',
-            value            : motionActive ? 'active' : 'inactive',
-            type            : isDigital == true ? 'digital' : 'physical',
-            descriptionText : descriptionText
-    )
-    //runIn(1, formatAttrib, [overwrite: true])
-}
-
-void resetToMotionInactive() {
-    if (device.currentState('motion')?.value == 'active') {
-        String descText = "Motion reset to inactive after ${getSecondsInactive()}s (software timeout)"
-        sendEvent(
-            name : 'motion',
-            value : 'inactive',
-            isStateChange : true,
-            type:  'digital',
-            descriptionText : descText
-        )
-        if (txtEnable) log.info "${device.displayName} ${descText}"
-    }
-    else {
-        if (txtEnable) log.debug "${device.displayName} ignored resetToMotionInactive (software timeout) after ${getSecondsInactive()}s"
-    }
-}
-
-void setMotion(String mode) {
-    if (mode == 'active') {
-        handleMotion(motionActive = true, isDigital = true)
-    } else if (mode == 'inactive') {
-        handleMotion(motionActive = false, isDigital = true)
-    } else {
-        if (settings?.txtEnable) {
-            log.warn "${device.displayName} please select motion action"
-        }
-    }
-}
-
-int getSecondsInactive() {
-    Long unixTime = 0
-    try { unixTime = formattedDate2unix(state.motionStarted) } catch (Exception e) { logWarn "getSecondsInactive: ${e}" }
-    if (unixTime) { return Math.round((now() - unixTime) / 1000) }
-    return settings?.motionResetTimer ?: 0
-}
-
+/*
+// called from standardProcessTuyaDP in the commonLib for each Tuya dp report in a Zigbee message
+// should always return true, as we are not processing the dp reports here. Actually - not needed to be defined at all!
 boolean customProcessTuyaDp(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
     return false
 }
+*/
 
 void customParseE002Cluster(final Map descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
@@ -979,27 +900,6 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
     }    
 }
 
-
-/*  // moved to deviceProfileLib
-List<String> refreshFromDeviceProfileList() {
-    logDebug "refreshFromDeviceProfileList()"
-    List<String> cmds = []
-    if (DEVICE?.refresh != null) {
-        List<String> refreshList = DEVICE.refresh
-        for (String k : refreshList) {
-            if (k != null) {
-                Map map = DEVICE.attributes.find { it.name == k }
-                if (map != null) {
-                    Map mfgCode = map.mfgCode != null ? ['mfgCode':map.mfgCode] : [:]
-                    cmds += zigbee.readAttribute(hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[0]), hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[1]), mfgCode, delay = 100)
-                }
-            }
-        }
-    }
-    return cmds
-}
-
-*/
 
 List<String> customRefresh() {
     logDebug "customRefresh()"

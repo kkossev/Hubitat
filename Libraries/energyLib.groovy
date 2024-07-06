@@ -3,7 +3,7 @@ library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Energy Library', name: 'energyLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/energyLib.groovy', documentationLink: '',
     version: '3.3.0'
-   
+
 )
 /*
  *  Zigbee Energy Library
@@ -21,7 +21,7 @@ library(
  * ver. 3.2.0  2024-05-24 kkossev  - CommonLib 3.2.0 allignment
  * ver. 3.3.0  2024-06-09 kkossev  - added energy, power, voltage, current events parsing
  *
- *                                   TODO: add energyRefresh() 
+ *                                   TODO: add energyRefresh()
 */
 
 static String energyLibVersion()   { '3.3.0' }
@@ -53,12 +53,10 @@ metadata {
 @Field static final int RMS_VOLTAGE_ID = 0x0505
 @Field static final int CURRENT_SUMMATION_DELIVERED = 0x0000 // Energy
 
-
 @Field static  int    DEFAULT_REPORTING_TIME = 30
 @Field static  int    DEFAULT_PRECISION = 3           // 3 decimal places
 @Field static  BigDecimal DEFAULT_DELTA = 0.001
 @Field static  int    MAX_POWER_LIMIT = 999
-
 
 void sendVoltageEvent(BigDecimal voltage, boolean isDigital=false) {
     Map map = [:]
@@ -180,9 +178,9 @@ void sendEnergyEvent(BigDecimal energy_total, boolean isDigital=false) {
     }
 }
 
-// parse the electrical measurement cluster 0x0B04 
+// parse the electrical measurement cluster 0x0B04
 boolean standardParseElectricalMeasureCluster(Map descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    if (descMap.value == null || descMap.value == 'FFFF') { return true } // invalid or unknown value
     int value = hexStrToUnsignedInt(descMap.value)
     int attributeInt = hexStrToUnsignedInt(descMap.attrId)
     logTrace "standardParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
@@ -203,11 +201,11 @@ boolean standardParseElectricalMeasureCluster(Map descMap) {
             BigDecimal frequency = new BigDecimal(value).divide(new BigDecimal(10))
             sendFrequencyEvent(frequency)
             break
-        case 0x0800:    // AC Alarms Mask 
+        case 0x0800:    // AC Alarms Mask
             logDebug "standardParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} AC Alarms Mask value=${value}"
             break
         case 0x0802:    // AC Current Overload
-            logDebug "standardParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} AC Current Overload value=${value/1000} (raw: ${value})"
+            logDebug "standardParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} AC Current Overload value=${value / 1000} (raw: ${value})"
             break
         case [AC_VOLTAGE_MULTIPLIER_ID, AC_VOLTAGE_DIVISOR_ID, AC_CURRENT_MULTIPLIER_ID, AC_CURRENT_DIVISOR_ID, AC_POWER_MULTIPLIER_ID, AC_POWER_DIVISOR_ID].contains(descMap.attrId):
             logDebug "standardParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
@@ -219,9 +217,9 @@ boolean standardParseElectricalMeasureCluster(Map descMap) {
     return true // parsed and processed
 }
 
-// parse the metering cluster 0x0702 
+// parse the metering cluster 0x0702
 boolean standardParseMeteringCluster(Map descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    if (descMap.value == null || descMap.value == 'FFFF') { return true } // invalid or unknown value
     int value = hexStrToUnsignedInt(descMap.value)
     int attributeInt = hexStrToUnsignedInt(descMap.attrId)
     logTrace "standardParseMeteringCluster: (0x0702)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"

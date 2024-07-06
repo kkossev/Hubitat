@@ -18,13 +18,13 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.2.0  2024-05-27 kkossev  - added iasLib.groovy
- * ver. 3.2.1  2024-06-22 kkossev  - (dev. branch)
+ * ver. 3.2.1  2024-07-06 kkossev  - (dev. branch) added standardParseIasMessage (debug only)
  *
  *                                   TODO:
 */
 
 static String iasLibVersion()   { '3.2.1' }
-static String iasLibStamp() { '2024/06/22 8:06 PM' }
+static String iasLibStamp() { '2024/07/06 11:48 AM' }
 
 metadata {
     // no capabilities
@@ -71,6 +71,19 @@ metadata {
     0x01: 'Enrolled'
 ]
 
+public void standardParseIasMessage(final String description) {
+    // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn
+    Map zs = zigbee.parseZoneStatusChange(description)
+    if (zs.alarm1Set == true) {
+        logDebug "standardParseIasMessage: Alarm 1 is set"
+        //handleMotion(true)
+    }
+    else {
+        logDebug "standardParseIasMessage: Alarm 1 is cleared"
+        //handleMotion(false)
+    }
+}
+
 public void standardParseIASCluster(final Map descMap) {
     logDebug "standardParseIASCluster: cluster=${descMap} attrInt=${descMap.attrInt} value=${descMap.value}"
     if (descMap.cluster != '0500') { return } // not IAS cluster
@@ -92,7 +105,7 @@ public void standardParseIASCluster(final Map descMap) {
         if (descMap?.attrId == '0000') {
             int value = Integer.parseInt(descMap?.value, 16)
             String status = "${ZONE_STATE[value]}"
-            if (value == 0 ) { status = "<b>${status}</b>" ; logWarn "${clusterInfo} is NOT ENROLLED!"}
+            if (value == 0 ) { status = "<b>${status}</b>" ; logWarn "${clusterInfo} is NOT ENROLLED!" }
             logInfo "${clusterInfo} IAS Zone State report is '${status}' (${value})"
         }
         else if (descMap?.attrId == '0001') {

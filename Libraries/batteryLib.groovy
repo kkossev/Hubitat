@@ -2,31 +2,25 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Battery Library', name: 'batteryLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/batteryLib.groovy', documentationLink: '',
-    version: '3.2.0'
+    version: '3.2.1'
 )
 /*
  *  Zigbee Level Library
  *
- *  Licensed Virtual the Apache License, Version 2.0 (the "License"); you may not use this file except
- *  in compliance with the License. You may obtain a copy of the License at:
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- *  for the specific language governing permissions and limitations under the License.
+ *  Licensed Virtual the Apache License, Version 2.0
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added batteryLib.groovy
  * ver. 3.0.1  2024-04-06 kkossev  - customParsePowerCluster bug fix
  * ver. 3.0.2  2024-04-14 kkossev  - batteryPercentage bug fix (was x2); added bVoltCtr; added battertRefresh
- * ver. 3.2.0  2024-04-14 kkossev  - (dev. branch) commonLib 3.2.0 allignment; added lastBattery
+ * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment; added lastBattery; added handleTuyaBatteryLevel
+ * ver. 3.2.1  2024-07-06 kkossev  - (dev. branch) added tuyaToBatteryLevel and handleTuyaBatteryLevel; added batteryInitializeVars
  *
- *                                   TODO:
+ *                                   TODO: batteryVoltage in the deviceProfile capabilities
  *                                   TODO: battery voltage low/high limits configuration
 */
 
-static String batteryLibVersion()   { '3.2.0' }
-static String batteryLibStamp() { '2024/05/21 5:57 PM' }
+static String batteryLibVersion()   { '3.2.1' }
+static String batteryLibStamp() { '2024/07/06 10:27 PM' }
 
 metadata {
     capability 'Battery'
@@ -36,11 +30,16 @@ metadata {
     preferences {
         if (device && advancedOptions == true) {
             input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: 'Convert battery voltage to battery Percentage remaining.'
+            if ('Battery' in DEVICE?.capabilities) {
+                input(name: 'batteryDelay', type: 'enum', title: '<b>Battery Events Delay</b>', description:'Select the Battery Events Delay<br>(default is <b>no delay</b>)', options: DelayBatteryOpts.options, defaultValue: DelayBatteryOpts.defaultValue)
+            }
         }
     }
 }
 
-void standardParsePowerCluster(final Map descMap) {
+@Field static final Map DelayBatteryOpts = [ defaultValue: 0, options: [0: 'No delay', 30: '30 seconds', 3600: '1 hour', 14400: '4 hours', 28800: '8 hours', 43200: '12 hours']]
+
+public void standardParsePowerCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     final int rawValue = hexStrToUnsignedInt(descMap.value)
     if (descMap.attrId == '0020') { // battery voltage
@@ -66,7 +65,7 @@ void standardParsePowerCluster(final Map descMap) {
     }
 }
 
-void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false) {
+public void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false) {
     logDebug "batteryVoltage = ${(double)rawValue / 10.0} V"
     final Date lastBattery = new Date()
     Map result = [:]
@@ -101,7 +100,7 @@ void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false)
     }
 }
 
-void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=false) {
+public void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=false) {
     if ((batteryPercent as int) == 255) {
         logWarn "ignoring battery report raw=${batteryPercent}"
         return
@@ -150,7 +149,33 @@ private void sendDelayedBatteryVoltageEvent(Map map) {
     sendEvent(name: 'lastBattery', value: map.lastBattery)
 }
 
-List<String> batteryRefresh() {
+public int tuyaToBatteryLevel(int fncmd) {
+    int rawValue = fncmd
+    switch (fncmd) {
+        case 0: rawValue = 100; break // Battery Full
+        case 1: rawValue = 75;  break // Battery High
+        case 2: rawValue = 50;  break // Battery Medium
+        case 3: rawValue = 25;  break // Battery Low
+        case 4: rawValue = 100; break // Tuya 3 in 1 -> USB powered
+        // for all other values >4 we will use the raw value, expected to be the real battery level 4..100%
+    }
+    return rawValue
+}
+
+public void handleTuyaBatteryLevel(int fncmd) {
+    int rawValue = tuyaToBatteryLevel(fncmd)
+    sendBatteryPercentageEvent(rawValue)
+}
+
+public void batteryInitializeVars( boolean fullInit = false ) {
+    logDebug "batteryInitializeVars()... fullInit = ${fullInit}"
+    if (device.hasCapability('Battery')) {
+        if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) }
+        if (fullInit || settings?.batteryDelay == null) { device.updateSetting('batteryDelay', [value: DelayBatteryOpts.defaultValue.toString(), type: 'enum']) }
+    }
+}
+
+public List<String> batteryRefresh() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 100)         // battery voltage
     cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 100)         // battery percentage
