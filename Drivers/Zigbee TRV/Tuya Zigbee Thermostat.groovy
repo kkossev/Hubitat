@@ -13,7 +13,8 @@
  *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *     for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.3.0  2024-06-07 kkossev  - (dev. branch) separate new 'Tuya Zigbee Thermostat' driver for Tuya Thermostats and TRVs.
+ * ver. 3.3.0  2024-06-07 kkossev  - separate new 'Tuya Zigbee Thermostat' driver for Tuya Thermostats and TRVs.
+ * ver. 3.3.1  2024-07-09 kkossev  - (dev. branch) driber renamed to 'Tuya Zigbee TRVs and Thermostats
  *
  *                                   TODO: BEOK - needs retries, the first command is lost sometimes! :( 
  *                                   TODO: BEOK: check calibration and correction DPs !!!
@@ -42,8 +43,8 @@
  *                                   TODO: UNKNOWN TRV - update the deviceProfile - separate 'Unknown Tuya' and 'Unknown ZCL'
  */
 
-static String version() { '3.3.0' }
-static String timeStamp() { '2024/06/08 1:52 PM' }
+static String version() { '3.3.1' }
+static String timeStamp() { '2024/07/09 7:52 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -68,7 +69,7 @@ deviceType = 'Thermostat'
 
 metadata {
     definition(
-        name: 'Tuya Zigbee Thermostat',
+        name: 'Tuya Zigbee TRVs and Thermostats',
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Zigbee%20TRV/Tuya_Zigbee_Thermostat_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {

@@ -2,9 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Thermostat Library', name: 'thermostatLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy', documentationLink: '',
-    version: '3.3.1'
-
-)
+    version: '3.3.2')
 /*
  *  Zigbee Thermostat Library
  *
@@ -18,13 +16,14 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.3.0  2024-06-09 kkossev  - added thermostatLib.groovy
- * ver. 3.3.1  2024-06-16 kkossev  - (dev.branch) added factoryResetThermostat() command
+ * ver. 3.3.1  2024-06-16 kkossev  - added factoryResetThermostat() command
+ * ver. 3.3.2  2024-07-09 kkossev  - (dev.branch)
  *
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
-static String thermostatLibVersion()   { '3.3.1' }
-static String illuminanceLibStamp() { '2024/06/16 8:59 AM' }
+static String thermostatLibVersion()   { '3.3.2' }
+static String illuminanceLibStamp() { '2024/07/09 8:59 AM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib
@@ -44,7 +43,7 @@ metadata {
     //    command 'setTemperature', ['NUMBER']                        // Virtual thermostat  TODO - decide if it is needed
 
     preferences {
-        if (settings?.advancedOptions == true) { // TODO -  move it to the deviceProfile preferences
+        if (device) { // TODO -  move it to the deviceProfile preferences
             input name: 'temperaturePollingInterval', type: 'enum', title: '<b>Temperature polling interval</b>', options: TrvTemperaturePollingIntervalOpts.options, defaultValue: TrvTemperaturePollingIntervalOpts.defaultValue, required: true, description: 'Changes how often the hub will poll the TRV for faster temperature reading updates and nice looking graphs.'
         }
     }

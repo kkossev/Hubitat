@@ -13,8 +13,11 @@
  *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *     for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.3.0  2024-06-08 kkossev  - (dev. branch) searate new driver for TRVZB thermostat
+ * ver. 3.3.0  2024-06-08 kkossev  - searate new driver for TRVZB thermostat
+ * ver. 3.3.1  2024-07-09 kkossev  - (dev.branch) TimeSync() magic
  *
+ *                                   TODO: initializeDeviceThermostat() - configure in the device profile !
+ *                                   TODO: verify if onoffLib is needed
  *                                   TODO: sonoff - the battery is reported twice, and too often
  *                                   TODO: add powerSource capability
  *                                   TODO: add Info dummy preference to the driver with a hyperlink
@@ -22,9 +25,7 @@
  *                                   TODO: Healthcheck to be every hour (not 4 hours) for mains powered thermostats
  *                                   TODO: add 'force manual mode' preference (like in the wall thermostat driver)
  *                                   TODO: option to disable the Auto mode ! (like in the wall thermostat driver)
- *                                   TODO: verify if onoffLib is needed
  *                                   TODO: Sonoff : decode weekly schedule responses (command 0x00)
- *                                   TODO: initializeDeviceThermostat() - configure in the device profile !
  *                                   TODO: add [refresh] for battery heatingSetpoint thermostatOperatingState events and logs
  *                                   TODO: autoPollThermostat: no polling for device profile UNKNOWN
  *                                   TODO: configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
@@ -38,8 +39,8 @@
  *                                   TODO: Sonoff - add 'emergency heat' simulation ?  ( +timer ?)
  */
 
-static String version() { '3.3.0' }
-static String timeStamp() { '2024/06/08 2:00 PM' }
+static String version() { '3.3.1' }
+static String timeStamp() { '2024/07/09 7:53 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -50,7 +51,6 @@ import hubitat.zigbee.zcl.DataType
 import java.util.concurrent.ConcurrentHashMap
 import groovy.json.JsonOutput
 import java.math.RoundingMode
-
 
 #include kkossev.commonLib
 #include kkossev.onOffLib
@@ -120,7 +120,6 @@ metadata {
     }
 }
 
-
 @Field static final Map deviceProfilesV3 = [
 
     // Sonoff TRVZB : https://github.com/Koenkk/zigbee-herdsman-converters/blob/b89af815cf41bd309d63f3f01d352dbabcf4ebb2/src/devices/sonoff.ts#L454
@@ -139,7 +138,7 @@ metadata {
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0006,0020,0201,FC57,FC11', outClusters:'000A,0019', model:'TRVZB', manufacturer:'SONOFF', deviceJoinName: 'Sonoff TRVZB']
             ],
-            commands      : ['printFingerprints':'printFingerprints', 'autoPollThermostat':'autoPollThermostat', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            commands      : [testT:'testT',initializeSonoff:'initializeSonoff', 'printFingerprints':'printFingerprints', 'autoPollThermostat':'autoPollThermostat', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             tuyaDPs       : [:],
             attributes    : [   // TODO - configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
                 [at:'0x0201:0x0000',  name:'temperature',           type:'decimal', dt:'0x29', rw:'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C',  description:'Local temperature'],
@@ -215,7 +214,6 @@ metadata {
 
 ]
 
-
 /*
  * -----------------------------------------------------------------------------
  * thermostat cluster 0x0201
@@ -229,6 +227,22 @@ void customParseThermostatCluster(final Map descMap) {
     boolean result = processClusterAttributeFromDeviceProfile(descMap)
     if ( result == false ) {
         logWarn "parseThermostatClusterThermostat: received unknown Thermostat cluster (0x0201) attribute 0x${descMap.attrId} (value ${descMap.value})"
+    }
+}
+
+/*
+ * -----------------------------------------------------------------------------
+ * Sonoff custom cluster 0xFC11
+ * called from parse() in the main code ...
+ * -----------------------------------------------------------------------------
+*/
+void customParseFC11Cluster(final Map descMap) {
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    logTrace "customParseFC11Cluster: zigbee received Sonoff custom cluster (0xFC11) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
+    boolean result = processClusterAttributeFromDeviceProfile(descMap)
+    if ( result == false ) {
+        logWarn "customParseFC11Cluster: received unknown Sonoff custom cluster (0xFC11) attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
 }
 
@@ -266,7 +280,6 @@ void customUpdated() {
     updateAllPreferences()
 }
 
-
 List<String> customRefresh() {
     List<String> cmds = refreshFromDeviceProfileList()
     logDebug "customRefresh: ${cmds} "
@@ -276,48 +289,55 @@ List<String> customRefresh() {
 List<String> customConfigure() {
     List<String> cmds = []
     logDebug "customConfigure() : ${cmds} (not implemented!)"
+    //initializeSonoff()
     return cmds
 }
 
 List<String> initializeSonoff()
 {
+    logWarn 'initializeSonoff() ...'
     List<String> cmds = []
-        //cmds = ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
-        //cmds =   ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 86 12 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
 
-        cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0005, 0x4000], [:], delay = 2711)
+//        cmds = ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
+   // cmds =   ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 86 12 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
+        cmds += zigbee.readAttribute(0x0000, 0x0001, [:], delay = 118)       // Seq: 18
+        //cmds += zigbee.readAttribute(0x0000, 0x0002, [:], delay = 119)       // Seq: 19  // response: unsupported attribute
+        //cmds += zigbee.readAttribute(0x0000, 0x0003, [:], delay = 120)       // Seq: 20  // response: unsupported attribute
 
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0020 {${device.zigbeeId}} {}", 'delay 612', ]     // Poll Control Cluster    112
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", 'delay 613', ]     // Power Configuration Cluster     113
-        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0001 0x0021 0x20 3600 7200 {02}", 'delay 314', ]          // battery reporting   114
-        cmds += zigbee.readAttribute(0x0019, 0x0002, [:], delay = 315)                                                 // current file version    115
-        cmds += zigbee.writeAttribute(0xFC11, 0x6008, 0x20, 0x7F, [:], delay = 116)                                     // unknown 1  116
-        cmds += zigbee.writeAttribute(0xFC11, 0x6008, 0x20, 0x7F, [:], delay = 317)                                     // unknown 1  117
-        cmds += zigbee.writeAttribute(0xFC11, 0x6008, 0x20, 0x7F, [:], delay = 118)                                     // unknown 1``  118
-        logDebug 'configuring cluster 0x0201 ...'
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x00 0x0201 {${device.zigbeeId}} {}", 'delay 619', ]     // Thermostat Cluster  119 // TODO : check source EP - 0 or 1 ?
-        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0000 0x29 1800 3540 {0x32}", 'delay 600', ]        // local temperature   120
-        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 1210)                                                 // battery 121
-        cmds += zigbee.command(0xEF00, 0x03, '00')        //, "00 00", "00")                               // sequence 123
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x00 0x0000 {${device.zigbeeId}} {}", 'delay 112' ]     // Basic cluster
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0000 0x0000 0x20 0 300 {00 00}", 'delay 122' ]           //
 
-        cmds += zigbee.writeAttribute(0xFC11, 0x0000, 0x10, 0x01, [:], delay = 140)                                    // 140
-        cmds += zigbee.writeAttribute(0xFC11, 0x0000, 0x10, 0x00, [:], delay = 141)                                    // 141
-        cmds += zigbee.writeAttribute(0xFC11, 0x6000, 0x10, 0x01, [:], delay = 142)                                    // 142
-        cmds += zigbee.writeAttribute(0xFC11, 0x6000, 0x10, 0x00, [:], delay = 143)                                    // 143
-        cmds += zigbee.writeAttribute(0xFC11, 0x6002, 0x29, 0750, [:], delay = 144)                                    // 144
-        cmds += zigbee.writeAttribute(0x0201, 0x001C, 0x30, 0x01, [:], delay = 145)                                    // 145
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0020 {${device.zigbeeId}} {}", 'delay 112' ]     // Poll Control Cluster    Seq: 68
+        cmds += zigbee.readAttribute(0x0020, 0x0000, [:], delay = 121)       // Seq: 21 (Check-in interval)
 
-    /*
-        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0012 0x29 1 600 {}", "delay 252", ]   // heating setpoint
-        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x001C 0x30 1 600 {}", "delay 253", ]   // thermostat mode
-    */
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x00 0x0201 {${device.zigbeeId}} {}", 'delay 169' ]     // Thermostat Cluster  Seq: 69
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0000 0x29 0 3600 {0A 00}", 'delay 122' ]        // Seq: 22 configure reproting - local temperature  min 0 max 3600 delta 10
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0012 0x29 0 3600 {0A 00}", 'delay 123' ]        // Seq: 23 configure reproting - occupied heatingSetpoint  min 0 max 3600 delta 10
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x001c 0x30 10 3600 {00 00}", 'delay 124' ]            // Seq: 24 configure reproting - SystemMode  min 10 max 3600 delta 10
+        //sendZigbeeCommands(cmds)
 
-        cmds +=  zigbee.reportingConfiguration(0x0201, 0x0000, [:], 552)    // read it back - doesn't work
-        cmds +=  zigbee.reportingConfiguration(0x0201, 0x0012, [:], 551)    // read it back - doesn't work
-        cmds +=  zigbee.reportingConfiguration(0x0201, 0x001C, [:], 553)    // read it back - doesn't work
+//        cmds = []
+        cmds += zigbee.readAttribute(0x0201, 0x0010, [:], delay = 125)       // Seq: 25 (LocalTemperatureCalibration)
+        cmds += zigbee.readAttribute(0xFC11, [0x0000, 0x6000, 0x6002, 0x6003, 0x6004, 0x6005, 0x6006, 0x6007], [:], delay = 226)     // Seq: 26
+        cmds += zigbee.writeAttribute(0x0201, 0x001c, 0x30, 0x01, [:], delay = 140)                                    // Seq: 29 (System Mode)
+        //sendZigbeeCommands(cmds)
+        cmds +=   ["he raw 0x${device.deviceNetworkId} 1 1 0x000a {40 01 01 00 00 00 e2 78 83 1f 2e 07 00 00 23 a8 ad 1f 2e}", "delay 141",]
 
-        cmds += zigbee.readAttribute(0x0201, 0x0010, [:], delay = 254)      // calibration
-        cmds += zigbee.readAttribute(0xFC11, [0x0000, 0x6000, 0x6002], [:], delay = 255)
+        //cmds = []
+        cmds += zigbee.writeAttribute(0x0201, 0x001c, 0x30, 0x04, [:], delay = 142)                                    // Seq: 30 (System Mode)
+
+/*
+        cmds += zigbee.readAttribute(0x0201, 0x0029, [:], delay = 131)                                                 // Seq: 31 (ThermostatRunningMode)
+        cmds += zigbee.readAttribute(0xFC11, 0x6002, [:], delay = 132)                                                 // Seq: 32 (Attribute: 0x6002)
+
+        cmds += zigbee.readAttribute(0xFC11, 0x6005, [:], delay = 133)                                                 // Seq: 33 (Attribute: 0x6005)
+        cmds += zigbee.readAttribute(0xFC11, 0x6006, [:], delay = 134)                                                 // Seq: 34 (Attribute: 0x6006)
+        cmds += zigbee.readAttribute(0xFC11, 0x6007, [:], delay = 135)                                                 // Seq: 35 (Attribute: 0x6007) (first time)
+        cmds += zigbee.readAttribute(0xFC11, 0x6007, [:], delay = 136)                                                 // Seq: 36 (Attribute: 0x6007) (second time)
+        cmds += zigbee.readAttribute(0xFC11, 0x6007, [:], delay = 137)                                                 // Seq: 37 (Attribute: 0x6007) (third time)
+        cmds += zigbee.readAttribute(0xFC11, 0x6007, [:], delay = 1138)                                                // Seq: 38 (Attribute: 0x6007) (fourth time)
+        cmds += zigbee.readAttribute(0xFC11, 0x6002, [:], delay = 1139)                                                // Seq: 39 (Attribute: 0x6002)
+*/        
 
     /*
         configure: async (device, coordinatorEndpoint, logger) => {
@@ -331,6 +351,7 @@ List<String> initializeSonoff()
             },
     */
     return cmds
+    //sendZigbeeCommands(cmds)
 }
 
 // called from initializeDevice in the commonLib code
@@ -357,7 +378,6 @@ void customInitEvents(final boolean fullInit=false) {
     logDebug "customInitEvents(${fullInit})"
     thermostatInitEvents(fullInit)
 }
-
 
 // called from processFoundItem  (processTuyaDPfromDeviceProfile and ) processClusterAttributeFromDeviceProfile in deviceProfileLib when a Zigbee message was found defined in the device profile map
 //
@@ -453,6 +473,7 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
 }
 
 void testT(String par) {
+    /*
     log.trace "testT(${par}) : DEVICE.preferences = ${DEVICE.preferences}"
     Map result
     if (DEVICE != null && DEVICE.preferences != null && DEVICE.preferences != [:]) {
@@ -462,8 +483,28 @@ void testT(String par) {
             logDebug "inputIt: ${result}"
         }
     }
+    */
+    List<String> cmds = []
+    cmds =   ["he raw 0x${device.deviceNetworkId} 1 1 0x000a {40 01 01 00 00 00 e2 78 83 1f 2e 07 00 00 23 a8 ad 1f 2e}", "delay 200",]
+    /*
+ZigBee Cluster Library Frame, Command: Read Attributes Response, Seq: 9
+    Frame Control Field: Profile-wide (0x40)
+    Sequence Number: 9
+    Command: Read Attributes Response (0x01)
+    Status Record, UTC
+        Attribute: Time (0x0000)
+        Status: Success (0x00)
+        Data Type: UTC Time (0xe2)
+        UTC: Jul  9, 2024 08:13:28.000000000 FLE Daylight Time
+    Status Record, Uint32: 773828008
+        Attribute: Local Time (0x0007)
+        Status: Success (0x00)
+        Data Type: 32-Bit Unsigned Integer (0x23)
+        Uint32: 773828008 (0x2e1fada8)
+
+    */
+
+    sendZigbeeCommands(cmds)
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
-
-

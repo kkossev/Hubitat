@@ -18,7 +18,7 @@
  * ver. 3.3.2  2024-06-16 kkossev  - added windowOpenCheck preference (not working?); added 'auto' mode, added emergency heat' mode; modeAfterDry default changed to 'heat'; added 'advanced:true' to the attributes map
  *                                    added 'eco' (away) mode; added overHeatAlarm advanced attribute; displayAutoOff is disabled by default; added refreshAll command; added add factoryReset command; fixed energy reporting configuration
  * ver. 3.3.3  2024-06-25 kkossev  - release 3.3.3
- * ver. 3.3.4  2024-06-29 kkossev  - (dev.branch) added NAMRON_RADIATOR device profile and attributes;
+ * ver. 3.3.4  2024-06-29 kkossev  - added NAMRON_RADIATOR device profile and attributes;
  *
  *                                   TODO: fix the forcedDeviceProfile !!!
  *                                   TODO: add a link to GitHub WiKi
