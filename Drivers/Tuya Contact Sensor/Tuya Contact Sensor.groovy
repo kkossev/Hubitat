@@ -24,6 +24,7 @@
  *                                   the configuration attempts are not repeated, if error code is returned; added setOpen and setClosed commands (for tests); added pollBatteryStatus option for devices that do not report the battery level automatically
  * ver. 1.2.1  2024-06-03 kkossev  - added resetStats command
  * ver. 1.2.2  2024-06-14 kkossev  - added ThirdReality tilt sensor 3RDTS01056Z; new _TZE200_pay2byax fingerprint; added preference to disable illuminance @Big_Bruin
+ * ver. 1.2.3  2024-07-10 kkossev  - (dev.branch) fixed outOfSync and pollContactStatus bugs; notPresentCounter-1 correction in the debug logs;
  *
  *                                   TODO: handle the case when 'lastBattery' is missing.
  *                                   TODO: filter duplicated open/close messages when 'Poll Contact Status' option is enabled
@@ -35,8 +36,8 @@
  *                                   TODO: refactor - use libraries !
  */
 
-static String version() { '1.2.2' }
-static String timeStamp() { '2024/06/14 7:05 PM' }
+static String version() { '1.2.3' }
+static String timeStamp() { '2024/07/10 6:37 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -130,7 +131,7 @@ metadata {
 
 @Field static final Map batteryReportingOptions = [
     defaultValue: 00,
-    options     : [00: 'Default', 7200: 'Every 2 Hours', 14400: 'Every 4 Hours', 28800: 'Every 8 Hours', 43200: 'Every 12 Hours', 86400: 'Every 24 Hours']
+    options     : [00: 'Default (no explicit battery configuration)', 600:'Every 10 minutes (not recommended!)', 3600: 'Every 1 hour',7200: 'Every 2 Hours', 14400: 'Every 4 Hours', 28800: 'Every 8 Hours', 43200: 'Every 12 Hours', 86400: 'Every 24 Hours']
 ]
 
 @Field static final Map deviceProfiles = [
@@ -702,12 +703,19 @@ void setClosed() {
 
 void sendContactEvent(contactActive, isDigital = false) {
     String descriptionText = 'contact is ' + (contactActive  ? 'open' : 'closed')
-    if (txtEnable) { log.info "${device.displayName} ${descriptionText}" }
-    Map statsMap = stringToJsonMap(state.stats);
+    descriptionText += isDigital ? ' [digital]' : ''
+    Map statsMap = stringToJsonMap(state.stats)
+    Map lastTxMap = stringToJsonMap(state.lastTx)
     // if contact is changed and contactPoll time is less than 10 seconds ago, increment the stats.outOfSync counter
-    if ((contactActive ? 'open' : 'closed') != device.currentValue('contact')) {
-        if (now() - (statsMap['contactPoll'] ?: now() ) < 10000) {
-            try {statsMap['outOfSync']++} catch (e) {statsMap['outOfSync'] = 1; }
+    if (setting?.pollContactStatus == true) {
+        if ((contactActive ? 'open' : 'closed') != device.currentValue('contact') && isDigital == false) {
+            int timeElapsed = Math.round((now() - (lastTxMap['contactPoll'] ?: now())) / 1)
+            logDebug "sendContactEvent: contact status changed from ${device.currentValue('contact')} to ${contactActive ? 'open' : 'closed'} timeElapsed = ${timeElapsed} ms"
+            if (timeElapsed < 10000) {
+                try {statsMap['outOfSync']++} catch (e) {statsMap['outOfSync'] = 1; }
+                logInfo "<b>contact status synchronized</b> from ${device.currentValue('contact')} to ${contactActive ? 'open' : 'closed'}"
+                descriptionText += ' [outOfSync]'
+            }
         }
     }
     sendEvent(
@@ -717,6 +725,7 @@ void sendContactEvent(contactActive, isDigital = false) {
             type: isDigital == true ? 'digital' : 'physical',
             descriptionText: descriptionText
     )
+    logInfo "${descriptionText}" 
     state.stats = mapToJsonString(statsMap)
 }
 
@@ -867,15 +876,16 @@ void updated() {
     }
 
     if (isBatteryConfigurable()) {
+        //log.trace "settings.batteryReporting = ${settings.batteryReporting}"
         int batteryReportinginterval = (settings.batteryReporting as Integer) ?: 0
-        //logDebug "settings?.batteryReporting = ${settings?.batteryReporting as int} batteryReportinginterval=${batteryReportinginterval}"
+        logDebug "settings?.batteryReporting = ${settings?.batteryReporting as int} batteryReportinginterval=${batteryReportinginterval}"
         if (batteryReportinginterval > 0) {
-            String newBattCfg = '3600' + ',' + batteryReportinginterval.toString() + ',' + '1'
+            String newBattCfg = settings.minReportingTime.toString() + ',' + batteryReportinginterval.toString() + ',' + '1'
             if (lastTxMap.battCfg == null || (lastTxMap.battCfg != lastRxMap.battCfg) || (lastTxMap.battCfg != newBattCfg ) ) {
                 lastTxMap.battCfg = newBattCfg
                 logDebug "lastTxMap.battCfg = ${lastTxMap.battCfg}"
-                cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 3600, batteryReportinginterval as int, 1  /*0*/, [:], 101)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
-                cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 3600, batteryReportinginterval as int, 1  /*0*/, [:], 102)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected
+                cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, settings.minReportingTime as int /*3600*/, batteryReportinginterval as int, 1  /*0*/, [:], 101)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
+                cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, settings.minReportingTime as int /*3600*/, batteryReportinginterval as int, 1  /*0*/, [:], 102)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected
                 cmds += zigbee.reportingConfiguration(0x0001, 0x0020, [:], 103)
                 cmds += zigbee.reportingConfiguration(0x0001, 0x0021, [:], 104)
                 log.info "configure battery reporting (${lastTxMap.battCfg}) pending ..."
@@ -886,7 +896,7 @@ void updated() {
             }
         }
         else {
-            logDebug 'no battery reporting configuration'
+            logDebug "no battery reporting configuration (deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true) = ${deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true }"
         }
     } // SONOFF
 
@@ -1015,7 +1025,7 @@ void refresh() {
 void pollContactStatus() {
     Map lastTxMap = stringToJsonMap(state.lastTx)
     List<String> cmds = []
-    cmds += zigbee.readAttribute(0x0500, 0x0000, [:], delay = 200)
+    cmds += zigbee.readAttribute(0x0500, 0x0002, [:], delay = 200)  // read contact status - bug fixed 07/10/2024
     sendZigbeeCommands(cmds)
     logDebug 'pollContactStatus() called'
     lastTxMap.contactPoll = now()
@@ -1119,7 +1129,7 @@ void initializeVars(boolean fullInit = true) {
     if (fullInit == true || settings?.batteryReporting == null) { device.updateSetting('batteryReporting', [value: batteryReportingOptions.defaultValue.toString(), type: 'enum']) }
     if (fullInit == true || settings?.pollContactStatus == null) { device.updateSetting('pollContactStatus', false) }
     if (fullInit == true || settings?.pollBatteryStatus == null) { device.updateSetting('pollBatteryStatus', false) }
-    if (fullInit == true || settings?.disableIlluminance == null) { device.updateSetting('disableIlluminance', false) }   
+    if (fullInit == true || settings?.disableIlluminance == null) { device.updateSetting('disableIlluminance', false) }
 }
 
 def tuyaBlackMagic() {
@@ -1190,7 +1200,7 @@ void sendBatteryPercentageEvent(rawValue) {
         result.translatable = true
         result.value = Math.round(rawValue / 2)
         result.descriptionText = "${device.displayName} battery percentage is ${result.value}%"
-        result.descriptionText += " (${device.currentValue('contact')})"
+        result.descriptionText += " (contact was ${device.currentValue('contact')})"
         result.isStateChange = true    // enabled 10/22/2023
         result.unit = '%'
         result.type = 'physical'
@@ -1235,7 +1245,7 @@ void sendBatteryVoltageEvent(rawValue, Boolean convertToPercent=false) {
             result.unit  = 'V'
             result.descriptionText = "battery is ${volts} Volts"
         }
-        result.descriptionText += " (${device.currentValue('contact')})"
+        result.descriptionText += " (contact was ${device.currentValue('contact')})"
         result.type = 'physical'
         result.isStateChange = true
         logInfo "${result.descriptionText}"
@@ -1249,7 +1259,7 @@ void sendBatteryVoltageEvent(rawValue, Boolean convertToPercent=false) {
 
 void sendLastBatteryEvent() {
     final Date lastBattery = new Date()
-    sendEvent(name: 'lastBattery', value: lastBattery, descriptionText: "Last battery event at ${lastBattery}")
+    sendEvent(name: 'lastBattery', value: lastBattery, descriptionText: "Last battery event at ${lastBattery}", type: 'physical')
 }
 
 // called when any event was received from the Zigbee device in parse() method..
@@ -1269,7 +1279,9 @@ void deviceHealthCheck() {
             if (settings?.txtEnable) { log.warn "${device.displayName} is not present!" }
         }
     } else {
-        if (logEnable) { log.debug "${device.displayName} deviceHealthCheck - online (notPresentCounter=${state.notPresentCounter})" }
+        int npc = (state.notPresentCounter ?: 0) - 1
+        if (npc < 0) { npc = 0 }
+        if (logEnable) { log.debug "${device.displayName} deviceHealthCheck - online (notPresentCounter=${npc})" }
     }
 }
 
