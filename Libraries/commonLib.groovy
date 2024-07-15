@@ -38,7 +38,7 @@ library(
   * ver. 3.2.2  2024-06-12 kkossev  - removed isAqaraTRV_OLD() and isAqaraTVOC_OLD() dependencies from the lib; added timeToHMS(); metering and electricalMeasure clusters swapped bug fix; added cluster 0x0204;
   * ver. 3.3.0  2024-06-25 kkossev  - fixed exception for unknown clusters; added cluster 0xE001; added powerSource - if 5 minutes after initialize() the powerSource is still unknown, query the device for the powerSource
   * ver. 3.3.1  2024-07-06 kkossev  - removed isFingerbot() dependancy; added FC03 cluster (Frient); removed noDef from the linter; added customParseIasMessage and standardParseIasMessage; powerSource set to unknown on initialize();
-  * ver. 3.3.2  2024-07-08 kkossev  - (dev.branch) added PollControl (0x0020) cluster;
+  * ver. 3.3.2  2024-07-12 kkossev  - (dev.branch) added PollControl (0x0020) cluster; ping for SONOFF
   *
   *                                   TODO: check deviceCommandTimeout()
   *                                   TODO: offlineCtr is not increasing! (ZBMicro);
@@ -54,7 +54,7 @@ library(
 */
 
 String commonLibVersion() { '3.3.2' }
-String commonLibStamp() { '2024/07/08 8:53 PM' }
+String commonLibStamp() { '2024/07/12 8:53 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -484,6 +484,25 @@ private BigDecimal approxRollingAverage(BigDecimal avgPar, BigDecimal newSample)
     return avg
 }
 
+void handlePingResponse() {
+    Long now = new Date().getTime()
+    if (state.lastRx == null) { state.lastRx = [:] }
+    state.lastRx['checkInTime'] = now
+
+    int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: '0').toInteger()
+    if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
+        state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1
+        if (timeRunning < safeToInt((state.stats['pingsMin'] ?: '999'))) { state.stats['pingsMin'] = timeRunning }
+        if (timeRunning > safeToInt((state.stats['pingsMax'] ?: '0')))   { state.stats['pingsMax'] = timeRunning }
+        state.stats['pingsAvg'] = approxRollingAverage(safeToDouble(state.stats['pingsAvg']), safeToDouble(timeRunning)) as int
+        sendRttEvent()
+    }
+    else {
+        logWarn "unexpected ping timeRunning=${timeRunning} "
+    }
+    state.states['isPing'] = false
+}
+
 /*
  * -----------------------------------------------------------------------------
  * Standard clusters reporting handlers
@@ -496,25 +515,14 @@ private void standardParseBasicCluster(final Map descMap) {
     Long now = new Date().getTime()
     if (state.lastRx == null) { state.lastRx = [:] }
     state.lastRx['checkInTime'] = now
+    boolean isPing = state.states['isPing'] ?: false
     switch (descMap.attrInt as Integer) {
         case 0x0000:
             logDebug "Basic cluster: ZCLVersion = ${descMap?.value}"
             break
         case PING_ATTR_ID: // 0x01 - Using 0x01 read as a simple ping/pong mechanism
-            boolean isPing = state.states['isPing'] ?: false
             if (isPing) {
-                int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: '0').toInteger()
-                if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
-                    state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1
-                    if (timeRunning < safeToInt((state.stats['pingsMin'] ?: '999'))) { state.stats['pingsMin'] = timeRunning }
-                    if (timeRunning > safeToInt((state.stats['pingsMax'] ?: '0')))   { state.stats['pingsMax'] = timeRunning }
-                    state.stats['pingsAvg'] = approxRollingAverage(safeToDouble(state.stats['pingsAvg']), safeToDouble(timeRunning)) as int
-                    sendRttEvent()
-                }
-                else {
-                    logWarn "unexpected ping timeRunning=${timeRunning} "
-                }
-                state.states['isPing'] = false
+                handlePingResponse()
             }
             else {
                 logTrace "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap.value})"
@@ -530,12 +538,17 @@ private void standardParseBasicCluster(final Map descMap) {
             }
             break
         case 0x0005:
-            logDebug "received device model ${descMap?.value}"
-            // received device model Remote Control N2
-            String model = device.getDataValue('model')
-            if ((model == null || model == 'unknown') && (descMap?.value != null)) {
-                logWarn "updating device model from ${model} to ${descMap?.value}"
-                device.updateDataValue('model', descMap?.value)
+            if (isPing) {
+                handlePingResponse()
+            }
+            else {
+                logDebug "received device model ${descMap?.value}"
+                // received device model Remote Control N2
+                String model = device.getDataValue('model')
+                if ((model == null || model == 'unknown') && (descMap?.value != null)) {
+                    logWarn "updating device model from ${model} to ${descMap?.value}"
+                    device.updateDataValue('model', descMap?.value)
+                }
             }
             break
         case 0x0007:
@@ -976,8 +989,9 @@ public void ping() {
     if (state.lastTx == null ) { state.lastTx = [:] } ; state.lastTx['pingTime'] = new Date().getTime()
     if (state.states == null ) { state.states = [:] } ;     state.states['isPing'] = true
     scheduleCommandTimeoutCheck()
+    int  pingAttr = (device.getDataValue('manufacturer') == 'SONOFF') ? 0x05 : PING_ATTR_ID
     if (isVirtual()) { runInMillis(10, 'virtualPong') }
-    else { sendZigbeeCommands(zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) ) }
+    else { sendZigbeeCommands(zigbee.readAttribute(zigbee.BASIC_CLUSTER, pingAttr, [:], 0) ) }
     logDebug 'ping...'
 }
 

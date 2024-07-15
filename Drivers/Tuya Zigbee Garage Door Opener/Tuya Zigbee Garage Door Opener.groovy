@@ -18,19 +18,21 @@
  * ver. 1.0.3 2022-06-26 kkossev  - fixed new device exceptions bug; warnings in Debug logs only; Debug logs are off by default.
  * ver. 1.0.4 2022-07-06 kkossev  - on() command opens the door if it was closed, off() command closes the door if it was open; 'contact is open/closed' info and warning logs are shown only on contact state change;
  * ver. 1.0.5 2023-10-09 kkossev  - added _TZE204_nklqjk62 fingerprint
+ * ver. 1.1.0 2024-07-15 kkossev  - (dev.branch) added commands setContact() and setDoor()
  *
 */
 
-def version() { "1.0.5" }
-def timeStamp() {"2022/07/06 8:34 AM"}
+def version() { "1.1.0" }
+def timeStamp() {"2024/07/15 7:56 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-@Field static final Boolean debug = false
-@Field static final Integer pulseTimer  = 1000
+@Field static final Boolean _DEBUG = false
+@Field static final Integer PULSE_TIMER  = 1000         // milliseconds
+@Field static final Integer DEFAULT_DOOR_TIMEOUT  = 15  // seconds
 
 
 metadata {
@@ -42,10 +44,11 @@ metadata {
         capability "Switch"
         capability "PowerSource"
 
-        if (debug) {
+        if (_DEBUG) {
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
-            command "setContact", [[name:"Set Contact", type: "ENUM", description: "Select Contact State", constraints: ["--- Select ---", "open", "closed" ]]]
         }
+        command "setContact", [[name:"Set Contact", type: "ENUM", description: "Select Contact State", constraints: ["--- Select ---", "open", "closed" ]]]
+        command "setDoor",    [[name:"Set Door",    type: "ENUM", description: "Select Door State", constraints: ["--- Select ---", "open", "closed" ]]]
         
         fingerprint profileId:"0104", model:"TS0601", manufacturer:"_TZE200_wfxuhoea", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", application:"42", deviceJoinName: "LoraTap Garage Door Opener"        // LoraTap GDC311ZBQ1
         fingerprint profileId:"0104", model:"TS0601", manufacturer:"_TZE200_nklqjk62", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", application:"42", deviceJoinName: "MatSee Garage Door Opener"         // MatSee PJ-ZGD01
@@ -56,7 +59,7 @@ metadata {
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "doorTimeout", type: "number", title: "<b>Door timeout</b>", description: "<i>The time needed for the door to open, seconds</i>", range: "1..100", defaultValue: 15)
+        input (name: "doorTimeout", type: "number", title: "<b>Door timeout</b>", description: "<i>The time needed for the door to open, seconds</i>", range: "1..100", defaultValue: DEFAULT_DOOR_TIMEOUT)
     }
 }
 
@@ -97,8 +100,8 @@ def parse(String description) {
                     case 0x03 : // Contact
                     case 0x07 : // debug/testing only!
                         def contactState = fncmd == 0 ? "closed" : "open"    // reversed in ver 1.0.1
-                        def doorState = device.currentState('door').value
-                        def previousContactState = device.currentState('contact').value
+                        def doorState = device?.currentState('door')?.value
+                        def previousContactState = device?.currentState('contact')?.value
                         sendContactEvent(contactState)
                         switch (doorState) {
                             case 'open' : // contact state was changed while the door was open
@@ -185,24 +188,24 @@ private int getTuyaAttributeValue(ArrayList _data) {
 
 
 def on() { 
-    if (device.currentState('switch').value != "on") {    
+    if (device?.currentState('switch')?.value != "on") {    
         if (logEnable) log.debug "${device.displayName} Turning ON (open)"
         sendSwitchEvent("on", isDigital=true)
         open()
     }
     else {
-        if (logEnable) log.warn "${device.displayName} ignoring ON (open) command (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
+        if (logEnable) log.warn "${device.displayName} ignoring ON (open) command (door was ${device?.currentState('door')?.value} , contact was ${device?.currentState('contact')?.value})"
     }
 }
 
 def off() {
-    if (device.currentState('switch').value != "off") {    
+    if (device?.currentState('switch')?.value != "off") {    
         if (logEnable) log.debug "${device.displayName} Turning OFF (close)"	
         sendSwitchEvent("off", isDigital=true)
         close()
     }
     else {
-        if (logEnable) log.warn "${device.displayName} ignoring OFF (close) command (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
+        if (logEnable) log.warn "${device.displayName} ignoring OFF (close) command (door was ${device?.currentState('door')?.value} , contact was ${device?.currentState('contact')?.value})"
     }
 }
 
@@ -219,7 +222,7 @@ def relayOff() {
 
 def pulseOn() {
     if (logEnable) log.debug "${device.displayName} pulseOn()"
-    runInMillis( pulseTimer, pulseOff, [overwrite: true])
+    runInMillis( PULSE_TIMER, pulseOff, [overwrite: true])
     relayOn()
 }
 
@@ -229,8 +232,8 @@ def pulseOff() {
 }
 
 def open() {
-    if (device.currentState('contact').value != "open") {
-        if (logEnable) log.debug "${device.displayName} opening (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
+    if (device?.currentState('contact')?.value != "open") {
+        if (logEnable) log.debug "${device.displayName} opening (door was ${device?.currentState('door')?.value} , contact was ${device?.currentState('contact')?.value})"
     	sendDoorEvent("opening")
         unschedule(confirmClosed)
         Integer timeout = settings?.doorTimeout * 1000
@@ -238,13 +241,13 @@ def open() {
         pulseOn()
     }
     else {
-        if (logEnable) log.warn "${device.displayName} ignoring Open command (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
+        if (logEnable) log.warn "${device.displayName} ignoring Open command (door was ${device?.currentState('door')?.value} , contact was ${device?.currentState('contact')?.value})"
     }
 }
 
 def close() {
-    if (device.currentState('contact').value != "closed") {
-        if (logEnable) log.debug "${device.displayName} closing (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
+    if (device?.currentState('contact')?.value != "closed") {
+        if (logEnable) log.debug "${device.displayName} closing (door was ${device?.currentState('door')?.value} , contact was ${device?.currentState('contact')?.value})"
     	sendDoorEvent("closing")
         unschedule(confirmOpen)
         Integer timeout = settings?.doorTimeout * 1200  // add 20% tolerance when closing
@@ -252,15 +255,17 @@ def close() {
         pulseOn()
     }
     else {
-        if (logEnable) log.warn "${device.displayName} ignoring Close command (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
+        if (logEnable) log.warn "${device.displayName} ignoring Close command (door was ${device?.currentState('door')?.value} , contact was ${device?.currentState('contact')?.value})"
     }
 }
 
-def sendDoorEvent(state) {
+def sendDoorEvent(state, isDigital=false) {
     def map = [:]
     map.name = "door"
     map.value = state    //  ["unknown", "open", "closing", "closed", "opening"]
+    map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${device.displayName} door is ${map.value}"
+    if (isDigital) { map.descriptionText += " [${map.type}]" }
     if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
     sendEvent(map)
 }
@@ -271,7 +276,8 @@ def sendContactEvent(state, isDigital=false) {
     map.value = state    // open or closed
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${device.displayName} contact is ${map.value}"
-    if (device.currentState('contact').value != state) {
+    if (isDigital) { map.descriptionText += " [${map.type}]" }
+    if (device?.currentState('contact')?.value != state) {
         if (txtEnable) {log.info "${device.displayName} ${map.descriptionText} (${map.type})"}
     }
     else {
@@ -291,7 +297,7 @@ def sendSwitchEvent(state, isDigital=false) {
 }
 
 def confirmClosed() {
-    if (device.currentState('contact').value == 'closed') {
+    if (device?.currentState('contact')?.value == 'closed') {
 	    sendDoorEvent("closed")
         sendSwitchEvent("off", isDigital=true)
     }
@@ -303,7 +309,7 @@ def confirmClosed() {
 }
 
 def confirmOpen() {
-    if (device.currentState('contact').value == 'open') {
+    if (device?.currentState('contact')?.value == 'open') {
         sendDoorEvent("open")
         sendSwitchEvent("on", isDigital=true)
     }
@@ -315,19 +321,19 @@ def confirmOpen() {
 }
 
 void initializeVars( boolean fullInit = true ) {
-    if (logEnable==true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
+    if (logEnable==true) { log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}" }
     if (fullInit == true ) {
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
     }
-    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false)
-    if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || settings?.doorTimeout == null) device.updateSetting("doorTimeout", 15)   
+    if (fullInit == true || settings?.logEnable == null) { device.updateSetting("logEnable", false) }
+    if (fullInit == true || settings?.txtEnable == null) { device.updateSetting("txtEnable", true) }
+    if (fullInit == true || settings?.doorTimeout == null) { device.updateSetting("doorTimeout", DEFAULT_DOOR_TIMEOUT) }
     
-    if (device.currentState('contact')?.value == null ) {
+    if (device?.currentState('contact')?.value == null ) {
         sendEvent(name : "contact",	value : "?", isStateChange : true)
     }
-    if (device.currentState('door')?.value == null ) {
+    if (device?.currentState('door')?.value == null ) {
         sendEvent(name : "door",	value : "?", isStateChange : true)
     }
 }
@@ -360,6 +366,7 @@ def configure() {
 }
 
 def updated() {
+    checkDriverVersion()
     log.info "${device.displayName} debug logging is: ${logEnable == true}"
     log.info "${device.displayName} description logging is: ${txtEnable == true}"
     if (txtEnable) log.info "${device.displayName} Updated..."
@@ -398,7 +405,7 @@ def setPresent() {
 }
 
 void sendZigbeeCommands(List<String> cmds) {
-    if (logEnable) {log.trace "${device.displayName} sendZigbeeCommands received : ${cmds}"}
+    if (logEnable) {log.trace "${device.displayName} sendZigbeeCommands : ${cmds}"}
 	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
 }
 
@@ -408,6 +415,16 @@ def setContact( mode ) {
     }
     else {
         if (logEnable) log.warn "${device.displayName} please select the Contact state"
+    }
+    
+}
+
+def setDoor( mode ) {
+    if (mode in ['open', 'closed']) {
+        sendDoorEvent(mode, isDigital=true)
+    }
+    else {
+        if (logEnable) log.warn "${device.displayName} please select the Door state"
     }
     
 }
