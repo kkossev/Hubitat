@@ -46,7 +46,8 @@
  * ver. 1.5.2  2024-05-14 kkossev - added _TZE204_upagmta9 and _TZE200_upagmta9 to TS0601_Tuya_2 group; healthStatus initialized as 'unknown';
  * ver. 1.6.0  2024-05-19 kkossev - added the correct NOUS TS0601 _TZE200_nnrfa68v fingerprint to group 'TS0601_Tuya'; all Current States and Preferences are cleared on initialize command;
  * ver. 1.6.1  2024-06-10 kkossev - added ThirdReality 3RTHS0224Z and 3RTHS24BZ
- * ver. 1.6.2  2024-06-26 kkossev - (dev. branch) added TS000F _TZ3218_7fiyo3kv in DS18B20 group (temperature only); added Tuya cluster command '06' processing; added description in the debug logs
+ * ver. 1.6.2  2024-06-26 kkossev - added TS000F _TZ3218_7fiyo3kv in DS18B20 group (temperature only); added Tuya cluster command '06' processing; added description in the debug logs
+ * ver. 1.6.3  2024-07-16 kkossev - (dev. branch) added TS0601 _TZE204_yjjdcqsq to TS0601_Tuya_2 group;
  *
  *                                  TODO: queryOnDeviceAnnounce for TS0601_Tuya_2 group
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
@@ -56,8 +57,8 @@
  *                                  TODO: add Batteryreporting time configuration (like in the TS004F driver)
 */
 
-@Field static final String VERSION = '1.6.2'
-@Field static final String TIME_STAMP = '2024/06/26 8:08 AM'
+@Field static final String VERSION = '1.6.3'
+@Field static final String TIME_STAMP = '2024/07/16 5:00 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -127,10 +128,12 @@ metadata {
         //
         // requre more Tuya Magic -  queryOnDeviceAnnounce !!! https://github.com/Koenkk/zigbee-herdsman-converters/blob/c7e670672eb9c584429fe5462eb835c0ae9b0da0/src/lib/tuya.ts#L45
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_yjjdcqsq', deviceJoinName: 'Tuya Temperature Humidity'                                 // kk
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_yjjdcqsq', deviceJoinName: 'Tuya Temperature Humidity'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_9yapgbuv', deviceJoinName: 'Tuya Temperature Humidity'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_9yapgbuv', deviceJoinName: 'Tuya Temperature Humidity'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_upagmta9', deviceJoinName: 'Tuya Temperature Humidity'
-        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_cirvgep4', deviceJoinName: 'Tuya Temperature Humidity LCD Display with a Clock' //https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/308?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_upagmta9', deviceJoinName: 'Tuya Temperature Humidity'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_cirvgep4', deviceJoinName: 'Tuya Temperature Humidity LCD Display with a Clock' //https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/308?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ysm4dsb1', deviceJoinName: 'Tuya Temperature Humidity'                                  // not tested ! https://github.com/Koenkk/zigbee2mqtt/issues/20815
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE0204_yjjdcqsq', deviceJoinName: 'Tuya Temperature Humidity'                                  // not tested !https://github.com/Koenkk/zigbee2mqtt/issues/20235
         // kk
@@ -242,10 +245,13 @@ metadata {
     '_TZE200_nnrfa68v'  : 'TS0601_Tuya',         // NOUS E6 https://community.hubitat.com/t/nous-humidity-and-temp-sensor/137764/7?u=kkossev
     '_TZE200_cirvgep4'  : 'TS0601_Tuya_2',       // https://www.aliexpress.com/item/1005005198387789.html
     '_TZE200_yjjdcqsq'  : 'TS0601_Tuya_2',       // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/446?u=kkossev
+    '_TZE204_yjjdcqsq'  : 'TS0601_Tuya_2',       // https://community.hubitat.com/t/newbie-help-with-owon-ths317-et-multi-sensor/122671/18?u=kkossev
     '_TZE200_9yapgbuv'  : 'TS0601_Tuya_2',       // not tested
-    '_TZE204_upagmta9'  : 'TS0601_Tuya_2',       // not tested  // https://github.com/zigpy/zha-device-handlers/issues/2694
+    '_TZE204_9yapgbuv'  : 'TS0601_Tuya_2',       // not tested
     '_TZE200_upagmta9'  : 'TS0601_Tuya_2',       // not tested
+    '_TZE204_upagmta9'  : 'TS0601_Tuya_2',       // not tested  // https://github.com/zigpy/zha-device-handlers/issues/2694
     '_TZE200_vvmbj46n'  : 'TS0601_Tuya_2',       // https://community.hubitat.com/t/looking-for-a-zigbee-temperature-humidity-illumination-sensor-with-display/130896/14?u=kkossev
+    '_TZE204_vvmbj46n'  : 'TS0601_Tuya_2',       // 
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       //
     '_TZE200_pisltm67'  : 'TS0601_AUBESS',       // illuminance only sensor
