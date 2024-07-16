@@ -19,6 +19,7 @@
  *                                    added 'eco' (away) mode; added overHeatAlarm advanced attribute; displayAutoOff is disabled by default; added refreshAll command; added add factoryReset command; fixed energy reporting configuration
  * ver. 3.3.3  2024-06-25 kkossev  - release 3.3.3
  * ver. 3.3.4  2024-06-29 kkossev  - added NAMRON_RADIATOR device profile and attributes;
+ * ver. 3.3.5  2024-07-09 kkossev  - (dev.branch)
  *
  *                                   TODO: fix the forcedDeviceProfile !!!
  *                                   TODO: add a link to GitHub WiKi
@@ -45,8 +46,8 @@
  *                                   TODO: separate the autoPoll commands from the refresh commands (lite)
  */
 
-static String version() { '3.3.4' }
-static String timeStamp() { '2024/06/29 10:13 AM' }
+static String version() { '3.3.5' }
+static String timeStamp() { '2024/07/09 10:49 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
@@ -142,7 +143,7 @@ metadata {
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0009,000A,0201,0204,0702,0B04", outClusters:"0003,0019", model:"4512737", manufacturer:"NAMRON AS", controllerType: "ZGB", deviceJoinName: 'NAMRON'] ,
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,0009,0408,0702,0B04,0B05,1000,FCCC', outClusters:'0019,1000', model:'4512749-N', manufacturer:'NAMRON AS', deviceJoinName: 'NAMRON']   // EP02: 0000,0004,0005,0201  // EPF2: 0021
             ],
-            commands      : [resetStats:'resetStats', refresh:'refresh', initialize:'initialize', updateAllPreferences: 'updateAllPreferences', resetPreferencesToDefaults:'resetPreferencesToDefaults', validateAndFixPreferences:'validateAndFixPreferences',
+            commands      : [tesT:'testT', resetStats:'resetStats', refresh:'refresh', initialize:'initialize', updateAllPreferences: 'updateAllPreferences', resetPreferencesToDefaults:'resetPreferencesToDefaults', validateAndFixPreferences:'validateAndFixPreferences',
                               factoryResetThermostat:'factoryResetThermostat', sendSupportedThermostatModes: 'sendSupportedThermostatModes', refreshAll: 'refreshAll', configureNamron:'configureNamron'
             ],
             attributes    : [
@@ -438,6 +439,9 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
         case 'temperature' :
             handleTemperatureEvent(valueScaled as Float)
             break
+        case 'humidity' :
+            handleHumidityEvent(valueScaled)
+            break
         case 'heatingSetpoint' :
             sendHeatingSetpointEvent(valueScaled)
             break
@@ -519,8 +523,14 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
     }
 }
 
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.LocalDateTime
+
+
+
 void testT(String par) {
-    
+    /*
     log.trace "testT(${par}) : DEVICE.preferences = ${DEVICE.preferences}"
     Map result
     if (DEVICE != null && DEVICE.preferences != null && DEVICE.preferences != [:]) {
@@ -530,6 +540,7 @@ void testT(String par) {
             logDebug "inputIt: ${result}"
         }
     }
+    */
     
     /*
     //log.trace "device.lastActivity = ${device.lastActivity}"
@@ -541,6 +552,41 @@ void testT(String par) {
         log.trace "${property.key} = ${property.value}"
     }
     */
+
+
+
+    List<String> cmds = []
+
+    cmds =   ["he raw 0x${device.deviceNetworkId} 1 1 0x000a {40 01 01 00 00 00 e2 78 83 1f 2e       07 00  00    23      a8 ad 1f 2e}", "delay 200",]
+    //                                                                                                          ^ uint32  ^
+
+    sendZigbeeCommands(cmds)
+
+
+
+
+/*
+// Step 1: Current time in seconds since Unix epoch
+long currentTime = Instant.now().getEpochSecond()
+
+// Step 2: Zigbee base time in seconds since Unix epoch
+LocalDateTime zigbeeBaseTime = LocalDateTime.of(2000, 1, 1, 0, 0, 0)
+long zigbeeBaseTimeSeconds = zigbeeBaseTime.toEpochSecond(ZoneOffset.UTC)
+
+// Step 3: Calculate Zigbee UTC time
+long zigbeeUTCTime = currentTime - zigbeeBaseTimeSeconds
+
+// Step 4: Convert to 32-bit unsigned integer (if necessary)
+long zigbeeUTCTime32bit = zigbeeUTCTime & 0xFFFFFFFFL
+
+logDebug "Zigbee UTC Time: $zigbeeUTCTime32bit"
+
+long value = zigbeeUTCTime32bit
+String hex = Long.toHexString(value).padLeft(8, '0') // Ensure it's 8 characters for a 32 bit
+String reversedHex = hex.toList().collate(2).reverse().flatten().join()
+
+logDebug "hex=${hex} reverse=${reversedHex}"
+*/
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////

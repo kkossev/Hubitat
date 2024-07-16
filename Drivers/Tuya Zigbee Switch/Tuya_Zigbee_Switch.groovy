@@ -26,7 +26,7 @@
  * ver. 3.0.7  2024-04-18 kkossev  - commonLib 3.0.7 and groupsLib allignment
  * ver. 3.1.1  2024-05-15 kkossev  - added SONOFF ZBMicro; commonLib 3.1.1 allignment; Groovy linting;
  * ver. 3.2.1  2024-06-04 kkossev  - commonLib 3.2.1 allignment; ZBMicro - do a refresh() after saving the preferences;
- * ver. 3.2.2  2024-06-29 kkossev  - (dev.branch) added zigbeePairingHelper code - credits @dandanache; added on/off control for SWITCH_GENERIC_EF00_TUYA 'switch' dp;
+ * ver. 3.2.2  2024-06-29 kkossev  - (dev.branch)  added on/off control for SWITCH_GENERIC_EF00_TUYA 'switch' dp;
  *
  *                                   TODO: Sonof ZBMINIL2 :zigbee read BASIC_CLUSTER attribute 0x0001 error: Unsupported Attribute
  *                                   TODO: add toggle() command; initialize 'switch' to unknown
@@ -339,40 +339,6 @@ void customParseFC11Cluster(final Map descMap) {
     if (result == false) {
         logWarn "customParseFC11Cluster: received unknown 0xFC11 attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
-}
-
-// all credits @dandanache  importUrl:"https://raw.githubusercontent.com/dan-danache/hubitat/master/zigbee-pairing-helper-driver/zigbee-pairing-helper.groovy"
-private Map<String, String> getDevices() {
-    try {
-        httpGet([ uri:"http://127.0.0.1:8080/hub/zigbee/getChildAndRouteInfoJson" ]) { response ->
-            if (response?.status != 200) {
-                return ["ZZZZ": "Invalid response: ${response}"]
-            }
-            return response.data.devices
-                .sort { it.name }
-                .collectEntries { ["${it.zigbeeId}", "${it.name}"] }
-        }
-    } catch (Exception ex) {
-        return ["ZZZZ": "Exception: ${ex}"]
-    }
-}
-
-void zigbeePairingHelper() {
-    logDebug "zigbeePairingHelper()..."
-    if (settings?.deviceNetworkId == null || settings?.deviceNetworkId == "ZZZZ") {
-        log.error("Invalid Device Network ID: ${settings?.deviceNetworkId}")
-        return
-    }
-
-    log.info "Stopping Zigbee pairing on all devices. Please wait 5 seconds ..."
-    sendHubCommand new hubitat.device.HubMultiAction(["he raw 0xFFFC 0x00 0x00 0x0036 {42 0001} {0x0000}"], hubitat.device.Protocol.ZIGBEE)
-    runIn(5, "startDeviceZigbeePairing")
-}
-
-private startDeviceZigbeePairing() {
-    log.info "Starting Zigbee pairing on device ${settings?.deviceNetworkId} for 90 seconds..."
-    sendHubCommand new hubitat.device.HubMultiAction(["he raw 0x${settings?.deviceNetworkId} 0x00 0x00 0x0036 {43 5A01} {0x0000}"], hubitat.device.Protocol.ZIGBEE)
-    log.warn "<b>Now is the right moment to put the device you want to join in pairing mode!</b>"
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////

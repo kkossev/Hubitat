@@ -16,14 +16,15 @@
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
  * ver. 2.0.0  2023-05-08 kkossev  - Initial test version
- * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) commonLib 3.0.6
- * ver. 3.2.0  2024-05-28 kkossev  - (dev. branch) commonLib 3.2.0
+ * ver. 3.0.6  2024-04-06 kkossev  - commonLib 3.0.6
+ * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0
+ * ver. 3.2.1  2024-05-28 kkossev  - (dev.branch)
  *
  *                                   TODO:
  */
 
-static String version() { "3.2.0" }
-static String timeStamp() {"2024/05/28 1:34 PM"}
+static String version() { "3.2.1" }
+static String timeStamp() {"2024/07/12 2:23 PM"}
 
 @Field static final Boolean _DEBUG = true
 
@@ -71,6 +72,7 @@ metadata {
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
+        //input(name: "deviceNetworkId", type: "enum", title: "Router Device", description: "<small>Select a mains-powered device that you want to put in pairing mode.</small>", options: [ "0000":"👑 Hubitat Hub" ] + getDevices(), required: true)
     }
 }
 
@@ -130,6 +132,42 @@ void getCpuTemperature(resp, data) {
  //       if (!warnSuppress) log.warn "getTemp httpResp = $respStatus but returned invalid data, will retry next cycle"
  //   } 
 }
+
+
+// all credits @dandanache  importUrl:"https://raw.githubusercontent.com/dan-danache/hubitat/master/zigbee-pairing-helper-driver/zigbee-pairing-helper.groovy"
+private Map<String, String> getDevices() {
+    try {
+        httpGet([ uri:"http://127.0.0.1:8080/hub/zigbee/getChildAndRouteInfoJson" ]) { response ->
+            if (response?.status != 200) {
+                return ["ZZZZ": "Invalid response: ${response}"]
+            }
+            return response.data.devices
+                .sort { it.name }
+                .collectEntries { ["${it.zigbeeId}", "${it.name}"] }
+        }
+    } catch (Exception ex) {
+        return ["ZZZZ": "Exception: ${ex}"]
+    }
+}
+
+void zigbeePairingHelper() {
+    logDebug "zigbeePairingHelper()..."
+    if (settings?.deviceNetworkId == null || settings?.deviceNetworkId == "ZZZZ") {
+        log.error("Invalid Device Network ID: ${settings?.deviceNetworkId}")
+        return
+    }
+
+    log.info "Stopping Zigbee pairing on all devices. Please wait 5 seconds ..."
+    sendHubCommand new hubitat.device.HubMultiAction(["he raw 0xFFFC 0x00 0x00 0x0036 {42 0001} {0x0000}"], hubitat.device.Protocol.ZIGBEE)
+    runIn(5, "startDeviceZigbeePairing")
+}
+
+private startDeviceZigbeePairing() {
+    log.info "Starting Zigbee pairing on device ${settings?.deviceNetworkId} for 90 seconds..."
+    sendHubCommand new hubitat.device.HubMultiAction(["he raw 0x${settings?.deviceNetworkId} 0x00 0x00 0x0036 {43 5A01} {0x0000}"], hubitat.device.Protocol.ZIGBEE)
+    log.warn "<b>Now is the right moment to put the device you want to join in pairing mode!</b>"
+}
+
 
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////

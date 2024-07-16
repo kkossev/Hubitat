@@ -4,7 +4,7 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Zigbee TRV/Zigbee_TRV.groovy",
       "id": 2664,
       "codeType": "driver",
-      "version": 531
+      "version": 535
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Zigbee TRV/Namron Zigbee Thermostat.groovy",
@@ -16,7 +16,7 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Zigbee TRV/Tuya Zigbee Thermostat.groovy",
       "codeType": "driver",
       "id": 3049,
-      "version": 5
+      "version": 9
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Zigbee TRV/Sonoff Zigbee TRV.groovy",
