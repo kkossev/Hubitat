@@ -38,8 +38,9 @@
  * ver. 1.4.0 2023-03-17 kkossev  - *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added 'Works with ...'; added ping() and RTT
  * ver. 1.4.1 2023-04-21 kkossev  - exception prevented when application string is enormously long; italic font bug fix; lumi.sen_ill.agl01 initialization and bug fixes; light sensor delta = 5 lux; removed MCCGQ14LM
  * ver. 1.4.2 2023-05-21 kkossev  - lumi.sen_ill.agl01 initialization fixes; removed the E1 contact sensor driver code; trace logs cleanup; added reporting time configuration for the Lux sensors; Lux sensors preferences are NOT reset to defaults when paired again; removed powerSource manipulation; periodic job renamed to deviceHealthCheck()
- * ver. 1.5.0 2024-02-29 kkossev  - (dev. branch) Groovy Lint
- * ver. 1.6.0 2024-06-29 kkossev  - (dev. branch) added state.health 'parentNWK' and 'nwkCtr'; added attribute parentNWK;
+ * ver. 1.5.0 2024-02-29 kkossev  - Groovy Lint
+ * ver. 1.6.0 2024-06-29 kkossev  - added state.health 'parentNWK' and 'nwkCtr'; added attribute parentNWK;
+ * ver. 1.6.1 2024-07-22 kkossev  - (dev.branch) bugfix: illuminanceThreshold and illuminanceMinReportingTime not working for lumi.sen_ill.mgl01 (GZCGQ01LM)
  * 
  *                                 TODO: powerSource 'unknown' fix
  *                                 TODO: WARN log, when the device model is not registered during the pairing !!!!!!!!
@@ -53,8 +54,8 @@
  *
  */
 
-static String version() { "1.6.0" }
-static String timeStamp() {"2024/06/29 11:06 AM"}
+static String version() { "1.6.1" }
+static String timeStamp() {"2024/07/22 9:34 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -111,7 +112,6 @@ metadata {
         
         command "configure", [[name: "Initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
-        command "zigbeePairingHelper", [[name: "Zigbee Pairing Helper" ]]
 
         if (_DEBUG) {
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "0001"]]
@@ -159,6 +159,7 @@ metadata {
                 input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "<i>illuminance minimum reporting interval, seconds (4..300)</i>", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
                 input (name: "illuminanceMaxReportingTime", type: "number", title: "<b>Maximum time between Illuminance Reports</b>", description: "<i>illuminance maximum reporting interval, seconds (120..10000)</i>", range: "120..10000", defaultValue: DEFAULT_ILLUMINANCE_MAX_TIME)
                 input (name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "<i>illuminance reporting threshold, value (1..255)<br>Bigger values will result in less frequent reporting</i>", range: "1..255", defaultValue: 1)
+                input (name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: '<i>Illuminance correction coefficient, range (0.10..10.00)</i>', range: '0.10..10.00', defaultValue: 1.00)
             }
             input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "<i>The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b></i>", defaultValue: false)
             if (internalTemperature == true) {
@@ -843,25 +844,66 @@ def parseSimpleDescriptorResponse(Map descMap) {
     }
 }
 
-def illuminanceEvent( rawLux ) {
+void illuminanceEvent( rawLux ) {
     if (rawLux == 0xFFFF) {
         logWarn "ignored rawLux reading ${rawLux}"
         return
     }
 	def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
-    sendEvent("name": "illuminance", "value": lux, "unit": "lx", type: "physical")
-    if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux (raw=${rawLux})"
+    illuminanceEventLux( lux as Integer )
 }
 
-def illuminanceEventLux( Integer lux ) {
+void illuminanceEventLux( Integer lux ) {
     if (lux == 0xFFFF) {
         logWarn "ignored lux reading ${lux}"
         return
     }
     if ( lux > 0xFFDC ) lux = 0    // maximum value is 0xFFDC !
-    sendEvent("name": "illuminance", "value": lux, "unit": "lx", type: "physical")
-    if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
+    handleIlluminanceEvent(lux)
 }
+
+void handleIlluminanceEvent(int illuminance, boolean isDigital=false) {
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (state.stats == null) { state.stats = [:] }
+    state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 
+    Map eventMap = [:]
+    eventMap.name = 'illuminance'
+    Integer illumCorrected = Math.round((illuminance * ((settings?.illuminanceCoeff ?: 1.00) as float)))
+    eventMap.value  = illumCorrected
+    eventMap.type = isDigital ? 'digital' : 'physical'
+    eventMap.unit = 'lx'
+    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
+    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now())) / 1000)
+    Integer minTime = settings?.illuminanceMinReportingTime ?: DEFAULT_ILLUMINANCE_MIN_TIME  // defined in commonLib
+    Integer timeRamaining = (minTime - timeElapsed) as Integer
+    Integer lastIllum = device.currentValue('illuminance') ?: 0
+    Integer delta = Math.abs(lastIllum - illumCorrected)
+    if (delta < ((settings?.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD) as int)) {
+        logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${settings?.illuminanceThreshold} (lastIllum=${lastIllum})"
+        return
+    }
+    if (timeElapsed >= minTime) {
+        logInfo "${eventMap.descriptionText}"
+        unschedule('sendDelayedIllumEvent')        //get rid of stale queued reports
+        state.lastRx['illumTime'] = now()
+        sendEvent(eventMap)
+    }
+    else {         // queue the event
+        eventMap.type = 'delayed'
+        logDebug "${device.displayName} <b>delaying ${timeRamaining} seconds</b> event : ${eventMap}"
+        runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap])
+    }
+}
+
+/* groovylint-disable-next-line UnusedPrivateMethod */
+private void sendDelayedIllumEvent(Map eventMap) {
+    logInfo "${eventMap.descriptionText} (${eventMap.type})"
+    state.lastRx['illumTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
+    sendEvent(eventMap)
+}
+
+
+
 
 def temperatureEvent( temperature ) {
     if (settings?.internalTemperature == false) {
@@ -1232,6 +1274,7 @@ void initializeVars(boolean fullInit = false) {
         if (fullInit == true || settings?.illuminanceMinReportingTime == null) { device.updateSetting("illuminanceMinReportingTime", [value: DEFAULT_ILLUMINANCE_MIN_TIME , type:"number"]) }
         if (fullInit == true || settings?.illuminanceMaxReportingTime == null) { device.updateSetting("illuminanceMaxReportingTime", [value: DEFAULT_ILLUMINANCE_MAX_TIME , type:"number"]) }
         if (fullInit == true || settings?.illuminanceThreshold == null) { device.updateSetting("illuminanceThreshold", [value: DEFAULT_ILLUMINANCE_THRESHOLD , type:"number"]) }
+        if (fullInit == true || settings?.illuminanceCoeff == null) { device.updateSetting('illuminanceCoeff', [value:1.00, type:'decimal']) }
     }
     
     if (isFP1()) {
