@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Battery Library', name: 'batteryLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/batteryLib.groovy', documentationLink: '',
-    version: '3.2.1'
+    version: '3.2.2'
 )
 /*
  *  Zigbee Level Library
@@ -13,14 +13,15 @@ library(
  * ver. 3.0.1  2024-04-06 kkossev  - customParsePowerCluster bug fix
  * ver. 3.0.2  2024-04-14 kkossev  - batteryPercentage bug fix (was x2); added bVoltCtr; added battertRefresh
  * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment; added lastBattery; added handleTuyaBatteryLevel
- * ver. 3.2.1  2024-07-06 kkossev  - (dev. branch) added tuyaToBatteryLevel and handleTuyaBatteryLevel; added batteryInitializeVars
+ * ver. 3.2.1  2024-07-06 kkossev  - added tuyaToBatteryLevel and handleTuyaBatteryLevel; added batteryInitializeVars
+ * ver. 3.2.2  2024-07-18 kkossev  - (dev. branch) added BatteryVoltage and BatteryDelay device capability checks
  *
- *                                   TODO: batteryVoltage in the deviceProfile capabilities
+ *                                   TODO: 
  *                                   TODO: battery voltage low/high limits configuration
 */
 
-static String batteryLibVersion()   { '3.2.1' }
-static String batteryLibStamp() { '2024/07/06 10:27 PM' }
+static String batteryLibVersion()   { '3.2.2' }
+static String batteryLibStamp() { '2024/07/18 2:34 PM' }
 
 metadata {
     capability 'Battery'
@@ -29,8 +30,10 @@ metadata {
     // no commands
     preferences {
         if (device && advancedOptions == true) {
-            input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: 'Convert battery voltage to battery Percentage remaining.'
-            if ('Battery' in DEVICE?.capabilities) {
+            if ('BatteryVoltage' in DEVICE?.capabilities) {
+                input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: 'Convert battery voltage to battery Percentage remaining.'
+            }
+            if ('BatteryDelay' in DEVICE?.capabilities) {
                 input(name: 'batteryDelay', type: 'enum', title: '<b>Battery Events Delay</b>', description:'Select the Battery Events Delay<br>(default is <b>no delay</b>)', options: DelayBatteryOpts.options, defaultValue: DelayBatteryOpts.defaultValue)
             }
         }

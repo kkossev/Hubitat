@@ -112,7 +112,6 @@ metadata {
     }
 }
 
-
 String getModelGroup()          { return state.deviceProfile ?: 'UNKNOWN' }
 Set<String> getDeviceProfiles()      { deviceProfilesV2.keySet() }
 boolean isConfigurable(String model)    { return (deviceProfilesV2["$model"]?.preferences != null && deviceProfilesV2["$model"]?.preferences != []) }
@@ -125,6 +124,7 @@ boolean isTS0001()               { return getModelGroup().contains('TS0001') }
 boolean isTS0011()               { return getModelGroup().contains('TS0011') }
 boolean isTS0049()               { return getModelGroup().contains('TS0049') }
 boolean isBatteryPowered()       { return isGIEX() || isSASWELL() || isTS0049() }
+boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') }
 
 // Constants
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3
@@ -309,21 +309,46 @@ boolean isBatteryPowered()       { return isGIEX() || isSASWELL() || isTS0049() 
             ]
     ],
 
+    'TS0601_FRANKEVER_FK_V02'    : [    // isFankEver()  // https://www.zigbee2mqtt.io/devices/FK_V02.html
+            model         : 'TS0601',                    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/a4a2ac2e382508fc911d721edbb9d4fa308a68bb/converters/fromZigbee.js#L5013
+            manufacturers : ['_TZE200_wt9agwf3', '_TZE200_5uodvhgc', '_TZE200_1n2zev06'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_1n2zev06'],     //https://community.hubitat.com/t/frankever-zigbee-1-water-valve/140694?u=kkossev
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_5uodvhgc'],
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_wt9agwf3'],
+            ],
+            deviceJoinName: 'FrankEver Zigbee Smart Water Valve FK_V02',
+            capabilities  : ['valve': true, 'battery': true],
+            configuration : ['battery': false],
+            attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery', 'battery': '---', 'timerTimeLeft': '---', 'lastValveOpenDuration': '---'],
+            tuyaCommands  : ['switch': '0x65'],
+            // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f2704346e27431ae3f77c398e4f434c88adec149/src/devices/frankever.ts#L10 
+            // https://github.com/u236/homed-service-zigbee/blob/66c507b47d720908bfb3ec2a0e8c6d9a79039d94/deploy/data/usr/share/homed-zigbee/tuya.json#L408
+            // state: 1,    status": {"enum": ["off", "on"]},
+            // frankEverTimer: 9,   // frankEverTimer: {timer: value / 60} 0 ..600 (minutes) 'Countdown timer in minutes'       "timer": {"min": 0, "max": 600},    
+            //                 9 Switch 1 timer value range 0-86400, pitch 1, unit sec
+            // frankEverTreshold: 101   // threshold 0..100 'Valve open percentage (multiple of 10)'        "threshold": {"min": 0, "max": 100, "step": 10, "unit": "%", "control": true, "icon": "mdi:percent"},
+            // "lock": "valve" 
+            preferences   : [
+                //'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'<i>Select Power-On Behaviour</i>', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+            ]
+    ],
+
     'TS0049_IRRIGATION_VALVE'    : [    // isTS0049()
             model         : 'TS0049',     // https://github.com/Koenkk/zigbee2mqtt/issues/15124#issuecomment-1435490104
             manufacturers : ['_TZ3210_0jxeoadc', '_TZ3000_hwnphliv'],   // https://github.com/Koenkk/zigbee2mqtt/issues/15124
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'EF00,0000', outClusters:'0019,000A', model:'TS0049', manufacturer:'_TZ3210_0jxeoadc'],     // https://www.amazon.com.au/dp/B0BX47V4YB
                 [profileId:'0104', endpointId:'01', inClusters:'EF00,0000', outClusters:'0019,000A', model:'TS0049', manufacturer:'_TZ3000_hwnphliv'],     // not tested // (FrankEver model FK-WT03W)
-                [profileId:'0104', endpointId:'01', inClusters:'EF00,0000', outClusters:'0019,000A', model:'TS0049', manufacturer:'_TZ3000_srldgdxz']      // 
+                [profileId:'0104', endpointId:'01', inClusters:'EF00,0000', outClusters:'0019,000A', model:'TS0049', manufacturer:'_TZ3000_srldgdxz']      //
             ],
             deviceJoinName: 'SasweTS0049ll Zigbee Irrigation Valve',
             capabilities  : ['valve': true, 'battery': true],
             configuration : ['battery': false],
             attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery', 'battery': '---', 'timerTimeLeft': '---', 'lastValveOpenDuration': '---'],
-            // https://github.com/Koenkk/zigbee2mqtt/issues/15124#issuecomment-1345161859 
-            // 00 - ??; 26 - "error_status"; 101(0x65) - "on_off"(bool); 0x66-???(bool); 0x67-??(bool); 0x69-??;0x6A-??; 0x6D-??(8bit) 110(0x6E) - ??; 111(0x6F) - "irrigation_time" or countdown(32bit); 115(0x73) - battery state: Low = 0x00 Medium = 0x01 High = 0x02; 
-            tuyaCommands  : ['switch': '0x65'], 
+            // https://github.com/Koenkk/zigbee2mqtt/issues/15124#issuecomment-1345161859
+            // 00 - ??; 26 - "error_status"; 101(0x65) - "on_off"(bool); 0x66-???(bool); 0x67-??(bool); 0x69-??;0x6A-??; 0x6D-??(8bit) 110(0x6E) - ??; 111(0x6F) - "irrigation_time" or countdown(32bit); 115(0x73) - battery state: Low = 0x00 Medium = 0x01 High = 0x02;
+            tuyaCommands  : ['switch': '0x65'],
             preferences   : [
                 'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'<i>Select Power-On Behaviour</i>', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
@@ -339,7 +364,6 @@ boolean isBatteryPowered()       { return isGIEX() || isSASWELL() || isTS0049() 
         batteries     : 'unknown'
     ]
 ]
-
 
 void parse(String description) {
     checkDriverVersion()
@@ -466,9 +490,7 @@ void sendSwitchEvent(final String switchValue) {
         runInMillis(DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true])
         return
     }
-    else {
-        logDebug "sendSwitchEvent: value=${value}  lastSwitch=${state.states['lastSwitch']}"
-    }
+    logDebug "sendSwitchEvent: value=${value}  lastSwitch=${state.states['lastSwitch']}"
     boolean isDigital = state.states['isDigital'] ?: true
     map.type = isDigital == true ? 'digital' : 'physical'
     if (lastSwitch != value) {
@@ -745,7 +767,7 @@ void parseZHAcommand(Map descMap) {
                             case '69' : // (105) WaterValveCycleIrrigationInterval for GiEX      // CycleIrrigationInterval   # cycle irrigation interval (minutes, max 1440)                        // TODO - Send to device cycle_irrigation_interval ?
                                 if (isTS0049()) {   // count down timer
                                     logInfo "TS049 timer time left (${cmd}) is: ${value}"   // seconds or minutes?
-                                    sendEvent(name: 'timerTimeLeft', value: value, type: 'physical')                                
+                                    sendEvent(name: 'timerTimeLeft', value: value, type: 'physical')
                                 }
                                 else {
                                     if (txtEnable == true) { log.info "${device.displayName} CycleIrrigationInterval (${cmd}) is: ${value}" }
@@ -764,14 +786,14 @@ void parseZHAcommand(Map descMap) {
                                     logInfo "TS0049 Automatic Mode Distinction (dp=${cmd}) is ${value}"
                                 }
                                 else {
-                                    logInfo "${device.displayName} LIDL time schedile (${cmd}) is: ${value}" 
+                                    logInfo "${device.displayName} LIDL time schedile (${cmd}) is: ${value}"
                                 }
                                 break
                             case '6C' : // (108) WaterValveBattery for GiEX    // 0001/0021,mul:2           # match to BatteryPercentage
                                 if (isGIEX()) {
                                     logInfo "GiEX Battery (${cmd}) is: ${value} %"
                                     sendBatteryEvent(value)
-                                } 
+                                }
                                 else if (isTS0049()) {
                                     logInfo "TS0049 Effective Time Period (dp=${cmd}) is ${value}"
                                 }
@@ -822,16 +844,16 @@ void parseZHAcommand(Map descMap) {
                                 logInfo "TS0049 battery_state (${cmd}) is: ${valueString} (${value})"
                                 sendBatteryEvent(value == 0 ? 33 : value == 1 ? 66 : value == 2 ? 100 : 0)
                                 break
-                                // case '74' : // (116) TS0049 - MaxTemp Set 
-                                // case '75' : // (117) TS0049 - MinTemp Set
-                                // case '76' : // (118) TS0049 - MaxHum  Set
-                                // case '77' : // (119) TS0049 - MinHum  Set
-                                // case '78' : // (120) TS0049 - Charge State
-                                // case '79' : // (121) TS0049 - Water Once
-                                // case '7A' : // (122) TS0049 - Flowrate Total
-                                // case '7B' : // (123) TS0049 - Water Supply Pressure
-                                // case '7C' : // (124) TS0049 - Flow Rate Instant Value
-                                // case '7D' : // (125) TS0049 - Flow Calibration
+                            // case '74' : // (116) TS0049 - MaxTemp Set
+                            // case '75' : // (117) TS0049 - MinTemp Set
+                            // case '76' : // (118) TS0049 - MaxHum  Set
+                            // case '77' : // (119) TS0049 - MinHum  Set
+                            // case '78' : // (120) TS0049 - Charge State
+                            // case '79' : // (121) TS0049 - Water Once
+                            // case '7A' : // (122) TS0049 - Flowrate Total
+                            // case '7B' : // (123) TS0049 - Water Supply Pressure
+                            // case '7C' : // (124) TS0049 - Flow Rate Instant Value
+                            // case '7D' : // (125) TS0049 - Flow Calibration
                             case 'D1' : // cycle timer
                                 if (txtEnable == true) { log.info "${device.displayName} cycle timer (${cmd}) is: ${value}" }
                                 break
@@ -1247,7 +1269,6 @@ void initializeVars(boolean fullInit = true) {
     if (fullInit == true || settings?.autoOffTimer == null) { device.updateSetting('autoOffTimer', [value: DEFAULT_AUTOOFF_TIMER, type: 'number']) }
     if (fullInit == true || settings?.autoSendTimer == null) { device.updateSetting('autoSendTimer', (isGIEX() ? true : false)) }
     if (fullInit == true || settings?.threeStateEnable == null) { device.updateSetting('threeStateEnable', false) }
-    
 
     if (isBatteryPowered()) {
         if (state.states['lastBattery'] == null) { state.states['lastBattery'] = '100' }
@@ -1598,11 +1619,11 @@ void updateTuyaVersion() {
 
 /* groovylint-disable-next-line MethodParameterTypeRequired, UnusedMethodParameter */
 void test( description ) {
-//    catchall: 0104 EF00 01 01 0040 00 533D 01 00 0000 01 01 00550101000100
+    //    catchall: 0104 EF00 01 01 0040 00 533D 01 00 0000 01 01 00550101000100
     log.warn "test parsing: <b>${description}</b>"
     parse(description)
-    //log.trace "getPowerSource()=${getPowerSource()}"
-   // setDeviceNameAndProfile()
+//log.trace "getPowerSource()=${getPowerSource()}"
+// setDeviceNameAndProfile()
 }
 
 void testX() {

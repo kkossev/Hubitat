@@ -58,7 +58,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/batteryLib.groovy",
       "id": 171,
       "codeType": "library",
-      "version": 22
+      "version": 23
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/illuminanceLib.groovy",
@@ -94,7 +94,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/temperatureLib.groovy",
       "id": 172,
       "codeType": "library",
-      "version": 34
+      "version": 35
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/humidityLib.groovy",

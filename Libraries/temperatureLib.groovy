@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Temperature Library', name: 'temperatureLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/temperatureLib.groovy', documentationLink: '',
-    version: '3.2.2'
+    version: '3.2.3'
 )
 /*
  *  Zigbee Temperature Library
@@ -13,26 +13,29 @@ library(
  * ver. 3.0.1  2024-04-19 kkossev  - temperature rounding fix
  * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment; added temperatureRefresh()
  * ver. 3.2.1  2024-06-07 kkossev  - excluded maxReportingTime for mmWaveSensor and Thermostat
- * ver. 3.2.2  2024-07-06 kkossev  - (dev.branch) fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
+ * ver. 3.2.2  2024-07-06 kkossev  - fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
+ * ver. 3.2.3  2024-07-18 kkossev  - (dev.branch) added 'ReportingConfiguration' capability check for minReportingTime and maxReportingTime
  *
- *                                   TODO: check why  if (settings?.minReportingTime...) condition in the preferences ?
+ *                                   TODO:
  *                                   TODO: add temperatureOffset
  *                                   TODO: unschedule('sendDelayedTempEvent') only if needed (add boolean flag to sendDelayedTempEvent())
  *                                   TODO: check for negative temperature values in standardParseTemperatureCluster()
 */
 
-static String temperatureLibVersion()   { '3.2.2' }
-static String temperatureLibStamp() { '2024/07/06 9:28 PM' }
+static String temperatureLibVersion()   { '3.2.3' }
+static String temperatureLibStamp() { '2024/07/18 3:08 PM' }
 
 metadata {
     capability 'TemperatureMeasurement'
     // no commands
     preferences {
         if (device && advancedOptions == true) {
-            input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: 'Minimum reporting interval, seconds <i>(1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
-            if (!(deviceType in ['mmWaveSensor', 'Thermostat'])) {
-                input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: 'Maximum reporting interval, seconds <i>(120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
-           }
+            if ('ReportingConfiguration' in DEVICE?.capabilities) {
+                input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: 'Minimum reporting interval, seconds <i>(1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
+                if (!(deviceType in ['mmWaveSensor', 'Thermostat', 'TRV'])) {
+                    input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: 'Maximum reporting interval, seconds <i>(120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
+                }
+            }
         }
     }
 }
