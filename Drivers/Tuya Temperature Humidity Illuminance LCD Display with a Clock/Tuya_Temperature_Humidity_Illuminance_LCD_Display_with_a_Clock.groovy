@@ -47,7 +47,8 @@
  * ver. 1.6.0  2024-05-19 kkossev - added the correct NOUS TS0601 _TZE200_nnrfa68v fingerprint to group 'TS0601_Tuya'; all Current States and Preferences are cleared on initialize command;
  * ver. 1.6.1  2024-06-10 kkossev - added ThirdReality 3RTHS0224Z and 3RTHS24BZ
  * ver. 1.6.2  2024-06-26 kkossev - added TS000F _TZ3218_7fiyo3kv in DS18B20 group (temperature only); added Tuya cluster command '06' processing; added description in the debug logs
- * ver. 1.6.3  2024-07-16 kkossev - (dev. branch) added TS0601 _TZE204_yjjdcqsq to TS0601_Tuya_2 group;
+ * ver. 1.6.3  2024-07-16 kkossev - dded TS0601 _TZE204_yjjdcqsq to TS0601_Tuya_2 group;
+ * ver. 1.6.3  2024-07-23 kkossev - (dev. branch) added Tuya Smart Soil Tester _TZE284_aao3yzhs into 'TS0601_Soil_II'
  *
  *                                  TODO: queryOnDeviceAnnounce for TS0601_Tuya_2 group
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
@@ -58,7 +59,7 @@
 */
 
 @Field static final String VERSION = '1.6.3'
-@Field static final String TIME_STAMP = '2024/07/16 5:00 PM'
+@Field static final String TIME_STAMP = '2024/07/23 5:01 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -166,11 +167,11 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,E001,E000,EF00', outClusters:'000A,0019', model:'TS000F', manufacturer:'_TZ3218_7fiyo3kv', deviceJoinName: 'MHCOZY switch with temp sensor'         // https://community.hubitat.com/t/mycozy-switch-with-temp-sensor-driver/139715?u=kkossev
     }
     preferences {
-        input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: '<i>Display measured values in HE log page. Recommended value is <b>true</b></i>', defaultValue: true)
-        input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: '<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>', defaultValue: true)
-        input(name: 'modelGroupPreference', type: 'enum', title: '<b>Model Group</b>', description:'Recommended value is <b>Auto detect</b></i>', defaultValue: 0, options:
+        input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: 'Display measured values in HE log page. <br>The recommended setting is <b>enabled</b>.', defaultValue: true)
+        input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: 'Debug information, useful for troubleshooting. <br>The recommended value is <b>disabled</b>.', defaultValue: true)
+        input(name: 'modelGroupPreference', type: 'enum', title: '<b>Model Group</b>', description:'The recommended setting is <b>Auto detect</b>.', defaultValue: 0, options:
                ['Auto detect':'Auto detect', 'TS0601_Tuya':'TS0601_Tuya', 'TS0601_Tuya_2':'TS0601_Tuya_2', 'TS0601_Haozee':'TS0601_Haozee', 'TS0601_AUBESS':'TS0601_AUBESS', 'TS0201':'TS0201', 'TS0222':'TS0222', 'TS0201_LCZ030': 'TS0201_LCZ030',
-                'TS0222_2':'TS0222_2', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
+                'TS0222_2':'TS0222_2', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', , 'TS0601_Soil_II':'TS0601_Soil_II', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
         input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', description: 'May not be supported by all devices!', defaultValue: false)
         if (advancedOptions == true) {
             if (isConfigurableSleepyDevice()) {
@@ -214,16 +215,16 @@ metadata {
         8: [input: [name: 'maxHumidityAlarmPar', type: 'number', title: '<b>Maximum Humidity Alarm</b>', description: 'Maximum Humidity Alarm, %', defaultValue: 60, range: '0..100',            // 'TS0601_Haozee' only!
                    limit:[/*'TS0601_Haozee',*/ /*'TS0201_LCZ030'*/]]],
 
-        9: [input: [name: 'minReportingTimeTemp', type: 'number', title: '<b>Minimum time between temperature reports</b>', description: 'Minimum time between temperature reporting, seconds', defaultValue: 10, range: '1..3600',
+        9: [input: [name: 'minReportingTimeTemp', type: 'number', title: '<b>Minimum time between temperature reports</b>', description: 'Minimum time between temperature reporting, seconds.', defaultValue: 10, range: '1..3600',
                    limit:['ALL']]],
 
-       10: [input: [name: 'maxReportingTimeTemp', type: 'number', title: '<b>Maximum time between temperature reports</b>', description: 'Maximum time between temperature reporting, seconds', defaultValue: 3600, range: '10..43200',
+       10: [input: [name: 'maxReportingTimeTemp', type: 'number', title: '<b>Maximum time between temperature reports</b>', description: 'Maximum time between temperature reporting, seconds.', defaultValue: 3600, range: '10..43200',
                    limit:['TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya']]],
 
-       11: [input: [name: 'minReportingTimeHumidity', type: 'number', title: '<b>Minimum time between humidity reports</b>', description: 'Minimum time between humidity reporting, seconds', defaultValue: 10, range: '1..3600',
+       11: [input: [name: 'minReportingTimeHumidity', type: 'number', title: '<b>Minimum time between humidity reports</b>', description: 'Minimum time between humidity reporting, seconds.', defaultValue: 10, range: '1..3600',
                    limit:['ALL']]],
 
-       12: [input: [name: 'maxReportingTimeHumidity', type: 'number', title: '<b>Maximum time between humidity reports</b>', description: 'Maximum time between humidity reporting, seconds', defaultValue: 3600, range: '10..43200',
+       12: [input: [name: 'maxReportingTimeHumidity', type: 'number', title: '<b>Maximum time between humidity reports</b>', description: 'Maximum time between humidity reporting, seconds.', defaultValue: 3600, range: '10..43200',
                    limit:['TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya']]],
 
        13: [input: [name: 'alarmTempPar', type: 'enum', title: '<b>Temperature Alarm</b>', description:'Temperature Alarm', defaultValue: 0, options: [0:'Below min temp', 1:'Over max temp', 2:'off'],
@@ -283,6 +284,7 @@ metadata {
     '_TZ3210_ncw88jfq'  : 'TS0201_TH',          // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/436?u=kkossev
     '_TZE200_myd45weu'  : 'TS0601_Soil',        // Soil monitoring sensor
     '_TZE200_ga1maeof'  : 'TS0601_Soil',        // Soil monitoring sensor
+    '_TZE284_aao3yzhs'  : 'TS0601_Soil_II',     // Soil monitoring sensor II
     'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D, SNZB-02P
     'SONOFF'            : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D, SNZB-02P
     'ShinaSystem'       : 'Zigbee NON-Tuya',    // USM-300Z
@@ -313,7 +315,7 @@ metadata {
             attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery'],
             configuration : ['battery': false],
             preferences   : [
-                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'<i>Select Power-On Behaviour</i>', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
     ]
 ]
@@ -666,7 +668,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             }
             break
         case 0x03 : // humidity or  illuminance or battery state
-            if (getModelGroup() in ['TS0601_Soil']) {
+            if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II']) {
                 logDebug "Soil Sensor humidity raw = ${fncmd}"
                 humidityEvent( fncmd )
             }
@@ -692,7 +694,15 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 // not good for the plants ...
                 fncmd = fncmd - 65536
             }
-            temperatureEvent( fncmd )
+            if (getModelGroup() in ['TS0601_Soil']) {
+                temperatureEvent( fncmd )
+            }
+            else if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II']) {
+                temperatureEvent( fncmd / 10.0 )
+            }
+            else {
+                if (settings?.logEnable) { log.warn "${device.displayName} Soil Monitor reported value ${fncmd}" }
+            }
             break
         case 0x09 : // temp. scale  1=Fahrenheit 0=Celsius (TS0601 Tuya and Haoze) TS0601_Tuya does not change the symbol on the LCD !    // including 'TS0601_Tuya_2'
             if (settings?.logEnable) { log.info "${device.displayName} Temperature scale reported by device is: ${fncmd == 1 ? 'Fahrenheit' : 'Celsius' }" }       // {'celsius' : new Enum(0), 'fahrenheit' : new Enum(1)}
@@ -721,7 +731,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             //device.updateSetting("minHumidityAlarmPar", [value:fncmd, type:"number"])
             break
         case 0x0E : // (14) Temperature Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared
-            if (getModelGroup() in ['TS0601_Soil']) {
+            if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II']) {
                 if (settings?.txtEnable) { log.info "${device.displayName} battery_state (0x0E) is ${fncmd}" }
             }
             else if (getModelGroup() in ['DS18B20']) {
@@ -748,7 +758,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             }
             break
         case 0x0F : // (15) humidity Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared    (Haozee only?)
-            if (getModelGroup() in ['TS0601_Soil']) {
+            if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II']) {
                 getBatteryPercentageResult(fncmd * 2)
             }
             else {
