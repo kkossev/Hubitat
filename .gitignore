@@ -34,3 +34,4 @@ Drivers/Tuya Zigbee Metering Plug/.hubitat/metadata.json
 *.log
 Drivers/Zigbee Smoke Detector/scratchPad.txt
 Drivers/ZigBee Window Shade/scratchPad.txt
+Drivers/Tuya Temperature Humidity Illuminance LCD Display with a Clock/scratchPad.txt
