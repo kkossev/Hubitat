@@ -17,7 +17,8 @@
  *
  * ver. 3.2.0  2024-05-26 kkossev  - first version, based on the mmWave radar driver code : depricated Linptech; added TS0202 add _TYZB01_vwqnz1sn; 
  * ver. 3.2.1  2024-05-31 kkossev  - commonLib ver 3.2.1 allignment; tested 2In1 _TZE200_3towulqd ; new device profile group 'RH3040_TUYATEC'; SiHAS; 
- * ver. 3.2.2  2024-07-05 kkossev  - (dev.branch) created motionLib; restored 'all' attribute
+ * ver. 3.2.2  2024-07-05 kkossev  - created motionLib; restored 'all' attribute
+ * ver. 3.2.3  2024-07-27 kkossev  - (dev.branch) added Sonoff SNZB-03P
  *                                   
  *                                   TODO: Sensor 3in1 _warning: couldn't find map for preference motionReset
  *                                   TODO: Sensor 3in1 _TZE200_7hfcudw5 - fix battery percentage (shows 4)
@@ -44,8 +45,8 @@
  *                                   TODO: check temperatureOffset and humidityOffset
 */
 
-static String version() { "3.2.2" }
-static String timeStamp() {"2024/07/04 11:22 PM"}
+static String version() { "3.2.3" }
+static String timeStamp() {"2024/07/27 8:29 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -395,7 +396,8 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'ms01', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],        // for testL 60 seconds re-triggering period!
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'msO1', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],        // second variant
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'MS01', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor']        // third variant
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'MS01', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],        // third variant
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0406,0500,FC57', outClusters:'0003,0019', model:'SNZB-03P', manufacturer:'eWeLink', deviceJoinName: 'SONOFF SNZB-03P Motion Sensor']         // https://community.hubitat.com/t/new-sonoff-snzb-03p-motion-sensors-not-detecting/141138?u=kkossev
             ],
             deviceJoinName: 'Sonoff/eWeLink Motion sensor',
             configuration : [
