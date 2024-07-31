@@ -34,8 +34,10 @@
  *  ver. 1.2.6 2023-07-28 kkossev - fixed exceptions in configure(), ping() and rtt commands; scheduleDeviceHealthCheck() was not scheduled on initialize() and updated(); UNKNOWN deviceProfile fixed; set deviceProfile preference to match the automatically selected one; fake deviceCommandTimeout fix;
  *  ver. 1.2.7 2023-12-18 kkossev - code linting
  *  ver. 1.3.0 2024-03-17 kkossev - more code linting; added TS0049 _TZ3210_0jxeoadc; added three-states (opening, closing)
- *  ver. 1.3.1 2024-04-30 kkossev - getPowerSource bug fix; TS0049 command '06' processing; TS049 battery% fix; TS049 open/close fix; TS0049 command '05' processing;
+ *  ver. 1.3.1 2024-04-30 kkossev - getPowerSource bug fix; TS0049 command '06' processing; TS0049 battery% fix; TS0049 open/close fix; TS0049 command '05' processing;
+ *  ver. 1.3.2 2024-07-31 kkossev - (dev.branch) added SONOFF SWV (+onWithTimedOff)
  *
+ *                                  TODO: bugFix: deviceProfule not found automatically; powerSource : []
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
  *                                  TODO: clear the old states on update; add rejoinCtr;
  */
@@ -43,8 +45,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-String version() { '1.3.1' }
-String timeStamp() { '2024/04/30 7:57 AM' }
+String version() { '1.3.2' }
+String timeStamp() { '2024/07/31 10:24 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -57,7 +59,10 @@ metadata {
         capability 'PowerSource'
         capability 'HealthCheck'
         capability 'Battery'
+        capability 'SignalStrength'         // Sonoff SWV
+        capability 'LiquidFlowRate'         // Sonoff SWV (attribute 'rate')
 
+        attribute 'batteryVoltage', 'number'
         attribute 'healthStatus', 'enum', ['offline', 'online']
         attribute 'rtt', 'number'
         attribute 'timerState', 'enum', ['disabled', 'active (on)', 'enabled (off)']
@@ -68,15 +73,17 @@ metadata {
         attribute 'irrigationEndTime', 'string'
         attribute 'lastIrrigationDuration', 'string'
         attribute 'waterConsumed', 'number'
+        attribute 'irrigationVolume', 'number'
         attribute 'irrigationDuration', 'number'
         attribute 'irrigationCapacity', 'number'
+        attribute 'valveStatus', 'enum', ['normal', 'shortage', 'leakage', 'shortageAndLeakage', 'clear']    // SONOFF {ID: 0x500c, type: 0x20},
 
-        command 'setIrrigationTimer', [[name:'timer, in seconds (Saswell) or minutes (GiEX, TS0049)', type: 'NUMBER', description: 'Set the irrigation duration timer, in seconds (Saswell) or in minutes (GiEX, TS0049)', constraints: ['0..86400']]]
+        command 'setIrrigationTimer', [[name:'auto-off timer, in seconds or minutes (depending on the model)', type: 'NUMBER', description: 'Set the irrigation duration timer<br>, in seconds or minutes (depending on the model', constraints: ['0..86400']]]
         command 'setIrrigationCapacity', [[name:'capacity, liters (Saswell and GiEX)', type: 'NUMBER', description: 'Set Irrigation Capacity, litres', constraints: ['0..9999']]]
         command 'setIrrigationMode', [[name:'select the mode (Saswell and GiEX)', type: 'ENUM', description: 'Set Irrigation Mode', constraints: ['--select--', 'duration', 'capacity']]]
+        command 'initialize', [[name: 'Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****']]
 
         if (_DEBUG == true) {
-            command 'initialize', [[name: 'Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****']]
             command 'testTuyaCmd', [
                 [name:'dpCommand', type: 'STRING', description: 'Tuya DP Command', constraints: ['STRING']],
                 [name:'dpValue',   type: 'STRING', description: 'Tuya DP value', constraints: ['STRING']],
@@ -96,18 +103,24 @@ metadata {
     }
 
     preferences {
-        input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: '<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>', defaultValue: true)
-        input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: '<i>Display measured values in HE log page. Recommended value is <b>true</b></i>', defaultValue: true)
-        input(name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'<i>Select Power-On Behaviour</i>', defaultValue: '2', options: powerOnBehaviourOptions)
-        if (isSASWELL() || isGIEX()) {
-            input(name: 'autoOffTimer', type: 'number', title: '<b>Auto off timer</b>', description: '<i>Automatically turn off after how many seconds(Saswell) or minutes(GiEX)?</i>', defaultValue: DEFAULT_AUTOOFF_TIMER, required: false)
-            input(name: 'irrigationCapacity', type: 'number', title: '<b>Irrigation Capacity</b>', description: '<i>Automatically turn off agter how many liters?</i>', defaultValue: DEFAULT_CAPACITY, required: false)
-        }
-        input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These options should have been set automatically by the driver<br>Manually changes may not always work!</i>', defaultValue: false)
-        if (advancedOptions == true) {
-            input(name: 'forcedProfile', type: 'enum', title: '<b>Device Profile</b>', description: '<i>Forcely change the Device Profile, if the valve model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>',  options: getDeviceProfiles())
-            input(name: 'autoSendTimer', type: 'bool', title: '<b>Send the timeout timer automatically</b>', description: '<i>Send the configured timeout value on every open and close command <b>(GiEX)</b></i>', defaultValue: true)
-            input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>Experimental multi-state switch events</i>', defaultValue: false
+        input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: 'Display measured values in HE log page. Recommended value is <b>true</b>', defaultValue: true)
+        input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: 'Debug information, useful for troubleshooting. Recommended value is <b>false</b>', defaultValue: true)
+        if (device) {
+            if (deviceProfilesV2[getModelGroup()]?.capabilities?.powerOnBehaviour != false) {
+                input(name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options: powerOnBehaviourOptions)
+            }
+            if (isSASWELL() || isGIEX() || isSonoff()) {
+                input(name: 'autoOffTimer', type: 'number', title: '<b>Auto off timer</b>', description: 'Automatically turn off after how many seconds or minutes<br>(depending on the model)', defaultValue: DEFAULT_AUTOOFF_TIMER, required: false)
+            }
+            if (isSASWELL() || isGIEX()) {
+                input(name: 'irrigationCapacity', type: 'number', title: '<b>Irrigation Capacity</b>', description: 'Automatically turn off agter how many liters?', defaultValue: DEFAULT_CAPACITY, required: false)
+            }
+            input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: 'These options should have been set automatically by the driver<br>Manually changes may not always work!', defaultValue: false)
+            if (advancedOptions == true) {
+                input(name: 'forcedProfile', type: 'enum', title: '<b>Device Profile</b>', description: 'Forcely change the Device Profile, if the valve model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!',  options: getDeviceProfiles())
+                input(name: 'autoSendTimer', type: 'bool', title: '<b>Send the timeout timer automatically</b>', description: 'Send the configured timeout value on every open and close command <b>(GiEX)</b>', defaultValue: true)
+                input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: 'Experimental multi-state switch events', defaultValue: false
+            }
         }
     }
 }
@@ -125,6 +138,7 @@ boolean isTS0011()               { return getModelGroup().contains('TS0011') }
 boolean isTS0049()               { return getModelGroup().contains('TS0049') }
 boolean isBatteryPowered()       { return isGIEX() || isSASWELL() || isTS0049() }
 boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') }
+boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
 
 // Constants
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3
@@ -139,6 +153,8 @@ boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') 
 @Field static final Integer COMMAND_TIMEOUT = 10
 @Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
 @Field static String UNKNOWN = 'UNKNOWN'
+@Field static final String  DATE_TIME_UNKNOWN = '::::-::-:: ::::::::'
+@Field static final String  NUMBER_UNKNOWN = ':::'
 
 // WaterMode  for _TZE200_sh1btabb : duration=0 / capacity=1
 
@@ -205,7 +221,7 @@ boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') 
             attributes    : ['valve': '', 'healthStatus': 'unknown', 'powerSource': 'dc'],
             configuration : ['battery': false],
             preferences   : [
-                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'<i>Select Power-On Behaviour</i>', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
     ],
 
@@ -221,7 +237,7 @@ boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') 
             attributes    : ['healthStatus': 'unknown', 'powerSource': 'dc'],
             configuration : ['battery': false],
             preferences   : [
-                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'<i>Select Power-On Behaviour</i>', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
     ],
 
@@ -236,7 +252,7 @@ boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') 
             configuration : ['battery': false],
             attributes    : ['healthStatus': 'unknown', 'powerSource': 'dc'],
             preferences   : [
-                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'<i>Select Power-On Behaviour</i>', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
     ],
 
@@ -253,7 +269,7 @@ boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') 
             configuration : ['battery': false],
             attributes    : ['healthStatus': 'unknown', 'powerSource': 'dc'],
             preferences   : [
-                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'<i>Select Power-On Behaviour</i>', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
     ],
 
@@ -269,7 +285,7 @@ boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') 
             configuration : ['battery': false],
             attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery'],
             preferences   : [
-                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'<i>Select Power-On Behaviour</i>', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
     ],
 
@@ -288,7 +304,7 @@ boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') 
             attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery', 'battery': '---', 'timerTimeLeft': '---', 'lastValveOpenDuration': '---'],
             tuyaCommands  : ['timerState': '0x02', 'timerTimeLeft': '0x0B'],
             preferences   : [
-                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'<i>Select Power-On Behaviour</i>', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
     ],
 
@@ -305,7 +321,7 @@ boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') 
             attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery', 'battery': '---'],
             tuyaCommands  : ['switch': '0x01', 'timeSchedule': '0x6B', 'frostReset': '0x6D'],
             preferences   : [
-            //                "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+            //                "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"Select Power-On Behaviour", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
     ],
 
@@ -322,27 +338,27 @@ boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') 
             configuration : ['battery': false],
             attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery', 'battery': '---', 'timerTimeLeft': '---', 'lastValveOpenDuration': '---'],
             tuyaCommands  : ['switch': '0x65'],
-            // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f2704346e27431ae3f77c398e4f434c88adec149/src/devices/frankever.ts#L10 
+            // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f2704346e27431ae3f77c398e4f434c88adec149/src/devices/frankever.ts#L10
             // https://github.com/u236/homed-service-zigbee/blob/66c507b47d720908bfb3ec2a0e8c6d9a79039d94/deploy/data/usr/share/homed-zigbee/tuya.json#L408
             // state: 1,    status": {"enum": ["off", "on"]},
-            // frankEverTimer: 9,   // frankEverTimer: {timer: value / 60} 0 ..600 (minutes) 'Countdown timer in minutes'       "timer": {"min": 0, "max": 600},    
+            // frankEverTimer: 9,   // frankEverTimer: {timer: value / 60} 0 ..600 (minutes) 'Countdown timer in minutes'       "timer": {"min": 0, "max": 600},
             //                 9 Switch 1 timer value range 0-86400, pitch 1, unit sec
             // frankEverTreshold: 101   // threshold 0..100 'Valve open percentage (multiple of 10)'        "threshold": {"min": 0, "max": 100, "step": 10, "unit": "%", "control": true, "icon": "mdi:percent"},
-            // "lock": "valve" 
+            // "lock": "valve"
             preferences   : [
-                //'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'<i>Select Power-On Behaviour</i>', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+                //'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
     ],
 
     'TS0049_IRRIGATION_VALVE'    : [    // isTS0049()
             model         : 'TS0049',     // https://github.com/Koenkk/zigbee2mqtt/issues/15124#issuecomment-1435490104
-            manufacturers : ['_TZ3210_0jxeoadc', '_TZ3000_hwnphliv'],   // https://github.com/Koenkk/zigbee2mqtt/issues/15124
+            manufacturers : ['_TZ3210_0jxeoadc', '_TZ3000_hwnphliv','_TZ3000_srldgdxz'],   // https://github.com/Koenkk/zigbee2mqtt/issues/15124
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'EF00,0000', outClusters:'0019,000A', model:'TS0049', manufacturer:'_TZ3210_0jxeoadc'],     // https://www.amazon.com.au/dp/B0BX47V4YB
                 [profileId:'0104', endpointId:'01', inClusters:'EF00,0000', outClusters:'0019,000A', model:'TS0049', manufacturer:'_TZ3000_hwnphliv'],     // not tested // (FrankEver model FK-WT03W)
                 [profileId:'0104', endpointId:'01', inClusters:'EF00,0000', outClusters:'0019,000A', model:'TS0049', manufacturer:'_TZ3000_srldgdxz']      //
             ],
-            deviceJoinName: 'SasweTS0049ll Zigbee Irrigation Valve',
+            deviceJoinName: 'TS0049 Zigbee Irrigation Valve',
             capabilities  : ['valve': true, 'battery': true],
             configuration : ['battery': false],
             attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery', 'battery': '---', 'timerTimeLeft': '---', 'lastValveOpenDuration': '---'],
@@ -350,7 +366,23 @@ boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') 
             // 00 - ??; 26 - "error_status"; 101(0x65) - "on_off"(bool); 0x66-???(bool); 0x67-??(bool); 0x69-??;0x6A-??; 0x6D-??(8bit) 110(0x6E) - ??; 111(0x6F) - "irrigation_time" or countdown(32bit); 115(0x73) - battery state: Low = 0x00 Medium = 0x01 High = 0x02;
             tuyaCommands  : ['switch': '0x65'],
             preferences   : [
-                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'<i>Select Power-On Behaviour</i>', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+            ]
+    ],
+
+
+    'SONOFF_SWV_VALVE'    : [           // isSonoff()
+            model         : 'SWV',      //https://github.com/Koenkk/zigbee-herdsman-converters/blob/97f8236ec184a3b5df09adca1168868deceaaa91/src/devices/sonoff.ts#L1104-L1138
+            manufacturers : ['SONOFF'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0006,0020,0404,0B05,FC57,FC11', outClusters:'000A,0019', model:'SWV', manufacturer:'SONOFF'],
+            ],
+            deviceJoinName: 'Sonoff Zigbee smart water valve SWV',
+            capabilities  : ['valve': true, 'battery': true, 'powerOnBehaviour': false],
+            configuration : ['battery': false],
+            attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery', 'battery': '---', 'timerTimeLeft': '---', 'lastValveOpenDuration': '---'],
+            preferences   : [
+                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
     ],
 
@@ -388,6 +420,15 @@ void parse(String description) {
         if (event.name ==  'switch') {
             if (logEnable == true) { log.debug "${device.displayName} event ${event}" }
             sendSwitchEvent(event.value)
+        }
+        else if (event.name == 'battery') {
+            if (logEnable == true) { log.debug "${device.displayName} event ${event}" }
+            sendBatteryEvent(event.value.toInteger())
+        }
+        else if (event.name == 'batteryVoltage') {
+            String descriptionText = "Battery voltage is ${event.value} V"
+            if (txtEnable == true) { log.info "${device.displayName} ${descriptionText}" }
+            sendEvent(name: 'batteryVoltage', value: event.value, descriptionText: descriptionText, unit: 'V', type: 'physical')
         }
         else {
             if (txtEnable) { log.warn "${device.displayName } received <b>unhandled event</b> ${event.name } = $event.value" }
@@ -459,6 +500,15 @@ void parse(String description) {
                     else {
                         logDebug "cluster 0006 attribute ${it.attrId} reported: ${it.value}"
                     }
+                }
+                else if (it.cluster == '0404') {
+                    parseFlowMeasurementCluster(it)
+                }
+                else if (it.cluster == 'FC11') {
+                    parseSonoffCluster(it, description)
+                }
+                else if (it.cluster == '0B05') {
+                    parseDiagnosticCluster(it)
                 }
                 else {
                     if (logEnable == true) { log.warn "${device.displayName} Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}" }
@@ -939,6 +989,152 @@ void parseZHAcommand(Map descMap) {
     }
 }
 
+/*
+        attribute 'valveStatus', 'enum', ['normal', 'shortage', 'leakage', 'shortageAndLeakage']    // SONOFF {ID: 0x500c, type: 0x20},
+        attribute 'irrigationDuration', 'number'
+
+*/
+
+@Field static final Map valveStatusOptions = [
+    '0': 'normal',
+    '1': 'shortage',
+    '2': 'leakage',
+    '3': 'shortage and leakage'
+]
+
+import java.text.SimpleDateFormat
+
+void parseSonoffCluster(Map it, String description) {
+    logDebug "parseSonoffCluster: ${it}"
+    // Define a date format
+    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+    Integer intValue = 0
+    try {
+        intValue = zigbee.convertHexToInt(it.value)
+    }
+    catch (e) {
+        logDebug "parseSonoffCluster: it.value ${it.value} is not a number"
+    }
+    switch (it.attrId) {
+        case '5006' :   // Real-time irrigation duration (0..86400, seconds)
+            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} value is ${intValue} (raw: ${it.value})"
+            String descText = "lastValveOpenDuration is ${intValue} seconds"
+            sendEvent(name: 'lastValveOpenDuration', value: intValue, descriptionText: descText, type: 'physical')
+            logInfo descText
+            break
+        case '5007' :   // Real-time Irrigation Volume (0..1000, divisor:10, unit: 'L')
+            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} value is ${intValue} (raw: ${it.value})"
+            String descText = "irrigationVolume is ${intValue} L"
+            sendEvent(name: 'irrigationVolume', value: intValue, descriptionText: descText, type: 'physical')
+            logInfo descText
+            break
+        case '5008' :   // Cyclic Timed Irrigation // data type: Char string      0x0A 01 01 00 00 04 B0 00 00 0E 10
+            //                                                      raw: E9D701FC11 0A 08 50 42 00,
+            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} description is ${description}"
+            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Cyclic Timed Irrigation : value is ${intValue} (raw: ${it.value})"
+            //decodeSonoffCiclicTimedIrrigationAtt0x5008(it)
+            break
+        case '5009' :   // Cyclic Volume Irrigation // data type: Char string     0x0A 01 01 00 00 00 1E 00 00 0E 10
+            //                                                           E9D701FC11 0A 09 50 42 00
+            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} description is ${description}"
+            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Cyclic Volume Irrigation : value is ${intValue} (raw: ${it.value})"
+            break
+        case '500A' :   // Weekly Schedule  // data type: Char string
+            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Weekly Schedule : value is ${intValue} (raw: ${it.value})"
+            break
+        case '500B' :   // Schedule Skip
+            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Schedule Skip : value is ${intValue} (raw: ${it.value})"
+            break
+        case '500C' :	// Valve Abnormal State // valveStatus :  0 - 'normal'; 1 - 'shortage'; 2 - 'leakage'; 3 - 'shortage and leakage'
+            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Valve Abnormal State value is ${intValue} (raw: ${it.value})"
+            String valveStatus = valveStatusOptions[intValue.toString()]
+            logInfo "valveStatus is: ${valveStatus} (${intValue})"
+            sendEvent(name: 'valveStatus', value: valveStatus, type: 'physical')
+            break
+        case '500D' :   // Irrigation Start Time // uint32  // Local time (since 1970)
+            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Irrigation Start Time : value is ${intValue} (raw: ${it.value})"
+            Date startDate = new Date((intValue + 946684800L)  * 1000L)
+            String startDateString = dateFormat.format(startDate)
+            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Irrigation Start Time : value is ${startDateString} (raw: ${it.value})"
+            sendEvent(name: 'irrigationStartTime', value: startDateString, type: 'physical')
+            //
+            //sendSwitchEvent('on')
+            break
+        case '500E' :   // Irrigation End Time //  uint32  // Local time (since 1970)
+            Date endDate = new Date((intValue + 946684800L)  * 1000L)
+            String endDateString = dateFormat.format(endDate)
+            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Irrigation End Time : value is ${endDateString} (raw: ${it.value})"
+            sendEvent(name: 'irrigationEndTime', value: endDateString, type: 'physical')
+            //
+            //sendSwitchEvent('off')
+            break
+        case '500F' :   // Daily Irrigation Volume (Irrigation water volume for the day)    // uint32 (Liter)
+            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Daily Irrigation Volume : value is ${intValue} (raw: ${it.value})"
+            break
+        case '5010' :   // Valve Work State (Valve working status)  // 0 - 'manual control'; 1 - 'Cycle timing / quantity control''; 2 - 'Schedule control'
+            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Valve Work State  : value is ${intValue} (raw: ${it.value})"
+            break
+        default :
+            logDebug "Sonoff cluster 0x${it.cluster} <b>unknown attribute ${it.attrId}</b> value is ${intValue} (raw: ${it.value})"
+            break
+    }
+}
+
+void parseFlowMeasurementCluster(Map it) {
+    if (it.attrId == '0000') {
+        logDebug "parseFlowMeasurementCluster: ${it}"
+        int flowRate = zigbee.convertHexToInt(it.value)
+        logInfo "Flow Measurement cluster 0x${it.cluster} attribute ${it.attrId} value is ${flowRate} 0m³/h (raw: ${it.value})"
+        sendEvent(name: 'rate', value: flowRate, unit: '0m³/h', type: 'physical')
+    }
+    else {
+        logDebug "Flow Measurement cluster 0x${it.cluster} unknown attribute ${it.attrId} value is ${zigbee.convertHexToInt(it.value)} (raw: ${it.value})"
+    }
+}
+
+// Read Attribute Response, status=SUCCESS, endpoint=0x01, cluster=0x0B05 (Diagnostics Cluster), attribute=0x011B (Average MAC Retry Per APS Message Sent), value=0003
+// Read Attribute Response, status=SUCCESS, endpoint=0x01, cluster=0x0B05 (Diagnostics Cluster), attribute=0x011C (Last Message LQI), value=FC 
+// Read Attribute Response, status=SUCCESS, endpoint=0x01, cluster=0x0B05 (Diagnostics Cluster), attribute=0x011D (Last Message RSSI), value=DB
+void parseDiagnosticCluster(Map it) {
+    logDebug "parseDiagnosticCluster: ${it}"
+    String descText = ''
+    switch (it.attrId) {
+        case '011B' :
+            descText = "Average MAC Retry Per APS Message Sent is ${zigbee.convertHexToInt(it.value)} (raw: ${it.value})"
+            logInfo "Diagnostics cluster 0x${it.cluster} attribute ${it.attrId} ${descText}"
+            break
+        case '011C' :
+            descText = "Last Message LQI is ${zigbee.convertHexToInt(it.value)} (raw: ${it.value})"
+            sendEvent(name: 'lqi', value: zigbee.convertHexToInt(it.value), descriptionText: descText, type: 'physical')
+            logInfo "Diagnostics cluster 0x${it.cluster} attribute ${it.attrId} ${descText}"
+            break
+        case '011D' :
+            descText = "Last Message RSSI is ${zigbee.convertHexToInt(it.value)} (raw: ${it.value})"
+            sendEvent(name: 'rssi', value: zigbee.convertHexToInt(it.value), descriptionText: descText, type: 'physical')
+            logInfo "Diagnostics cluster 0x${it.cluster} attribute ${it.attrId} ${descText}"
+            break
+        default :
+            logDebug "Diagnostics cluster 0x${it.cluster} unknown attribute ${it.attrId} value is ${zigbee.convertHexToInt(it.value)} (raw: ${it.value})"
+            break
+    }
+}
+
+void decodeSonoffCiclicTimedIrrigationAtt005008(Map it) {
+    logDebug "decodeSonoffCiclicTimedIrrigationAtt: ${it} it.data.size() = ${it.data.size()}"
+    int currentCount, totalNumber, irrigationDuration, irrigationInterval
+    if (it.data.size() >= 10) {
+        currentCount = zigbee.convertHexToInt(it.data[0])
+        totalNumber = zigbee.convertHexToInt(it.data[1])        // 0 - 100 'Total times of circulating irrigation'
+        irrigationDuration = (zigbee.convertHexToInt(it.data[2]) << 24) + (zigbee.convertHexToInt(it.data[3]) << 16) + (zigbee.convertHexToInt(it.data[4]) << 8) + zigbee.convertHexToInt(it.data[5])       // 0..86400 'Single irrigation duration', seconds
+        irrigationInterval = (zigbee.convertHexToInt(it.data[6]) << 24) + (zigbee.convertHexToInt(it.data[7]) << 16) + (zigbee.convertHexToInt(it.data[8]) << 8) + zigbee.convertHexToInt(it.data[9])       // 0..86400 'Time interval between two adjacent irrigations', seconds
+        logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} value is ${it.value} currentCount=${currentCount} totalNumber=${totalNumber} irrigationDuration=${irrigationDuration} irrigationInterval=${irrigationInterval}"
+    }
+    else {
+        logWarn "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} value is ${it.value} data.size() = ${it.data.size()}"
+    }
+
+}
+
 int getAttributeValue(ArrayList _data) {
     int retValue = 0
     try {
@@ -977,7 +1173,7 @@ void close() {
     state.states['isDigital'] = true
     if (settings?.threeStateEnable == true) {
         sendEvent(name: 'valve', value: 'closing', descriptionText: 'sent a command to close the valve', type: 'digital')
-        logInfo "closing ..."
+        logInfo 'closing ...'
     }
     scheduleCommandTimeoutCheck()
     List<String> cmds = []
@@ -1006,13 +1202,22 @@ void open() {
     state.states['isDigital'] = true
     if (settings?.threeStateEnable == true) {
         sendEvent(name: 'valve', value: 'opening', descriptionText: 'sent a command to open the valve', type: 'digital')
-        logInfo "opening ..."
+        logInfo 'opening ...'
+    }
+    if (isSonoff()) {
+        String lastValveStatus = device.currentValue('valveStatus')
+        if (lastValveStatus != null && !(lastValveStatus in ['normal', 'clear'])) {
+            sendEvent(name: 'valveStatus', value: 'clear', type: 'digital')
+        }
+        sendEvent(name: 'irrigationStartTime', value: DATE_TIME_UNKNOWN, type: 'digital')
+        sendEvent(name: 'irrigationEndTime', value: DATE_TIME_UNKNOWN, type: 'digital')
+        sendEvent(name: 'lastValveOpenDuration', value: NUMBER_UNKNOWN, type: 'digital')
     }
     scheduleCommandTimeoutCheck()
     ArrayList<String> cmds = []
     if (isGIEX()) {
         Short paramVal = 1
-        def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
+        String dpValHex = zigbee.convertToHexString(paramVal as int, 2)
         cmds = sendTuyaCommand('02', DP_TYPE_BOOL, dpValHex)
         if (logEnable) { log.debug "${device.displayName} opening WaterIrrigationValve cmds = ${cmds}" }
     }
@@ -1021,6 +1226,14 @@ void open() {
     }
     else if (getModelGroup().contains('TS0049')) {
         cmds = sendTuyaCommand('65', DP_TYPE_BOOL, '01')
+    }
+    else if (getModelGroup().contains('SONOFF')) {
+        int delay = settings?.autoOffTimer ?: MAX_AUTOOFF_TIMER
+        String delayHex = zigbee.convertToHexString(delay as int, 4)
+        String payload = zigbee.swapOctets(delayHex)
+        log.trace "SONOFF delay: ${delay} delayHex: ${delayHex} payload: ${payload}"
+        cmds = zigbee.command(0x0006, 0x42, [:],  delay=300, "00 ${payload} 0000")
+        log.trace "SONOFF cmds: ${cmds}"
     }
     else {
         cmds =  zigbee.on()
@@ -1095,13 +1308,14 @@ void refresh() {
         cmds = zigbee.onOffRefresh()
     }
     if (deviceProfilesV2[getModelGroup()]?.capabilities?.battery?.value == true) {
-        cmds += zigbee.readAttribute(0x001, 0x0020, [:], delay = 100)
-        cmds += zigbee.readAttribute(0x001, 0x0021, [:], delay = 200)
+        cmds += zigbee.readAttribute(0x001, [0x0021, 0x0020], [:], delay = 100)
+        //cmds += zigbee.readAttribute(0x001, 0x0021, [:], delay = 200)
     }
+    //
     if (isSASWELL() || isGIEX()) {
         cmds += zigbee.command(0xEF00, 0x0, '00020100')
     }
-    if (isTS0001() || isTS0011()) {
+    else if (isTS0001() || isTS0011()) {
         cmds += zigbee.readAttribute(0xE000, 0xD001, [:], delay = 200)    // encoding:42, value:AAAA; attrId: D001, encoding: 48, value: 020006
         cmds += zigbee.readAttribute(0xE000, 0xD002, [:], delay = 200)    // encoding: 48, value: 02000A
         cmds += zigbee.readAttribute(0xE000, 0xD003, [:], delay = 200)
@@ -1111,6 +1325,34 @@ void refresh() {
         cmds += zigbee.readAttribute(0x0006, 0x4002, [:], delay = 200)    // OffWaitTime
         cmds += zigbee.readAttribute(0x0006, 0x8001, [:], delay = 200)    // IndicatorMode: 1
         cmds += zigbee.readAttribute(0x0006, 0x8002, [:], delay = 200)    // RestartStatus: 2
+    }
+    else if (isSonoff()) {
+        //  cluster=0x0001 (Power Configuration Cluster), attribute=0x0020 (Battery Voltage), value=36
+        //  cluster=0x0001 (Power Configuration Cluster), attribute=0x0021 (Battery Percentage Remaining), value=90
+        //  cluster=0x0404 (Flow Measurement Cluster), attribute=0x0000 (Measured Value), value=0000
+        cmds += zigbee.readAttribute(0x0404, 0x0000, [:], delay = 199)
+        // Read Attribute Response, status=SUCCESS, endpoint=0x01, cluster=0x0B05 (Diagnostics Cluster), attribute=0x011B (Average MAC Retry Per APS Message Sent), value=0003
+        // Read Attribute Response, status=SUCCESS, endpoint=0x01, cluster=0x0B05 (Diagnostics Cluster), attribute=0x011C (Last Message LQI), value=FC 
+        // Read Attribute Response, status=SUCCESS, endpoint=0x01, cluster=0x0B05 (Diagnostics Cluster), attribute=0x011D (Last Message RSSI), value=DB
+        cmds += zigbee.readAttribute(0x0B05, [0x011B, 0x011C, 0x011D], [:], delay = 200)
+        // cluster=0xFC11 (Unknown), attribute=0x5006 (Unknown), value=00000009
+        //  cluster=0xFC11 (Unknown), attribute=0x5007 (Unknown), value=00000000
+        //  cluster=0xFC11 (Unknown), attribute=0x5008 (Unknown), value=
+        // cluster=0xFC11 (Unknown), attribute=0x5009 (Unknown), value=
+        // cluster=0xFC11 (Unknown), attribute=0x500C (Unknown), value=01 
+        // cluster=0xFC11 (Unknown), attribute=0x500D (Unknown), value=2E37E249 
+        // cluster=0xFC11 (Unknown), attribute=0x500E (Unknown), value=2E37E24E
+        // cluster=0xFC11 (Unknown), attribute=0x500F (Unknown), value=00000000
+        //  cluster=0xFC11 (Unknown), attribute=0x5010 (Unknown), value=00      Valve Work State 0: Manual control; 1: Cycle timing / quantity control; 2: Schedule control
+        cmds += zigbee.readAttribute(0xFC11, [0x5006, 0x5007,0x500C, 0x500D, 0x500E, 0x500F, 0x5010], [:], delay = 201)
+        cmds += zigbee.readAttribute(0xFC11, 0x5008, [:], delay = 202)
+        cmds += zigbee.readAttribute(0xFC11, 0x5009, [:], delay = 203)
+
+        // reportging
+        // Read Reporting Configuration Response, status=SUCCESS, endpoint=0x01, cluster=0x0001, attribute=0x0021, minPeriod=1, maxPeriod=7200      , data:[00, 00, 21, 00, 20, 01, 00, 20, 1C, 02],
+        // Check attribute reporting (endpoint=0x01, cluster=0x0001, attribute=0x0020, manufacturer=)  => Read Reporting Configuration Response, status=NOT_FOUND, data=[8B, 00, 20, 00]
+        // Read Reporting Configuration Response, status=SUCCESS, endpoint=0x01, cluster=0x0404, attribute=0x0000, minPeriod=1, maxPeriod=7200  data:[00, 00, 00, 00, 21, 01, 00, 20, 1C, 01, 00]
+        // 5006, 
     }
     runInMillis(REFRESH_TIMER, isRefreshRequestClear, [overwrite: true])           // 3 seconds
     if (cmds != null && cmds != []) {
@@ -1176,11 +1418,11 @@ void configure() {
 def setDeviceNameAndProfile(String model=null, String manufacturer=null) {
     String deviceName
     def currentModelMap = null
-    def deviceModel        = model != null ? model : device.getDataValue('model')
-    def deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer')
+    String deviceModel        = model != null ? model : device.getDataValue('model')
+    String deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer')
     deviceProfilesV2.each { profileName, profileMap ->
-        if ((profileMap.model?.value as String) == (deviceModel as String)) {
-            if ((profileMap.manufacturers.value as String).contains(deviceManufacturer as String)) {
+        if (profileMap.model == deviceModel) {
+            if (profileMap.manufacturers.contains(deviceManufacturer)) {
                 currentModelMap = profileName
                 state.deviceProfile = currentModelMap
                 deviceName = deviceProfilesV2[currentModelMap].deviceJoinName
@@ -1192,7 +1434,7 @@ def setDeviceNameAndProfile(String model=null, String manufacturer=null) {
     if (currentModelMap == null) {
         logWarn "unknown model ${deviceModel} manufacturer ${deviceManufacturer}"
         // don't change the device name when unknown
-        state.deviceProfile = 'UNKNOWN'
+        state.deviceProfile = UNKNOWN
     }
     if (deviceName != NULL) {
         device.setName(deviceName)
@@ -1250,7 +1492,7 @@ void initializeVars(boolean fullInit = true) {
         resetStats()
         logInfo 'all states and scheduled jobs cleared!'
         setDeviceNameAndProfile()
-        state.comment = 'Works with Tuya TS0001 TS0011 TS011F TS0601 shutoff valves; Tuya, GiEX, Saswell, Lidl irrigation valves'
+        state.comment = 'Works with Tuya TS0001 TS0011 TS011F TS0601 shutoff valves; Tuya TS0049, GiEX, Saswell, Lidl irrigation valves'
         state.driverVersion = driverVersionAndTimeStamp()
     }
 
@@ -1302,7 +1544,7 @@ void checkDriverVersion() {
         logInfo "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         initializeVars(fullInit = false)
         scheduleDeviceHealthCheck()
-        if (state.deviceProfile == 'UNKNOWN') {
+        if (state.deviceProfile == UNKNOWN) {
             setDeviceNameAndProfile()
         }
         state.driverVersion = driverVersionAndTimeStamp()
@@ -1317,7 +1559,7 @@ void logInitializeRezults() {
 void initialize() {
     log.info "${device.displayName} Initialize()..."
     unschedule()
-    initializeVars(fullInit = true)
+    initializeVars(true)
     updated()            // calls also configure()
     scheduleDeviceHealthCheck()
     runIn(3, logInitializeRezults, [overwrite: true])
@@ -1618,15 +1860,16 @@ void updateTuyaVersion() {
 }
 
 /* groovylint-disable-next-line MethodParameterTypeRequired, UnusedMethodParameter */
-void test( description ) {
+void test(String description) {
     //    catchall: 0104 EF00 01 01 0040 00 533D 01 00 0000 01 01 00550101000100
     log.warn "test parsing: <b>${description}</b>"
     parse(description)
 //log.trace "getPowerSource()=${getPowerSource()}"
-// setDeviceNameAndProfile()
+// 
 }
 
 void testX() {
+    /*
     logWarn 'sending Active Endpoints and Simple Descriptor Requests'
     List<String> cmds = []
     String endpointIdTemp
@@ -1636,6 +1879,8 @@ void testX() {
     endpointIdTemp = 'F2'
     cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0004 {00 ${zigbee.swapOctets(device.deviceNetworkId)} $endpointIdTemp} {0x0000}"]
     sendZigbeeCommands(cmds)
+    */
+    setDeviceNameAndProfile()
 }
 
 // private methods
