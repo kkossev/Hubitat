@@ -15,19 +15,20 @@
  *
  * ver. 3.3.0  2024-06-07 kkossev  - separate new 'Tuya Zigbee Thermostat' driver for Tuya Thermostats and TRVs.
  * ver. 3.3.1  2024-07-09 kkossev  - driver renamed to 'Tuya Zigbee TRVs and Thermostats'
- * ver. 3.3.2  2024-07-16 kkossev  - (dev. branch) added AVATTO_TRV06_TRV16_ME167_ME168_TRV profile
+ * ver. 3.3.2  2024-07-18 kkossev  - added AVATTO_TRV06_TRV16_ME167_ME168_TRV profile; added '_TZE200_bvrlmajk' as 'AVATTO TRV-07'; added 'IMMAX_Neo Lite TRV 07732L' profile; temperaturePollingInterval disabled for Tuya TRVs
+ *                                   'Battery Voltage to Percentage' and 'Minimum time between reports' are hidden; 
+ * ver. 3.3.3  2024-08-01 kkossev  - (dev.branch) added _TZE200_g9a3awaj 'AVATTO_ZWT07_BATTERY_THERMOSTAT'
  *
- *                                   TODO: AVATTO - hide Battery Voltage to Percentage; Minimum time between reports; better descriptions for anti-freeze and limescaleProtect preferences
+ *                                   TODO: add TS0601 _TZE204_lzriup1  https://community.hubitat.com/t/release-tuya-wall-mount-thermostat-water-electric-floor-heating-zigbee-driver/87050/318?u=kkossev 
+ *                                   TODO: AVATTO -  better descriptions for anti-freeze and limescaleProtect preferences
  *                                   TODO: BEOK - needs retries, the first command is lost sometimes! :(  Battery Voltage to Percentage
  *                                   TODO: BEOK: check calibration and correction DPs !!!
  *                                   TODO: BEOK: do NOT synchronize the clock between 00:00 and 09:00 local time !!
- *                                   TODO: add powerSource capability
  *                                   TODO: add Info dummy preference to the driver with a hyperlink
  *                                   TODO: add state.thermostat for storing last attributes
  *                                   TODO: Healthcheck to be every hour (not 4 hours) for mains powered thermostats
  *                                   TODO: add 'force manual mode' preference (like in the wall thermostat driver)
  *                                   TODO: option to disable the Auto mode ! (like in the wall thermostat driver)
- *                                   TODO: verify if onoffLib is needed
  *                                   TODO: BRT-100 : what is emergencyHeatingTime and boostTime ?
  *                                   TODO: initializeDeviceThermostat() - configure in the device profile !
  *                                   TODO: partial match for the fingerprint (model if Tuya, manufacturer for the rest)
@@ -45,8 +46,8 @@
  *                                   TODO: UNKNOWN TRV - update the deviceProfile - separate 'Unknown Tuya' and 'Unknown ZCL'
  */
 
-static String version() { '3.3.2' }
-static String timeStamp() { '2024/07/16 9:56 PM' }
+static String version() { '3.3.3' }
+static String timeStamp() { '2024/08/01 9:50 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -126,7 +127,7 @@ metadata {
     }
 }
 
-@Field static final Map deviceProfilesV3 = [
+@Field static final Map deviceProfilesV3 = [    // https://github.com/jacekk015/zha_quirks
     // BRT-100-B0
     //              https://github.com/Koenkk/zigbee-herdsman-converters/blob/47f56c19a3fdec5f23e74f805ff640a931721099/src/devices/moes.ts#L282
     //              TODO - what is the difference between 'holidays' mode and 'ecoMode' ?  Which one to use to substitute the 'off' mode ?
@@ -170,7 +171,7 @@ metadata {
     //              https://github.com/Koenkk/zigbee-herdsman-converters/blob/11e06a1b28a7ea2c3722c515f0ef3a148e81a3c3/src/devices/saswell.ts#L37
     //              TODO - what is the difference between 'holidays' mode and 'ecoMode' ?  Which one to use to substitute the 'off' mode ?
     'TUYA_SASWELL_TRV'    : [
-        description   : 'Tuya Saswell TRV (not fully working yet!)',
+        description   : 'Tuya Saswell TRV (not tested!)',
         device        : [models: ['TS0601'], type: 'TRV', powerSource: 'battery', isSleepy:false],
         capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
         preferences   : ['windowOpenDetection':'8', 'childLock':'40', 'calibrationTemp':'27'],
@@ -209,6 +210,7 @@ metadata {
         configuration : [:]
     ],
 
+    // https://github.com/Koenkk/zigbee2mqtt/issues/18872#issuecomment-1869439394 Few words to note that _TZE200_rxntag7i TS0601 / Tuya - Avatto TRV16 does not fit to ME168 TRV model.
     'AVATTO_TRV06_TRV16_ME167_ME168_TRV'   : [
         description   : 'AVATTO TRV6/TRV16/ME167/ME168 TRV',   // AVATTO TRV06
         // _TZE200_bvu2wnxz
@@ -217,7 +219,7 @@ metadata {
         preferences   : ['childLock':'7', 'antiFreeze':'36', 'limescaleProtect':'39', 'calibrationTemp':'47'],
         fingerprints  : [
             [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_p3dbf6qs', deviceJoinName: 'Avatto ME168 TRV06'],        // https://community.hubitat.com/t/release-tuya-wall-mount-thermostat-water-electric-floor-heating-zigbee-driver/87050/249?u=kkossev
-            [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_rxntag7i', deviceJoinName: 'Avatto ME168 TRV'],
+            [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_rxntag7i', deviceJoinName: 'Avatto ME168 TRV16'],        // https://community.hubitat.com/t/beta-tuya-zigbee-thermostats-and-trvs-driver/128916/39?u=kkossev
             [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_6rdj8dzm', deviceJoinName: 'Avatto ME167 TRV'],
             [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bvu2wnxz', deviceJoinName: 'Avatto ME167 TRV'],
         ],
@@ -246,10 +248,194 @@ metadata {
         configuration : [:]
     ],
 
+    'AVATTO-TRV07'   : [        // https://github.com/eteodun/Avatto-TRV07-TS0601-_TZE200_bvrlmajk/blob/main/tuyats601.js
+        description   : 'AVATTO TRV-07 (not tested!)',
+        device        : [models: ['TS0601'], type: 'TRV', powerSource: 'battery', isSleepy:false],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
+        preferences   : ['windowOpenDetection':'8', 'childLock':'12', 'calibrationTemp':'101', 'minHeatingSetpoint':'15', 'maxHeatingSetpoint':'16', 'brightness':'111', 'orientation':'113', 'ecoMode':'114'],
+        fingerprints  : [
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bvrlmajk', deviceJoinName: 'AVATTO TRV-07']
+        ],
+        commands      : ['sendSupportedThermostatModes':'sendSupportedThermostatModes', 'setHeatingSetpoint':'setHeatingSetpoint', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+        tuyaDPs       : [
+            [dp:1,   name:'thermostatMode',     type:'enum',            rw: 'rw', min:0,     max:3,    defVal:'1',  step:1,   scale:1,  map:[0: 'auto', 1: 'heat', 2: 'off', 3: 'emergency heat'] ,   unit:'', title:'<b>Thermostat Mode</b>',  description:'Thermostat mode'],
+            [dp:2,   name:'heatingSetpoint',    type:'decimal',         rw: 'rw', min:5.0,   max:35.0, defVal:20.0, step:0.5, scale:10,  unit:'°C',  title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
+            [dp:3,   name:'temperature',        type:'decimal',         rw: 'ro', min:-10.0, max:50.0, defVal:20.0, step:0.5, scale:10, unit:'°C',  description:'Temperature'],
+            [dp:6,   name:'thermostatOperatingState',  type:'enum',     rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'heating', 1:'idle'],  unit:'', description:'Thermostat Operating State(working state)'],
+            [dp:7,   name:'windowsState',       type:'enum',            rw: 'ro', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'open', 1:'closed'] ,   unit:'', title:'<bWindow State</b>',  description:'Window state'],
+            [dp:8,   name:'windowOpenDetection', type:'enum', dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Window Detection</b>',  description:'Window detection'],
+            [dp:12,  name:'childLock',          type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Child Lock</b>',  description:'Child lock'],
+            [dp:13,  name:'battery',            type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:1,   scale:1,  unit:'%',          description:'Battery level'],
+            [dp:14,  name:'faultAlarm',         type:'enum',            rw: 'ro', defVal:'0', map:[0:'clear', 1:'faultSensor', 2:'faultMotor', 4:'faultLowBatt', 8:'faultUgLowBatt'],  description:'Fault alarm'],
+            [dp:15,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,   max:15.0, defVal:10.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Minimum Temperature</b>',      description:'Minimum temperature'],
+            [dp:16,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0,  max:45.0, defVal:35.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Maximum Temperature</b>',      description:'Maximum temperature'],
+            [dp:17,  name:'scheduleMonday',     type:'number',          rw: 'ro', description:'Schedule Monday'],
+            [dp:18,  name:'scheduleTuesday',    type:'number',          rw: 'ro', description:'Schedule Tueasday'],
+            [dp:19,  name:'scheduleWednesday',  type:'number',          rw: 'ro', description:'Schedule Wednesday'],
+            [dp:20,  name:'scheduleThursday',   type:'number',          rw: 'ro', description:'Schedule Thursday'],
+            [dp:21,  name:'scheduleFriday',     type:'number',          rw: 'ro', description:'Schedule Friday'],
+            [dp:22,  name:'scheduleSaturday',   type:'number',          rw: 'ro', description:'Schedule Saturday'],
+            [dp:23,  name:'scheduleSunday',     type:'number',          rw: 'ro', description:'Schedule Sunday'],
+            [dp:101, name:'calibrationTemp',    type:'decimal',         rw: 'rw', min:-10.0,  max:19.0,  defVal:0.0, step:0.1,   scale:10,  unit:'°C',  title:'<b>Calibration Temperature</b>', description:'Calibration Temperature'],
+            [dp:108, name:'level',              type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:10,   scale:10,  unit:'%', description:'Valve level'],      // valve open degree
+            [dp:109, name:'model',              type:'number',          rw: 'ro', description:'Manufacturer model'],      // STRING!
+            [dp:110, name:'motorThrust',        type:'enum',            rw: 'ro', defVal:'1', map:[0:'strong', 1:'middle', 2:'weak'], description:'Motor thrust'],
+            [dp:111, name:'brightness',         type:'enum',            rw: 'rw', defVal:'1', map:[0:'high', 1:'medium', 2:'low'], title:'<b>Display Brightness</b>',  description:'Display brightness'],
+            [dp:112, name:'softVersion',        type:'number',          rw: 'ro', description:'Software version'],
+            [dp:113, name:'orientation',        type:'enum',            rw: 'rw', defVal:'1', map:[0:'up', 1:'right', 2:'down', 3:'left'], title:'<b>Screen Orientation</b>',  description:'Screen orientation'],
+            [dp:114, name:'ecoMode',            type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Eco mode</b>',  description:'Eco mode'],
+            [dp:115, name:'switchDeviation',    type:'decimal',         rw: 'ro', min:0.5,   max:5.0,  defVal:1.0,  step:10,   scale:10,  unit:'°C', description:'Valve level'],      // ECO mode only?
+            // ^^^^ "system_mode": { "type": "enum", "range": [ "comfort_mode", "Eco_mode"    ]      },
+            //{'comfort': tuya.enum(0), 'eco': tuya.enum(1)}
+        ],
+        supportedThermostatModes: ['off', 'heat', 'auto', 'emergency heat', 'eco'],
+        refresh: ['pollTuya'],
+        deviceJoinName: 'AVATTO TRV-07',
+        configuration : [:]
+    ],
 
+    'IMMAX_Neo Lite TRV 07732L'   : [
+        description   : 'IMMAX_Neo Lite TRV 07732L (not tested!)',
+        device        : [models: ['TS0601'], type: 'TRV', powerSource: 'battery', isSleepy:false],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
+        preferences   : ['windowOpenDetection':'8', 'childLock':'13', 'boostTime':'103', 'calibrationTemp':'105', 'ecoTemp':'107', 'minHeatingSetpoint':'109', 'maxHeatingSetpoint':'108'],
+        fingerprints  : [
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_rufdtfyv', deviceJoinName: 'Immax 07732L TRV'],            // https://community.hubitat.com/t/release-tuya-wall-mount-thermostat-water-electric-floor-heating-zigbee-driver/87050/232?u=kkossev
+        ],
+        commands      : ['sendSupportedThermostatModes':'sendSupportedThermostatModes', 'setHeatingSetpoint':'setHeatingSetpoint', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+        tuyaDPs       : [
+            [dp:2,   name:'heatingSetpoint',    type:'decimal',         rw: 'rw', min:1.0,   max:70.0, defVal:20.0, step:0.5, scale:1,  unit:'°C', title: '<b>Current Heating Setpoint</b>', description:'Current heating setpoint'],
+            [dp:3,   name:'temperature',        type:'decimal',         rw: 'ro', min:0.0,   max:70.0, defVal:20.0, step:0.5, scale:10, unit:'°C', description:'Temperature'],
+            [dp:4,   name:'thermostatMode',     type:'enum',            rw: 'rw', min:0,     max:7,    defVal:'2',  step:1,   scale:1,  map:[0: 'holiday', 1: 'auto', 2: 'manual', 3: 'comfort', 4: 'eco', 5: 'BOOST', 6: 'temp_auto', 7: 'Valve'] ,   unit:'', title:'<b>Auto Mode Type</b>',  description:'Auto mode type'], // mode 
+            [dp:7,   name:'childLock',          type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'], title:'<b>Child Lock</b>',  description:'Child lock'],
+            [dp:13,  name:'faultAlarm',         type:'enum',            rw: 'ro', defVal:'0', map:[0:'clear', 1:'err1', 2:'err2', 3:'err3', 4:'err4', 5:'err5'],  description:'Fault alarm'],
+            [dp:44,  name:'calibrationTemp',    type:'decimal',         rw: 'rw', min:-9.0,  max:9.0,  defVal:0.0,  step:1,   scale:10, unit:'°C', title:'<b>Calibration Temperature</b>', description:'Calibration Temperature'],
+            [dp:102, name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:1.0,   max:15.0, defVal:10.0, step:1.0, scale:1,  unit:'°C', title: '<b>Minimum Temperature</b>',      description:'Minimum temperature'],
+            [dp:103, name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:16.0,  max:70.0, defVal:35.0, step:1.0, scale:1,  unit:'°C', title: '<b>Maximum Temperature</b>',      description:'Maximum temperature'],
+            [dp:104, name:'windowOpenDetection', type:'enum', dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'], title:'<b>Window Detection</b>',  description:'Window detection'],   // Window Parameter
+            [dp:105, name:'boostTime',          type:'number',          rw: 'rw', min:100,   max:900 , defVal:100,  step:1,   scale:1,  unit:'seconds', title:'<b>Boost Timer</b>',  description:'Boost timer'],
+            [dp:106, name:'valveSet',           type:'enum', dt: '01',  rw: 'rw', min:0,     max:2 ,   defVal:'0',  step:1,   scale:1,  map:[0:'normal', 1:'forceOpen', 2:'forceClose'], title:'<b>Valve Set</b>',  description:'Valve set'],
+            [dp:107, name:'comfortTemp',        type:'decimal',         rw: 'rw', min:1.0,   max:70.0, defVal:20.0, step:1.0, scale:1,  unit:'°C', title: '<b>Comfort Temperature</b>',      description:'Comfort temperature'],
+            [dp:108, name:'ecoTemp',            type:'decimal',         rw: 'rw', min:1.0,   max:70.0, defVal:18.0, step:1.0, scale:1,  unit:'°C', title: '<b>Eco Temperature</b>',      description:'Eco temperature'],
+            [dp:109, name:'valveStatus',        type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:1,   scale:1,  unit:'%',  description:'Valve status'],  // Valve Status ?
+            [dp:110, name:'battery',            type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:1,   scale:1,  unit:'%',  description:'Battery level'],
+            [dp:111, name:'autoModeType',       type:'enum',            rw: 'rw', min:0,     max:7,    defVal:'2',  step:1,   scale:1,  map:[0: 'holiday', 1: 'auto', 2: 'manual', 3: 'comfort', 4: 'eco', 5: 'BOOST', 6: 'temp_auto', 7: 'Valve'] ,   unit:'', title:'<b>Auto Mode Type</b>',  description:'Auto mode type'], // mode 
+            [dp:112, name:'workdaySet',         type:'number',          rw: 'ro', description:'Workday Set'],
+            [dp:113, name:'restdaySet',         type:'number',          rw: 'ro', description:'Restday Set'],
+            [dp:114, name:'holidayTemp',        type:'decimal',         rw: 'rw', min:1.0,   max:70.0, defVal:20.0, step:1.0, scale:1,  unit:'°C', title: '<b>Holiday Temperature</b>', description:'Holiday temperature'],
+            [dp:115, name:'windowsState',       type:'enum',            rw: 'ro', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'open', 1:'closed'] ,   unit:'', title:'<bWindow State</b>',  description:'Window state'],
+            [dp:116, name:'autoLock',            type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,  scale:1,  map:[0:'off', 1:'on'], title:'<b>Auto Lock</b>',  description:'Auto lock'],
+            [dp:117, name:'holidayDays',        type:'number',          rw: 'ro', description:'Holiday Days'],  /// 1..30
+            [dp:118, name:'level',              type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:10,  scale:1,  unit:'%',  description:'Valve level'],  // Valve Opening 
+        ],
+        supportedThermostatModes: ['off', 'heat', 'auto', 'emergency heat', 'eco'],
+        refresh: ['pollTuya'],
+        deviceJoinName: 'MOES BRT-100 TRV',
+        configuration : [:]
+    ],
+
+
+
+
+
+    'TUYA_HY367_HY368_HY369_TRV'   : [        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/a615c8077123197a6d30aac334160e5dd4cf1058/src/devices/tuya.ts#L3018
+        description   : 'TUYA_HY367_HY368_HY369_TRV (not tested!)',
+        device        : [models: ['TS0601'], type: 'TRV', powerSource: 'battery', isSleepy:false],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
+        preferences   : ['windowOpenDetection':'8', 'childLock':'12', 'boostTime':'103', 'calibrationTemp':'101', 'minHeatingSetpoint':'15', 'maxHeatingSetpoint':'16', 'brightness':'111', 'orientation':'113', 'ecoMode':'114'],
+        fingerprints  : [
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ckud7u2l', deviceJoinName: 'TUYA_HY367_HY368_HY369_TRV'],
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ywdxldoj', deviceJoinName: 'TUYA_HY367_HY368_HY369_TRV'],
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_do5qy8zo', deviceJoinName: 'TUYA_HY367_HY368_HY369_TRV'],
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_cwnjrr72', deviceJoinName: 'TUYA_HY367_HY368_HY369_TRV'],
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_pvvbommb', deviceJoinName: 'TUYA_HY367_HY368_HY369_TRV'],
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_9sfg7gm0', deviceJoinName: 'TUYA HomeCloud TRV'],
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_2atgpdho', deviceJoinName: 'TUYA HY367 TRV'],
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_cpmgn2cf', deviceJoinName: 'TUYA_HY367_HY368_HY369_TRV'],  // https://community.hubitat.com/t/release-tuya-wall-mount-thermostat-water-electric-floor-heating-zigbee-driver/87050/253?u=kkossev
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_znlqjmih', deviceJoinName: 'TUYA_HY367_HY368_HY369_TRV'],
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_8thwkzxl', deviceJoinName: 'TUYA Tervix eva2 TRV'],
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_4eeyebrt', deviceJoinName: 'TUYA_HY367_HY368_HY369_TRV'],
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_lpwgshtl', deviceJoinName: 'TUYA_HY367_HY368_HY369_TRV'],
+        ],
+        commands      : ['sendSupportedThermostatModes':'sendSupportedThermostatModes', 'setHeatingSetpoint':'setHeatingSetpoint', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+        tuyaDPs       : [
+            [dp:1,   name:'thermostatMode',     type:'enum',            rw: 'rw', min:0,     max:3,    defVal:'1',  step:1,   scale:1,  map:[0: 'auto', 1: 'heat', 2: 'off', 3: 'emergency heat'] ,   unit:'', title:'<b>Thermostat Mode</b>',  description:'Thermostat mode'],
+            [dp:2,   name:'heatingSetpoint',    type:'decimal',         rw: 'rw', min:5.0,   max:35.0, defVal:20.0, step:0.5, scale:10,  unit:'°C',  title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
+            [dp:3,   name:'temperature',        type:'decimal',         rw: 'ro', min:-10.0, max:50.0, defVal:20.0, step:0.5, scale:10, unit:'°C',  description:'Temperature'],
+            [dp:6,   name:'thermostatOperatingState',  type:'enum',     rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'heating', 1:'idle'],  unit:'', description:'Thermostat Operating State(working state)'],
+            [dp:7,   name:'windowsState',       type:'enum',            rw: 'ro', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'open', 1:'closed'] ,   unit:'', title:'<bWindow State</b>',  description:'Window state'],
+            [dp:8,   name:'windowOpenDetection', type:'enum', dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Window Detection</b>',  description:'Window detection'],
+            [dp:12,  name:'childLock',          type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Child Lock</b>',  description:'Child lock'],
+            [dp:13,  name:'battery',            type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:1,   scale:1,  unit:'%',          description:'Battery level'],
+            [dp:14,  name:'faultAlarm',         type:'enum',            rw: 'ro', defVal:'0', map:[0:'active', 1:'clear'],  description:'Fault alarm'],
+            [dp:15,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,   max:15.0, defVal:10.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Minimum Temperature</b>',      description:'Minimum temperature'],
+            [dp:16,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0,  max:45.0, defVal:35.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Maximum Temperature</b>',      description:'Maximum temperature'],
+            [dp:17,  name:'scheduleMonday',     type:'number',          rw: 'ro', description:'Schedule Monday'],
+            [dp:18,  name:'scheduleTuesday',    type:'number',          rw: 'ro', description:'Schedule Tueasday'],
+            [dp:19,  name:'scheduleWednesday',  type:'number',          rw: 'ro', description:'Schedule Wednesday'],
+            [dp:20,  name:'scheduleThursday',   type:'number',          rw: 'ro', description:'Schedule Thursday'],
+            [dp:21,  name:'scheduleFriday',     type:'number',          rw: 'ro', description:'Schedule Friday'],
+            [dp:22,  name:'scheduleSaturday',   type:'number',          rw: 'ro', description:'Schedule Saturday'],
+            [dp:23,  name:'scheduleSunday',     type:'number',          rw: 'ro', description:'Schedule Sunday'],
+            [dp:101, name:'calibrationTemp',    type:'decimal',         rw: 'rw', min:-3.0,  max:3.0,  defVal:00.0, step:0.1,   scale:10,  unit:'°C',  title:'<b>Calibration Temperature</b>', description:'Calibration Temperature'],
+            [dp:108, name:'level',              type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:1,   scale:1,  unit:'%',          description:'Valve level'],      // position
+            [dp:111, name:'brightness',         type:'enum',            rw: 'rw', defVal:'1', map:[0:'high', 1:'medium', 2:'low'], title:'<b>Display Brightness</b>',  description:'Display brightness'],
+            [dp:113, name:'orientation',        type:'enum',            rw: 'rw', defVal:'1', map:[0:'up', 1:'right', 2:'down', 3:'left'], title:'<b>Screen Orientation</b>',  description:'Screen orientation'],
+            [dp:114, name:'ecoMode',            type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Eco mode</b>',  description:'Eco mode'],
+            // or Hysteresis  ?
+            //{'comfort': tuya.enum(0), 'eco': tuya.enum(1)}
+
+/*
+  [49, 'running_state', tuya.valueConverterBasic.lookup({'heat': tuya.enum(1), 'idle': tuya.enum(0)})],
+                [2, 'preset', tuya.valueConverterBasic.lookup({'comfort': tuya.enum(3), 'auto': tuya.enum(0),
+                    'manual': tuya.enum(2), 'holiday': tuya.enum(1)})],
+                [4, 'current_heating_setpoint', tuya.valueConverter.divideBy10],
+                [5, 'local_temperature', tuya.valueConverter.divideBy10],
+                [6, 'battery', tuya.valueConverter.raw],
+                [7, 'child_lock', tuya.valueConverter.lockUnlock],
+                [9, 'max_temperature_limit', tuya.valueConverter.divideBy10],
+                [10, 'min_temperature_limit', tuya.valueConverter.divideBy10],
+                [14, 'window_detection', tuya.valueConverter.onOff],
+                [16, 'open_window_temperature', tuya.valueConverter.divideBy10],
+                [17, 'open_window_time', tuya.valueConverter.raw],
+                [18, 'backlight', tuya.valueConverter.raw],
+                [19, 'factory_reset', tuya.valueConverter.setLimit],
+                [21, 'holiday_temperature', tuya.valueConverter.raw],
+                [24, 'comfort_temperature', tuya.valueConverter.divideBy10],
+                [25, 'eco_temperature', tuya.valueConverter.divideBy10],
+                [28, 'schedule_monday', tuya.valueConverter.thermostatScheduleDayMultiDP],
+                [29, 'schedule_tuesday', tuya.valueConverter.thermostatScheduleDayMultiDP],
+                [30, 'schedule_wednesday', tuya.valueConverter.thermostatScheduleDayMultiDP],
+                [31, 'schedule_thursday', tuya.valueConverter.thermostatScheduleDayMultiDP],
+                [32, 'schedule_friday', tuya.valueConverter.thermostatScheduleDayMultiDP],
+                [33, 'schedule_saturday', tuya.valueConverter.thermostatScheduleDayMultiDP],
+                [34, 'schedule_sunday', tuya.valueConverter.thermostatScheduleDayMultiDP],
+                [35, 'error_status', tuya.valueConverter.raw],
+                [36, 'frost_protection', tuya.valueConverter.onOff],
+                [37, 'boost_heating', tuya.valueConverter.onOff],
+                [38, 'boost_time', tuya.valueConverter.countdown],
+                [39, 'Switch Scale', tuya.valueConverter.raw],
+                [47, 'local_temperature_calibration', tuya.valueConverter.localTempCalibration1],
+                [48, 'valve_testing', tuya.valueConverter.raw],
+                [49, 'valve', tuya.valueConverterBasic.lookup({'OPEN': 1, 'CLOSE': 0})],
+                [49, 'running_state', tuya.valueConverterBasic.lookup({'heat': tuya.enum(1), 'idle': tuya.enum(0)})],
+                [49, 'system_mode', tuya.valueConverterBasic.lookup({'heat': tuya.enum(1), 'off': tuya.enum(0)})],                
+
+            ],
+        },
+    },
+*/
+            
+        ],
+        supportedThermostatModes: ['off', 'heat', 'auto', 'emergency heat', 'eco'],
+        refresh: ['pollTuya'],
+        deviceJoinName: 'TUYA_HY367_HY368_HY369_TRV',
+        configuration : [:]
+    ],
 
 
 // ---------------------------------------------------- thermostats ----------------------------------------------------
+
     'TUYA/AVATTO_ME81H_THERMOSTAT'   : [       // https://github.com/Koenkk/zigbee-herdsman-converters/blob/3ec951e4c16310be29cec0473030827fb9a5bc23/src/devices/moes.ts#L97-L165 
             description   : 'Tuya/Avatto/Moes ME81H Thermostat',
             device        : [models: ['TS0601'], type: 'Thermostat', powerSource: 'ac', isSleepy:false],
@@ -287,9 +473,14 @@ metadata {
             ],
             supportedThermostatModes: ['off', 'heat', 'auto'],
             refresh: ['pollTuya'],
-            deviceJoinName: 'Avatto Thermostat',
+            deviceJoinName: 'Tuya/Avatto/Moes ME81H Thermostat',
             configuration : [:]
     ],
+
+    // TODO - AVATTO (ZWT100) WT198/ZWT100-BH - https://github.com/Koenkk/zigbee-herdsman-converters/blob/34de76fe3d1ffb2aa6dbcd712ceb5178f38712f9/src/devices/tuya.ts#L4338C51-L4338C67    https://www.aliexpress.com/i/3256802774365245.html 
+
+
+    
 
     'TUYA/MOES_BHT-002_THERMOSTAT'   : [        // probably also BSEED ? TODO - check!
             description   : 'Tuya/Moes BHT-002-GCLZB Thermostat',
@@ -367,7 +558,40 @@ metadata {
             refresh: ['pollTuya'],
             deviceJoinName: 'Beok X5H-GB-B Thermostat',     // pairing - hold the Up button for 5 seconds while the thermostat is off.
             configuration : [:]
-    ]
+    ],
+
+    'AVATTO_ZWT07_BATTERY_THERMOSTAT'   : [       // https://github.com/Koenkk/zigbee-herdsman-converters/blob/c70ee5c41c0c1a4d9e36cf5527d8079e502edf98/src/devices/tuya.ts#L4231-L4274
+            description   : 'Avatto ZWT07 Battery Thermostat',
+            device        : [models: ['TS0601'], type: 'Thermostat', powerSource: 'ac', isSleepy:false],
+            capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
+            preferences   : [childLock:'40', minHeatingSetpoint:'18', maxHeatingSetpoint:'19', sensor:'43', antiFreeze:'10', hysteresis:'106', temperatureCalibration:'109'],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_g9a3awaj", controllerType: "ZGB", deviceJoinName: 'Avatto ZWT07 Battery Thermostat'],
+            ],
+            commands      : ['sendSupportedThermostatModes':'sendSupportedThermostatModes', 'setHeatingSetpoint':'setHeatingSetpoint', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            tuyaDPs       : [
+                [dp:1,   name:'systemMode',         type:'enum',  dt: '01', rw: 'rw', defVal:'1', map:[0: 'off', 1: 'on'],  title:'<b>Thermostat Switch</b>',  description:'Thermostat Switch (system mode)'],  //'system_mode', 'switch'
+                [dp:2,   name:'thermostatMode',     type:'enum',            rw: 'rw', defVal:'0', map:[1:'heat', 0:'auto'], description:'Thermostat Working Mode'],                             // 'preset', 'mode'
+                [dp:9,   name:'battery',            type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:1,   scale:1,  unit:'%',          description:'Battery level'],
+                [dp:10,  name:'antiFreeze',         type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Anti-Freeze</b>',  description:'Anti-Freeze / Frost Protection'],     // 'frost_protection'
+                [dp:16,  name:'heatingSetpoint',    type:'decimal',         rw: 'rw', min:5.0,    max:95.0, defVal:20.0, step:0.5, scale:10,  unit:'°C',  title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],    // moesHeatingSetpoint: 16,
+                [dp:18,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,    max:20.0, defVal:5.0,  step:1.0, scale:10,  unit:'°C',  title: '<b>Minimum Heating Setpoint</b>',      description:'Minimum heating setpoint'],
+                [dp:19,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:21.0,   max:95.0, defVal:50.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Maximum Heating Setpoint</b>',      description:'Maximum heating setpoint'],    // moesMaxTemp: 18, 
+                [dp:24,  name:'temperature',        type:'decimal',         rw: 'ro', defVal:20.0, scale:10 , unit:'°C',  description:'Temperature'],                                                    // 'local_temperature'
+                [dp:31,  name:'programmingMode',    type:'enum',            rw: 'ro', defVal:'0', map:[0:'5/2', 1:'6/1', 2:'7/0'], title:'<b>Programming Mode</b>',  description:'Programming Mode'],    // workday settings
+                [dp:36,  name:'thermostatOperatingState',  type:'enum',     rw: 'rw', defVal:'0', map:[1:'heating', 0:'idle'] ,  unit:'', description:'Thermostat Operating State(working state)'],      //  'running_state' valve state?
+                [dp:40,  name:'childLock',          type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Child Lock</b>',  description:'Child lock'],              // moesChildLock: 40,
+                [dp:45,  name:'faultAlarm',         type:'enum',            rw: 'ro', defVal:'0', map:[0:'e1', 1:'e2', 2:'e3'], title:'<b>Fault Alarm Selection</b>',  description:'Fault alarm'],              // fault alarm  Bitmap	{  "label": [    "e1",    "e2",    "e3"  ] } // etopErrorStatus: 13,
+                [dp:67,  name:'heatingSchedule',    type:'number',          rw: 'ro', description:'Heating Schedule'],
+                [dp:105, name:'model',              type:'number',          rw: 'ro', description:'Model'],     // mfg_model	String	
+                [dp:109, name:'temperatureCalibration',  type:'decimal',    rw: 'rw', min:-9.9,   max:9.9,  defVal:0.0, step:1,   scale:10,  unit:'°C',  title:'<b>Temperature Calibration</b>',  description:'Temperature calibration'],
+            ],
+            supportedThermostatModes: ['off', 'heat', 'auto'],
+            refresh: ['pollTuya'],
+            deviceJoinName: 'Avatto ZWT07 Battery Thermostat',
+            configuration : [:]
+    ],
+
 ]
 
 
@@ -464,6 +688,9 @@ void customInitializeVars(final boolean fullInit=false) {
     if (fullInit == true) {
         resetPreferencesToDefaults()
     }
+    // for Tuya TRVs and thermostats - change the default polling method to 0 'disabled'
+    if (fullInit || settings?.temperaturePollingInterval == null) { device.updateSetting('temperaturePollingInterval', [value: '0', type: 'enum']) }
+
 }
 
 // called from initializeVars() in the main code ...
@@ -2472,7 +2699,7 @@ void onOfInitializeVars( boolean fullInit = false ) { // library marker kkossev.
 library( // library marker kkossev.batteryLib, line 2
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Battery Library', name: 'batteryLib', namespace: 'kkossev', // library marker kkossev.batteryLib, line 3
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/batteryLib.groovy', documentationLink: '', // library marker kkossev.batteryLib, line 4
-    version: '3.2.1' // library marker kkossev.batteryLib, line 5
+    version: '3.2.2' // library marker kkossev.batteryLib, line 5
 ) // library marker kkossev.batteryLib, line 6
 /* // library marker kkossev.batteryLib, line 7
  *  Zigbee Level Library // library marker kkossev.batteryLib, line 8
@@ -2483,174 +2710,177 @@ library( // library marker kkossev.batteryLib, line 2
  * ver. 3.0.1  2024-04-06 kkossev  - customParsePowerCluster bug fix // library marker kkossev.batteryLib, line 13
  * ver. 3.0.2  2024-04-14 kkossev  - batteryPercentage bug fix (was x2); added bVoltCtr; added battertRefresh // library marker kkossev.batteryLib, line 14
  * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment; added lastBattery; added handleTuyaBatteryLevel // library marker kkossev.batteryLib, line 15
- * ver. 3.2.1  2024-07-06 kkossev  - (dev. branch) added tuyaToBatteryLevel and handleTuyaBatteryLevel; added batteryInitializeVars // library marker kkossev.batteryLib, line 16
- * // library marker kkossev.batteryLib, line 17
- *                                   TODO: batteryVoltage in the deviceProfile capabilities // library marker kkossev.batteryLib, line 18
- *                                   TODO: battery voltage low/high limits configuration // library marker kkossev.batteryLib, line 19
-*/ // library marker kkossev.batteryLib, line 20
+ * ver. 3.2.1  2024-07-06 kkossev  - added tuyaToBatteryLevel and handleTuyaBatteryLevel; added batteryInitializeVars // library marker kkossev.batteryLib, line 16
+ * ver. 3.2.2  2024-07-18 kkossev  - (dev. branch) added BatteryVoltage and BatteryDelay device capability checks // library marker kkossev.batteryLib, line 17
+ * // library marker kkossev.batteryLib, line 18
+ *                                   TODO:  // library marker kkossev.batteryLib, line 19
+ *                                   TODO: battery voltage low/high limits configuration // library marker kkossev.batteryLib, line 20
+*/ // library marker kkossev.batteryLib, line 21
 
-static String batteryLibVersion()   { '3.2.1' } // library marker kkossev.batteryLib, line 22
-static String batteryLibStamp() { '2024/07/06 10:27 PM' } // library marker kkossev.batteryLib, line 23
+static String batteryLibVersion()   { '3.2.2' } // library marker kkossev.batteryLib, line 23
+static String batteryLibStamp() { '2024/07/18 2:34 PM' } // library marker kkossev.batteryLib, line 24
 
-metadata { // library marker kkossev.batteryLib, line 25
-    capability 'Battery' // library marker kkossev.batteryLib, line 26
-    attribute  'batteryVoltage', 'number' // library marker kkossev.batteryLib, line 27
-    attribute  'lastBattery', 'date'         // last battery event time - added in 3.2.0 05/21/2024 // library marker kkossev.batteryLib, line 28
-    // no commands // library marker kkossev.batteryLib, line 29
-    preferences { // library marker kkossev.batteryLib, line 30
-        if (device && advancedOptions == true) { // library marker kkossev.batteryLib, line 31
-            input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: 'Convert battery voltage to battery Percentage remaining.' // library marker kkossev.batteryLib, line 32
-            if ('Battery' in DEVICE?.capabilities) { // library marker kkossev.batteryLib, line 33
-                input(name: 'batteryDelay', type: 'enum', title: '<b>Battery Events Delay</b>', description:'Select the Battery Events Delay<br>(default is <b>no delay</b>)', options: DelayBatteryOpts.options, defaultValue: DelayBatteryOpts.defaultValue) // library marker kkossev.batteryLib, line 34
+metadata { // library marker kkossev.batteryLib, line 26
+    capability 'Battery' // library marker kkossev.batteryLib, line 27
+    attribute  'batteryVoltage', 'number' // library marker kkossev.batteryLib, line 28
+    attribute  'lastBattery', 'date'         // last battery event time - added in 3.2.0 05/21/2024 // library marker kkossev.batteryLib, line 29
+    // no commands // library marker kkossev.batteryLib, line 30
+    preferences { // library marker kkossev.batteryLib, line 31
+        if (device && advancedOptions == true) { // library marker kkossev.batteryLib, line 32
+            if ('BatteryVoltage' in DEVICE?.capabilities) { // library marker kkossev.batteryLib, line 33
+                input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: 'Convert battery voltage to battery Percentage remaining.' // library marker kkossev.batteryLib, line 34
             } // library marker kkossev.batteryLib, line 35
-        } // library marker kkossev.batteryLib, line 36
-    } // library marker kkossev.batteryLib, line 37
-} // library marker kkossev.batteryLib, line 38
+            if ('BatteryDelay' in DEVICE?.capabilities) { // library marker kkossev.batteryLib, line 36
+                input(name: 'batteryDelay', type: 'enum', title: '<b>Battery Events Delay</b>', description:'Select the Battery Events Delay<br>(default is <b>no delay</b>)', options: DelayBatteryOpts.options, defaultValue: DelayBatteryOpts.defaultValue) // library marker kkossev.batteryLib, line 37
+            } // library marker kkossev.batteryLib, line 38
+        } // library marker kkossev.batteryLib, line 39
+    } // library marker kkossev.batteryLib, line 40
+} // library marker kkossev.batteryLib, line 41
 
-@Field static final Map DelayBatteryOpts = [ defaultValue: 0, options: [0: 'No delay', 30: '30 seconds', 3600: '1 hour', 14400: '4 hours', 28800: '8 hours', 43200: '12 hours']] // library marker kkossev.batteryLib, line 40
+@Field static final Map DelayBatteryOpts = [ defaultValue: 0, options: [0: 'No delay', 30: '30 seconds', 3600: '1 hour', 14400: '4 hours', 28800: '8 hours', 43200: '12 hours']] // library marker kkossev.batteryLib, line 43
 
-public void standardParsePowerCluster(final Map descMap) { // library marker kkossev.batteryLib, line 42
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.batteryLib, line 43
-    final int rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.batteryLib, line 44
-    if (descMap.attrId == '0020') { // battery voltage // library marker kkossev.batteryLib, line 45
-        state.lastRx['batteryTime'] = new Date().getTime() // library marker kkossev.batteryLib, line 46
-        state.stats['bVoltCtr'] = (state.stats['bVoltCtr'] ?: 0) + 1 // library marker kkossev.batteryLib, line 47
-        sendBatteryVoltageEvent(rawValue) // library marker kkossev.batteryLib, line 48
-        if ((settings.voltageToPercent ?: false) == true) { // library marker kkossev.batteryLib, line 49
-            sendBatteryVoltageEvent(rawValue, convertToPercent = true) // library marker kkossev.batteryLib, line 50
-        } // library marker kkossev.batteryLib, line 51
-    } // library marker kkossev.batteryLib, line 52
-    else if (descMap.attrId == '0021') { // battery percentage // library marker kkossev.batteryLib, line 53
-        state.lastRx['batteryTime'] = new Date().getTime() // library marker kkossev.batteryLib, line 54
-        state.stats['battCtr'] = (state.stats['battCtr'] ?: 0) + 1 // library marker kkossev.batteryLib, line 55
-        if (isTuya()) { // library marker kkossev.batteryLib, line 56
-            sendBatteryPercentageEvent(rawValue) // library marker kkossev.batteryLib, line 57
-        } // library marker kkossev.batteryLib, line 58
-        else { // library marker kkossev.batteryLib, line 59
-            sendBatteryPercentageEvent((rawValue / 2) as int) // library marker kkossev.batteryLib, line 60
+public void standardParsePowerCluster(final Map descMap) { // library marker kkossev.batteryLib, line 45
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.batteryLib, line 46
+    final int rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.batteryLib, line 47
+    if (descMap.attrId == '0020') { // battery voltage // library marker kkossev.batteryLib, line 48
+        state.lastRx['batteryTime'] = new Date().getTime() // library marker kkossev.batteryLib, line 49
+        state.stats['bVoltCtr'] = (state.stats['bVoltCtr'] ?: 0) + 1 // library marker kkossev.batteryLib, line 50
+        sendBatteryVoltageEvent(rawValue) // library marker kkossev.batteryLib, line 51
+        if ((settings.voltageToPercent ?: false) == true) { // library marker kkossev.batteryLib, line 52
+            sendBatteryVoltageEvent(rawValue, convertToPercent = true) // library marker kkossev.batteryLib, line 53
+        } // library marker kkossev.batteryLib, line 54
+    } // library marker kkossev.batteryLib, line 55
+    else if (descMap.attrId == '0021') { // battery percentage // library marker kkossev.batteryLib, line 56
+        state.lastRx['batteryTime'] = new Date().getTime() // library marker kkossev.batteryLib, line 57
+        state.stats['battCtr'] = (state.stats['battCtr'] ?: 0) + 1 // library marker kkossev.batteryLib, line 58
+        if (isTuya()) { // library marker kkossev.batteryLib, line 59
+            sendBatteryPercentageEvent(rawValue) // library marker kkossev.batteryLib, line 60
         } // library marker kkossev.batteryLib, line 61
-    } // library marker kkossev.batteryLib, line 62
-    else { // library marker kkossev.batteryLib, line 63
-        logWarn "customParsePowerCluster: zigbee received unknown Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.batteryLib, line 64
+        else { // library marker kkossev.batteryLib, line 62
+            sendBatteryPercentageEvent((rawValue / 2) as int) // library marker kkossev.batteryLib, line 63
+        } // library marker kkossev.batteryLib, line 64
     } // library marker kkossev.batteryLib, line 65
-} // library marker kkossev.batteryLib, line 66
+    else { // library marker kkossev.batteryLib, line 66
+        logWarn "customParsePowerCluster: zigbee received unknown Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.batteryLib, line 67
+    } // library marker kkossev.batteryLib, line 68
+} // library marker kkossev.batteryLib, line 69
 
-public void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false) { // library marker kkossev.batteryLib, line 68
-    logDebug "batteryVoltage = ${(double)rawValue / 10.0} V" // library marker kkossev.batteryLib, line 69
-    final Date lastBattery = new Date() // library marker kkossev.batteryLib, line 70
-    Map result = [:] // library marker kkossev.batteryLib, line 71
-    BigDecimal volts = safeToBigDecimal(rawValue) / 10G // library marker kkossev.batteryLib, line 72
-    if (rawValue != 0 && rawValue != 255) { // library marker kkossev.batteryLib, line 73
-        BigDecimal minVolts = 2.2 // library marker kkossev.batteryLib, line 74
-        BigDecimal maxVolts = 3.2 // library marker kkossev.batteryLib, line 75
-        BigDecimal pct = (volts - minVolts) / (maxVolts - minVolts) // library marker kkossev.batteryLib, line 76
-        int roundedPct = Math.round(pct * 100) // library marker kkossev.batteryLib, line 77
-        if (roundedPct <= 0) { roundedPct = 1 } // library marker kkossev.batteryLib, line 78
-        if (roundedPct > 100) { roundedPct = 100 } // library marker kkossev.batteryLib, line 79
-        if (convertToPercent == true) { // library marker kkossev.batteryLib, line 80
-            result.value = Math.min(100, roundedPct) // library marker kkossev.batteryLib, line 81
-            result.name = 'battery' // library marker kkossev.batteryLib, line 82
-            result.unit  = '%' // library marker kkossev.batteryLib, line 83
-            result.descriptionText = "battery is ${roundedPct} %" // library marker kkossev.batteryLib, line 84
-        } // library marker kkossev.batteryLib, line 85
-        else { // library marker kkossev.batteryLib, line 86
-            result.value = volts // library marker kkossev.batteryLib, line 87
-            result.name = 'batteryVoltage' // library marker kkossev.batteryLib, line 88
-            result.unit  = 'V' // library marker kkossev.batteryLib, line 89
-            result.descriptionText = "battery is ${volts} Volts" // library marker kkossev.batteryLib, line 90
-        } // library marker kkossev.batteryLib, line 91
-        result.type = 'physical' // library marker kkossev.batteryLib, line 92
-        result.isStateChange = true // library marker kkossev.batteryLib, line 93
-        logInfo "${result.descriptionText}" // library marker kkossev.batteryLib, line 94
-        sendEvent(result) // library marker kkossev.batteryLib, line 95
-        sendEvent(name: 'lastBattery', value: lastBattery) // library marker kkossev.batteryLib, line 96
-    } // library marker kkossev.batteryLib, line 97
-    else { // library marker kkossev.batteryLib, line 98
-        logWarn "ignoring BatteryResult(${rawValue})" // library marker kkossev.batteryLib, line 99
+public void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false) { // library marker kkossev.batteryLib, line 71
+    logDebug "batteryVoltage = ${(double)rawValue / 10.0} V" // library marker kkossev.batteryLib, line 72
+    final Date lastBattery = new Date() // library marker kkossev.batteryLib, line 73
+    Map result = [:] // library marker kkossev.batteryLib, line 74
+    BigDecimal volts = safeToBigDecimal(rawValue) / 10G // library marker kkossev.batteryLib, line 75
+    if (rawValue != 0 && rawValue != 255) { // library marker kkossev.batteryLib, line 76
+        BigDecimal minVolts = 2.2 // library marker kkossev.batteryLib, line 77
+        BigDecimal maxVolts = 3.2 // library marker kkossev.batteryLib, line 78
+        BigDecimal pct = (volts - minVolts) / (maxVolts - minVolts) // library marker kkossev.batteryLib, line 79
+        int roundedPct = Math.round(pct * 100) // library marker kkossev.batteryLib, line 80
+        if (roundedPct <= 0) { roundedPct = 1 } // library marker kkossev.batteryLib, line 81
+        if (roundedPct > 100) { roundedPct = 100 } // library marker kkossev.batteryLib, line 82
+        if (convertToPercent == true) { // library marker kkossev.batteryLib, line 83
+            result.value = Math.min(100, roundedPct) // library marker kkossev.batteryLib, line 84
+            result.name = 'battery' // library marker kkossev.batteryLib, line 85
+            result.unit  = '%' // library marker kkossev.batteryLib, line 86
+            result.descriptionText = "battery is ${roundedPct} %" // library marker kkossev.batteryLib, line 87
+        } // library marker kkossev.batteryLib, line 88
+        else { // library marker kkossev.batteryLib, line 89
+            result.value = volts // library marker kkossev.batteryLib, line 90
+            result.name = 'batteryVoltage' // library marker kkossev.batteryLib, line 91
+            result.unit  = 'V' // library marker kkossev.batteryLib, line 92
+            result.descriptionText = "battery is ${volts} Volts" // library marker kkossev.batteryLib, line 93
+        } // library marker kkossev.batteryLib, line 94
+        result.type = 'physical' // library marker kkossev.batteryLib, line 95
+        result.isStateChange = true // library marker kkossev.batteryLib, line 96
+        logInfo "${result.descriptionText}" // library marker kkossev.batteryLib, line 97
+        sendEvent(result) // library marker kkossev.batteryLib, line 98
+        sendEvent(name: 'lastBattery', value: lastBattery) // library marker kkossev.batteryLib, line 99
     } // library marker kkossev.batteryLib, line 100
-} // library marker kkossev.batteryLib, line 101
+    else { // library marker kkossev.batteryLib, line 101
+        logWarn "ignoring BatteryResult(${rawValue})" // library marker kkossev.batteryLib, line 102
+    } // library marker kkossev.batteryLib, line 103
+} // library marker kkossev.batteryLib, line 104
 
-public void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=false) { // library marker kkossev.batteryLib, line 103
-    if ((batteryPercent as int) == 255) { // library marker kkossev.batteryLib, line 104
-        logWarn "ignoring battery report raw=${batteryPercent}" // library marker kkossev.batteryLib, line 105
-        return // library marker kkossev.batteryLib, line 106
-    } // library marker kkossev.batteryLib, line 107
-    final Date lastBattery = new Date() // library marker kkossev.batteryLib, line 108
-    Map map = [:] // library marker kkossev.batteryLib, line 109
-    map.name = 'battery' // library marker kkossev.batteryLib, line 110
-    map.timeStamp = now() // library marker kkossev.batteryLib, line 111
-    map.value = batteryPercent < 0 ? 0 : batteryPercent > 100 ? 100 : (batteryPercent as int) // library marker kkossev.batteryLib, line 112
-    map.unit  = '%' // library marker kkossev.batteryLib, line 113
-    map.type = isDigital ? 'digital' : 'physical' // library marker kkossev.batteryLib, line 114
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}" // library marker kkossev.batteryLib, line 115
-    map.isStateChange = true // library marker kkossev.batteryLib, line 116
-    // // library marker kkossev.batteryLib, line 117
-    Object latestBatteryEvent = device.currentState('battery') // library marker kkossev.batteryLib, line 118
-    Long latestBatteryEventTime = latestBatteryEvent != null ? latestBatteryEvent.getDate().getTime() : now() // library marker kkossev.batteryLib, line 119
-    //log.debug "battery latest state timeStamp is ${latestBatteryTime} now is ${now()}" // library marker kkossev.batteryLib, line 120
-    int timeDiff = ((now() - latestBatteryEventTime) / 1000) as int // library marker kkossev.batteryLib, line 121
-    if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) { // library marker kkossev.batteryLib, line 122
-        // send it now! // library marker kkossev.batteryLib, line 123
-        sendDelayedBatteryPercentageEvent(map) // library marker kkossev.batteryLib, line 124
-        sendEvent(name: 'lastBattery', value: lastBattery) // library marker kkossev.batteryLib, line 125
-    } // library marker kkossev.batteryLib, line 126
-    else { // library marker kkossev.batteryLib, line 127
-        int delayedTime = (settings?.batteryDelay as int) - timeDiff // library marker kkossev.batteryLib, line 128
-        map.delayed = delayedTime // library marker kkossev.batteryLib, line 129
-        map.descriptionText += " [delayed ${map.delayed} seconds]" // library marker kkossev.batteryLib, line 130
-        map.lastBattery = lastBattery // library marker kkossev.batteryLib, line 131
-        logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds" // library marker kkossev.batteryLib, line 132
-        runIn(delayedTime, 'sendDelayedBatteryEvent', [overwrite: true, data: map]) // library marker kkossev.batteryLib, line 133
-    } // library marker kkossev.batteryLib, line 134
-} // library marker kkossev.batteryLib, line 135
+public void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=false) { // library marker kkossev.batteryLib, line 106
+    if ((batteryPercent as int) == 255) { // library marker kkossev.batteryLib, line 107
+        logWarn "ignoring battery report raw=${batteryPercent}" // library marker kkossev.batteryLib, line 108
+        return // library marker kkossev.batteryLib, line 109
+    } // library marker kkossev.batteryLib, line 110
+    final Date lastBattery = new Date() // library marker kkossev.batteryLib, line 111
+    Map map = [:] // library marker kkossev.batteryLib, line 112
+    map.name = 'battery' // library marker kkossev.batteryLib, line 113
+    map.timeStamp = now() // library marker kkossev.batteryLib, line 114
+    map.value = batteryPercent < 0 ? 0 : batteryPercent > 100 ? 100 : (batteryPercent as int) // library marker kkossev.batteryLib, line 115
+    map.unit  = '%' // library marker kkossev.batteryLib, line 116
+    map.type = isDigital ? 'digital' : 'physical' // library marker kkossev.batteryLib, line 117
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}" // library marker kkossev.batteryLib, line 118
+    map.isStateChange = true // library marker kkossev.batteryLib, line 119
+    // // library marker kkossev.batteryLib, line 120
+    Object latestBatteryEvent = device.currentState('battery') // library marker kkossev.batteryLib, line 121
+    Long latestBatteryEventTime = latestBatteryEvent != null ? latestBatteryEvent.getDate().getTime() : now() // library marker kkossev.batteryLib, line 122
+    //log.debug "battery latest state timeStamp is ${latestBatteryTime} now is ${now()}" // library marker kkossev.batteryLib, line 123
+    int timeDiff = ((now() - latestBatteryEventTime) / 1000) as int // library marker kkossev.batteryLib, line 124
+    if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) { // library marker kkossev.batteryLib, line 125
+        // send it now! // library marker kkossev.batteryLib, line 126
+        sendDelayedBatteryPercentageEvent(map) // library marker kkossev.batteryLib, line 127
+        sendEvent(name: 'lastBattery', value: lastBattery) // library marker kkossev.batteryLib, line 128
+    } // library marker kkossev.batteryLib, line 129
+    else { // library marker kkossev.batteryLib, line 130
+        int delayedTime = (settings?.batteryDelay as int) - timeDiff // library marker kkossev.batteryLib, line 131
+        map.delayed = delayedTime // library marker kkossev.batteryLib, line 132
+        map.descriptionText += " [delayed ${map.delayed} seconds]" // library marker kkossev.batteryLib, line 133
+        map.lastBattery = lastBattery // library marker kkossev.batteryLib, line 134
+        logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds" // library marker kkossev.batteryLib, line 135
+        runIn(delayedTime, 'sendDelayedBatteryEvent', [overwrite: true, data: map]) // library marker kkossev.batteryLib, line 136
+    } // library marker kkossev.batteryLib, line 137
+} // library marker kkossev.batteryLib, line 138
 
-private void sendDelayedBatteryPercentageEvent(Map map) { // library marker kkossev.batteryLib, line 137
-    logInfo "${map.descriptionText}" // library marker kkossev.batteryLib, line 138
-    //map.each {log.trace "$it"} // library marker kkossev.batteryLib, line 139
-    sendEvent(map) // library marker kkossev.batteryLib, line 140
-    sendEvent(name: 'lastBattery', value: map.lastBattery) // library marker kkossev.batteryLib, line 141
-} // library marker kkossev.batteryLib, line 142
+private void sendDelayedBatteryPercentageEvent(Map map) { // library marker kkossev.batteryLib, line 140
+    logInfo "${map.descriptionText}" // library marker kkossev.batteryLib, line 141
+    //map.each {log.trace "$it"} // library marker kkossev.batteryLib, line 142
+    sendEvent(map) // library marker kkossev.batteryLib, line 143
+    sendEvent(name: 'lastBattery', value: map.lastBattery) // library marker kkossev.batteryLib, line 144
+} // library marker kkossev.batteryLib, line 145
 
-/* groovylint-disable-next-line UnusedPrivateMethod */ // library marker kkossev.batteryLib, line 144
-private void sendDelayedBatteryVoltageEvent(Map map) { // library marker kkossev.batteryLib, line 145
-    logInfo "${map.descriptionText}" // library marker kkossev.batteryLib, line 146
-    //map.each {log.trace "$it"} // library marker kkossev.batteryLib, line 147
-    sendEvent(map) // library marker kkossev.batteryLib, line 148
-    sendEvent(name: 'lastBattery', value: map.lastBattery) // library marker kkossev.batteryLib, line 149
-} // library marker kkossev.batteryLib, line 150
+/* groovylint-disable-next-line UnusedPrivateMethod */ // library marker kkossev.batteryLib, line 147
+private void sendDelayedBatteryVoltageEvent(Map map) { // library marker kkossev.batteryLib, line 148
+    logInfo "${map.descriptionText}" // library marker kkossev.batteryLib, line 149
+    //map.each {log.trace "$it"} // library marker kkossev.batteryLib, line 150
+    sendEvent(map) // library marker kkossev.batteryLib, line 151
+    sendEvent(name: 'lastBattery', value: map.lastBattery) // library marker kkossev.batteryLib, line 152
+} // library marker kkossev.batteryLib, line 153
 
-public int tuyaToBatteryLevel(int fncmd) { // library marker kkossev.batteryLib, line 152
-    int rawValue = fncmd // library marker kkossev.batteryLib, line 153
-    switch (fncmd) { // library marker kkossev.batteryLib, line 154
-        case 0: rawValue = 100; break // Battery Full // library marker kkossev.batteryLib, line 155
-        case 1: rawValue = 75;  break // Battery High // library marker kkossev.batteryLib, line 156
-        case 2: rawValue = 50;  break // Battery Medium // library marker kkossev.batteryLib, line 157
-        case 3: rawValue = 25;  break // Battery Low // library marker kkossev.batteryLib, line 158
-        case 4: rawValue = 100; break // Tuya 3 in 1 -> USB powered // library marker kkossev.batteryLib, line 159
-        // for all other values >4 we will use the raw value, expected to be the real battery level 4..100% // library marker kkossev.batteryLib, line 160
-    } // library marker kkossev.batteryLib, line 161
-    return rawValue // library marker kkossev.batteryLib, line 162
-} // library marker kkossev.batteryLib, line 163
+public int tuyaToBatteryLevel(int fncmd) { // library marker kkossev.batteryLib, line 155
+    int rawValue = fncmd // library marker kkossev.batteryLib, line 156
+    switch (fncmd) { // library marker kkossev.batteryLib, line 157
+        case 0: rawValue = 100; break // Battery Full // library marker kkossev.batteryLib, line 158
+        case 1: rawValue = 75;  break // Battery High // library marker kkossev.batteryLib, line 159
+        case 2: rawValue = 50;  break // Battery Medium // library marker kkossev.batteryLib, line 160
+        case 3: rawValue = 25;  break // Battery Low // library marker kkossev.batteryLib, line 161
+        case 4: rawValue = 100; break // Tuya 3 in 1 -> USB powered // library marker kkossev.batteryLib, line 162
+        // for all other values >4 we will use the raw value, expected to be the real battery level 4..100% // library marker kkossev.batteryLib, line 163
+    } // library marker kkossev.batteryLib, line 164
+    return rawValue // library marker kkossev.batteryLib, line 165
+} // library marker kkossev.batteryLib, line 166
 
-public void handleTuyaBatteryLevel(int fncmd) { // library marker kkossev.batteryLib, line 165
-    int rawValue = tuyaToBatteryLevel(fncmd) // library marker kkossev.batteryLib, line 166
-    sendBatteryPercentageEvent(rawValue) // library marker kkossev.batteryLib, line 167
-} // library marker kkossev.batteryLib, line 168
+public void handleTuyaBatteryLevel(int fncmd) { // library marker kkossev.batteryLib, line 168
+    int rawValue = tuyaToBatteryLevel(fncmd) // library marker kkossev.batteryLib, line 169
+    sendBatteryPercentageEvent(rawValue) // library marker kkossev.batteryLib, line 170
+} // library marker kkossev.batteryLib, line 171
 
-public void batteryInitializeVars( boolean fullInit = false ) { // library marker kkossev.batteryLib, line 170
-    logDebug "batteryInitializeVars()... fullInit = ${fullInit}" // library marker kkossev.batteryLib, line 171
-    if (device.hasCapability('Battery')) { // library marker kkossev.batteryLib, line 172
-        if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) } // library marker kkossev.batteryLib, line 173
-        if (fullInit || settings?.batteryDelay == null) { device.updateSetting('batteryDelay', [value: DelayBatteryOpts.defaultValue.toString(), type: 'enum']) } // library marker kkossev.batteryLib, line 174
-    } // library marker kkossev.batteryLib, line 175
-} // library marker kkossev.batteryLib, line 176
+public void batteryInitializeVars( boolean fullInit = false ) { // library marker kkossev.batteryLib, line 173
+    logDebug "batteryInitializeVars()... fullInit = ${fullInit}" // library marker kkossev.batteryLib, line 174
+    if (device.hasCapability('Battery')) { // library marker kkossev.batteryLib, line 175
+        if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) } // library marker kkossev.batteryLib, line 176
+        if (fullInit || settings?.batteryDelay == null) { device.updateSetting('batteryDelay', [value: DelayBatteryOpts.defaultValue.toString(), type: 'enum']) } // library marker kkossev.batteryLib, line 177
+    } // library marker kkossev.batteryLib, line 178
+} // library marker kkossev.batteryLib, line 179
 
-public List<String> batteryRefresh() { // library marker kkossev.batteryLib, line 178
-    List<String> cmds = [] // library marker kkossev.batteryLib, line 179
-    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 100)         // battery voltage // library marker kkossev.batteryLib, line 180
-    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 100)         // battery percentage // library marker kkossev.batteryLib, line 181
-    return cmds // library marker kkossev.batteryLib, line 182
-} // library marker kkossev.batteryLib, line 183
+public List<String> batteryRefresh() { // library marker kkossev.batteryLib, line 181
+    List<String> cmds = [] // library marker kkossev.batteryLib, line 182
+    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 100)         // battery voltage // library marker kkossev.batteryLib, line 183
+    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 100)         // battery percentage // library marker kkossev.batteryLib, line 184
+    return cmds // library marker kkossev.batteryLib, line 185
+} // library marker kkossev.batteryLib, line 186
 
 // ~~~~~ end include (171) kkossev.batteryLib ~~~~~
 
@@ -2659,7 +2889,7 @@ public List<String> batteryRefresh() { // library marker kkossev.batteryLib, lin
 library( // library marker kkossev.temperatureLib, line 2
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Temperature Library', name: 'temperatureLib', namespace: 'kkossev', // library marker kkossev.temperatureLib, line 3
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/temperatureLib.groovy', documentationLink: '', // library marker kkossev.temperatureLib, line 4
-    version: '3.2.2' // library marker kkossev.temperatureLib, line 5
+    version: '3.2.3' // library marker kkossev.temperatureLib, line 5
 ) // library marker kkossev.temperatureLib, line 6
 /* // library marker kkossev.temperatureLib, line 7
  *  Zigbee Temperature Library // library marker kkossev.temperatureLib, line 8
@@ -2670,101 +2900,104 @@ library( // library marker kkossev.temperatureLib, line 2
  * ver. 3.0.1  2024-04-19 kkossev  - temperature rounding fix // library marker kkossev.temperatureLib, line 13
  * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment; added temperatureRefresh() // library marker kkossev.temperatureLib, line 14
  * ver. 3.2.1  2024-06-07 kkossev  - excluded maxReportingTime for mmWaveSensor and Thermostat // library marker kkossev.temperatureLib, line 15
- * ver. 3.2.2  2024-07-06 kkossev  - (dev.branch) fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug // library marker kkossev.temperatureLib, line 16
- * // library marker kkossev.temperatureLib, line 17
- *                                   TODO: check why  if (settings?.minReportingTime...) condition in the preferences ? // library marker kkossev.temperatureLib, line 18
- *                                   TODO: add temperatureOffset // library marker kkossev.temperatureLib, line 19
- *                                   TODO: unschedule('sendDelayedTempEvent') only if needed (add boolean flag to sendDelayedTempEvent()) // library marker kkossev.temperatureLib, line 20
- *                                   TODO: check for negative temperature values in standardParseTemperatureCluster() // library marker kkossev.temperatureLib, line 21
-*/ // library marker kkossev.temperatureLib, line 22
+ * ver. 3.2.2  2024-07-06 kkossev  - fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug // library marker kkossev.temperatureLib, line 16
+ * ver. 3.2.3  2024-07-18 kkossev  - (dev.branch) added 'ReportingConfiguration' capability check for minReportingTime and maxReportingTime // library marker kkossev.temperatureLib, line 17
+ * // library marker kkossev.temperatureLib, line 18
+ *                                   TODO:  // library marker kkossev.temperatureLib, line 19
+ *                                   TODO: add temperatureOffset // library marker kkossev.temperatureLib, line 20
+ *                                   TODO: unschedule('sendDelayedTempEvent') only if needed (add boolean flag to sendDelayedTempEvent()) // library marker kkossev.temperatureLib, line 21
+ *                                   TODO: check for negative temperature values in standardParseTemperatureCluster() // library marker kkossev.temperatureLib, line 22
+*/ // library marker kkossev.temperatureLib, line 23
 
-static String temperatureLibVersion()   { '3.2.2' } // library marker kkossev.temperatureLib, line 24
-static String temperatureLibStamp() { '2024/07/06 9:28 PM' } // library marker kkossev.temperatureLib, line 25
+static String temperatureLibVersion()   { '3.2.3' } // library marker kkossev.temperatureLib, line 25
+static String temperatureLibStamp() { '2024/07/18 3:08 PM' } // library marker kkossev.temperatureLib, line 26
 
-metadata { // library marker kkossev.temperatureLib, line 27
-    capability 'TemperatureMeasurement' // library marker kkossev.temperatureLib, line 28
-    // no commands // library marker kkossev.temperatureLib, line 29
-    preferences { // library marker kkossev.temperatureLib, line 30
-        if (device && advancedOptions == true) { // library marker kkossev.temperatureLib, line 31
-            input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: 'Minimum reporting interval, seconds <i>(1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.temperatureLib, line 32
-            if (!(deviceType in ['mmWaveSensor', 'Thermostat'])) { // library marker kkossev.temperatureLib, line 33
-                input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: 'Maximum reporting interval, seconds <i>(120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME // library marker kkossev.temperatureLib, line 34
-           } // library marker kkossev.temperatureLib, line 35
-        } // library marker kkossev.temperatureLib, line 36
-    } // library marker kkossev.temperatureLib, line 37
-} // library marker kkossev.temperatureLib, line 38
+metadata { // library marker kkossev.temperatureLib, line 28
+    capability 'TemperatureMeasurement' // library marker kkossev.temperatureLib, line 29
+    // no commands // library marker kkossev.temperatureLib, line 30
+    preferences { // library marker kkossev.temperatureLib, line 31
+        if (device && advancedOptions == true) { // library marker kkossev.temperatureLib, line 32
+            if ('ReportingConfiguration' in DEVICE?.capabilities) { // library marker kkossev.temperatureLib, line 33
+                input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: 'Minimum reporting interval, seconds <i>(1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.temperatureLib, line 34
+                if (!(deviceType in ['mmWaveSensor', 'Thermostat', 'TRV'])) { // library marker kkossev.temperatureLib, line 35
+                    input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: 'Maximum reporting interval, seconds <i>(120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME // library marker kkossev.temperatureLib, line 36
+                } // library marker kkossev.temperatureLib, line 37
+            } // library marker kkossev.temperatureLib, line 38
+        } // library marker kkossev.temperatureLib, line 39
+    } // library marker kkossev.temperatureLib, line 40
+} // library marker kkossev.temperatureLib, line 41
 
-void standardParseTemperatureCluster(final Map descMap) { // library marker kkossev.temperatureLib, line 40
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.temperatureLib, line 41
-    if (descMap.attrId == '0000') { // library marker kkossev.temperatureLib, line 42
-        int value = hexStrToSignedInt(descMap.value) // library marker kkossev.temperatureLib, line 43
-        handleTemperatureEvent(value / 100.0F as BigDecimal) // library marker kkossev.temperatureLib, line 44
-    } // library marker kkossev.temperatureLib, line 45
-    else { // library marker kkossev.temperatureLib, line 46
-        logWarn "standardParseTemperatureCluster() - unknown attribute ${descMap.attrId} value=${descMap.value}" // library marker kkossev.temperatureLib, line 47
+void standardParseTemperatureCluster(final Map descMap) { // library marker kkossev.temperatureLib, line 43
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.temperatureLib, line 44
+    if (descMap.attrId == '0000') { // library marker kkossev.temperatureLib, line 45
+        int value = hexStrToSignedInt(descMap.value) // library marker kkossev.temperatureLib, line 46
+        handleTemperatureEvent(value / 100.0F as BigDecimal) // library marker kkossev.temperatureLib, line 47
     } // library marker kkossev.temperatureLib, line 48
-} // library marker kkossev.temperatureLib, line 49
+    else { // library marker kkossev.temperatureLib, line 49
+        logWarn "standardParseTemperatureCluster() - unknown attribute ${descMap.attrId} value=${descMap.value}" // library marker kkossev.temperatureLib, line 50
+    } // library marker kkossev.temperatureLib, line 51
+} // library marker kkossev.temperatureLib, line 52
 
-void handleTemperatureEvent(BigDecimal temperaturePar, boolean isDigital=false) { // library marker kkossev.temperatureLib, line 51
-    Map eventMap = [:] // library marker kkossev.temperatureLib, line 52
-    BigDecimal temperature = safeToBigDecimal(temperaturePar).setScale(2, BigDecimal.ROUND_HALF_UP) // library marker kkossev.temperatureLib, line 53
-    if (state.stats != null) { state.stats['tempCtr'] = (state.stats['tempCtr'] ?: 0) + 1 } else { state.stats = [:] } // library marker kkossev.temperatureLib, line 54
-    eventMap.name = 'temperature' // library marker kkossev.temperatureLib, line 55
-    if (location.temperatureScale == 'F') { // library marker kkossev.temperatureLib, line 56
-        temperature = ((temperature * 1.8) + 32).setScale(2, BigDecimal.ROUND_HALF_UP) // library marker kkossev.temperatureLib, line 57
-        eventMap.unit = '\u00B0F' // library marker kkossev.temperatureLib, line 58
-    } // library marker kkossev.temperatureLib, line 59
-    else { // library marker kkossev.temperatureLib, line 60
-        eventMap.unit = '\u00B0C' // library marker kkossev.temperatureLib, line 61
+void handleTemperatureEvent(BigDecimal temperaturePar, boolean isDigital=false) { // library marker kkossev.temperatureLib, line 54
+    Map eventMap = [:] // library marker kkossev.temperatureLib, line 55
+    BigDecimal temperature = safeToBigDecimal(temperaturePar).setScale(2, BigDecimal.ROUND_HALF_UP) // library marker kkossev.temperatureLib, line 56
+    if (state.stats != null) { state.stats['tempCtr'] = (state.stats['tempCtr'] ?: 0) + 1 } else { state.stats = [:] } // library marker kkossev.temperatureLib, line 57
+    eventMap.name = 'temperature' // library marker kkossev.temperatureLib, line 58
+    if (location.temperatureScale == 'F') { // library marker kkossev.temperatureLib, line 59
+        temperature = ((temperature * 1.8) + 32).setScale(2, BigDecimal.ROUND_HALF_UP) // library marker kkossev.temperatureLib, line 60
+        eventMap.unit = '\u00B0F' // library marker kkossev.temperatureLib, line 61
     } // library marker kkossev.temperatureLib, line 62
-    BigDecimal tempCorrected = (temperature + safeToBigDecimal(settings?.temperatureOffset ?: 0)).setScale(2, BigDecimal.ROUND_HALF_UP) // library marker kkossev.temperatureLib, line 63
-    eventMap.value = tempCorrected.setScale(1, BigDecimal.ROUND_HALF_UP) // library marker kkossev.temperatureLib, line 64
-    BigDecimal lastTemp = device.currentValue('temperature') ?: 0 // library marker kkossev.temperatureLib, line 65
-    logTrace "lastTemp=${lastTemp} tempCorrected=${tempCorrected} delta=${Math.abs(lastTemp - tempCorrected)}" // library marker kkossev.temperatureLib, line 66
-    if (Math.abs(lastTemp - tempCorrected) < 0.1) { // library marker kkossev.temperatureLib, line 67
-        logDebug "skipped temperature ${tempCorrected}, less than delta 0.1 (lastTemp=${lastTemp})" // library marker kkossev.temperatureLib, line 68
-        return // library marker kkossev.temperatureLib, line 69
-    } // library marker kkossev.temperatureLib, line 70
-    eventMap.type = isDigital == true ? 'digital' : 'physical' // library marker kkossev.temperatureLib, line 71
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}" // library marker kkossev.temperatureLib, line 72
-    if (state.states['isRefresh'] == true) { // library marker kkossev.temperatureLib, line 73
-        eventMap.descriptionText += ' [refresh]' // library marker kkossev.temperatureLib, line 74
-        eventMap.isStateChange = true // library marker kkossev.temperatureLib, line 75
-    } // library marker kkossev.temperatureLib, line 76
-    Integer timeElapsed = Math.round((now() - (state.lastRx['tempTime'] ?: now())) / 1000) // library marker kkossev.temperatureLib, line 77
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.temperatureLib, line 78
-    Integer timeRamaining = (minTime - timeElapsed) as Integer // library marker kkossev.temperatureLib, line 79
-    if (timeElapsed >= minTime) { // library marker kkossev.temperatureLib, line 80
-        logInfo "${eventMap.descriptionText}" // library marker kkossev.temperatureLib, line 81
-        unschedule('sendDelayedTempEvent')        //get rid of stale queued reports // library marker kkossev.temperatureLib, line 82
-        state.lastRx['tempTime'] = now() // library marker kkossev.temperatureLib, line 83
-        sendEvent(eventMap) // library marker kkossev.temperatureLib, line 84
-    } // library marker kkossev.temperatureLib, line 85
-    else {         // queue the event // library marker kkossev.temperatureLib, line 86
-        eventMap.type = 'delayed' // library marker kkossev.temperatureLib, line 87
-        logDebug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.temperatureLib, line 88
-        runIn(timeRamaining, 'sendDelayedTempEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.temperatureLib, line 89
-    } // library marker kkossev.temperatureLib, line 90
-} // library marker kkossev.temperatureLib, line 91
+    else { // library marker kkossev.temperatureLib, line 63
+        eventMap.unit = '\u00B0C' // library marker kkossev.temperatureLib, line 64
+    } // library marker kkossev.temperatureLib, line 65
+    BigDecimal tempCorrected = (temperature + safeToBigDecimal(settings?.temperatureOffset ?: 0)).setScale(2, BigDecimal.ROUND_HALF_UP) // library marker kkossev.temperatureLib, line 66
+    eventMap.value = tempCorrected.setScale(1, BigDecimal.ROUND_HALF_UP) // library marker kkossev.temperatureLib, line 67
+    BigDecimal lastTemp = device.currentValue('temperature') ?: 0 // library marker kkossev.temperatureLib, line 68
+    logTrace "lastTemp=${lastTemp} tempCorrected=${tempCorrected} delta=${Math.abs(lastTemp - tempCorrected)}" // library marker kkossev.temperatureLib, line 69
+    if (Math.abs(lastTemp - tempCorrected) < 0.1) { // library marker kkossev.temperatureLib, line 70
+        logDebug "skipped temperature ${tempCorrected}, less than delta 0.1 (lastTemp=${lastTemp})" // library marker kkossev.temperatureLib, line 71
+        return // library marker kkossev.temperatureLib, line 72
+    } // library marker kkossev.temperatureLib, line 73
+    eventMap.type = isDigital == true ? 'digital' : 'physical' // library marker kkossev.temperatureLib, line 74
+    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}" // library marker kkossev.temperatureLib, line 75
+    if (state.states['isRefresh'] == true) { // library marker kkossev.temperatureLib, line 76
+        eventMap.descriptionText += ' [refresh]' // library marker kkossev.temperatureLib, line 77
+        eventMap.isStateChange = true // library marker kkossev.temperatureLib, line 78
+    } // library marker kkossev.temperatureLib, line 79
+    Integer timeElapsed = Math.round((now() - (state.lastRx['tempTime'] ?: now())) / 1000) // library marker kkossev.temperatureLib, line 80
+    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.temperatureLib, line 81
+    Integer timeRamaining = (minTime - timeElapsed) as Integer // library marker kkossev.temperatureLib, line 82
+    if (timeElapsed >= minTime) { // library marker kkossev.temperatureLib, line 83
+        logInfo "${eventMap.descriptionText}" // library marker kkossev.temperatureLib, line 84
+        unschedule('sendDelayedTempEvent')        //get rid of stale queued reports // library marker kkossev.temperatureLib, line 85
+        state.lastRx['tempTime'] = now() // library marker kkossev.temperatureLib, line 86
+        sendEvent(eventMap) // library marker kkossev.temperatureLib, line 87
+    } // library marker kkossev.temperatureLib, line 88
+    else {         // queue the event // library marker kkossev.temperatureLib, line 89
+        eventMap.type = 'delayed' // library marker kkossev.temperatureLib, line 90
+        logDebug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.temperatureLib, line 91
+        runIn(timeRamaining, 'sendDelayedTempEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.temperatureLib, line 92
+    } // library marker kkossev.temperatureLib, line 93
+} // library marker kkossev.temperatureLib, line 94
 
-void sendDelayedTempEvent(Map eventMap) { // library marker kkossev.temperatureLib, line 93
-    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.temperatureLib, line 94
-    state.lastRx['tempTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.temperatureLib, line 95
-    sendEvent(eventMap) // library marker kkossev.temperatureLib, line 96
-} // library marker kkossev.temperatureLib, line 97
+void sendDelayedTempEvent(Map eventMap) { // library marker kkossev.temperatureLib, line 96
+    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.temperatureLib, line 97
+    state.lastRx['tempTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.temperatureLib, line 98
+    sendEvent(eventMap) // library marker kkossev.temperatureLib, line 99
+} // library marker kkossev.temperatureLib, line 100
 
-List<String> temperatureLibInitializeDevice() { // library marker kkossev.temperatureLib, line 99
-    List<String> cmds = [] // library marker kkossev.temperatureLib, line 100
-    cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1도*/)                // 402 - temperature // library marker kkossev.temperatureLib, line 101
-    logDebug "temperatureLibInitializeDevice() cmds=${cmds}" // library marker kkossev.temperatureLib, line 102
-    return cmds // library marker kkossev.temperatureLib, line 103
-} // library marker kkossev.temperatureLib, line 104
+List<String> temperatureLibInitializeDevice() { // library marker kkossev.temperatureLib, line 102
+    List<String> cmds = [] // library marker kkossev.temperatureLib, line 103
+    cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1도*/)                // 402 - temperature // library marker kkossev.temperatureLib, line 104
+    logDebug "temperatureLibInitializeDevice() cmds=${cmds}" // library marker kkossev.temperatureLib, line 105
+    return cmds // library marker kkossev.temperatureLib, line 106
+} // library marker kkossev.temperatureLib, line 107
 
-List<String> temperatureRefresh() { // library marker kkossev.temperatureLib, line 106
-    List<String> cmds = [] // library marker kkossev.temperatureLib, line 107
-    cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200) // library marker kkossev.temperatureLib, line 108
-    return cmds // library marker kkossev.temperatureLib, line 109
-} // library marker kkossev.temperatureLib, line 110
+List<String> temperatureRefresh() { // library marker kkossev.temperatureLib, line 109
+    List<String> cmds = [] // library marker kkossev.temperatureLib, line 110
+    cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200) // library marker kkossev.temperatureLib, line 111
+    return cmds // library marker kkossev.temperatureLib, line 112
+} // library marker kkossev.temperatureLib, line 113
 
 // ~~~~~ end include (172) kkossev.temperatureLib ~~~~~
 
