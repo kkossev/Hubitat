@@ -47,8 +47,8 @@
  * ver. 1.6.0  2024-05-19 kkossev - added the correct NOUS TS0601 _TZE200_nnrfa68v fingerprint to group 'TS0601_Tuya'; all Current States and Preferences are cleared on initialize command;
  * ver. 1.6.1  2024-06-10 kkossev - added ThirdReality 3RTHS0224Z and 3RTHS24BZ
  * ver. 1.6.2  2024-06-26 kkossev - added TS000F _TZ3218_7fiyo3kv in DS18B20 group (temperature only); added Tuya cluster command '06' processing; added description in the debug logs
- * ver. 1.6.3  2024-07-16 kkossev - dded TS0601 _TZE204_yjjdcqsq to TS0601_Tuya_2 group;
- * ver. 1.6.3  2024-07-23 kkossev - (dev. branch) added Tuya Smart Soil Tester _TZE284_aao3yzhs into 'TS0601_Soil_II'
+ * ver. 1.6.3  2024-07-16 kkossev - added TS0601 _TZE204_yjjdcqsq to TS0601_Tuya_2 group;
+ * ver. 1.6.4  2024-07-23 kkossev - added Tuya Smart Soil Tester _TZE284_aao3yzhs into 'TS0601_Soil_II'
  *
  *                                  TODO: queryOnDeviceAnnounce for TS0601_Tuya_2 group
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
@@ -58,8 +58,8 @@
  *                                  TODO: add Batteryreporting time configuration (like in the TS004F driver)
 */
 
-@Field static final String VERSION = '1.6.3'
-@Field static final String TIME_STAMP = '2024/07/23 5:01 PM'
+@Field static final String VERSION = '1.6.4'
+@Field static final String TIME_STAMP = '2024/07/23 5:46 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -122,6 +122,8 @@ metadata {
 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_myd45weu', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          // https://www.aliexpress.com/item/1005004979025740.html
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ga1maeof', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          // https://www.aliexpress.com/item/1005004979025740.html
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_aao3yzhs", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'
+
         // model: 'ZG-227ZL',
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0004,0005,0402,0405,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_qoy0ekbd', deviceJoinName: 'Tuya Temperature Humidity LCD Display'      // not tested
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0004,0005,0402,0405,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_a8sdabtg', deviceJoinName: 'Tuya Temperature Humidity (no screen)'      // https://community.hubitat.com/t/new-temp-humidity-device-not-working-correctly-generic-zigbee-th-driver/109725?u=kkossev
@@ -1415,7 +1417,7 @@ def initializeDevice() {
     if (getModelGroup() == 'OWON') {    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/e8750f6f2a34a3a6ae87f61e989a00964fb1107f/devices/owon.js
         // It seem this device have 2 version, one using the endpoint 0x01 and one other using the endpoint 0x03
         // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/5738#issuecomment-1579521543
-        // there is a firmware bug in the OWON THS317-ET which leads to a reported temperature of 327.67�C if the real sensor temperature is near -20�C e.g. in a fridge.
+        // there is a firmware bug in the OWON THS317-ET which leads to a reported temperature of 327.67?C if the real sensor temperature is near -20?C e.g. in a fridge.
         cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", 'delay 200',]
         cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}", 'delay 200',]
         cmds += ["zdo bind 0x${device.deviceNetworkId} 0x03 0x01 0x0001 {${device.zigbeeId}} {}", 'delay 200',]
