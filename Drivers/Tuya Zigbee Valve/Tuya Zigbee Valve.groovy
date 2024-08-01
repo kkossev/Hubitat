@@ -35,9 +35,11 @@
  *  ver. 1.2.7 2023-12-18 kkossev - code linting
  *  ver. 1.3.0 2024-03-17 kkossev - more code linting; added TS0049 _TZ3210_0jxeoadc; added three-states (opening, closing)
  *  ver. 1.3.1 2024-04-30 kkossev - getPowerSource bug fix; TS0049 command '06' processing; TS0049 battery% fix; TS0049 open/close fix; TS0049 command '05' processing;
- *  ver. 1.3.2 2024-07-31 kkossev - (dev.branch) added SONOFF SWV (+onWithTimedOff)
+ *  ver. 1.3.2 2024-07-31 kkossev - added SONOFF SWV (+onWithTimedOff)
+ *  ver. 1.3.3 2024-08-01 kkossev - (dev. branch) added for tests FrankEver FK_V02  Valve Open Percentage and timeout timer 
  *
- *                                  TODO: bugFix: deviceProfule not found automatically; powerSource : []
+ *                                  TODO: bugFix: deviceProfule not found automatically; 
+ *                                  TODO: bugFix: powerSource : []
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
  *                                  TODO: clear the old states on update; add rejoinCtr;
  */
@@ -45,8 +47,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-String version() { '1.3.2' }
-String timeStamp() { '2024/07/31 10:24 PM' }
+String version() { '1.3.3' }
+String timeStamp() { '2024/08/01 2:28 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -77,11 +79,13 @@ metadata {
         attribute 'irrigationDuration', 'number'
         attribute 'irrigationCapacity', 'number'
         attribute 'valveStatus', 'enum', ['normal', 'shortage', 'leakage', 'shortageAndLeakage', 'clear']    // SONOFF {ID: 0x500c, type: 0x20},
+        attribute 'valveOpenPercentage', 'number'   // FrankEver FK_V02
 
         command 'setIrrigationTimer', [[name:'auto-off timer, in seconds or minutes (depending on the model)', type: 'NUMBER', description: 'Set the irrigation duration timer<br>, in seconds or minutes (depending on the model', constraints: ['0..86400']]]
         command 'setIrrigationCapacity', [[name:'capacity, liters (Saswell and GiEX)', type: 'NUMBER', description: 'Set Irrigation Capacity, litres', constraints: ['0..9999']]]
         command 'setIrrigationMode', [[name:'select the mode (Saswell and GiEX)', type: 'ENUM', description: 'Set Irrigation Mode', constraints: ['--select--', 'duration', 'capacity']]]
         command 'initialize', [[name: 'Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****']]
+        command 'setValveOpenPercentage', [[name:'Valve Open Percentage, % (FrankEver FK_V02)', type: 'NUMBER', description: 'Valve Open Percentage, % (FrankEver FK_V02)', constraints: ['0..100']]]
 
         if (_DEBUG == true) {
             command 'testTuyaCmd', [
@@ -109,11 +113,23 @@ metadata {
             if (deviceProfilesV2[getModelGroup()]?.capabilities?.powerOnBehaviour != false) {
                 input(name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options: powerOnBehaviourOptions)
             }
-            if (isSASWELL() || isGIEX() || isSonoff()) {
+            if (isSASWELL() || isGIEX() || isSonoff() || isFankEver()) {
                 input(name: 'autoOffTimer', type: 'number', title: '<b>Auto off timer</b>', description: 'Automatically turn off after how many seconds or minutes<br>(depending on the model)', defaultValue: DEFAULT_AUTOOFF_TIMER, required: false)
             }
             if (isSASWELL() || isGIEX()) {
                 input(name: 'irrigationCapacity', type: 'number', title: '<b>Irrigation Capacity</b>', description: 'Automatically turn off agter how many liters?', defaultValue: DEFAULT_CAPACITY, required: false)
+            }
+            if (isFankEver()) {
+                input(name: 'valveOpenPercentage', type: 'number', title: '<b>Valve Open Percentage, %</b>', description: 'Valve Open Percentage, %<br>(FrankEver only)', range: "0..100", step: 10, defaultValue: 100, required: false)
+                if (valveOpenPercentage != null ) {
+                    int roundedValue = Math.floor((valveOpenPercentage + 5) / 10) * 10
+                    if ((valveOpenPercentage % 10) != 0) {
+                        device.updateSetting('valveOpenPercentage', [value: roundedValue, type: 'number'])
+                    }
+                    if ((device.currentValue('valveOpenPercentage') ?: UNKNOWN) != valveOpenPercentage) {
+                        sendEvent(name: 'valveOpenPercentage', value: roundedValue, type: 'digital')
+                    }
+                }
             }
             input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: 'These options should have been set automatically by the driver<br>Manually changes may not always work!', defaultValue: false)
             if (advancedOptions == true) {
@@ -153,8 +169,8 @@ boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
 @Field static final Integer COMMAND_TIMEOUT = 10
 @Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
 @Field static String UNKNOWN = 'UNKNOWN'
-@Field static final String  DATE_TIME_UNKNOWN = '::::-::-:: ::::::::'
-@Field static final String  NUMBER_UNKNOWN = ':::'
+@Field static final String  DATE_TIME_UNKNOWN = '****-**-** **:**:**'
+@Field static final String  NUMBER_UNKNOWN = '***'
 
 // WaterMode  for _TZE200_sh1btabb : duration=0 / capacity=1
 
@@ -337,7 +353,7 @@ boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
             capabilities  : ['valve': true, 'battery': true],
             configuration : ['battery': false],
             attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery', 'battery': '---', 'timerTimeLeft': '---', 'lastValveOpenDuration': '---'],
-            tuyaCommands  : ['switch': '0x65'],
+            tuyaCommands  : ['switch': '0x01', 'valveOpenPercentage': '0x65', 'timer': '0x09'],
             // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f2704346e27431ae3f77c398e4f434c88adec149/src/devices/frankever.ts#L10
             // https://github.com/u236/homed-service-zigbee/blob/66c507b47d720908bfb3ec2a0e8c6d9a79039d94/deploy/data/usr/share/homed-zigbee/tuya.json#L408
             // state: 1,    status": {"enum": ["off", "on"]},
@@ -1069,7 +1085,7 @@ void parseSonoffCluster(Map it, String description) {
             //sendSwitchEvent('off')
             break
         case '500F' :   // Daily Irrigation Volume (Irrigation water volume for the day)    // uint32 (Liter)
-            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Daily Irrigation Volume : value is ${intValue} (raw: ${it.value})"
+            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Daily Irrigation Volume : value is ${intValue} (raw: ${it.value})"
             break
         case '5010' :   // Valve Work State (Valve working status)  // 0 - 'manual control'; 1 - 'Cycle timing / quantity control''; 2 - 'Schedule control'
             logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Valve Work State  : value is ${intValue} (raw: ${it.value})"
@@ -1492,7 +1508,7 @@ void initializeVars(boolean fullInit = true) {
         resetStats()
         logInfo 'all states and scheduled jobs cleared!'
         setDeviceNameAndProfile()
-        state.comment = 'Works with Tuya TS0001 TS0011 TS011F TS0601 shutoff valves; Tuya TS0049, GiEX, Saswell, Lidl irrigation valves'
+        state.comment = 'Works with Tuya TS0001 TS0011 TS011F TS0601 shutoff valves; Tuya TS0049, GiEX, Saswell, Lidl, FrankEver irrigation timers'
         state.driverVersion = driverVersionAndTimeStamp()
     }
 
@@ -1781,6 +1797,9 @@ void sendIrrigationDuration() {
     else if (isTS0049()) {
         cmds = sendTuyaCommand('6F', DP_TYPE_VALUE, dpValHex)
     }
+    else if (isFankEver()) {
+        cmds = sendTuyaCommand('09', DP_TYPE_VALUE, dpValHex)
+    }
     else {
         logWarn 'sendIrrigationDuration is not avaiable!'
         return
@@ -1809,11 +1828,15 @@ void sendIrrigationCapacity() {
         logDebug "sendIrrigationCapacity= ${settings?.irrigationCapacity} : ${cmds}"
         sendZigbeeCommands( cmds )
     } else {
-        logWarn 'sendIrrigationCapacity is avaiable for GiEX valves only'
+        logWarn 'sendIrrigationCapacity is avaiable for GiEX valves only!'
     }
 }
 
 void setIrrigationMode(String mode) {
+    if (!(isGIEX() || isSASWELL())) {
+        logWarn 'setIrrigationMode is avaiable for GiEX and SASWELL valves only!'
+        return
+    }
     List<String> cmds = []
     String dpValHex
     switch (mode)  {
@@ -1830,6 +1853,25 @@ void setIrrigationMode(String mode) {
     cmds = sendTuyaCommand('01', DP_TYPE_ENUM, dpValHex)
     logDebug "setIrrigationMode= ${mode} : ${cmds}"
     sendZigbeeCommands( cmds )
+}
+
+void setValveOpenPercentage(Number percentage) {
+    if (!isFankEver()) {
+        logWarn 'setValveOpenPercentage is avaiable only for FankEver valves'
+        return
+    }
+    List<String> cmds = []
+    int value = safeToInt(percentage, -1)
+    if (value < 0 || value > 100) {
+        logWarn "valve open percentage must be withing 0 and 100"
+        return
+    }
+    // round to the nearest 10
+    int roundedValue = Math.floor((value + 5) / 10) * 10 
+    logDebug "setting the valve open percentage to ${roundedValue} (was ${value})"
+    device.updateSetting('valveOpenPercentage', [value: roundedValue, type: 'number'])
+    sendEvent(name: 'valveOpenPercentage', value: roundedValue, type: 'digital')
+    sendTuyaCommand('65', DP_TYPE_VALUE, zigbee.convertToHexString(roundedValue, 8))
 }
 
 void testTuyaCmd(String dpCommand, String dpValue, String dpTypeString) {
