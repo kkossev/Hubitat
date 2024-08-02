@@ -36,7 +36,7 @@
  *  ver. 1.3.0 2024-03-17 kkossev - more code linting; added TS0049 _TZ3210_0jxeoadc; added three-states (opening, closing)
  *  ver. 1.3.1 2024-04-30 kkossev - getPowerSource bug fix; TS0049 command '06' processing; TS0049 battery% fix; TS0049 open/close fix; TS0049 command '05' processing;
  *  ver. 1.3.2 2024-07-31 kkossev - added SONOFF SWV (+onWithTimedOff)
- *  ver. 1.3.3 2024-08-01 kkossev - (dev. branch) added for tests FrankEver FK_V02  Valve Open Percentage and timeout timer 
+ *  ver. 1.3.3 2024-08-02 kkossev - (dev. branch) added for tests FrankEver FK_V02  Valve Open Percentage and timeout timer; separated valveOpenThreshold and valveOpenPercentage
  *
  *                                  TODO: bugFix: deviceProfule not found automatically; 
  *                                  TODO: bugFix: powerSource : []
@@ -48,7 +48,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 String version() { '1.3.3' }
-String timeStamp() { '2024/08/01 2:28 PM' }
+String timeStamp() { '2024/08/02 7:39 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -79,13 +79,14 @@ metadata {
         attribute 'irrigationDuration', 'number'
         attribute 'irrigationCapacity', 'number'
         attribute 'valveStatus', 'enum', ['normal', 'shortage', 'leakage', 'shortageAndLeakage', 'clear']    // SONOFF {ID: 0x500c, type: 0x20},
-        attribute 'valveOpenPercentage', 'number'   // FrankEver FK_V02
+        attribute 'valveOpenThreshold', 'number'   // FrankEver FK_V02 - the set threshold for valve open 
+        attribute 'valveOpenPercentage', 'number'   // FrankEver FK_V02 - the current valve open percentage reported by the device
 
+        command 'initialize', [[name: 'Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****']]
         command 'setIrrigationTimer', [[name:'auto-off timer, in seconds or minutes (depending on the model)', type: 'NUMBER', description: 'Set the irrigation duration timer<br>, in seconds or minutes (depending on the model', constraints: ['0..86400']]]
         command 'setIrrigationCapacity', [[name:'capacity, liters (Saswell and GiEX)', type: 'NUMBER', description: 'Set Irrigation Capacity, litres', constraints: ['0..9999']]]
         command 'setIrrigationMode', [[name:'select the mode (Saswell and GiEX)', type: 'ENUM', description: 'Set Irrigation Mode', constraints: ['--select--', 'duration', 'capacity']]]
-        command 'initialize', [[name: 'Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****']]
-        command 'setValveOpenPercentage', [[name:'Valve Open Percentage, % (FrankEver FK_V02)', type: 'NUMBER', description: 'Valve Open Percentage, % (FrankEver FK_V02)', constraints: ['0..100']]]
+        command 'setValveOpenThreshold', [[name:'Valve Open Threshold, % (FrankEver FK_V02)', type: 'NUMBER', description: 'Valve Open Threshold, % (FrankEver FK_V02)', constraints: ['0..100']]]
 
         if (_DEBUG == true) {
             command 'testTuyaCmd', [
@@ -120,14 +121,14 @@ metadata {
                 input(name: 'irrigationCapacity', type: 'number', title: '<b>Irrigation Capacity</b>', description: 'Automatically turn off agter how many liters?', defaultValue: DEFAULT_CAPACITY, required: false)
             }
             if (isFankEver()) {
-                input(name: 'valveOpenPercentage', type: 'number', title: '<b>Valve Open Percentage, %</b>', description: 'Valve Open Percentage, %<br>(FrankEver only)', range: "0..100", step: 10, defaultValue: 100, required: false)
-                if (valveOpenPercentage != null ) {
-                    int roundedValue = Math.floor((valveOpenPercentage + 5) / 10) * 10
-                    if ((valveOpenPercentage % 10) != 0) {
-                        device.updateSetting('valveOpenPercentage', [value: roundedValue, type: 'number'])
+                input(name: 'valveOpenThreshold', type: 'number', title: '<b>Valve Open Thrfeshold, %</b>', description: 'Valve Open Threshold, %<br>(FrankEver only)', range: "0..100", step: 10, defaultValue: 100, required: false)
+                if (valveOpenThreshold != null ) {
+                    int roundedValue = Math.floor((valveOpenThreshold + 5) / 10) * 10
+                    if ((valveOpenThreshold % 10) != 0) {
+                        device.updateSetting('valveOpenThreshold', [value: roundedValue, type: 'number'])
                     }
-                    if ((device.currentValue('valveOpenPercentage') ?: UNKNOWN) != valveOpenPercentage) {
-                        sendEvent(name: 'valveOpenPercentage', value: roundedValue, type: 'digital')
+                    if ((device.currentValue('valveOpenThreshold') ?: UNKNOWN) != valveOpenThreshold) {
+                        sendEvent(name: 'valveOpenThreshold', value: roundedValue, type: 'digital')
                     }
                 }
             }
@@ -353,7 +354,7 @@ boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
             capabilities  : ['valve': true, 'battery': true],
             configuration : ['battery': false],
             attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery', 'battery': '---', 'timerTimeLeft': '---', 'lastValveOpenDuration': '---'],
-            tuyaCommands  : ['switch': '0x01', 'valveOpenPercentage': '0x65', 'timer': '0x09'],
+            tuyaCommands  : ['switch': '0x01', 'valveOpenThreshold': '0x65', 'timer': '0x09'],
             // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f2704346e27431ae3f77c398e4f434c88adec149/src/devices/frankever.ts#L10
             // https://github.com/u236/homed-service-zigbee/blob/66c507b47d720908bfb3ec2a0e8c6d9a79039d94/deploy/data/usr/share/homed-zigbee/tuya.json#L408
             // state: 1,    status": {"enum": ["off", "on"]},
@@ -739,7 +740,15 @@ void parseZHAcommand(Map descMap) {
                                 logInfo "battery_state (${cmd}) is: ${valueString} (${value})"
                                 break
                             case '09' : // accumulated_usage_time (0..2592000, seconds)
-                                logInfo "accumulated_usage_time (${cmd}) is: ${value} seconds"
+                                if (isFankEver()) {
+                                    String descText = "received FrankEver irrigation timer ${value} seconds"
+                                    //device.updateSetting('autoOffTimer', [value: value, type: 'number'])
+                                    sendEvent(name: 'irrigationDuration', value: value, descriptionText: descText, unit: 's',type: 'physical')
+                                    logInfo descText
+                                }
+                                else {
+                                    logInfo "accumulated_usage_time (${cmd}) is: ${value} seconds"
+                                }
                                 break
                             case '0A' : // (10) weather_delay //   0 -> disabled; 1 -> "24h"; 2 -> "48h";  3 -> "72h"
                                 String valueString = weatherDelayOptions[safeToInt(value).toString()]
@@ -794,7 +803,12 @@ void parseZHAcommand(Map descMap) {
                                 if (isTS0049()) {   // TS0049 valve on/off
                                     String switchValue = value == 0 ? 'off' : 'on'
                                     logInfo "TS0049 Valve (dp=${cmd}) switch is ${switchValue} ${value})"
-                                    sendSwitchEvent(switchValue)                                }
+                                    sendSwitchEvent(switchValue)        
+                                }
+                                else if (isFankEver()) {
+                                    logInfo "reported valve open threshold is ${value} %"
+                                    sendEvent(name: 'valveOpenThreshold', value: value, type: 'physical') 
+                               }
                                 else {
                                     String str = getAttributeString(descMap.data)
                                     logInfo "IrrigationStartTime (${cmd}) is: ${str}"
@@ -807,6 +821,10 @@ void parseZHAcommand(Map descMap) {
                                     logInfo "Water Valve Mode (dp=${cmd}) is: ${str} (${value})"  // 0 - 'duration'; 1 - 'capacity'
                                     sendEvent(name: 'waterMode', value: str, type: 'physical')
                                 }
+                                else if (isFankEver()) {
+                                    logInfo "reported valve open percentage is ${value} %"
+                                    sendEvent(name: 'valveOpenPercentage', value: value, type: 'physical') 
+                               }
                                 else {
                                     String str = getAttributeString(descMap.data)
                                     logInfo "IrrigationEndTime (${cmd}) is: ${str}"
@@ -1855,22 +1873,22 @@ void setIrrigationMode(String mode) {
     sendZigbeeCommands( cmds )
 }
 
-void setValveOpenPercentage(Number percentage) {
+void setValveOpenThreshold(Number percentage) {
     if (!isFankEver()) {
-        logWarn 'setValveOpenPercentage is avaiable only for FankEver valves'
+        logWarn 'setValveOpenThreshold is avaiable only for FankEver valves'
         return
     }
     List<String> cmds = []
     int value = safeToInt(percentage, -1)
     if (value < 0 || value > 100) {
-        logWarn "valve open percentage must be withing 0 and 100"
+        logWarn "valve open threshold must be withing 0 and 100"
         return
     }
     // round to the nearest 10
     int roundedValue = Math.floor((value + 5) / 10) * 10 
-    logDebug "setting the valve open percentage to ${roundedValue} (was ${value})"
-    device.updateSetting('valveOpenPercentage', [value: roundedValue, type: 'number'])
-    sendEvent(name: 'valveOpenPercentage', value: roundedValue, type: 'digital')
+    logDebug "setting the valve open threshold to ${roundedValue} % (was ${value})"
+    device.updateSetting('valveOpenThreshold', [value: roundedValue, type: 'number'])
+    sendEvent(name: 'valveOpenThreshold', value: roundedValue, type: 'digital')
     sendTuyaCommand('65', DP_TYPE_VALUE, zigbee.convertToHexString(roundedValue, 8))
 }
 
