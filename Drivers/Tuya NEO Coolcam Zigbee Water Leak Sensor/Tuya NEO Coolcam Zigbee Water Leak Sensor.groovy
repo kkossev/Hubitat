@@ -26,15 +26,16 @@
  * ver. 1.1.0 2023-07-11 kkossev  - replaced Presence w/ healthStatus; added TS0207 _TZ3000_js34cuma; removed manipulating the powerSource and dropping the battery level 0% when offline.
  * ver. 1.1.1 2023-07-28 kkossev  - added ping rtt; added zigbee.enrollResponse() in the configuration; added TS0207 _TZ3000_2wcynpml
  * ver. 1.1.2 2024-05-11 kkossev  - added ThirdReality 3RWS18BZ 
-  *
+ * ver. 1.1.3 2024-08-02 kkossev  - added Sonoff SNZB-05P
+ *
  *                                  TODO:  scheduleCommandTimeoutCheck()
  *                                  TODO: check why Neo Coolcam is not sending actual battery reports : https://community.hubitat.com/t/release-tuya-neo-coolcam-zigbee-water-leak-sensor/91370/86?u=kkossev 
  *                                  TODO: add batteryLastReplaced event; add 'Testing option'; add 'isTesting' state; 
  *
 */
 
-def version() { "1.1.2" }
-def timeStamp() {"2024/05/11 8:36 PM"}
+def version() { "1.1.3" }
+def timeStamp() {"2024/08/02 8:24 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean debugLogsDefault = true
@@ -84,6 +85,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_js34cuma", deviceJoinName: "Tuya Leak Sensor TS0207 Type II"  // KK
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_2wcynpml", deviceJoinName: "Tuya Leak Sensor TS0207"          // https://community.hubitat.com/t/2nd-water-sensor-will-not-report/122112?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FF01,FF00,0001,0500", outClusters:"0019,0006", model:"3RWS18BZ", manufacturer:"Third Reality, Inc", deviceJoinName: "ThirdReality Water Leak Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0500,FC57", outClusters:"0003,0019", model:"SNZB-05P", manufacturer:"SONOFF", controllerType: "ZGB", deviceJoinName: "Sonoff SNZB-05 Water Leak Sensor"
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: debugLogsDefault)
