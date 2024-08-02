@@ -292,10 +292,11 @@ boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
 
     'TS0601_GIEX_VALVE'   : [         // https://www.aliexpress.com/item/1005004222098040.html    // GiEX valve device
             model         : 'TS0601',        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/21a66c05aa533de356a51c8417073f28092c6e9d/devices/giex.js
-            manufacturers : ['_TZE200_sh1btabb', '_TZE200_a7sghmms'],
+            manufacturers : ['_TZE200_sh1btabb', '_TZE200_a7sghmms', '_TZE204_7ytb3h8u'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_sh1btabb'],    // WaterIrrigationValve
-                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_a7sghmms']     // WaterIrrigationValve
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_a7sghmms'],    // WaterIrrigationValve
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_7ytb3h8u']     // WaterIrrigationValve
             ],
             deviceJoinName: 'Tuya Zigbee Irrigation Valve',
             capabilities  : ['valve': true, 'battery': true],        // no consumption reporting ?
