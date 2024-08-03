@@ -1,4 +1,4 @@
-/* groovylint-disable NoDouble, ParameterName, StaticMethodsBeforeInstanceMethods */
+/* groovylint-disable DuplicateMapLiteral, DuplicateStringLiteral, ImplicitClosureParameter, InsecureRandom, LineLength, NoDouble, ParameterName, StaticMethodsBeforeInstanceMethods */
 /**
  *  Tuya Zigbee Valve driver for Hubitat Elevation
  *
@@ -38,6 +38,7 @@
  *  ver. 1.3.2 2024-07-31 kkossev - added SONOFF SWV (+onWithTimedOff)
  *  ver. 1.3.3 2024-08-02 kkossev - added FrankEver FK_V02 _TZE200_1n2zev06 Valve Open Percentage and timeout timer; separated valveOpenThreshold and valveOpenPercentage
  *  ver. 1.3.4 2024-08-02 dstutz  - added Giex _TZE204_7ytb3h8u 
+ *  ver. 1.3.5 2024-08-03 kkossev - (dev. branch)
  *
  *                                  TODO: bugFix: deviceProfule not found automatically; 
  *                                  TODO: bugFix: powerSource : []
@@ -48,8 +49,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-String version() { '1.3.3' }
-String timeStamp() { '2024/08/02 23:59 PM' }
+String version() { '1.3.5' }
+String timeStamp() { '2024/08/03 8:52 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -328,11 +329,11 @@ boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
     ],
 
     'TS0601_LIDL_VALVE'   : [
-            model         : 'TS0601',                                    // TS0601 _TZE200_c88teujp model: 'PSBZS A1'   PARKSIDE� Smart Irrigation Computer     Lidl https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
+            model         : 'TS0601',                                    // TS0601 _TZE200_c88teujp model: 'PSBZS A1'   PARKSIDE? Smart Irrigation Computer     Lidl https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
             manufacturers : ['_TZE200_htnnfasr', '_TZE200_c88teujp'],    // TS0601 _TZE200_htnnfasr 'Parkside smart watering timer' -  only DP1 and 5 (timer) !!!  'PSBZS A1',    // https://github.com/mgrom/zigbee-herdsman-converters/blob/ce171e86f9bde6004046b9f4a3701b8024569a2a/devices/lidl.js
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,EF00', outClusters:'000A,0019', model:'TS0601', manufacturer:'_TZE200_htnnfasr'],     // not tested // LIDL // PARKSIDE� Smart Irrigation Computer //https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,EF00', outClusters:'000A,0019', model:'TS0601', manufacturer:'_TZE200_htnnfasr']      // not tested // LIDL // PARKSIDE� Smart Irrigation Computer //https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,EF00', outClusters:'000A,0019', model:'TS0601', manufacturer:'_TZE200_htnnfasr'],     // not tested // LIDL // PARKSIDE? Smart Irrigation Computer //https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,EF00', outClusters:'000A,0019', model:'TS0601', manufacturer:'_TZE200_htnnfasr']      // not tested // LIDL // PARKSIDE? Smart Irrigation Computer //https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
             ],
             deviceJoinName: 'LIDL Parkside smart watering timer',        // also https://gist.github.com/zinserjan/e0486af73d0aa8c6aeed31762e831022
             capabilities  : ['valve': true, 'battery': true],            // Lidl commands set : https://github.com/Koenkk/zigbee2mqtt/issues/7695#issuecomment-1084932081
