@@ -36,7 +36,7 @@
  *  ver. 1.3.0 2024-03-17 kkossev - more code linting; added TS0049 _TZ3210_0jxeoadc; added three-states (opening, closing)
  *  ver. 1.3.1 2024-04-30 kkossev - getPowerSource bug fix; TS0049 command '06' processing; TS0049 battery% fix; TS0049 open/close fix; TS0049 command '05' processing;
  *  ver. 1.3.2 2024-07-31 kkossev - added SONOFF SWV (+onWithTimedOff)
- *  ver. 1.3.3 2024-08-02 kkossev - (dev. branch) added for tests FrankEver FK_V02  Valve Open Percentage and timeout timer; separated valveOpenThreshold and valveOpenPercentage
+ *  ver. 1.3.3 2024-08-02 kkossev - (dev. branch) added for tests FrankEver FK_V02 _TZE200_1n2zev06 Valve Open Percentage and timeout timer; separated valveOpenThreshold and valveOpenPercentage
  *
  *                                  TODO: bugFix: deviceProfule not found automatically; 
  *                                  TODO: bugFix: powerSource : []
@@ -347,7 +347,7 @@ boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
             manufacturers : ['_TZE200_wt9agwf3', '_TZE200_5uodvhgc', '_TZE200_1n2zev06'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_1n2zev06'],     //https://community.hubitat.com/t/frankever-zigbee-1-water-valve/140694?u=kkossev
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_5uodvhgc'],
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_5uodvhgc'],    // https://www.youtube.com/watch?v=lpL6xAYuBHk
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_wt9agwf3'],
             ],
             deviceJoinName: 'FrankEver Zigbee Smart Water Valve FK_V02',
