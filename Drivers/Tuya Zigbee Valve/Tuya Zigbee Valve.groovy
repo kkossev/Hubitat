@@ -36,7 +36,8 @@
  *  ver. 1.3.0 2024-03-17 kkossev - more code linting; added TS0049 _TZ3210_0jxeoadc; added three-states (opening, closing)
  *  ver. 1.3.1 2024-04-30 kkossev - getPowerSource bug fix; TS0049 command '06' processing; TS0049 battery% fix; TS0049 open/close fix; TS0049 command '05' processing;
  *  ver. 1.3.2 2024-07-31 kkossev - added SONOFF SWV (+onWithTimedOff)
- *  ver. 1.3.3 2024-08-02 kkossev - (dev. branch) added for tests FrankEver FK_V02 _TZE200_1n2zev06 Valve Open Percentage and timeout timer; separated valveOpenThreshold and valveOpenPercentage
+ *  ver. 1.3.3 2024-08-02 kkossev - added FrankEver FK_V02 _TZE200_1n2zev06 Valve Open Percentage and timeout timer; separated valveOpenThreshold and valveOpenPercentage
+ *  ver. 1.3.4 2024-08-02 dstutz  - added Giex _TZE204_7ytb3h8u 
  *
  *                                  TODO: bugFix: deviceProfule not found automatically; 
  *                                  TODO: bugFix: powerSource : []
@@ -48,7 +49,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 String version() { '1.3.3' }
-String timeStamp() { '2024/08/02 7:39 AM' }
+String timeStamp() { '2024/08/02 23:59 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -296,7 +297,7 @@ boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_sh1btabb'],    // WaterIrrigationValve
                 [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_a7sghmms'],    // WaterIrrigationValve
-                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_7ytb3h8u']     // WaterIrrigationValve
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_7ytb3h8u']     // https://www.amazon.com/dp/B0D3BXVZKY
             ],
             deviceJoinName: 'Tuya Zigbee Irrigation Valve',
             capabilities  : ['valve': true, 'battery': true],        // no consumption reporting ?
