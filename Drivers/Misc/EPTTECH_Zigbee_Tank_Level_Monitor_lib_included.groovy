@@ -18,7 +18,7 @@
  */
 
 static String version() { "3.3.0" }
-static String timeStamp() {"2024/08/03 11:39 PM"}
+static String timeStamp() {"2024/08/03 9:45 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -44,7 +44,7 @@ deviceType = "LevelMonitor"
 metadata {
     definition (
         name: 'EPTTECH Zigbee Tank Level Monitor',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Misc/EPTTECH%20Zigbee%20Tank%20Level%20Monitor_lib_included.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Misc/EPTTECH_Zigbee_Tank_Level_Monitor_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         // no standard capabilities
@@ -73,7 +73,7 @@ metadata {
 
     preferences {
         if (device) {
-            input(name: 'info',    type: 'hidden', title: "<a href='https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1' target='_blank'><i>For more info, click on this link to visit the WiKi page</i></a>")
+            // input(name: 'info',    type: 'hidden', title: "<a href='https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1' target='_blank'><i>For more info, click on this link to visit the WiKi page</i></a>")
         }
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables events logging.'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_DEBUG_LOGGING, description: 'Turns on debug logging for 24 hours.'
@@ -195,8 +195,8 @@ void customUpdated() {
 
 void customInitializeVars(final boolean fullInit=false) {
     logDebug "customInitializeVars(${fullInit})"
-    if (state.deviceProfile == null) {
-        setDeviceNameAndProfile()               // in deviceProfileiLib.groovy
+    if (state.deviceProfile == null || state.deviceProfile == '' || state.deviceProfile == 'UNKNOWN') {
+        setDeviceNameAndProfile('TS0601', '_TZE200_lvkk0hdg')               // in deviceProfileiLib.groovy
     }
     if (fullInit == true) {
         resetPreferencesToDefaults()
