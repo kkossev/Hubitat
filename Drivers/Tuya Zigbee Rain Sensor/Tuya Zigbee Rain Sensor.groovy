@@ -1,5 +1,5 @@
 /* groovylint-disable NglParseError, ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnusedImport, VariableName *//**
- *  (Tuya) EPTTECH Zigbee Tank Level Monitor - driver for Hubitat Elevation
+ *  Tuya Zigbee Rain Sensor - driver for Hubitat Elevation
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
  *
@@ -12,13 +12,13 @@
  * 	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  * 	for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.3.0  2024-08-03 kkossev  - first test version
+ * ver. 3.0.0  2024-08-08 kkossev  - first test version
  *                                   
  *                                   TODO: HPM
  */
 
-static String version() { "3.3.0" }
-static String timeStamp() {"2024/08/03 9:45 AM"}
+static String version() { "3.0.0" }
+static String timeStamp() {"2024/08/08 7:45 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -37,18 +37,20 @@ import groovy.transform.CompileStatic
 
 #include kkossev.deviceProfileLib
 #include kkossev.commonLib
+#include kkossev.iasLib
+#include kkossev.illuminanceLib
 
-deviceType = "LevelMonitor"
-@Field static final String DEVICE_TYPE = "LevelMonitor"
+deviceType = "RainSensor"
+@Field static final String DEVICE_TYPE = "RainSensor"
 
 metadata {
     definition (
-        name: 'EPTTECH Zigbee Tank Level Monitor',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Misc/EPTTECH_Zigbee_Tank_Level_Monitor_lib_included.groovy',
+        name: 'Tuya Zigbee Rain Sensor',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya_Zigbee_Rain_Sensor/Tuya_Zigbee_Rain_Sensor_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         // no standard capabilities
-
+        /*
         attribute 'liquidState', 'enum', ['normal', 'low', 'high', 'unknown']  // Liquid State
         attribute 'liquidDepth', 'decimal'                          // Liquid depth
         attribute 'highSet', 'number'                               // Liquid percentage to set high state (above this value)
@@ -56,6 +58,7 @@ metadata {
         attribute 'installationHeight', 'number'                    // Height from sensor to tank bottom
         attribute 'liquidDepthMax', 'number'                        // Distance from sensor to max liquid level
         attribute 'level', 'number'                                 // Liquid level percentage
+        */
 
        // no commands
 
@@ -84,20 +87,18 @@ metadata {
 @Field static String ttStyleStr = '<style>.tTip {display:inline-block;border-bottom: 1px dotted black;}.tTip .tTipText {display:none;border-radius: 6px;padding: 5px 0;position: absolute;z-index: 1;}.tTip:hover .tTipText {display:inline-block;background-color:red;color:red;}</style>'
 
 @Field static final Map deviceProfilesV3 = [
-    // https://www.amazon.com/EPTTECH-TLC2206-ZB-Contactless-Waterproof-Industrial/dp/B0CY8H86VM
-    // https://www.aliexpress.com/item/1005006395402636.html 
-    // https://www.aliexpress.com/item/1005005758585356.html
-    // https://github.com/Koenkk/zigbee2mqtt/issues/21015#issuecomment-2263850384 
-    // https://www.eptsensor.com/level-monitor/tlc2206p-wireless-tuya-tank-level-monitor.html
-    'EPTTECH_TLC2206'  : [
-            description   : 'EPTTECH TLC2206 Zigbee Tank Level Monitor',
+    // https://www.aliexpress.us/item/3256807083309300.html
+    // https://www.aliexpress.com/item/1005007269233710.html
+    // https://community.hubitat.com/t/new-tuya-zigbee-light-and-rain-sensor/141057/6?u=kkossev
+    'TUYA_RAIN_SENSOR'  : [
+            description   : 'Tuya Zigbee Rain Sensor',
             models        : ['TS0601'],
-            device        : [type: 'Sensor', powerSource: 'dc', isSleepy:false],    // check powerSource
-            capabilities  : ['Battery': false],
+            device        : [type: 'Sensor', powerSource: 'battery', isSleepy:false],    // check powerSource
+            capabilities  : ['Battery': true],
             preferences   : ['highSet':'7', 'lowSet':'8', 'installationHeight':'19', 'liquidDepthMax':'21'],
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences', 'printFingerprints':'printFingerprints', 'printPreferences':'printPreferences'],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601',  manufacturer:'_TZE200_lvkk0hdg', deviceJoinName: 'EPTTECH TLC2206 Zigbee Tank Level Monitor'],
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0001,0500,EF00", outClusters:"0003,0004,0006,1000,000A,0019", model:"TS0207", manufacturer:"_TZ3210_tgvtvdoc", controllerType: "ZGB", deviceJoinName: 'Tuya Zigbee Rain Sensor'],
             ],
             tuyaDPs:        [
                 [dp:1,   name:'liquidState',          type:'enum',    rw: 'ro', defVal:'0', map:[0:'normal', 1:'low', 2:'high'], description:'Liquid State'],
@@ -110,7 +111,7 @@ metadata {
             ],
             refresh:        ['refreshFantem'],
             configuration : ['battery': false],
-            deviceJoinName: 'EPTTECH TLC2206 Zigbee Tank Level Monitor'
+            deviceJoinName: 'Tuya Zigbee Rain Sensor'
     ]
 ]
 
