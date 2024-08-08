@@ -13,13 +13,13 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.3.0  2024-08-03 kkossev  - first test version
- * ver. 3.3.1  2024-08-08 kkossev  - (dev.branch)
+ * ver. 3.3.1  2024-08-08 kkossev  - (dev.branch) driver renamed to 'Tuya Zigbee Tank Level Monitor'
  *                                   
  *                                   TODO: HPM
  */
 
 static String version() { "3.3.1" }
-static String timeStamp() {"2024/08/08 9:45 AM"}
+static String timeStamp() {"2024/08/08 11:35 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
