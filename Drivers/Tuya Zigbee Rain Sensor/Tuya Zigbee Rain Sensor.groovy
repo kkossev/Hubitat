@@ -18,25 +18,18 @@
  */
 
 static String version() { "3.0.0" }
-static String timeStamp() {"2024/08/08 7:45 AM"}
+static String timeStamp() {"2024/08/08 9:54 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for production
 
-/*
 import groovy.transform.Field
-import hubitat.device.HubMultiAction
-import hubitat.device.Protocol
-import hubitat.helper.HexUtils
-import hubitat.zigbee.zcl.DataType
-import java.util.concurrent.ConcurrentHashMap
-import groovy.json.JsonOutput
 import groovy.transform.CompileStatic
-*/
 
 #include kkossev.deviceProfileLib
 #include kkossev.commonLib
+#include kkossev.batteryLib
 #include kkossev.iasLib
 #include kkossev.illuminanceLib
 
@@ -46,19 +39,17 @@ deviceType = "RainSensor"
 metadata {
     definition (
         name: 'Tuya Zigbee Rain Sensor',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya_Zigbee_Rain_Sensor/Tuya_Zigbee_Rain_Sensor_lib_included.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Rain%20Sensor/Tuya_Zigbee_Rain_Sensor_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         // no standard capabilities
-        /*
-        attribute 'liquidState', 'enum', ['normal', 'low', 'high', 'unknown']  // Liquid State
-        attribute 'liquidDepth', 'decimal'                          // Liquid depth
-        attribute 'highSet', 'number'                               // Liquid percentage to set high state (above this value)
-        attribute 'lowSet', 'number'                                // Liquid percentage to set low state (below this value)
-        attribute 'installationHeight', 'number'                    // Height from sensor to tank bottom
-        attribute 'liquidDepthMax', 'number'                        // Distance from sensor to max liquid level
-        attribute 'level', 'number'                                 // Liquid level percentage
-        */
+        attribute 'dropletDetectionState',       'enum',    ['off', 'on']
+        attribute 'battery',                     'number'
+        attribute 'illuminance',                 'number'
+        attribute 'averageLightIntensity20mins', 'number'
+        attribute 'todaysMaxLightIntensity',     'number'
+        attribute 'cleaningReminder',            'enum',    ['off', 'on']
+        attribute 'rainSensorVoltage',           'number'
 
        // no commands
 
@@ -90,26 +81,29 @@ metadata {
     // https://www.aliexpress.us/item/3256807083309300.html
     // https://www.aliexpress.com/item/1005007269233710.html
     // https://community.hubitat.com/t/new-tuya-zigbee-light-and-rain-sensor/141057/6?u=kkossev
+    // https://github.com/Koenkk/zigbee2mqtt/issues/23532 
     'TUYA_RAIN_SENSOR'  : [
             description   : 'Tuya Zigbee Rain Sensor',
             models        : ['TS0601'],
-            device        : [type: 'Sensor', powerSource: 'battery', isSleepy:false],    // check powerSource
+            device        : [type: 'Sensor', isIAS:true, powerSource: 'battery', isSleepy:true],    // check powerSource
             capabilities  : ['Battery': true],
-            preferences   : ['highSet':'7', 'lowSet':'8', 'installationHeight':'19', 'liquidDepthMax':'21'],
+            preferences   : [],
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences', 'printFingerprints':'printFingerprints', 'printPreferences':'printPreferences'],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0001,0500,EF00", outClusters:"0003,0004,0006,1000,000A,0019", model:"TS0207", manufacturer:"_TZ3210_tgvtvdoc", controllerType: "ZGB", deviceJoinName: 'Tuya Zigbee Rain Sensor'],
+                // for tests only!  TOBEDEL
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0001,0500,EF00", outClusters:"0003,0004,0006,1000,000A,0019", model:"TS0222", manufacturer:"_TYZB01_4mdqxxnn", controllerType: "ZGB", deviceJoinName: 'TEST Tuya Zigbee Rain Sensor'],
             ],
             tuyaDPs:        [
-                [dp:1,   name:'liquidState',          type:'enum',    rw: 'ro', defVal:'0', map:[0:'normal', 1:'low', 2:'high'], description:'Liquid State'],
-                [dp:2,   name:'liquidDepth',          type:'decimal', rw: 'ro', min:0.0, max:9.9,  defVal:1.0,   scale:100, unit:'m',  title:'<b>Liquid Depth</b>', description:'Liquid depth'],
-                [dp:7,   name:'highSet',              type:'number',  rw: 'rw', min:0,   max:100,  defVal:75,    scale:1,   unit:'%',  title:'<b>High Set</b>', description:'Liquid percentage to set high state (above this value)'],
-                [dp:8,   name:'lowSet',               type:'number',  rw: 'rw', min:0,   max:100,  defVal:25,    scale:1,   unit:'%',  title:'<b>Low Set</b>', description:'Liquid percentage to set low state (below this value)'],
-                [dp:19,  name:'installationHeight',   type:'number',  rw: 'rw', min:100, max:3000, defVal:2000,  scale:1,   unit:'mm', title:'<b>Installation Height</b>', description:'Height from sensor to tank bottom'], 
-                [dp:21,  name:'liquidDepthMax',       type:'number',  rw: 'rw', min:100, max:2000, defVal:100,   scale:1,   unit:'mm', title:'<b>Liquid Depth Max</b>', description:'Distance from sensor to max liquid level'], 
-                [dp:22,  name:'level',                type:'number',  rw: 'ro', min:0,   max:100,  defVal:0,     scale:1,   unit:'%',  title:'<b>Liquid Level Percent</b>', description:'Liquid level percentage"'], 
+                [dp:1,   name:'dropletDetectionState',       type:'enum',    rw: 'ro', defVal:'0', map:[0:'off', 1:'on'], description:'Droplet Detection State'],
+                [dp:4,   name:'battery',                     type:'number',  rw: 'ro', unit:'%', description:'Battery level'],
+                [dp:101, name:'illuminance',                 type:'number',  rw: 'ro', unit:'lx', description:'Illuminance'],
+                [dp:102, name:'averageLightIntensity20mins', type:'number',  rw: 'ro', unit:'lx', description:'20 mins average light intensity'],
+                [dp:103, name:'todaysMaxLightIntensity',     type:'number',  rw: 'ro', unit:'lx', description:'Todays max light intensity'],
+                [dp:104, name:'cleaningReminder',            type:'enum',    rw: 'ro', defVal:'0', map:[0:'off', 1:'on'], description:'Cleaning reminder'],
+                [dp:105, name:'rainSensorVoltage',           type:'decimal', rw: 'ro', unit:'V', description:'Rain Sensor Voltage'],
             ],
-            refresh:        ['refreshFantem'],
+            //refresh:        ['refreshFantem'],
             configuration : ['battery': false],
             deviceJoinName: 'Tuya Zigbee Rain Sensor'
     ]
@@ -206,6 +200,13 @@ void customInitializeVars(final boolean fullInit=false) {
 
 void customInitEvents(final boolean fullInit=false) {
     logDebug "customInitEvents()"
+    if ((device.currentState('dropletDetectionState')?.value == null)) { sendEvent(name: 'dropletDetectionState', value: 'off', type:'digital') }
+    if ((device.currentState('battery')?.value == null)) { sendEvent(name: 'battery', value: 0, unit:'%', type:'digital') }
+    if ((device.currentState('illuminance')?.value == null)) { sendEvent(name: 'illuminance', value: 0, unit:'lx', type:'digital') }
+    if ((device.currentState('averageLightIntensity20mins')?.value == null)) { sendEvent(name: 'averageLightIntensity20mins', value: 0, unit:'lx', type:'digital') }
+    if ((device.currentState('todaysMaxLightIntensity')?.value == null)) { sendEvent(name: 'todaysMaxLightIntensity', value: 0, unit:'lx', type:'digital') }
+    if ((device.currentState('cleaningReminder')?.value == null)) { sendEvent(name: 'cleaningReminder', value: 'off', type:'digital') }
+    if ((device.currentState('rainSensorVoltage')?.value == null)) { sendEvent(name: 'rainSensorVoltage', value: 0, unit:'V', type:'digital') }
 }
 
 void test(String par) {
