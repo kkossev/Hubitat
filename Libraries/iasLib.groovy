@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee IASLibrary', name: 'iasLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/iasLib.groovy', documentationLink: '',
-    version: '3.2.1'
+    version: '3.2.2'
 
 )
 /*
@@ -18,13 +18,14 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.2.0  2024-05-27 kkossev  - added iasLib.groovy
- * ver. 3.2.1  2024-07-06 kkossev  - (dev. branch) added standardParseIasMessage (debug only)
+ * ver. 3.2.1  2024-07-06 kkossev  - added standardParseIasMessage (debug only); zs null check
+ * ver. 3.2.2  2024-08-09 kkossev  - (dev. branch) zs null check
  *
  *                                   TODO:
 */
 
-static String iasLibVersion()   { '3.2.1' }
-static String iasLibStamp() { '2024/07/06 11:48 AM' }
+static String iasLibVersion()   { '3.2.2' }
+static String iasLibStamp() { '2024/08/09 12:03 PM' }
 
 metadata {
     // no capabilities
@@ -74,6 +75,10 @@ metadata {
 public void standardParseIasMessage(final String description) {
     // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn
     Map zs = zigbee.parseZoneStatusChange(description)
+    if (zs == null) {
+        logWarn "standardParseIasMessage: zs is null!"
+        return
+    }
     if (zs.alarm1Set == true) {
         logDebug "standardParseIasMessage: Alarm 1 is set"
         //handleMotion(true)

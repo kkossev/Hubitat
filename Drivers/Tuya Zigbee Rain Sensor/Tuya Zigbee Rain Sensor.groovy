@@ -13,12 +13,13 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.0.0  2024-08-08 kkossev  - first test version
+ * ver. 3.0.1  2024-08-09 kkossev  - (dev.branch) added capability 'WaterSensor'; rainSensorVoltage scale 1000; illuminance changed to illuminanceVoltage and scale 1000; 
  *                                   
  *                                   TODO: HPM
  */
 
-static String version() { "3.0.0" }
-static String timeStamp() {"2024/08/08 9:54 PM"}
+static String version() { "3.0.1" }
+static String timeStamp() {"2024/08/09 12:36 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -31,7 +32,7 @@ import groovy.transform.CompileStatic
 #include kkossev.commonLib
 #include kkossev.batteryLib
 #include kkossev.iasLib
-#include kkossev.illuminanceLib
+//#include kkossev.illuminanceLib
 
 deviceType = "RainSensor"
 @Field static final String DEVICE_TYPE = "RainSensor"
@@ -42,10 +43,11 @@ metadata {
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Rain%20Sensor/Tuya_Zigbee_Rain_Sensor_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
-        // no standard capabilities
+        capability "WaterSensor"        
+
         attribute 'dropletDetectionState',       'enum',    ['off', 'on']
         attribute 'battery',                     'number'
-        attribute 'illuminance',                 'number'
+        attribute 'illuminanceVoltage',          'number'
         attribute 'averageLightIntensity20mins', 'number'
         attribute 'todaysMaxLightIntensity',     'number'
         attribute 'cleaningReminder',            'enum',    ['off', 'on']
@@ -97,11 +99,11 @@ metadata {
             tuyaDPs:        [
                 [dp:1,   name:'dropletDetectionState',       type:'enum',    rw: 'ro', defVal:'0', map:[0:'off', 1:'on'], description:'Droplet Detection State'],
                 [dp:4,   name:'battery',                     type:'number',  rw: 'ro', unit:'%', description:'Battery level'],
-                [dp:101, name:'illuminance',                 type:'number',  rw: 'ro', unit:'lx', description:'Illuminance'],
-                [dp:102, name:'averageLightIntensity20mins', type:'number',  rw: 'ro', unit:'lx', description:'20 mins average light intensity'],
-                [dp:103, name:'todaysMaxLightIntensity',     type:'number',  rw: 'ro', unit:'lx', description:'Todays max light intensity'],
+                [dp:101, name:'illuminanceVoltage',          type:'decimal', rw: 'ro', unit:'V', scale:1000, description:'Illuminance voltage'],
+                [dp:102, name:'averageLightIntensity20mins', type:'decimal',  rw: 'ro', unit:'V', scale:1000, description:'20 mins average light intensity'],
+                [dp:103, name:'todaysMaxLightIntensity',     type:'decimal',  rw: 'ro', unit:'V', scale:1000, description:'Todays max light intensity'],
                 [dp:104, name:'cleaningReminder',            type:'enum',    rw: 'ro', defVal:'0', map:[0:'off', 1:'on'], description:'Cleaning reminder'],
-                [dp:105, name:'rainSensorVoltage',           type:'decimal', rw: 'ro', unit:'V', description:'Rain Sensor Voltage'],
+                [dp:105, name:'rainSensorVoltage',           type:'decimal', rw: 'ro', unit:'V', scale:1000, description:'Rain Sensor Voltage'],
             ],
             //refresh:        ['refreshFantem'],
             configuration : ['battery': false],
@@ -144,6 +146,53 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, value
             break
     }
 }
+
+public void customParseIasMessage(final String description) {
+    Map zs = zigbee.parseZoneStatusChange(description)
+    if (zs == null) {
+        logWarn "customParseIasMessage: zs is null!"
+        return
+    }
+    if (zs.alarm1Set == true) {
+        logDebug "customParseIasMessage: Alarm 1 is set"
+        sendWaterEvent('wet')
+    }
+    else {
+        logDebug "customParseIasMessage: Alarm 1 is cleared"
+        sendWaterEvent('dry')
+    }
+}
+
+void sendWaterEvent( String value, boolean isDigital=false) {
+    def type = isDigital == true ? "digital" : "physical"
+    String descriptionText
+    switch (value) {
+        case 'checking' :
+            descriptionText = "${device.displayName} checking"
+            break
+        case 'tested' :
+            descriptionText = "${device.displayName} is tested"
+            break
+        case 'wet' :
+            // send 'wet' without delays and additional checks
+            descriptionText = "<b>${device.displayName} is wet</b>"
+            break
+        case 'dry' :
+            descriptionText = "${device.displayName} is dry"
+            break
+        case 'unknown' :
+            // 'unknown' is sent when the water leak sensor healthStatus goes in offline state
+            descriptionText = "${device.displayName} status is unknown"
+            break
+        default :
+            log.warn "sendWaterEvent: unprocessed water event '${value}'"
+            return
+    }
+    if (isDigital == true) descriptionText += " [digital]"
+    if (settings?.txtEnable==true) log.info "$descriptionText"    // includes deviceName
+    sendEvent(name: "water", value: value, descriptionText: descriptionText, type: type , isStateChange: true)    
+}
+
 
 List<String> refreshFantem() {
     List<String>  cmds = zigbee.command(0xEF00, 0x07, '00')    // Fantem Tuya Magic
@@ -202,11 +251,12 @@ void customInitEvents(final boolean fullInit=false) {
     logDebug "customInitEvents()"
     if ((device.currentState('dropletDetectionState')?.value == null)) { sendEvent(name: 'dropletDetectionState', value: 'off', type:'digital') }
     if ((device.currentState('battery')?.value == null)) { sendEvent(name: 'battery', value: 0, unit:'%', type:'digital') }
-    if ((device.currentState('illuminance')?.value == null)) { sendEvent(name: 'illuminance', value: 0, unit:'lx', type:'digital') }
-    if ((device.currentState('averageLightIntensity20mins')?.value == null)) { sendEvent(name: 'averageLightIntensity20mins', value: 0, unit:'lx', type:'digital') }
-    if ((device.currentState('todaysMaxLightIntensity')?.value == null)) { sendEvent(name: 'todaysMaxLightIntensity', value: 0, unit:'lx', type:'digital') }
+    if ((device.currentState('illuminanceVoltage')?.value == null)) { sendEvent(name: 'illuminance', value: 0.0, unit:'V', type:'digital') }
+    if ((device.currentState('averageLightIntensity20mins')?.value == null)) { sendEvent(name: 'averageLightIntensity20mins', value: 0.0, unit:'V', type:'digital') }
+    if ((device.currentState('todaysMaxLightIntensity')?.value == null)) { sendEvent(name: 'todaysMaxLightIntensity', value: 0.0, unit:'V', type:'digital') }
     if ((device.currentState('cleaningReminder')?.value == null)) { sendEvent(name: 'cleaningReminder', value: 'off', type:'digital') }
-    if ((device.currentState('rainSensorVoltage')?.value == null)) { sendEvent(name: 'rainSensorVoltage', value: 0, unit:'V', type:'digital') }
+    if ((device.currentState('rainSensorVoltage')?.value == null)) { sendEvent(name: 'rainSensorVoltage', value: 0.0, unit:'V', type:'digital') }
+    if ((device.currentState('water')?.value == null)) { sendEvent(name: 'water', value: 'unknown', unit:'', type:'digital') }
 }
 
 void test(String par) {
