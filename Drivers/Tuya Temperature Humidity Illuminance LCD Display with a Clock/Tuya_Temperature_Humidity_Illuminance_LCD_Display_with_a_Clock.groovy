@@ -49,6 +49,7 @@
  * ver. 1.6.2  2024-06-26 kkossev - added TS000F _TZ3218_7fiyo3kv in DS18B20 group (temperature only); added Tuya cluster command '06' processing; added description in the debug logs
  * ver. 1.6.3  2024-07-16 kkossev - added TS0601 _TZE204_yjjdcqsq to TS0601_Tuya_2 group;
  * ver. 1.6.4  2024-07-23 kkossev - added Tuya Smart Soil Tester _TZE284_aao3yzhs into 'TS0601_Soil_II'
+ * ver. 1.6.5  2024-08-09 kkossev - bugfix: TS0201 _TZ3000_dowj6gyi moved back to TS0201 group;
  *
  *                                  TODO: queryOnDeviceAnnounce for TS0601_Tuya_2 group
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
@@ -58,8 +59,8 @@
  *                                  TODO: add Batteryreporting time configuration (like in the TS004F driver)
 */
 
-@Field static final String VERSION = '1.6.4'
-@Field static final String TIME_STAMP = '2024/07/23 5:46 PM'
+@Field static final String VERSION = '1.6.5'
+@Field static final String TIME_STAMP = '2024/08/09 9:38 AM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -270,7 +271,7 @@ metadata {
     '_TZ3000_fllyghyj'  : 'TS0201',
     '_TZ3000_yd2e749y'  : 'TS0201',
     '_TZ3000_6uzkisv2'  : 'TS0201',
-    '_TZ3000_dowj6gyi'  : 'TS0201_TH',
+    '_TZ3000_dowj6gyi'  : 'TS0201',             // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/512?u=kkossev
     '_TZ3000_8ybe88nf'  : 'TS0201',
     '_TZ3000_rdhukkmi'  : 'TS0201',
     '_TZ3000_utwgoauk'  : 'TS0201',
