@@ -1,5 +1,5 @@
 /* groovylint-disable NglParseError, ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnusedImport, VariableName *//**
- *  (Tuya) EPTTECH Zigbee Tank Level Monitor - driver for Hubitat Elevation
+ *  Tuya Zigbee Tank Level Monitor - driver for Hubitat Elevation
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
  *
@@ -13,12 +13,14 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.3.0  2024-08-03 kkossev  - first test version
+ * ver. 3.3.1  2024-08-08 kkossev  - driver renamed to 'Tuya Zigbee Tank Level Monitor'
+ * ver. 3.3.2  2024-08-11 kkossev  - (dev.branch) driver renamed to 'Tuya Zigbee Tank Level Monitor', pars renamed to upperLimit/lowerLimit; added MOREYALEC_TUYA_ME201WZ device profile for tests;
  *                                   
  *                                   TODO: HPM
  */
 
-static String version() { "3.3.0" }
-static String timeStamp() {"2024/08/03 9:45 AM"}
+static String version() { "3.3.2" }
+static String timeStamp() {"2024/08/11 5:48 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -26,13 +28,9 @@ static String timeStamp() {"2024/08/03 9:45 AM"}
 
 /*
 import groovy.transform.Field
-import hubitat.device.HubMultiAction
-import hubitat.device.Protocol
+import groovy.transform.CompileStatic
 import hubitat.helper.HexUtils
 import hubitat.zigbee.zcl.DataType
-import java.util.concurrent.ConcurrentHashMap
-import groovy.json.JsonOutput
-import groovy.transform.CompileStatic
 */
 
 
@@ -43,16 +41,16 @@ deviceType = "LevelMonitor"
 
 metadata {
     definition (
-        name: 'EPTTECH Zigbee Tank Level Monitor',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Misc/EPTTECH_Zigbee_Tank_Level_Monitor_lib_included.groovy',
+        name: 'Tuya Zigbee Tank Level Monitor',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Tank%20Level%20Monitor/Tuya_Zigbee_Tank_Level_Monitor_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         // no standard capabilities
 
         attribute 'liquidState', 'enum', ['normal', 'low', 'high', 'unknown']  // Liquid State
         attribute 'liquidDepth', 'decimal'                          // Liquid depth
-        attribute 'highSet', 'number'                               // Liquid percentage to set high state (above this value)
-        attribute 'lowSet', 'number'                                // Liquid percentage to set low state (below this value)
+        attribute 'upperLimit', 'number'                               // Liquid percentage to set high state (above this value)
+        attribute 'lowerLimit', 'number'                                // Liquid percentage to set low state (below this value)
         attribute 'installationHeight', 'number'                    // Height from sensor to tank bottom
         attribute 'liquidDepthMax', 'number'                        // Distance from sensor to max liquid level
         attribute 'level', 'number'                                 // Liquid level percentage
@@ -94,7 +92,7 @@ metadata {
             models        : ['TS0601'],
             device        : [type: 'Sensor', powerSource: 'dc', isSleepy:false],    // check powerSource
             capabilities  : ['Battery': false],
-            preferences   : ['highSet':'7', 'lowSet':'8', 'installationHeight':'19', 'liquidDepthMax':'21'],
+            preferences   : ['upperLimit':'7', 'lowerLimit':'8', 'installationHeight':'19', 'liquidDepthMax':'21'],
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences', 'printFingerprints':'printFingerprints', 'printPreferences':'printPreferences'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601',  manufacturer:'_TZE200_lvkk0hdg', deviceJoinName: 'EPTTECH TLC2206 Zigbee Tank Level Monitor'],
@@ -102,8 +100,8 @@ metadata {
             tuyaDPs:        [
                 [dp:1,   name:'liquidState',          type:'enum',    rw: 'ro', defVal:'0', map:[0:'normal', 1:'low', 2:'high'], description:'Liquid State'],
                 [dp:2,   name:'liquidDepth',          type:'decimal', rw: 'ro', min:0.0, max:9.9,  defVal:1.0,   scale:100, unit:'m',  title:'<b>Liquid Depth</b>', description:'Liquid depth'],
-                [dp:7,   name:'highSet',              type:'number',  rw: 'rw', min:0,   max:100,  defVal:75,    scale:1,   unit:'%',  title:'<b>High Set</b>', description:'Liquid percentage to set high state (above this value)'],
-                [dp:8,   name:'lowSet',               type:'number',  rw: 'rw', min:0,   max:100,  defVal:25,    scale:1,   unit:'%',  title:'<b>Low Set</b>', description:'Liquid percentage to set low state (below this value)'],
+                [dp:7,   name:'upperLimit',           type:'number',  rw: 'rw', min:0,   max:100,  defVal:75,    scale:1,   unit:'%',  title:'<b>High Set</b>', description:'Liquid percentage to set high state (above this value)'],
+                [dp:8,   name:'lowerLimit',           type:'number',  rw: 'rw', min:0,   max:100,  defVal:25,    scale:1,   unit:'%',  title:'<b>Low Set</b>', description:'Liquid percentage to set low state (below this value)'],
                 [dp:19,  name:'installationHeight',   type:'number',  rw: 'rw', min:100, max:3000, defVal:2000,  scale:1,   unit:'mm', title:'<b>Installation Height</b>', description:'Height from sensor to tank bottom'], 
                 [dp:21,  name:'liquidDepthMax',       type:'number',  rw: 'rw', min:100, max:2000, defVal:100,   scale:1,   unit:'mm', title:'<b>Liquid Depth Max</b>', description:'Distance from sensor to max liquid level'], 
                 [dp:22,  name:'level',                type:'number',  rw: 'ro', min:0,   max:100,  defVal:0,     scale:1,   unit:'%',  title:'<b>Liquid Level Percent</b>', description:'Liquid level percentage"'], 
@@ -111,6 +109,31 @@ metadata {
             refresh:        ['refreshFantem'],
             configuration : ['battery': false],
             deviceJoinName: 'EPTTECH TLC2206 Zigbee Tank Level Monitor'
+    ],
+
+    'MOREYALEC_TUYA_ME201WZ'  : [
+            description   : 'Morayelec Zigbee Tank Level Monitor',
+            models        : ['TS0601'],
+            device        : [type: 'Sensor', powerSource: 'dc', isSleepy:false],
+            capabilities  : ['Battery': false],
+            preferences   : ['upperLimit':'7', 'lowerLimit':'8', 'installationHeight':'19'],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences', 'printFingerprints':'printFingerprints', 'printPreferences':'printPreferences'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601',  manufacturer:'_TZE200_moraylec', deviceJoinName: 'Moraylec ME201WZ Zigbee Tank Level Monitor'],
+            ],
+            tuyaDPs:        [
+                [dp:1,   name:'liquidState',          type:'enum',    rw: 'ro', defVal:'0', map:[0:'normal', 1:'low', 2:'high'], description:'Liquid level status'],
+                [dp:2,   name:'liquidDepth',          type:'decimal', rw: 'ro', min:0.0, max:4.0,  defVal:0.0,   scale:100, unit:'m',  description:'Liquid level depth'],
+                [dp:5,   name:'battery',              type:'number',  rw: 'ro', min:0,   max:100,  defVal:100,   scale:1,   unit:'%',  description:'Battery percentage'],        // or ???? Supply voltage ?
+                [dp:7,   name:'upperLimit',           type:'number',  rw: 'rw', min:0,   max:100,  defVal:75,    scale:1,   unit:'%',  title:'<b>Upper Limit Setting</b>', description:'Liquid percentage to set high state (above this value)'],
+                [dp:8,   name:'lowerLimit',           type:'number',  rw: 'rw', min:0,   max:100,  defVal:25,    scale:1,   unit:'%',  title:'<b>Lower Limit Setting</b>', description:'Liquid percentage to set low state (below this value)'],
+                [dp:19,  name:'installationHeight',   type:'number',  rw: 'rw', min:0,   max:4000, defVal:2000,  scale:1,   unit:'mm', title:'<b>Installation Height</b>', description:'Height from sensor to tank bottom'], 
+                [dp:22,  name:'level',                type:'number',  rw: 'ro', min:0,   max:100,  defVal:0,     scale:1,   unit:'%',  title:'<b>Liquid Level Percent</b>', description:'Liquid level percentage"'], 
+                [dp:24,  name:'relaySwitch',          type:'enum',    rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'Relay Switch', description:'Relay Switch'],
+            ],
+            refresh:        ['refreshFantem'],
+            configuration : ['battery': false],
+            deviceJoinName: 'Morayelec ME201WZ Zigbee Tank Level Monitor'
     ]
 ]
 
