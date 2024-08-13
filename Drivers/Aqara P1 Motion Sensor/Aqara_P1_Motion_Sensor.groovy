@@ -40,7 +40,8 @@
  * ver. 1.4.2 2023-05-21 kkossev  - lumi.sen_ill.agl01 initialization fixes; removed the E1 contact sensor driver code; trace logs cleanup; added reporting time configuration for the Lux sensors; Lux sensors preferences are NOT reset to defaults when paired again; removed powerSource manipulation; periodic job renamed to deviceHealthCheck()
  * ver. 1.5.0 2024-02-29 kkossev  - Groovy Lint
  * ver. 1.6.0 2024-06-29 kkossev  - added state.health 'parentNWK' and 'nwkCtr'; added attribute parentNWK;
- * ver. 1.6.1 2024-07-22 kkossev  - (dev.branch) bugfix: illuminanceThreshold and illuminanceMinReportingTime not working for lumi.sen_ill.mgl01 (GZCGQ01LM)
+ * ver. 1.6.1 2024-07-22 kkossev  - bugfix: illuminanceThreshold and illuminanceMinReportingTime not working for lumi.sen_ill.mgl01 (GZCGQ01LM)
+ * ver. 1.7.0 2024-08-13 kkossev  - (dev.branch) Aqara FP1E
  * 
  *                                 TODO: powerSource 'unknown' fix
  *                                 TODO: WARN log, when the device model is not registered during the pairing !!!!!!!!
@@ -54,8 +55,8 @@
  *
  */
 
-static String version() { "1.6.1" }
-static String timeStamp() {"2024/07/22 9:34 PM"}
+static String version() { "1.7.0" }
+static String timeStamp() {"2024/08/13 10:23 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -67,7 +68,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean deviceSimulation = false
 @Field static final Boolean _REGIONS = false
-@Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, Aqara/Xiaomi/Mija other motion and illuminance sensors'
+@Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, FP1E, Aqara/Xiaomi/Mija other motion and illuminance sensors'
 
 @Field static final Map<Integer, Map> DynamicSettingsMap = new ConcurrentHashMap<>().withDefault {
     new ConcurrentHashMap<String, String>()
@@ -130,6 +131,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer:"LUMI",   deviceJoinName: aqaraModels['GZCGQ01LM'].deviceJoinName                        // Mi Light Detection Sensor GZCGQ01LM
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer: "XIAOMI", deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.agl01", manufacturer:"LUMI",   deviceJoinName:  aqaraModels['GZCGQ11LM'].deviceJoinName                       // tests only : "Aqara T1 light intensity sensor GZCGQ11LM"    
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0", outClusters:"0003,0019", model:"lumi.sensor_occupy.agl1", manufacturer:"aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP1E Human Presence Detector RTCZCGQ13LM"        // RTCZCGQ13LM ( FP1E )
     }
 
     preferences {
@@ -137,19 +139,19 @@ metadata {
             input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
             input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Show motion activity in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
             input (title: "<b>Information on Pairing and Configuration:</b>", description: "<i>Pair the P1 and FP1 devices <b>at least 2 times, very close to the HE hub</b>. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences</i>", type: "paragraph", element: "paragraph")        
-            if (!isFP1() && !isLightSensor()) {
+            if (!(isFP1() || isFP1E()) && !isLightSensor()) {
                 input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "<i>After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 30 seconds</i>", range: "0..7200", defaultValue: 30)
             }    
             if (isRTCGQ13LM() || isP1() || isT1()) {
                 input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "<i>Motion Retrigger Interval, seconds (2..200)</i>", range: "2..202", defaultValue: 30)
             }
-            if (isRTCGQ13LM() || isP1() || isFP1()) {
+            if (isRTCGQ13LM() || isP1() || isFP1() /*|| isFP1E()*/) {
                 input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "<i>Sensor motion sensitivity</i>", defaultValue: 0, options: getSensitivityOptions())
             }
             if (isP1()) {
                 input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "<i>Enable/disable LED blinking on motion detection</i>", defaultValue: -1, options: ["0":"Disabled", "1":"Enabled" ])
             }
-            if (isFP1()) {
+            if (isFP1() /*|| isFP1E()*/) {
                 // "Approaching induction" distance : far, medium, near            // https://www.reddit.com/r/Aqara/comments/scht7o/aqara_presence_detector_fp1_rtczcgq11lm/
                 input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "<i>Approach distance</i>", defaultValue: "1", options: approachDistanceOptions)
                 // Monitoring Mode: "Undirected monitoring" - Monitors all motions within the sensing range; "Left and right monitoring" - Monitors motions on the lefy and right sides within
@@ -187,6 +189,16 @@ metadata {
         ],
         motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],    // TODO - check!
     ],
+    'RTCZCGQ13LM': [    // FP1E https://github.com/niceboygithub/AqaraGateway/blob/dedad6e56d02b6f5d1dac364d9d9a20ec12c5ff8/custom_components/aqara_gateway/core/utils.py#L491
+        model: "lumi.sensor_occupy.agl1", manufacturer: "aqara", deviceJoinName: "Aqara FP1E Human Presence Detector RTCZCGQ13LM",
+        capabilities: ["motionSensor":true, "temperatureMeasurement":true, "battery":true, "powerSource":true, "signalStrength":true],
+        attributes: ["roomState", "roomActivity"],
+        preferences: [
+            "motionSensitivity": [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ],
+            "approachDistance":true, "monitoringMode":true
+        ],
+        motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],    // TODO - check!
+    ],    
     'RTCGQ14LM': [
         model: "lumi.motion.ac02", manufacturer: "LUMI", deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM",
         motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],
@@ -222,6 +234,7 @@ metadata {
 def isRTCGQ13LM() { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl04']) }     // Aqara Precision motion sensor
 def isP1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac02'] ) }     // Aqara P1 motion sensor (LED control)
 def isFP1()       { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac01'] ) }     // Aqara FP1 Presence sensor (microwave radar)
+def isFP1E()      { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.sensor_occupy.agl1'] ) }     // Aqara FP1E Presence sensor
 def isT1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl02'] ) }    // Aqara T1 motion sensor
 def isLightSensorXiaomi() { return (device.getDataValue('model') in ['lumi.sen_ill.mgl01'] ) } // Mi Light Detection Sensor;
 def isLightSensorAqara()  { return (device.getDataValue('model') in ['lumi.sen_ill.agl01'] ) } // T1 light intensity sensor
@@ -232,6 +245,7 @@ private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled
 @Field static final Map sensitivityOptions =          [ "1":"low", "2":"medium", "3":"high" ]
 @Field static final Map fp1RoomStateEventOptions =        [ "0":"unoccupied", "1":"occupied" ]
 @Field static final Map fp1RoomActivityEventTypeOptions = [ "0":"enter", "1":"leave" , "2":"enter (right)" , "3":"leave (left)" , "4":"enter (left)" , "5":"leave (right)" , "6":"towards", "7":"away" ]
+@Field static final Map fp1ERoomActivityEventTypeOptions = [ "0":"0 - unknown", "1":"1 - unknown" , "2":"2 - unknown" , "3":"large movement" , "4":"small movement" , "5":"5 - unknown" ]
 @Field static final Map approachDistanceOptions =         [ "0":"far", "1":"medium", "2":"near" ]
 @Field static final Map monitoringModeOptions =           [ "0":"undirected", "1":"left_right" ]
 
@@ -346,7 +360,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             logWarn "<b>received unknown report: ${P1_LED_MODE_NAME(value)}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0065" :
-            if (isFP1()) { // FP1    'unoccupied':'occupied'
+            if (isFP1() || isFP1E()) { // FP1    'unoccupied':'occupied'
                 logDebug "(attr 0x065) roomState (presence) is  ${fp1RoomStateEventOptions[value.toString()]} (${value})"
                 roomStateEvent( fp1RoomStateEventOptions[value.toString()] )
             }
@@ -366,7 +380,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
                 device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
                 logDebug "<b>received motion retrigger interval report: ${value} s</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             }
-            else if (isFP1()) { // FP1
+            else if (isFP1() || isFP1E()) { // FP1
                 logDebug "(0x69) <b>received approach_distance report: ${value} s</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
                 device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
             }
@@ -374,11 +388,11 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
                 logWarn "Received unknown device report: cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value} status=${it.status} data=${descMap.data}"
             }
             break
-        case "00F7" :
+        case "00F7" :   // Aqara FP1E : 00F7_States (115F): {16=1, 18=0, 3=19, 5=1, 101=0, 8=278, 10=56426, 12=20} [STRUCT2]
             decodeAqaraStruct(description)
             break
-        case "00FC" :
-            logWarn "received unknown FC report:  (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+        case "00FC" :   // Aqara FP1E : 00FC_Unknown (115F): false [BOOLEAN]
+            logWarn "received unknown 00FC report:  (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0102" : // Retrigger interval (duration)
             value = Integer.parseInt(it.value, 16)
@@ -386,7 +400,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             logDebug "<b>received motion retrigger interval report: ${value} s</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0106" : // PIR sensitivity RTCGQ13LM RTCGQ14LM RTCZCGQ11LM
-        case "010C" : // (268) PIR sensitivity RTCGQ13LM RTCGQ14LM (P1) RTCZCGQ11LM; TODO: check if applicable for FP1 ?
+        case "010C" : // (268) PIR sensitivity RTCGQ13LM RTCGQ14LM (P1) RTCZCGQ11LM; TODO: check if applicable for FP1 ? // FP1E 010C_SensorSensitivity (115F): 3 [UNSIGNED_8_BIT_INTEGER]
             device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
             logDebug "(0x010C) <b>received PIR sensitivity report: ${sensitivityOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
@@ -397,11 +411,11 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
                 handleMotion( true )    // TODO !!
             }
             break
-        case "0142" : // (322) FP1 RTCZCGQ11LM presence
+        case "0142" : // (322) FP1 RTCZCGQ11LM presence (roomState) // FP1E: 0142_SensorPresense (115F): 1 [UNSIGNED_8_BIT_INTEGER]
             logDebug "(attr. 0x0142) roomState (presence) is  ${fp1RoomStateEventOptions[value.toString()]} (${value})"
             roomStateEvent( fp1RoomStateEventOptions[value.toString()] )
             break
-        case "0143" : // (323) FP1 RTCZCGQ11LM presence_event {0: 'enter', 1: 'leave', 2: 'left_enter', 3: 'right_leave', 4: 'right_enter', 5: 'left_leave', 6: 'approach', 7: 'away'}[value];
+        case "0143" : // (323) FP1 RTCZCGQ11LM presence_event {0: 'enter', 1: 'leave', 2: 'left_enter', 3: 'right_leave', 4: 'right_enter', 5: 'left_leave', 6: 'approach', 7: 'away'}[value];  // FP1E: 0143_SensorPresenseEvent (115F): [UNSIGNED_8_BIT_INTEGER]
             presenceTypeEvent( fp1RoomActivityEventTypeOptions[value.toString()] )
             break
         case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
@@ -431,11 +445,40 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
         case "0154" : // (340) FP1 set interference region event
             logDebug "(0x0154) <b>received set interference region report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
+        case '0155' : // (341) FP1E 0155_SensorReportPosition (115F): 0 [UNSIGNED_8_BIT_INTEGER]
+            logDebug "(0x0155) <b>received FP1E SensorReportPosition report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
         case "0156" : // (342) FP1 set edge region event
             logDebug "(0x0156) <b>received set edge region report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
-        case "0157" : // (343) FP1 reset presence event
-            logWarn "(0x0157) <b>received reset presence report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+        case "0157" : // (343) FP1 reset presence event // FP1E 0157_SensorResetMotion (115F): [UNSIGNED_8_BIT_INTEGER]
+            logWarn "(0x0157) <b>received reset presence/motion report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case '0160' :   // FP1E frequently sent report ?? presence_event {0: 'enter', 1: 'leave', 2: 'left_enter', 3: 'right_leave', 4: 'right_enter', 5: 'left_leave', 6: 'approach', 7: 'away'}[value];  // FP1E: 0143_SensorPresenseEvent (115F): [UNSIGNED_8_BIT_INTEGER]
+            logDebug "(0x0160) <b>received frequently sent report: ${fp1ERoomActivityEventTypeOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            presenceTypeEvent( fp1ERoomActivityEventTypeOptions[value.toString()] )
+            break
+
+        case '0006' :   // 0006_Unknown (115F): ByteArray [value=D3 45 B9 CD AC 60 DB 02 FB C5 C0 E9 41 14 B0 CC] [OCTET_STRING]
+        case '0007' :   // 0007_Unknown (115F): ByteArray [value=00 00 00 00 2A FD 50 0F] [OCTET_STRING]
+        case '00DF' :   // 00DF_Unknown (115F): {228=null} [STRUCT2]
+        case '00E4' :   // 00E4_Unknown (115F): [UNSIGNED_32_BIT_INTEGER]
+        case '00FA' :   // 00FA_Unknown (115F): false [BOOLEAN]
+        case '00FE' :   // 00FE_SerialNumber (115F): 777S00072190 [CHARACTER_STRING]
+        case '00FF' :   // 00FF_Unknown (115F): ByteArray [value=] [OCTET_STRING]
+        case '0133' :   // 0133_Unknown (115F): 1 [UNSIGNED_8_BIT_INTEGER]
+        case '0134' :   // 0134_Unknown (115F): [OCTET_STRING]
+        case '0159' :   // 0159_Unknown (115F): 1 [UNSIGNED_8_BIT_INTEGER]
+        case "015A" :   // FP1E RTCZCGQ13LM unknown   015A_Custom: 600 [UNSIGNED_32_BIT_INTEGER]
+        case "015B" :   // 015B_Custom: 600 [UNSIGNED_32_BIT_INTEGER]
+        case "015C" :   // 015C_Custom: 1 [UNSIGNED_8_BIT_INTEGER]
+        case "015D" :   // 015D_Custom: 1 [UNSIGNED_8_BIT_INTEGER]
+        case "015E" :   // 015E_Custom: 1 [UNSIGNED_8_BIT_INTEGER]
+        case "015F" :   // 015F_Custom: 15 [UNSIGNED_32_BIT_INTEGER]
+        case '0705' :   // 0705_Unknown (115F): 0 [UNSIGNED_8_BIT_INTEGER]
+        case 'FFF2' :   // FFF2_Unknown (115F): 0006_AqaraCommand [FCC0_ManufacturerSpecific: mc=115F, null -> null, TID=--, Input, const1=62207, length1=134, const2=null, seq=null, integrity=null, action=null, const3=null, length2=null, raw=null] [AQARA_FFF2]
+        case 'FFFD' :   // FFFD_Unknown (115F): 1 [UNSIGNED_16_BIT_INTEGER]
+            logDebug "<b>received FP1E RTCZCGQ13LM unknown report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         default :
             logDebug "Unprocessed <b>FCC0</b> attribute report: cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value} status=${it.status} data=${descMap.data}"
@@ -502,6 +545,9 @@ def decodeAqaraStruct( description )
                             logDebug "(0x65) roomState (presence) is  ${fp1RoomStateEventOptions[rawValue.toString()]} (${rawValue})"
                             roomStateEvent( fp1RoomStateEventOptions[rawValue.toString()] )  
                         }
+                        else if (isFP1E()) {
+                            logDebug "FP1E tag #65 is ${rawValue}"
+                        }
                         else {
                             logDebug "on/off EP 2 or battery percentage is ${rawValue}"
                         }
@@ -519,7 +565,7 @@ def decodeAqaraStruct( description )
                         }
                         break
                     case 0x67 : // (103) FP1 monitoring_mode
-                        if (isFP1()) {
+                        if (isFP1() || isFP1E()) {
                             logDebug "monitoring_mode is <b> ${monitoringModeOptions[rawValue.toString()]}</b> (${rawValue})"
                             device.updateSetting( "monitoringMode",  [value:rawValue.toString(), type:"enum"] )
                         }
@@ -528,7 +574,7 @@ def decodeAqaraStruct( description )
                         }
                         break
                     case 0x69 : // (105) 
-                        if (isFP1()) { // FP1
+                        if (isFP1() || isFP1E()) { // FP1
                             device.updateSetting( "approachDistance",  [value:rawValue.toString(), type:"enum"] )    // {0: 'far', 1: 'medium', 2: 'near'}
                             logDebug "approach_distance is <b>${approachDistanceOptions[rawValue.toString()]}</b> (${rawValue})"
                         }
@@ -546,7 +592,7 @@ def decodeAqaraStruct( description )
                         }
                         break
                     case 0x6A :    // sensitivity
-                        if (isFP1()) {
+                        if (isFP1() || isFP1E()) {
                             logDebug "(0x6A) FP1 unknown parameter, value: ${rawValue}"
                         }
                         else {
@@ -555,7 +601,7 @@ def decodeAqaraStruct( description )
                         }
                         break
                     case 0x6B :    // LED
-                        if (isFP1()) {
+                        if (isFP1() || isFP1E()) {
                             logDebug "(0x06B) FP1 unknown parameter, value: ${rawValue}"
                         }
                         else {
@@ -588,7 +634,7 @@ def decodeAqaraStruct( description )
                             String descriptionText = "parentNWK changed from ${oldNWK} to ${nwk}"
                             state.health['parentNWK']  = nwk
                             state.health['nwkCtr'] = (state.health['nwkCtr'] ?: 0) + 1
-                            sendEvent(name: "parentNWK", value: nwk, descriptionText: description, type: "digital")
+                            sendEvent(name: "parentNWK", value: nwk, descriptionText: descriptionText, type: "digital")
                             logWarn "${descriptionText}"
                         }
                         break
@@ -1013,8 +1059,8 @@ def getSecondsInactive() {
 }
 
 def powerSourceEvent() {
-    def value = isFP1() ? "dc" : "battery"
-    def descriptionText = isFP1() ? "powerSource is dc/mains" : "powerSource is battery"
+    def value = isFP1() || isFP1E() ? "dc" : "battery"
+    def descriptionText = isFP1() || isFP1E() ? "powerSource is dc/mains" : "powerSource is battery"
     sendEvent(name : "powerSource",	value : value, descriptionText: descriptionText, type: "digital")
     logInfo "${descriptionText}"
 }
@@ -1078,7 +1124,7 @@ private void scheduleDeviceHealthCheck(int intervalMins) {
 }
 
 void deviceCommandTimeout() {
-    if (isFP1()) {
+    if (isFP1() || isFP1E()) {
         logWarn 'no response received (device offline?)'
         sendHealthStatusEvent("offline")
         resetState()
@@ -1179,7 +1225,7 @@ void updated() {
             cmds += zigbee.writeAttribute(0xFCC0, 0x0152, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
     }
-    if (isRTCGQ13LM() || isP1() || isFP1()) {
+    if (isRTCGQ13LM() || isP1() || isFP1() || isFP1E()) {
         if (settings?.motionSensitivity != null && settings?.motionSensitivity != 0) {
             value = safeToInt( motionSensitivity )
             if (settings?.logEnable) log.debug "${device.displayName} setting motionSensitivity to ${sensitivityOptions[value.toString()]} (${value})"
@@ -1196,7 +1242,7 @@ void updated() {
         }
     }
     //
-    if (isFP1()) { // FP1
+    if (isFP1() || isFP1E()) { // FP1
         if (settings?.approachDistance != null) {    // [0:"far", 1:"medium", 2:"near" ]
             value = safeToInt( approachDistance )
             if (settings?.logEnable) log.debug "${device.displayName} setting approachDistance to ${approachDistanceOptions[value.toString()]} (${value})"
@@ -1277,7 +1323,7 @@ void initializeVars(boolean fullInit = false) {
         if (fullInit == true || settings?.illuminanceCoeff == null) { device.updateSetting('illuminanceCoeff', [value:1.00, type:'decimal']) }
     }
     
-    if (isFP1()) {
+    if (isFP1() || isFP1E()) {
         device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP1
     }
     if (fullInit == true || settings.tempOffset == null) { device.updateSetting("tempOffset", 0) }
@@ -1326,14 +1372,14 @@ void setMotion(final String mode) {
     switch (mode) {
         case "active" : 
             handleMotion(true, isDigital=true)
-            if (isFP1()) {
+            if (isFP1() || isFP1E()) {
                 roomStateEvent("occupied", isDigital=true)
                 presenceTypeEvent("enter", isDigital=true)
             }
             break
         case "inactive" :
             handleMotion(false, isDigital=true)
-            if (isFP1()) {
+            if (isFP1() || isFP1E()) {
                 roomStateEvent("unoccupied", isDigital=true)
                 presenceTypeEvent("leave", isDigital=true)
                 resetPresence()
@@ -1372,7 +1418,7 @@ void aqaraReadAttributes() {
     else if (isP1()) {    // Aqara P1 human body movement and illuminance sensor
         cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C, 0x0152], [mfgCode: 0x115F], delay=200)
     }
-    else if (isFP1()) {  // Aqara presence detector FP1 
+    else if (isFP1() || isFP1E()) {  // Aqara presence detector FP1 
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x0144, 0x0146], [mfgCode: 0x115F], delay=200)
     }
     else if (isLightSensorAqara()) {
@@ -1396,7 +1442,7 @@ void aqaraBlackMagic() {
     if (isP1()) {
         cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0005], [:], delay=200)
     }
-    else if (isFP1()) {
+    else if (isFP1() || isFP1E()) {
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",]
         cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 FF 00 41 10 02 32 71 76 20 79 16 48 28 87 18 12 21 55 72 36}  {0x0104}", "delay 50",]      // FP1 write attr 0xFF 16 bytes
         cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 07 01 01 ff ff 00 00 ff}  {0x0104}", "delay 50",]                                 // FP1 write attr 0x0150 8 bytes
