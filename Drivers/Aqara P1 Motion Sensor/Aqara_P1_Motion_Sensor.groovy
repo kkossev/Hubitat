@@ -43,7 +43,7 @@
  * ver. 1.6.1 2024-07-22 kkossev  - bugfix: illuminanceThreshold and illuminanceMinReportingTime not working for lumi.sen_ill.mgl01 (GZCGQ01LM)
  * ver. 1.7.0 2024-08-13 kkossev  - (dev.branch) Aqara FP1E
  * 
- *                                 TODO: powerSource 'unknown' fix
+ *                                 TODO: powerSource 'unknown' fix; No signature of method: user_driver_kkossev_Aqara_P1_Motion_Sensor_3016.resetState() is applicable for argument types: () values: [] on line 1130 (method deviceCommandTimeout)
  *                                 TODO: WARN log, when the device model is not registered during the pairing !!!!!!!!
  *                                 TODO: automatic logsOff() is not working sometimes!
  *                                 TODO: configure to clear the current states and events

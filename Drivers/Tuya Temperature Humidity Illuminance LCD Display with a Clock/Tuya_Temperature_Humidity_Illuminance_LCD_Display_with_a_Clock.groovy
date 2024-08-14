@@ -50,7 +50,7 @@
  * ver. 1.6.3  2024-07-16 kkossev - added TS0601 _TZE204_yjjdcqsq to TS0601_Tuya_2 group;
  * ver. 1.6.4  2024-07-23 kkossev - added Tuya Smart Soil Tester _TZE284_aao3yzhs into 'TS0601_Soil_II'
  * ver. 1.6.5  2024-08-09 kkossev - bugfix: TS0201 _TZ3000_dowj6gyi moved back to TS0201 group;
- * ver. 1.6.6  2024-08-14 kkossev - (dev.branch) added TS0601 _TZE204_myd45weu
+ * ver. 1.6.6  2024-08-14 kkossev - (dev.branch) added TS0601 _TZE204_myd45weu; added TS0601 _TZE204_qyflbnbj
  *
  *                                  TODO: queryOnDeviceAnnounce for TS0601_Tuya_2 group
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
@@ -61,7 +61,7 @@
 */
 
 @Field static final String VERSION = '1.6.6'
-@Field static final String TIME_STAMP = '2024/08/14 11:06 AM'
+@Field static final String TIME_STAMP = '2024/08/14 12:48 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -121,6 +121,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bjawzodf', deviceJoinName: 'Tuya like Temperature Humidity LCD Display'                // https://de.aliexpress.com/item/4000739457722.html?gatewayAdapt=glo2deu
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_zl1kmjqx', deviceJoinName: 'Tuya Temperature Humidity sensor MIR-TE100-TY'            // https://www.aliexpress.com/item/1005002836127648.html
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_qyflbnbj', deviceJoinName: 'Tuya Temperature Humidity sensor MIR-TE100-TY'            // https://www.aliexpress.com/item/1005002836127648.html
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_qyflbnbj', deviceJoinName: 'Tuya Temperature Humidity sensor MIR-TE100-TY'            // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/522?u=kkossev
 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_myd45weu', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          // 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_myd45weu', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          // https://www.aliexpress.com/item/1005004979025740.html
@@ -248,6 +249,7 @@ metadata {
     '_TZE200_znbl8dj5'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005004116638127.html - TODO !
     '_TZE200_zl1kmjqx'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005002836127648.html
     '_TZE200_qyflbnbj'  : 'TS0601_Tuya',         // not tested
+    '_TZE204_qyflbnbj'  : 'TS0601_Tuya',         // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/522?u=kkossev
     '_TZE200_nnrfa68v'  : 'TS0601_Tuya',         // NOUS E6 https://community.hubitat.com/t/nous-humidity-and-temp-sensor/137764/7?u=kkossev
     '_TZE200_cirvgep4'  : 'TS0601_Tuya_2',       // https://www.aliexpress.com/item/1005005198387789.html
     '_TZE200_yjjdcqsq'  : 'TS0601_Tuya_2',       // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/446?u=kkossev
