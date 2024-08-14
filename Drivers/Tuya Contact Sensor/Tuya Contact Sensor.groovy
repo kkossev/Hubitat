@@ -24,7 +24,8 @@
  *                                   the configuration attempts are not repeated, if error code is returned; added setOpen and setClosed commands (for tests); added pollBatteryStatus option for devices that do not report the battery level automatically
  * ver. 1.2.1  2024-06-03 kkossev  - added resetStats command
  * ver. 1.2.2  2024-06-14 kkossev  - added ThirdReality tilt sensor 3RDTS01056Z; new _TZE200_pay2byax fingerprint; added preference to disable illuminance @Big_Bruin
- * ver. 1.2.3  2024-07-10 kkossev  - (dev.branch) fixed outOfSync and pollContactStatus bugs; notPresentCounter-1 correction in the debug logs;
+ * ver. 1.2.3  2024-07-10 kkossev  - fixed outOfSync and pollContactStatus bugs; notPresentCounter-1 correction in the debug logs;
+ * ver. 1.2.4  2024-08-14 kkossev  - (dev.branch) added TS0203 _TZ3000_rcuyhwe3
  *
  *                                   TODO: handle the case when 'lastBattery' is missing.
  *                                   TODO: filter duplicated open/close messages when 'Poll Contact Status' option is enabled
@@ -36,8 +37,8 @@
  *                                   TODO: refactor - use libraries !
  */
 
-static String version() { '1.2.3' }
-static String timeStamp() { '2024/07/10 6:37 PM' }
+static String version() { '1.2.4' }
+static String timeStamp() { '2024/08/14 1:05 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -97,6 +98,7 @@ metadata {
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,000A,0001,0500', outClusters: '0003,0004,0005,0006,0008,1000,0019,000A', model: 'RH3001', manufacturer: 'TUYATEC-nznq0233', deviceJoinName: 'BlitzWolf Contact Sensor'   // Model SNTZ007
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,000A,0001,0500', outClusters: '0003,0004,0005,0006,0008,1000,0019,000A', model: 'RH3001', manufacturer: 'TUYATEC-trhrga6p', deviceJoinName: 'BlitzWolf Contact Sensor'   // Model BW-IS2
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,000A,0001,0500', outClusters: '0019', model: 'RH3001', manufacturer: 'TUYATEC-0l6xaqmi', deviceJoinName: 'BlitzWolf Contact Sensor'   // KK
+        fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0003,0500,0000', outClusters: '0003,0004,0005,0006,0008,1000,0019,000A', model: 'TS0203', manufacturer: '_TZ3000_rcuyhwe3', deviceJoinName: 'Tuya Contact Sensor'        // https://community.hubitat.com/t/release-tuya-zigbee-contact-sensor-w-healthstatus/112762/37?u=kkossev
 
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0003,0500,0001', outClusters: '0003', model: 'DS01', manufacturer: 'eWeLink', deviceJoinName: 'Sonoff Contact Sensor'
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,FF01,FF00,0001,0500', outClusters: '0019', model: '3RDS17BZ', manufacturer: 'Third Reality, Inc', deviceJoinName: 'Third Reality Contact Sensor' 
@@ -138,7 +140,7 @@ metadata {
     'TS0203_CONTACT_BATT'          : [     // https://community.hubitat.com/t/i-need-help-with-tuya-contact-sensor-ts0203-white-label-ih-f001/110946/1
         model     : 'TS0203',      // default battery reporting period = 4 hours
         manufacturers : ['_TZ3000_26fmupbb', '_TZ3000_n2egfsli', '_TZ3000_oxslv1c9', '_TZ3000_2mbfxlzr', '_TZ3000_402jjyro', '_TZ3000_7d8yme6f', '_TZ3000_psqjayrd', '_TZ3000_ebar6ljy', '_TYZB01_xph99wvr',
-                '_TYZB01_ncdapbwy', '_TZ3000_fab7r7mc', 'TUYATEC-nznq0233'],
+                '_TYZB01_ncdapbwy', '_TZ3000_fab7r7mc', 'TUYATEC-nznq0233', '_TZ3000_rcuyhwe3'],
         deviceJoinName: 'Tuya Zigbee Contact Sensor',
         inClusters    : '0001,0003,0500,0000',
         outClusters   : '0003,0004,0005,0006,0008,1000,0019,000A',
