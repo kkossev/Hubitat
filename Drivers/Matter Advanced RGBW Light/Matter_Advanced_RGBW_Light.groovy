@@ -203,9 +203,9 @@ void parse(String description) {
             } else if (descMap.attrId == '0001') { //saturation
                 sendSaturationEvent(descMap.value)
             }
-            else if (descMap.attrId == '0007') { //color temperature
-                logDebug "parse: skipped color temperature:${descMap}"
-            }
+            else if (descMap.attrId == "0007") { //color temp
+                sendCTEvent(descMap.value)
+            } //logDebug "parse: skipped color temperature:${descMap}"
             else if (descMap.attrId == '0008') { //color mode
                 logDebug "parse: skipped color mode:${descMap}"
             }
@@ -253,6 +253,15 @@ private void sendSaturationEvent(String rawValue, Boolean presetColor = false) {
     String descriptionText = " saturation was set to ${value}%"
     logInfo "${descriptionText}"
     sendEvent(name:'saturation', value:value, descriptionText:descriptionText, unit: '%')
+}
+
+/* groovylint-disable-next-line UnusedPrivateMethodParameter */
+private void sendCTEvent(String rawValue, Boolean presetColor = false) {
+    Integer value = (1000000/(hexStrToUnsignedInt(rawValue))).toInteger()
+    String descriptionText = "${device.displayName} ColorTemp was set to ${value}K"
+    if (txtEnable) log.info descriptionText
+    sendEvent(name:"colorTemperature", value:value, descriptionText:descriptionText, unit: "K")
+
 }
 
 /* groovylint-disable-next-line MethodParameterTypeRequired, NoDef, UnusedPrivateMethodParameter */
