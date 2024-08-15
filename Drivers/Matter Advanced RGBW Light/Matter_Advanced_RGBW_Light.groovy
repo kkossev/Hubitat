@@ -46,6 +46,7 @@ metadata {
         capability 'SwitchLevel'
         capability 'Configuration'
         capability 'Color Control'
+        capability "ColorTemperature"
         capability 'Light'
         capability 'Initialize'
         capability 'Refresh'
@@ -340,6 +341,18 @@ void setHueSat(Object hue, Object sat) {
         cmds.add(matter.on())
         cmds.add(matter.setHue(hue.toInteger(), transitionTime))
         cmds.add(matter.setSaturation(sat.toInteger(), transitionTime))
+    }
+    sendToDevice(cmds)
+}
+
+void setColorTemperature(colortemperature, transitionTime=null) {
+    if (logEnable) log.debug "setcolortemp(${colortemperature})"
+    List<String> cmds = []
+    if (device.currentValue("switch") == "on"){
+        cmds.add(matter.setColorTemperature(colortemperature.toInteger(), transitionTime))
+    } else {
+        cmds.add(matter.on())
+        cmds.add(matter.setColorTemperature(colortemperature.toInteger(), transitionTime))
     }
     sendToDevice(cmds)
 }
