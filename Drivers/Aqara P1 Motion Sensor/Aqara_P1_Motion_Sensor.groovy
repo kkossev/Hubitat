@@ -57,7 +57,7 @@
  */
 
 static String version() { "1.7.0" }
-static String timeStamp() {"2024/08/15 8:19 AM"}
+static String timeStamp() {"2024/08/15 8:26 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -66,7 +66,7 @@ import hubitat.zigbee.zcl.DataType
 import hubitat.helper.HexUtils
 import java.util.concurrent.ConcurrentHashMap
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean deviceSimulation = false
 @Field static final Boolean _REGIONS = false
 @Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, FP1E, Aqara/Xiaomi/Mija other motion and illuminance sensors'
