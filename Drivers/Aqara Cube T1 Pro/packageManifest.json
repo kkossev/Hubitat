@@ -1,0 +1,19 @@
+{
+ "packageName":"Aqara Cube T1 Pro",
+ "author":"Krassimir Kossev",
+ "version":"3.0.6",
+ "minimumHEVersion":"2.3.6.0",
+ "dateReleased":"2024-04-13",
+ "releaseNotes":" 3.0.6  2023-07-16 kkossev  - first HPM version",
+ "documentationLink":"https://community.hubitat.com/t/release-aqara-cube-t1-pro-mfczq12lm-is-fun/121604",
+ "communityLink":"https://community.hubitat.com/t/release-aqara-cube-t1-pro-mfczq12lm-is-fun/121604",
+ "drivers": [
+  {
+     "id":"39945711-acb5-420b-a3ce-6ec89772f4cf",
+     "name":"Aqara Cube T1 Pro",
+	 "namespace": "kkossev",
+     "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Aqara%20Cube%20T1%20Pro/Aqara_Cube_T1_Pro_lib_included.groovy",
+     "required":true
+  }
+  ]
+}

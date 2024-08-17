@@ -1,0 +1,19 @@
+{
+  "packageName": "VINDSTYRKA Air Quality Monitor",
+  "author": "Krassimir Kossev",
+  "version": "2.1.5",
+  "minimumHEVersion": "2.2.7",
+  "dateReleased": "2023-09-03",
+  "documentationLink": "https://github.com/kkossev/Hubitat/blob/main/Drivers/VINDSTYRKA%20Air%20Quality%20Monitor/VINDSTYRKA_Air_Quality_Monitor_lib_included.groovy",
+  "communityLink": "https://community.hubitat.com/t/ikea-trip-what-to-buy/112770/38?u=kkossev",
+  "releaseNotes": "2.1.5 2023-09-02 removed airQualityLevel, added thresholds; airQualityIndex replaced by sensirionVOCindex\n2.1.2 2023-07-23 fixed the exponential (3E+1) temperature representation bug\n2.1.1 2023-07-16 micro gram symbol fix \n2.0.0  2023-05-08 - Initial test version (VINDSTYRKA driver)",    
+  "drivers": [
+    {
+      "id": "551e8d69-6ce0-4986-b336-ae9cc0c8afd9",
+      "name": "VINDSTYRKA Air Quality Monitor",
+      "namespace": "kkossev",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/VINDSTYRKA%20Air%20Quality%20Monitor/VINDSTYRKA_Air_Quality_Monitor_lib_included.groovy",
+      "required": true
+    }
+  ]
+}
