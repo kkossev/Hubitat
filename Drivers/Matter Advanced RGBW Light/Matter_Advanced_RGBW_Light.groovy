@@ -51,6 +51,7 @@ metadata {
         capability 'SwitchLevel'
         //capability 'Configuration'
         capability 'Color Control'
+        capability "ColorTemperature"
         capability 'Light'
         capability 'Initialize'
         capability 'Refresh'
@@ -70,10 +71,11 @@ metadata {
 
         if (_DEBUG) {
             command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
+            command 'parseTest', [[name: 'parseTest', type: 'STRING', description: 'parseTest', defaultValue : '']]
         }
-    // fingerprints are commented out, because are already included in the stock driver
-    // fingerprint endpointId:'01', inClusters:'0003,0004,0005,0006,0008,001D,001E,0300', outClusters:'', model:'NL67', manufacturer:'Nanoleaf', controllerType:'MAT'                      // Nanoleaf Essentials A19 Bulb
-    // fingerprint endpointId:'01', inClusters:'0003,0004,0005,0006,0008,001D,001E,0300', outClusters:'', model:'NL68', manufacturer:'Nanoleaf', controllerType:'MAT'                      // Nanoleaf Strip 5E8
+        // fingerprints are commented out, because are already included in the stock driver
+        // fingerprint endpointId:'01', inClusters:'0003,0004,0005,0006,0008,001D,001E,0300', outClusters:'', model:'NL67', manufacturer:'Nanoleaf', controllerType:'MAT'                      // Nanoleaf Essentials A19 Bulb
+        // fingerprint endpointId:'01', inClusters:'0003,0004,0005,0006,0008,001D,001E,0300', outClusters:'', model:'NL68', manufacturer:'Nanoleaf', controllerType:'MAT'                      // Nanoleaf Strip 5E8
     }
     preferences {
         input(name:'txtEnable', type:'bool', title:'Enable descriptionText logging', defaultValue:true)
@@ -102,6 +104,27 @@ metadata {
 @Field static final Map SpammyReportsFilterOpts = [               // delay spammy reports
     defaultValue: 500,
     options     : [0: 'none', 250: '250 ms', 500: '500 ms', 750: '750 ms', 1000: '1000 ms', 1500: '1500 ms', 2000: '2000 ms', 3000: '3000 ms', 5000: '5000 ms']
+//transitionTime options
+@Field static Map ttOpts = [
+    defaultValue: '1',
+    defaultText:  '1s',
+    options:['0':'ASAP', '1':'1s', '2':'2s', '5':'5s']
+]
+
+@Field static Map colorRGBName = [
+    4: 'Red',
+    13:'Orange',
+    21:'Yellow',
+    29:'Chartreuse',
+    38:'Green',
+    46:'Spring',
+    54:'Cyan',
+    63:'Azure',
+    71:'Blue',
+    79:'Violet',
+    88:'Magenta',
+    96:'Rose',
+    101:'Red'
 ]
 
 //parsers
@@ -182,6 +205,9 @@ void parse(String description) {
             else if (descMap.attrId == '0007') { //color temperature
                 logDebug "parse: skipped color temperature:${descMap}"
             }
+            else if (descMap.attrId == "0007") { //color temp
+                sendCTEvent(descMap.value)
+            } //logDebug "parse: skipped color temperature:${descMap}"
             else if (descMap.attrId == '0008') { //color mode
                 logDebug "parse: skipped color mode:${descMap}"
             }
@@ -337,6 +363,15 @@ private void sendSwitchEvent(String rawValue, isDigital = false) {
     sendEvent(eventMap)
 }
 
+//events
+private void sendSwitchEvent(String rawValue) {
+    String value = rawValue == '01' ? 'on' : 'off'
+    if (device.currentValue('switch') == value) { return }
+    String descriptionText = " was turned ${value}"
+    logInfo "${descriptionText}"
+    sendEvent(name:'switch', value:value, descriptionText:descriptionText)
+}
+
 private void sendLevelEvent(String rawValue) {
     Integer value = Math.round(hexStrToUnsignedInt(rawValue) / 2.55)
     if (value == 0 || value == device.currentValue('level')) { return }
@@ -436,6 +471,15 @@ private void sendSaturationEvent(String rawValue, Boolean presetColor = false) {
 private void sendDelayedSaturationEvent(Map eventMap) {
     logInfo "${eventMap.descriptionText}"
     sendEvent(eventMap)
+}
+
+/* groovylint-disable-next-line UnusedPrivateMethodParameter */
+private void sendCTEvent(String rawValue, Boolean presetColor = false) {
+    Integer value = (1000000/(hexStrToUnsignedInt(rawValue))).toInteger()
+    String descriptionText = "${device.displayName} ColorTemp was set to ${value}K"
+    if (txtEnable) log.info descriptionText
+    sendEvent(name:"colorTemperature", value:value, descriptionText:descriptionText, unit: "K")
+
 }
 
 /* groovylint-disable-next-line MethodParameterTypeRequired, NoDef, UnusedPrivateMethodParameter */
@@ -561,6 +605,18 @@ void setHueSat(Object hue, Object sat) {
         cmds.add(matter.on())
         cmds.add(matter.setHue(hue.toInteger(), transitionTime))
         cmds.add(matter.setSaturation(sat.toInteger(), transitionTime))
+    }
+    sendToDevice(cmds)
+}
+
+void setColorTemperature(colortemperature, transitionTime=null) {
+    if (logEnable) log.debug "setcolortemp(${colortemperature})"
+    List<String> cmds = []
+    if (device.currentValue("switch") == "on"){
+        cmds.add(matter.setColorTemperature(colortemperature.toInteger(), transitionTime))
+    } else {
+        cmds.add(matter.on())
+        cmds.add(matter.setColorTemperature(colortemperature.toInteger(), transitionTime))
     }
     sendToDevice(cmds)
 }
@@ -799,7 +855,11 @@ void refresh() {
     logInfo'refresh() ...'
     checkDriverVersion()
     setRefreshRequest()    // 6 seconds
-    sendToDevice(refreshCmd())
+    if (state.deviceType == null) {
+        log.warn 'initialize()...'
+        initializeVars(fullInit = true)
+    }
+    sendToDevice(subscribeCmd())
 }
 
 String refreshCmd() {
@@ -875,6 +935,8 @@ List<String> commands(List<String> cmds, Integer delay = 300) {
 
 /* =================================================================================== */
 
+void setRefreshRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = true; runInMillis(REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }
+void clearRefreshRequest() { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = false }
 void clearInfoEvent()      { sendInfoEvent('clear') }
 
 void checkDriverVersion() {
@@ -1023,6 +1085,8 @@ void deviceCommandTimeout() {
     } else {
         sendInfoEvent('timeout!', 'no response received on the last matter command!')
     }
+    sendRttEvent('timeout')
+    if (state.stats != null) { state.stats['pingsFail'] = (state.stats['pingsFail'] ?: 0) + 1 } else { state.stats = [:] }
 }
 
 void sendRttEvent(String value=null) {
