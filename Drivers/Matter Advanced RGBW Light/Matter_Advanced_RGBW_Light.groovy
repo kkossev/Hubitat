@@ -18,7 +18,9 @@
  * ver. 1.0.0  2023-12-21 kkossev  - Inital version: added healthCheck attribute; added refresh(); added stats; added RTT attribute; added periodicPolling healthCheck method;
  * ver. 1.0.2  2023-12-26 kkossev  - commented out the initialize() and configure() capabilities because of duplicated subscriptions; added getInfo command; fixed the refresh() command for MATTER_OUTLET; added isDigital isRefresh; use the Basic cluster attr. 0 for ping()
  * ver. 1.0.3  2023-12-28 kkossev  - added info for ColorControl and LevelControl clusters; added toggle(); added initializeCtr and duplicatedCtr in stats; added reSubscribe() method
- * ver. 1.0.4  2024-01-23 kkossev  - (dev. branch) added spammyReportsFilter preference; 
+ * ver. 1.0.4  2024-01-23 kkossev  - added spammyReportsFilter preference;
+ * ver. 1.1.0  2024-08-15 mavvrick  - Add parsing for Color Temp command
+ * ver. 1.1.1  2024-08-18 kkossev  - merged the changes from the dev. branch to the master branch
  *
  *                                   TODO: 
  *                                   TODO: add flashRate preference; add flash() command
@@ -28,8 +30,8 @@
  *                                   TODO: add state.color w/ min/max Mirad values
  */
 
-static String version() { '1.0.4' }
-static String timeStamp() { '2024/01/23 10:54 PM' }
+static String version() { '1.1.1' }
+static String timeStamp() { '2024/08/18 9:04 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final String   DEVICE_TYPE = 'MATTER_BULB'
@@ -49,7 +51,6 @@ metadata {
         capability 'Actuator'
         capability 'Switch'
         capability 'SwitchLevel'
-        //capability 'Configuration'
         capability 'Color Control'
         capability "ColorTemperature"
         capability 'Light'
@@ -63,9 +64,7 @@ metadata {
         attribute 'silentMode', 'enum', ['off', 'on']   // disable all logging and events while in color animation mode
         command 'getInfo'
         command 'toggle'
-        command 'identify'  // can't make it work ... :(
-        //command 'unsubscribe'
-        //command 'subscribe'
+        command 'identify'
         command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
         command 'reSubscribe', [[name: 're-subscribe to the Matter controller events']]
 
@@ -104,6 +103,7 @@ metadata {
 @Field static final Map SpammyReportsFilterOpts = [               // delay spammy reports
     defaultValue: 500,
     options     : [0: 'none', 250: '250 ms', 500: '500 ms', 750: '750 ms', 1000: '1000 ms', 1500: '1500 ms', 2000: '2000 ms', 3000: '3000 ms', 5000: '5000 ms']
+]
 //transitionTime options
 @Field static Map ttOpts = [
     defaultValue: '1',
@@ -332,17 +332,6 @@ void parseOnOffCluster(Map descMap) {
         default :
             logWarn "parseOnOffCluster: unexpected attrId:${descMap.attrId} (raw:${descMap.value})"
     }
-    /*
-    if (eventMap != null) {
-        eventMap.type = 'physical'
-        eventMap.isStateChange = true
-        if (state.states['isRefresh'] == true) {
-            eventMap.descriptionText += ' [refresh]'
-        }
-        sendEvent(eventMap)
-        logInfo eventMap.descriptionText
-    }
-    */
 }
 
 //events
@@ -361,15 +350,6 @@ private void sendSwitchEvent(String rawValue, isDigital = false) {
     eventMap.descriptionText += (isDigital == true || state.states['isDigital'] == true ) ? ' [digital]' : ' [physical]'
     logInfo "${eventMap.descriptionText}"
     sendEvent(eventMap)
-}
-
-//events
-private void sendSwitchEvent(String rawValue) {
-    String value = rawValue == '01' ? 'on' : 'off'
-    if (device.currentValue('switch') == value) { return }
-    String descriptionText = " was turned ${value}"
-    logInfo "${descriptionText}"
-    sendEvent(name:'switch', value:value, descriptionText:descriptionText)
 }
 
 private void sendLevelEvent(String rawValue) {
@@ -477,7 +457,7 @@ private void sendDelayedSaturationEvent(Map eventMap) {
 private void sendCTEvent(String rawValue, Boolean presetColor = false) {
     Integer value = (1000000/(hexStrToUnsignedInt(rawValue))).toInteger()
     String descriptionText = "${device.displayName} ColorTemp was set to ${value}K"
-    if (txtEnable) log.info descriptionText
+    if (txtEnable) { log.info descriptionText }
     sendEvent(name:"colorTemperature", value:value, descriptionText:descriptionText, unit: "K")
 
 }
@@ -542,18 +522,13 @@ void toggle() {
 }
 
 void identify() {
-    /*
-    List<Map<String, String>> attributeWriteRequests = []
-    attributeWriteRequests.add(matter.attributeWriteRequest(device.endpointId, 0x0003, 0x0000, 0x05, '0101'))
-    String cmd = matter.writeAttributes(attributeWriteRequests)
-    sendToDevice(cmd)
-    */
-
+    logDebug 'identifying...'
+    String cmd
+    Integer time = 10
     List<Map<String, String>> cmdFields = []
-    cmdFields.add(matter.cmdField(0x05, 0x00, '0101'))
+    cmdFields.add(matter.cmdField(0x05, 0x00, zigbee.swapOctets(HexUtils.integerToHexString(time, 2))))
     cmd = matter.invoke(device.endpointId, 0x0003, 0x0000, cmdFields)
     sendToDevice(cmd)
-    
 }
 
 void setLevel(Object value) {
@@ -635,8 +610,6 @@ void setColor(Map colorMap) {
     }
 }
 
-void setRefreshRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = true ; runInMillis(REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }                 // 3 seconds
-void clearRefreshRequest() { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = false }
 void setDigitalRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isDigital'] = true ; runInMillis(DIGITAL_TIMER, clearDigitalRequest, [overwrite: true]) }                 // 3 seconds
 void clearDigitalRequest() { if (state.states == null) { state.states = [:] } ; state.states['isDigital'] = false }
 
@@ -754,30 +727,6 @@ void initialize() {
         initializeVars(fullInit = true)
         sendInfoEvent('initialize()...', 'full initialization - all settings are reset to default')
     }
-    /*
-    if (state.lastTx['unsubscribeTime'] == null || timeSinceLastUnsubscribe > 45) { //  20 seconds for Aqara P2, 23 seconds for Onvis
-        log.warn "initialize(): calling unsubscribe()! (last unsubscribe was more than ${timeSinceLastUnsubscribe} seconds ago)"
-        state.lastTx['unsubscribeTime'] = now()
-        state.states['isUnsubscribe'] = true
-        scheduleCommandTimeoutCheck(delay = 45)
-        unsubscribe()
-    }
-    else {
-        log.warn "initialize(): unsubscribe() was already called in the last ${timeSinceLastUnsubscribe} seconds ..."
-        if (timeSinceLastSubscribe > 30) {
-            */
-            log.warn "initialize(): calling subscribe()! (last unsubscribe was more than ${timeSinceLastSubscribe} seconds ago)"
-            state.lastTx['subscribeTime'] = now()
-            state.states['isUnsubscribe'] = false
-            state.states['isSubscribe'] = true  // should be set to false in the parse() method
-            scheduleCommandTimeoutCheck(delay = 30)
-            subscribe()
-            /*
-        }
-        else {
-            log.warn "initialize(): subscribe() was already called in the last ${timeSinceLastSubscribe} seconds ... We are good to go!"
-        }
-    } */
 }
 
 void reSubscribe() {
@@ -859,7 +808,7 @@ void refresh() {
         log.warn 'initialize()...'
         initializeVars(fullInit = true)
     }
-    sendToDevice(subscribeCmd())
+    sendToDevice(refreshCmd())
 }
 
 String refreshCmd() {
@@ -1495,27 +1444,4 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x47    : 'StopMoveStep',
     0x4B    : 'MoveColorTemperature',
     0x4C    : 'StepColorTemperature'
-]
-
-@Field static Map colorRGBName = [
-    4: 'Red',
-    13:'Orange',
-    21:'Yellow',
-    29:'Chartreuse',
-    38:'Green',
-    46:'Spring',
-    54:'Cyan',
-    63:'Azure',
-    71:'Blue',
-    79:'Violet',
-    88:'Magenta',
-    96:'Rose',
-    101:'Red'
-]
-
-//transitionTime options
-@Field static Map ttOpts = [
-    defaultValue: '1',
-    defaultText:  '1s',
-    options:['0':'ASAP', '1':'1s', '2':'2s', '5':'5s']
 ]
