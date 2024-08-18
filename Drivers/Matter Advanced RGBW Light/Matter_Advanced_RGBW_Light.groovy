@@ -18,7 +18,9 @@
  * ver. 1.0.0  2023-12-21 kkossev  - Inital version: added healthCheck attribute; added refresh(); added stats; added RTT attribute; added periodicPolling healthCheck method;
  * ver. 1.0.2  2023-12-26 kkossev  - commented out the initialize() and configure() capabilities because of duplicated subscriptions; added getInfo command; fixed the refresh() command for MATTER_OUTLET; added isDigital isRefresh; use the Basic cluster attr. 0 for ping()
  * ver. 1.0.3  2023-12-28 kkossev  - added info for ColorControl and LevelControl clusters; added toggle(); added initializeCtr and duplicatedCtr in stats; added reSubscribe() method
- * ver. 1.0.4  2024-01-23 kkossev  - (dev. branch) added spammyReportsFilter preference; 
+ * ver. 1.0.4  2024-01-23 kkossev  - added spammyReportsFilter preference;
+ * ver. 1.1.0  2024-08-15 mavvrick  - Add parsing for Color Temp command
+ * ver. 1.1.1  2024-08-18 kkossev  - merged the changes from the dev. branch to the master branch
  *
  *                                   TODO: 
  *                                   TODO: add flashRate preference; add flash() command
@@ -28,8 +30,8 @@
  *                                   TODO: add state.color w/ min/max Mirad values
  */
 
-static String version() { '1.0.4' }
-static String timeStamp() { '2024/01/23 10:54 PM' }
+static String version() { '1.1.1' }
+static String timeStamp() { '2024/08/18 8:22 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final String   DEVICE_TYPE = 'MATTER_BULB'
@@ -104,6 +106,7 @@ metadata {
 @Field static final Map SpammyReportsFilterOpts = [               // delay spammy reports
     defaultValue: 500,
     options     : [0: 'none', 250: '250 ms', 500: '500 ms', 750: '750 ms', 1000: '1000 ms', 1500: '1500 ms', 2000: '2000 ms', 3000: '3000 ms', 5000: '5000 ms']
+]
 //transitionTime options
 @Field static Map ttOpts = [
     defaultValue: '1',
@@ -363,6 +366,7 @@ private void sendSwitchEvent(String rawValue, isDigital = false) {
     sendEvent(eventMap)
 }
 
+/*
 //events
 private void sendSwitchEvent(String rawValue) {
     String value = rawValue == '01' ? 'on' : 'off'
@@ -371,6 +375,7 @@ private void sendSwitchEvent(String rawValue) {
     logInfo "${descriptionText}"
     sendEvent(name:'switch', value:value, descriptionText:descriptionText)
 }
+*/
 
 private void sendLevelEvent(String rawValue) {
     Integer value = Math.round(hexStrToUnsignedInt(rawValue) / 2.55)
@@ -542,18 +547,20 @@ void toggle() {
 }
 
 void identify() {
-    /*
-    List<Map<String, String>> attributeWriteRequests = []
-    attributeWriteRequests.add(matter.attributeWriteRequest(device.endpointId, 0x0003, 0x0000, 0x05, '0101'))
-    String cmd = matter.writeAttributes(attributeWriteRequests)
+    logDebug 'identifying...'
+    String cmd
+    Integer time = 10
+    List<Map<String, String>> cmdFields = []
+    cmdFields.add(matter.cmdField(0x05, 0x00, zigbee.swapOctets(HexUtils.integerToHexString(time, 2))))
+    cmd = matter.invoke(device.endpointId, 0x0003, 0x0000, cmdFields)
     sendToDevice(cmd)
-    */
 
+/*
     List<Map<String, String>> cmdFields = []
     cmdFields.add(matter.cmdField(0x05, 0x00, '0101'))
     cmd = matter.invoke(device.endpointId, 0x0003, 0x0000, cmdFields)
     sendToDevice(cmd)
-    
+*/    
 }
 
 void setLevel(Object value) {
@@ -634,9 +641,10 @@ void setColor(Map colorMap) {
         setSaturation(colorMap.saturation)
     }
 }
-
+/*
 void setRefreshRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = true ; runInMillis(REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }                 // 3 seconds
 void clearRefreshRequest() { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = false }
+*/
 void setDigitalRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isDigital'] = true ; runInMillis(DIGITAL_TIMER, clearDigitalRequest, [overwrite: true]) }                 // 3 seconds
 void clearDigitalRequest() { if (state.states == null) { state.states = [:] } ; state.states['isDigital'] = false }
 
@@ -859,7 +867,7 @@ void refresh() {
         log.warn 'initialize()...'
         initializeVars(fullInit = true)
     }
-    sendToDevice(subscribeCmd())
+    sendToDevice(refreshCmd())
 }
 
 String refreshCmd() {
@@ -1497,6 +1505,7 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x4C    : 'StepColorTemperature'
 ]
 
+/*
 @Field static Map colorRGBName = [
     4: 'Red',
     13:'Orange',
@@ -1512,10 +1521,12 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     96:'Rose',
     101:'Red'
 ]
-
+*/
+/*
 //transitionTime options
 @Field static Map ttOpts = [
     defaultValue: '1',
     defaultText:  '1s',
     options:['0':'ASAP', '1':'1s', '2':'2s', '5':'5s']
 ]
+*/
