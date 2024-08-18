@@ -31,7 +31,7 @@
  */
 
 static String version() { '1.1.1' }
-static String timeStamp() { '2024/08/18 8:22 AM' }
+static String timeStamp() { '2024/08/18 9:04 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final String   DEVICE_TYPE = 'MATTER_BULB'
@@ -51,7 +51,6 @@ metadata {
         capability 'Actuator'
         capability 'Switch'
         capability 'SwitchLevel'
-        //capability 'Configuration'
         capability 'Color Control'
         capability "ColorTemperature"
         capability 'Light'
@@ -65,9 +64,7 @@ metadata {
         attribute 'silentMode', 'enum', ['off', 'on']   // disable all logging and events while in color animation mode
         command 'getInfo'
         command 'toggle'
-        command 'identify'  // can't make it work ... :(
-        //command 'unsubscribe'
-        //command 'subscribe'
+        command 'identify'
         command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
         command 'reSubscribe', [[name: 're-subscribe to the Matter controller events']]
 
@@ -335,17 +332,6 @@ void parseOnOffCluster(Map descMap) {
         default :
             logWarn "parseOnOffCluster: unexpected attrId:${descMap.attrId} (raw:${descMap.value})"
     }
-    /*
-    if (eventMap != null) {
-        eventMap.type = 'physical'
-        eventMap.isStateChange = true
-        if (state.states['isRefresh'] == true) {
-            eventMap.descriptionText += ' [refresh]'
-        }
-        sendEvent(eventMap)
-        logInfo eventMap.descriptionText
-    }
-    */
 }
 
 //events
@@ -365,17 +351,6 @@ private void sendSwitchEvent(String rawValue, isDigital = false) {
     logInfo "${eventMap.descriptionText}"
     sendEvent(eventMap)
 }
-
-/*
-//events
-private void sendSwitchEvent(String rawValue) {
-    String value = rawValue == '01' ? 'on' : 'off'
-    if (device.currentValue('switch') == value) { return }
-    String descriptionText = " was turned ${value}"
-    logInfo "${descriptionText}"
-    sendEvent(name:'switch', value:value, descriptionText:descriptionText)
-}
-*/
 
 private void sendLevelEvent(String rawValue) {
     Integer value = Math.round(hexStrToUnsignedInt(rawValue) / 2.55)
@@ -482,7 +457,7 @@ private void sendDelayedSaturationEvent(Map eventMap) {
 private void sendCTEvent(String rawValue, Boolean presetColor = false) {
     Integer value = (1000000/(hexStrToUnsignedInt(rawValue))).toInteger()
     String descriptionText = "${device.displayName} ColorTemp was set to ${value}K"
-    if (txtEnable) log.info descriptionText
+    if (txtEnable) { log.info descriptionText }
     sendEvent(name:"colorTemperature", value:value, descriptionText:descriptionText, unit: "K")
 
 }
@@ -554,13 +529,6 @@ void identify() {
     cmdFields.add(matter.cmdField(0x05, 0x00, zigbee.swapOctets(HexUtils.integerToHexString(time, 2))))
     cmd = matter.invoke(device.endpointId, 0x0003, 0x0000, cmdFields)
     sendToDevice(cmd)
-
-/*
-    List<Map<String, String>> cmdFields = []
-    cmdFields.add(matter.cmdField(0x05, 0x00, '0101'))
-    cmd = matter.invoke(device.endpointId, 0x0003, 0x0000, cmdFields)
-    sendToDevice(cmd)
-*/    
 }
 
 void setLevel(Object value) {
@@ -641,10 +609,7 @@ void setColor(Map colorMap) {
         setSaturation(colorMap.saturation)
     }
 }
-/*
-void setRefreshRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = true ; runInMillis(REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }                 // 3 seconds
-void clearRefreshRequest() { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = false }
-*/
+
 void setDigitalRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isDigital'] = true ; runInMillis(DIGITAL_TIMER, clearDigitalRequest, [overwrite: true]) }                 // 3 seconds
 void clearDigitalRequest() { if (state.states == null) { state.states = [:] } ; state.states['isDigital'] = false }
 
@@ -762,30 +727,6 @@ void initialize() {
         initializeVars(fullInit = true)
         sendInfoEvent('initialize()...', 'full initialization - all settings are reset to default')
     }
-    /*
-    if (state.lastTx['unsubscribeTime'] == null || timeSinceLastUnsubscribe > 45) { //  20 seconds for Aqara P2, 23 seconds for Onvis
-        log.warn "initialize(): calling unsubscribe()! (last unsubscribe was more than ${timeSinceLastUnsubscribe} seconds ago)"
-        state.lastTx['unsubscribeTime'] = now()
-        state.states['isUnsubscribe'] = true
-        scheduleCommandTimeoutCheck(delay = 45)
-        unsubscribe()
-    }
-    else {
-        log.warn "initialize(): unsubscribe() was already called in the last ${timeSinceLastUnsubscribe} seconds ..."
-        if (timeSinceLastSubscribe > 30) {
-            */
-            log.warn "initialize(): calling subscribe()! (last unsubscribe was more than ${timeSinceLastSubscribe} seconds ago)"
-            state.lastTx['subscribeTime'] = now()
-            state.states['isUnsubscribe'] = false
-            state.states['isSubscribe'] = true  // should be set to false in the parse() method
-            scheduleCommandTimeoutCheck(delay = 30)
-            subscribe()
-            /*
-        }
-        else {
-            log.warn "initialize(): subscribe() was already called in the last ${timeSinceLastSubscribe} seconds ... We are good to go!"
-        }
-    } */
 }
 
 void reSubscribe() {
@@ -1504,29 +1445,3 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x4B    : 'MoveColorTemperature',
     0x4C    : 'StepColorTemperature'
 ]
-
-/*
-@Field static Map colorRGBName = [
-    4: 'Red',
-    13:'Orange',
-    21:'Yellow',
-    29:'Chartreuse',
-    38:'Green',
-    46:'Spring',
-    54:'Cyan',
-    63:'Azure',
-    71:'Blue',
-    79:'Violet',
-    88:'Magenta',
-    96:'Rose',
-    101:'Red'
-]
-*/
-/*
-//transitionTime options
-@Field static Map ttOpts = [
-    defaultValue: '1',
-    defaultText:  '1s',
-    options:['0':'ASAP', '1':'1s', '2':'2s', '5':'5s']
-]
-*/
