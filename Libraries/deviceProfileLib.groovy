@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy', documentationLink: '',
-    version: '3.3.1'
+    version: '3.3.2'
 )
 /*
  *  Device Profile Library
@@ -28,7 +28,8 @@ library(
  * ver. 3.2.0  2024-05-25 kkossev  - commonLib 3.2.0 allignment;
  * ver. 3.2.1  2024-06-06 kkossev  - Tuya Multi Sensor 4 In 1 (V3) driver allignment (customProcessDeviceProfileEvent); getDeviceProfilesMap bug fix; forcedProfile is always shown in preferences;
  * ver. 3.3.0  2024-06-29 kkossev  - empty preferences bug fix; zclWriteAttribute delay 50 ms; added advanced check in inputIt(); fixed 'Cannot get property 'rw' on null object' bug; fixed enum attributes first event numeric value bug;
- * ver. 3.3.1  2024-07-06 kkossev  - (dev. branch) added powerSource event in the initEventsDeviceProfile
+ * ver. 3.3.1  2024-07-06 kkossev  - added powerSource event in the initEventsDeviceProfile
+ * ver. 3.3.2  2024-08-18 kkossev  - release 3.3.2
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
@@ -41,8 +42,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.3.1' }
-static String deviceProfileLibStamp() { '2024/07/06 10:02 PM' }
+static String deviceProfileLibVersion()   { '3.3.2' }
+static String deviceProfileLibStamp() { '2024/08/18 11:29 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -283,8 +284,8 @@ public void updateAllPreferences() {
                 // scale the value
                 preferenceValue = (safeToDouble(preferenceValue) / safeToInt(foundMap.scale)) as double
             }
-            if (preferenceValue != null) { 
-                setPar(name, preferenceValue.toString()) 
+            if (preferenceValue != null) {
+                setPar(name, preferenceValue.toString())
             }
             else { logDebug "updateAllPreferences: preference ${name} is not set (preferenceValue was null)" ;  return }
         }
@@ -718,11 +719,11 @@ public boolean sendCommand(final String command_orig=null, final String val_orig
             logInfo "executed <b>$func</b>()"
             funcResult = "${func}"()
         }
-    } 
+    }
     catch (e) {
         logWarn "sendCommand: Exception '${e}' caught while processing <b>$func</b>(${val})"
         return false
-    } 
+    }
     // funcResult is expected to be list of commands to be sent to the device, but can also return boolean or null
     // check if the result is a list of commands
     /* groovylint-disable-next-line Instanceof */
@@ -759,16 +760,17 @@ Map inputIt(String paramPar, boolean debug = false) {
     Map input = [:]
     Map foundMap = [:]
     if (!(param in DEVICE?.preferences)) { if (debug) { log.warn "inputIt: preference ${param} not defined for this device!" } ; return [:] }
-    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
-    def preference
+    Object preference
     try { preference = DEVICE?.preferences["$param"] }
     catch (e) { if (debug) { log.warn "inputIt: exception ${e} caught while parsing preference ${param} value ${preference}" } ; return [:] }
     //  check for boolean values
     try { if (preference in [true, false]) { if (debug) { log.warn "inputIt: preference ${param} is boolean value ${preference} - skipping it for now!" } ; return [:] } }
     catch (e) { if (debug) { log.warn "inputIt: exception ${e} caught while checking for boolean values preference ${param} value ${preference}" } ; return [:] }
+    /*
     // TODO - check if this is neccessary? isTuyaDP is not defined!
     try { isTuyaDP = preference.isNumber() }
     catch (e) { if (debug) { log.warn "inputIt: exception ${e} caught while checking isNumber() preference ${param} value ${preference}" } ; return [:]  }
+    */
     //if (debug) log.debug "inputIt: preference ${param} found. value is ${preference} isTuyaDP=${isTuyaDP}"
     foundMap = getPreferencesMapByName(param)
     //if (debug) log.debug "foundMap = ${foundMap}"
@@ -781,13 +783,15 @@ Map inputIt(String paramPar, boolean debug = false) {
     input.name = foundMap.name
     input.type = foundMap.type    // bool, enum, number, decimal
     input.title = foundMap.title
-    input.description = foundMap.description
+    //input.description = (foundMap.description ?: foundMap.title)?.replaceAll(/<\/?b>/, '')  // if description is not defined, use the title
+    input.description = foundMap.description ?: ''   // if description is not defined, skip it
     if (input.type in ['number', 'decimal']) {
         if (foundMap.min != null && foundMap.max != null) {
             input.range = "${foundMap.min}..${foundMap.max}"
         }
         if (input.range != null && input.description != null) {
-            input.description += "<br><i>Range: ${input.range}</i>"
+            if (input.description != '') { input.description += "<br>" }
+            input.description += "<i>Range: ${input.range}</i>"
             if (foundMap.unit != null && foundMap.unit != '') {
                 input.description += " <i>(${foundMap.unit})</i>"
             }

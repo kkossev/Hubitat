@@ -19,7 +19,7 @@ library(
  *
  * ver. 3.2.0  2024-05-27 kkossev  - added iasLib.groovy
  * ver. 3.2.1  2024-07-06 kkossev  - added standardParseIasMessage (debug only); zs null check
- * ver. 3.2.2  2024-08-09 kkossev  - (dev. branch) zs null check
+ * ver. 3.2.2  2024-08-09 kkossev  - zs null check
  *
  *                                   TODO:
 */

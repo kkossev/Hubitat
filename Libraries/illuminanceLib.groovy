@@ -18,7 +18,7 @@ library(
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added illuminanceLib.groovy
  * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment; added capability 'IlluminanceMeasurement'; added illuminanceRefresh()
- * ver. 3.2.1  2024-07-06 kkossev  - (dev.branch) added illuminanceCoeff; added luxThreshold and illuminanceCoeff to preferences (if applicable)
+ * ver. 3.2.1  2024-07-06 kkossev  - added illuminanceCoeff; added luxThreshold and illuminanceCoeff to preferences (if applicable)
  *
  *                                   TODO: illum threshold not working!
  *                                   TODO: check illuminanceInitializeVars() and illuminanceProcessTuyaDP() usage

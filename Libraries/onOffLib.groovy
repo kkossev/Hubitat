@@ -18,7 +18,7 @@ library(
  *
  * ver. 3.2.0  2024-06-04 kkossev  - commonLib 3.2.1 allignment; if isRefresh then sendEvent with isStateChange = true
  * ver. 3.2.1  2024-06-07 kkossev  - the advanced options are excpluded for DEVICE_TYPE Thermostat
- * ver. 3.2.2  2024-06-29 kkossev  - (dev.branch) added on/off control for Tuya device profiles with 'switch' dp;
+ * ver. 3.2.2  2024-06-29 kkossev  - added on/off control for Tuya device profiles with 'switch' dp;
  *
  *                                   TODO:
 */

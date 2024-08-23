@@ -14,7 +14,7 @@ library(
  * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment; added temperatureRefresh()
  * ver. 3.2.1  2024-06-07 kkossev  - excluded maxReportingTime for mmWaveSensor and Thermostat
  * ver. 3.2.2  2024-07-06 kkossev  - fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
- * ver. 3.2.3  2024-07-18 kkossev  - (dev.branch) added 'ReportingConfiguration' capability check for minReportingTime and maxReportingTime
+ * ver. 3.2.3  2024-07-18 kkossev  - added 'ReportingConfiguration' capability check for minReportingTime and maxReportingTime
  *
  *                                   TODO:
  *                                   TODO: add temperatureOffset

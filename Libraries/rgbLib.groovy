@@ -20,7 +20,7 @@ library(
  *
  * ver. 1.0.0  2023-11-06 kkossev  - added rgbLib; musicMode;
  * ver. 1.0.1  2024-04-01 kkossev  - Groovy linting (all disabled)
- * ver. 3.2.0  2024-05-21 kkossev  - (dev.branch) commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment
  *
  *                                   TODO:
 */

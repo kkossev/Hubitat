@@ -25,7 +25,8 @@
  * ver. 1.2.1  2024-06-03 kkossev  - added resetStats command
  * ver. 1.2.2  2024-06-14 kkossev  - added ThirdReality tilt sensor 3RDTS01056Z; new _TZE200_pay2byax fingerprint; added preference to disable illuminance @Big_Bruin
  * ver. 1.2.3  2024-07-10 kkossev  - fixed outOfSync and pollContactStatus bugs; notPresentCounter-1 correction in the debug logs;
- * ver. 1.2.4  2024-08-14 kkossev  - (dev.branch) added TS0203 _TZ3000_rcuyhwe3
+ * ver. 1.2.4  2024-08-14 kkossev  - added TS0203 _TZ3000_rcuyhwe3
+ * ver. 1.2.5  2024-08-20 kkossev  - (dev.branch) pollContactStatus only when the current message is not IAS !
  *
  *                                   TODO: handle the case when 'lastBattery' is missing.
  *                                   TODO: filter duplicated open/close messages when 'Poll Contact Status' option is enabled
@@ -416,7 +417,7 @@ def parse(String description) {
     if (isPendingConfig()) {
         ConfigurationStateMachine()
     }
-    if (settings?.pollContactStatus == true) {          // added 10/19/2023
+    if (settings?.pollContactStatus == true && descMap?.cluster != '0500') {          // added 10/19/2023, modified 08/20/2024 (poll only when the current message is not IAS !)
         Map lastTxMap = stringToJsonMap(state.lastTx)
         //try {logDebug "now() - lastTxMap?.contactPoll = ${(now() - lastTxMap?.contactPoll)}"} catch (e) {logDebug "exception catched when procesing now() - lastTxMap?.contactPoll"}
         if (lastTxMap?.contactPoll == null || (lastTxMap?.contactPoll != null && (now() - lastTxMap?.contactPoll) > 60000)) {   // last poll was more than 60 seconds ago

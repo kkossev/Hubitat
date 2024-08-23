@@ -14,7 +14,7 @@ library(
  * ver. 3.0.2  2024-04-14 kkossev  - batteryPercentage bug fix (was x2); added bVoltCtr; added battertRefresh
  * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment; added lastBattery; added handleTuyaBatteryLevel
  * ver. 3.2.1  2024-07-06 kkossev  - added tuyaToBatteryLevel and handleTuyaBatteryLevel; added batteryInitializeVars
- * ver. 3.2.2  2024-07-18 kkossev  - (dev. branch) added BatteryVoltage and BatteryDelay device capability checks
+ * ver. 3.2.2  2024-07-18 kkossev  - added BatteryVoltage and BatteryDelay device capability checks
  *
  *                                   TODO: 
  *                                   TODO: battery voltage low/high limits configuration

@@ -19,9 +19,9 @@
  *                                    added 'eco' (away) mode; added overHeatAlarm advanced attribute; displayAutoOff is disabled by default; added refreshAll command; added add factoryReset command; fixed energy reporting configuration
  * ver. 3.3.3  2024-06-25 kkossev  - release 3.3.3
  * ver. 3.3.4  2024-06-29 kkossev  - added NAMRON_RADIATOR device profile and attributes;
- * ver. 3.3.5  2024-07-09 kkossev  - (dev.branch)
+ * ver. 3.3.5  2024-07-09 kkossev  - release 3.3.5
  *
- *                                   TODO: fix the forcedDeviceProfile !!!
+ *                                   TODO: fix the forcedDeviceProfile
  *                                   TODO: add a link to GitHub WiKi
  *                                   TODO: test Alexa compatibility
  *                                   TODO: test Google Home compatibility

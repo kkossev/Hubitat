@@ -17,7 +17,7 @@ library(
  *
  * ver. 3.3.0  2024-06-09 kkossev  - added thermostatLib.groovy
  * ver. 3.3.1  2024-06-16 kkossev  - added factoryResetThermostat() command
- * ver. 3.3.2  2024-07-09 kkossev  - (dev.branch)
+ * ver. 3.3.2  2024-07-09 kkossev  - release 3.3.2
  *
  *                                   TODO: refactor sendHeatingSetpointEvent
 */

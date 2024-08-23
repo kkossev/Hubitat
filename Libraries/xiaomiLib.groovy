@@ -20,7 +20,7 @@ library(
  * ver. 1.0.2  2024-04-06 kkossev  - (dev. branch) Groovy linting; aqaraCube specific code;
  * ver. 1.1.0  2024-06-01 kkossev  - (dev. branch) comonLib 3.2.0 alignmment
  * ver. 3.2.2  2024-06-01 kkossev  - (dev. branch) comonLib 3.2.2 alignmment
- * ver. 3.3.0  2024-06-23 kkossev  - (dev. branch) comonLib 3.3.0 alignmment; added parseXiaomiClusterSingeTag() method
+ * ver. 3.3.0  2024-06-23 kkossev  - comonLib 3.3.0 alignmment; added parseXiaomiClusterSingeTag() method
  *
  *                                   TODO: remove the DEVICE_TYPE dependencies for Bulb, Thermostat, AqaraCube, FP1, TRV_OLD
  *                                   TODO: remove the isAqaraXXX  dependencies !!
