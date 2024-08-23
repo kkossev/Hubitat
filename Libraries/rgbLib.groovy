@@ -20,7 +20,7 @@ library(
  *
  * ver. 1.0.0  2023-11-06 kkossev  - added rgbLib; musicMode;
  * ver. 1.0.1  2024-04-01 kkossev  - Groovy linting (all disabled)
- * ver. 3.2.0  2024-05-21 kkossev  - (dev.branch) commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment
  *
  *                                   TODO:
 */
@@ -28,20 +28,20 @@ library(
 def rgbLibVersion()   { '3.2.0' }
 def rgbLibStamp() { '2024/05/21 10:06 PM' }
 
+/* groovylint-disable-next-line UnusedImport */
 import hubitat.helper.ColorUtils
 
 metadata {
     capability 'Actuator'
     capability 'Color Control'
     capability 'ColorMode'
-    capability 'Refresh'
+    //capability 'Refresh'  // already defined in commonLib
     capability 'Switch'
     capability 'Light'
 
     preferences {
     }
 }
-
 
 //
 // called from customUpdated() in the driver *Aqara_LED_Strip_T1.groovy*
@@ -120,7 +120,6 @@ void initEventsBulb(boolean fullInit=false) {
         sendEvent(name: 'level', value: 100)
     }
 }
-
 
 def testT(par) {
     logWarn "testT(${par})"

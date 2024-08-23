@@ -16,13 +16,13 @@ library(
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.2.0  2024-05-22 kkossev  - commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-05-31 kkossev  - commonLib 3.2.0 allignment
  *
  *                                   TODO:
 */
 
 static String ctLibVersion()   { '3.2.0' }
-static String ctLibStamp() { '2024/05/22 10:00 PM' }
+static String ctLibStamp() { '2024/05/31 4:35 PM' }
 
 metadata {
     capability 'Color Temperature'  // Attributes: colorName - STRING, colorTemperature - NUMBER, unit:°K; Commands:setColorTemperature(colortemperature, level, transitionTime)
@@ -448,7 +448,7 @@ def colorGammaRevert(component) {
 
 def colorXy2Rgb(x = 255, y = 255) {
     logTrace "< Color xy: ($x, $y)"
-
+    if (y == 0) return [red: 0, green: 0, blue: 0]  // patch! Added KK 05/31/2024
     def Y = 1
     def X = (Y / y) * x
     def Z = (Y / y) * (1.0 - x - y)

@@ -1,8 +1,8 @@
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee OnOff Cluster Library', name: 'onOffLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/onOffLib.groovy', documentationLink: '',
-    version: '3.2.0'
+    version: '3.2.2'
 )
 /*
  *  Zigbee OnOff Cluster Library
@@ -16,13 +16,15 @@ library(
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.2.0  2024-05-24 kkossev  - commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-06-04 kkossev  - commonLib 3.2.1 allignment; if isRefresh then sendEvent with isStateChange = true
+ * ver. 3.2.1  2024-06-07 kkossev  - the advanced options are excpluded for DEVICE_TYPE Thermostat
+ * ver. 3.2.2  2024-06-29 kkossev  - added on/off control for Tuya device profiles with 'switch' dp;
  *
  *                                   TODO:
 */
 
-static String onOffLibVersion()   { '3.2.0' }
-static String onOffLibStamp() { '2024/05/24 10:44 AM' }
+static String onOffLibVersion()   { '3.2.2' }
+static String onOffLibStamp() { '2024/06/29 12:27 PM' }
 
 @Field static final Boolean _THREE_STATE = true
 
@@ -34,9 +36,11 @@ metadata {
     }
     // no commands
     preferences {
-        if (advancedOptions == true) {
+        if (settings?.advancedOptions == true && device != null && !(DEVICE_TYPE in ['Device', 'Thermostat'])) {
+            input(name: 'ignoreDuplicated', type: 'bool', title: '<b>Ignore Duplicated Switch Events</b>', description: 'Some switches and plugs send periodically the switch status as a heart-beet ', defaultValue: true)
+            input(name: 'alwaysOn', type: 'bool', title: '<b>Always On</b>', description: 'Disable switching off plugs and switches that must stay always On', defaultValue: false)
             if (_THREE_STATE == true) {
-                input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>Experimental multi-state switch events</i>', defaultValue: false
+                input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: 'Experimental multi-state switch events', defaultValue: false
             }
         }
     }
@@ -96,15 +100,22 @@ void toggle() {
 }
 
 void off() {
-    if (this.respondsTo('customOff')) {
-        customOff()
-        return
+    if (this.respondsTo('customOff')) { customOff() ; return  }
+    if ((settings?.alwaysOn ?: false) == true) { logWarn "AlwaysOn option for ${device.displayName} is enabled , the command to switch it OFF is ignored!" ; return }
+    List<String> cmds = []
+    // added 06/29/2024 - control Tuya 0xEF00 switch
+    if (this.respondsTo(getDEVICE)) {   // defined in deviceProfileLib
+        Map switchMap = getAttributesMap('switch')
+        int onOffValue = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  0  : 1
+        if (switchMap != null && switchMap != [:]) {
+            cmds = sendTuyaParameter(switchMap, 'switch', onOffValue)
+            logTrace "off() Tuya cmds=${cmds}"
+        }
     }
-    if ((settings?.alwaysOn ?: false) == true) {
-        logWarn "AlwaysOn option for ${device.displayName} is enabled , the command to switch it OFF is ignored!"
-        return
+    if (cmds.size() == 0) { // if not Tuya 0xEF00 switch
+        cmds = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  zigbee.off()  : zigbee.on()
     }
-    List<String> cmds = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  zigbee.off()  : zigbee.on()
+
     String currentState = device.currentState('switch')?.value ?: 'n/a'
     logDebug "off() currentState=${currentState}"
     if (_THREE_STATE == true && settings?.threeStateEnable == true) {
@@ -117,29 +128,26 @@ void off() {
         sendEvent(name: 'switch', value: value, descriptionText: descriptionText, type: 'digital', isStateChange: true)
         logInfo "${descriptionText}"
     }
-    /*
-    else {
-        if (currentState != 'off') {
-            logDebug "Switching ${device.displayName} Off"
-        }
-        else {
-            logDebug "ignoring off command for ${device.displayName} - already off"
-            return
-        }
-    }
-    */
-
     state.states['isDigital'] = true
     runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
     sendZigbeeCommands(cmds)
 }
 
 void on() {
-    if (this.respondsTo('customOn')) {
-        customOn()
-        return
+    if (this.respondsTo('customOn')) { customOn() ; return }
+    List<String> cmds = []
+    // added 06/29/2024 - control Tuya 0xEF00 switch
+    if (this.respondsTo(getDEVICE)) {   // defined in deviceProfileLib
+        Map switchMap = getAttributesMap('switch')
+        int onOffValue = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  1  : 0
+        if (switchMap != null && switchMap != [:]) {
+            cmds = sendTuyaParameter(switchMap, 'switch', onOffValue)
+            logTrace "on() Tuya cmds=${cmds}"
+        }
     }
-    List<String> cmds = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  zigbee.on()  : zigbee.off()
+    if (cmds.size() == 0) { // if not Tuya 0xEF00 switch
+        cmds = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  zigbee.on()  : zigbee.off()
+    }
     String currentState = device.currentState('switch')?.value ?: 'n/a'
     logDebug "on() currentState=${currentState}"
     if (_THREE_STATE == true && settings?.threeStateEnable == true) {
@@ -152,17 +160,6 @@ void on() {
         sendEvent(name: 'switch', value: value, descriptionText: descriptionText, type: 'digital', isStateChange: true)
         logInfo "${descriptionText}"
     }
-    /*
-    else {
-        if (currentState != 'on') {
-            logDebug "Switching ${device.displayName} On"
-        }
-        else {
-            logDebug "ignoring on command for ${device.displayName} - already on"
-            return
-        }
-    }
-    */
     state.states['isDigital'] = true
     runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
     sendZigbeeCommands(cmds)
@@ -175,9 +172,10 @@ void sendSwitchEvent(int switchValuePar) {
     }
     String value = (switchValue == null) ? 'unknown' : (switchValue == 0x00) ? 'off' : (switchValue == 0x01) ? 'on' : 'unknown'
     Map map = [:]
+    boolean isRefresh = state.states['isRefresh'] ?: false
     boolean debounce = state.states['debounce'] ?: false
     String lastSwitch = state.states['lastSwitch'] ?: 'unknown'
-    if (value == lastSwitch && (debounce || (settings.ignoreDuplicated ?: false))) {
+    if (value == lastSwitch && (debounce || (settings.ignoreDuplicated ?: false)) && !isRefresh) {
         logDebug "Ignored duplicated switch event ${value}"
         runInMillis(DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true])
         return
@@ -196,7 +194,6 @@ void sendSwitchEvent(int switchValuePar) {
     }
     map.name = 'switch'
     map.value = value
-    boolean isRefresh = state.states['isRefresh'] ?: false
     if (isRefresh) {
         map.descriptionText = "${device.displayName} is ${value} [Refresh]"
         map.isStateChange = true
@@ -214,7 +211,7 @@ void sendSwitchEvent(int switchValuePar) {
 void parseOnOffAttributes(final Map it) {
     logDebug "OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}"
     /* groovylint-disable-next-line VariableTypeRequired */
-    def mode
+    String mode
     String attrName
     if (it.value == null) {
         logDebug "OnOff attribute ${it.attrId} cluster ${it.cluster } skipping NULL value status=${it.status}"
@@ -266,20 +263,15 @@ void parseOnOffAttributes(final Map it) {
     if (settings?.logEnable) { logInfo "${attrName} is ${mode}" }
 }
 
-
 List<String> onOffRefresh() {
-    logDebug "onOffRefresh()"
-    List<String> cmds = []
-    cmds = zigbee.readAttribute(0x0006, 0x0000, [:], delay = 100)
+    logDebug 'onOffRefresh()'
+    List<String> cmds = zigbee.readAttribute(0x0006, 0x0000, [:], delay = 100)
     return cmds
 }
 
-
 void onOfInitializeVars( boolean fullInit = false ) {
     logDebug "onOfInitializeVars()... fullInit = ${fullInit}"
+    if (fullInit || settings?.ignoreDuplicated == null) { device.updateSetting('ignoreDuplicated', true) }
     if (fullInit || settings?.alwaysOn == null) { device.updateSetting('alwaysOn', false) }
     if ((fullInit || settings?.threeStateEnable == null) && _THREE_STATE == true) { device.updateSetting('threeStateEnable', false) }
 }
-
-
-
