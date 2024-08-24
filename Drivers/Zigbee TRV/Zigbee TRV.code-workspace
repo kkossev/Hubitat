@@ -5,9 +5,6 @@
 		},
 		{
 			"path": "../../Libraries"
-		},
-		{
-			"path": "../Aqara E1 Thermostat"
 		}
 	],
 	"settings": {}
