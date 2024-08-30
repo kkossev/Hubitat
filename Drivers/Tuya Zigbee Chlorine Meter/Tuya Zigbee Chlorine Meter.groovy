@@ -13,13 +13,15 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.3.0  2024-08-03 kkossev  - first test version
- * ver. 3.3.1  2024-08-30 kkossev  - (dev.branch) added tuyaDataQuery
+ * ver. 3.3.1  2024-08-30 kkossev  - (dev.branch) added tuyaDataQuery; added dp 103 104 114 115 116 118 decoding; filter invalid freeChlorine value -1.0  (0xFFFFFFFFF)
  *                                   
+ *                                   TODO: 
+ *                                   TODO: unprocessed Tuya cluster command 11
  *                                   TODO: put in HPM
  */
 
 static String version() { "3.3.1" }
-static String timeStamp() {"2024/08/30 5:40 PM"}
+static String timeStamp() {"2024/08/30 10:01 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -121,28 +123,26 @@ Measures :
                 [dp:1,   name:'tds',                  type:'number',  rw: 'ro',  scale:1,   unit:'ppm',   description:'Total Dissolved Solids'],
                 [dp:2,   name:'temperature',          type:'decimal', rw: 'ro',  scale:10,  unit:'C',     description:'Temperature'],
                 [dp:7,   name:'battery',              type:'number',  rw: 'ro',  scale:1,   unit:'%',     description:'Battery level remaining'],
-                [dp:10,  name:'ph',                   type:'decimal', rw: 'ro',  scale:100, unit:'pH',    description:'pH value'],     // 'pH value, if the pH value is lower than 6.5, it means that the water quality is too acidic and has impurities, and it is necessary to add disinfectant water for disinfection
+                [dp:10,  name:'ph',                   type:'decimal', rw: 'ro',  scale:100, unit:'pH',    description:'pH value'],                              // 'pH value, if the pH value is lower than 6.5, it means that the water quality is too acidic and has impurities, and it is necessary to add disinfectant water for disinfection
                 [dp:11,  name:'ec',                   type:'decimal', rw: 'ro',  scale:1,   unit:'µS/cm', description:'Electrical conductivity'],
                 [dp:101, name:'orp',                  type:'decimal', rw: 'ro',  scale:1,   unit:'mV',    description:'Oxidation Reduction Potential value'],   // 'Oxidation Reduction Potential value. If the ORP value is above 850mv, it means that the disinfectant has been added too much, and it is necessary to add water or change the water for neutralization. If the ORP value is below 487mv, it means that too little disinfectant has been added and the pool needs to be disinfected again'
-                [dp:102, name:'freeChlorine',         type:'decimal', rw: 'ro',  scale:1,   unit:'mg/L',  description:'Free chlorine value'],   // The water in the swimming pool should be between 6.5-8ph and ORP should be between 487-840mv, and the chlorine value will be displayed normally. Chlorine will not be displayed if either value is out of range
-                // "67": { "sensor_type": "phCalibration1" },
-                // "68": { "store_tuya_attribute": "backlight_status", "EvalExp": "(value)" },
-                // "69": { "store_tuya_attribute": "backlight_level", "EvalExp": "(value)" },
-                [dp:105, name:'backlightvalue',       type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'Backlight value'],      // unknown
-                [dp:106, name:'phMmax',               type:'decimal', rw: 'rw',  min:0,   max:20,   /*defVal:1.5,*/  scale:10,  unit:'pH',    title:'<b>pH maximal value</b>'],
-                [dp:107, name:'phMmin',               type:'decimal', rw: 'rw',  min:0,   max:20,   /*defVal:0.5,*/  scale:10,  unit:'pH',    title:'<b>pH minimal value</b>'],
-                [dp:108, name:'ecMmax',               type:'decimal', rw: 'rw',  min:0,   max:100,  /*defVal:80.0,*/ scale:1,   unit:'µS/cm', title:'<b>Electrical Conductivity maximal value</b>'],
-                [dp:109, name:'ecMmin',               type:'decimal', rw: 'rw',  min:0,   max:100,  /*defVal:20.0,*/ scale:1,   unit:'µS/cm', title:'<b>Electrical Conductivity minimal value</b>'],
-                [dp:110, name:'orpMmax',              type:'decimal', rw: 'rw',  min:0,   max:1000, /*defVal:20.0,*/ scale:1,   unit:'mV',    title:'<b>Oxidation Reduction Potential maximal value</b>'],
-                [dp:111, name:'orpMmin',              type:'decimal', rw: 'rw',  min:0,   max:1000, /*defVal:20.0,*/ scale:1,   unit:'mV',    title:'<b>Oxidation Reduction Potential minimal value</b>'],
-                [dp:112, name:'freeChlorineMax',      type:'decimal', rw: 'rw',  min:0,   max:15,   /*defVal:20.0,*/ scale:10,  unit:'mg/L',  title:'<b>Free Chlorine maximal value</b>'],
-                [dp:113, name:'freeChlorineMin',      type:'decimal', rw: 'rw',  min:0,   max:15,   /*defVal:20.0,*/ scale:10,  unit:'mg/L',  title:'<b>Free Chlorine minimal value</b>'],
-                // "72": { "sensor_type": "phCalibration2"},
-                // "73": { "sensor_type": "ecCalibration"},
-                // "74": { "sensor_type": "orpCalibration"},
-                [dp:117, name:'salinity',             type:'decimal', rw: 'ro',  scale:1,   unit:'gg', description:'Salt value'],
-                // "78": { "store_tuya_attribute": "ORP_Calibration" }
-
+                [dp:102, name:'freeChlorine', preProc:'checkInvalidValue',       type:'decimal', rw: 'ro',  scale:1,   unit:'mg/L',  description:'Free chlorine value'],                   // The water in the swimming pool should be between 6.5-8ph and ORP should be between 487-840mv, and the chlorine value will be displayed normally. Chlorine will not be displayed if either value is out of range
+                [dp:103, name:'phCalibration1',       type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'pH Calibration 1'],                      // "67": { "sensor_type": "phCalibration1" },
+                [dp:104, name:'backlightStatus',      type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'Backlight status'],                      // "68": { "store_tuya_attribute": "backlight_status", "EvalExp": "(value)" },
+                [dp:105, name:'backlightLevel',       type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'Backlight level'],                                                                   // "69": { "store_tuya_attribute": "backlight_level", "EvalExp": "(value)" }, dp:105
+                [dp:106, name:'phMmax',               type:'decimal', rw: 'rw',  min:0,   max:20,   /*defVal:14.0,*/  scale:10,  unit:'pH',    title:'<b>pH maximal value</b>'],
+                [dp:107, name:'phMmin',               type:'decimal', rw: 'rw',  min:0,   max:20,   /*defVal:0.0,*/   scale:10,  unit:'pH',    title:'<b>pH minimal value</b>'],
+                [dp:108, name:'ecMmax',               type:'decimal', rw: 'rw',  min:0,   max:20000, /*defVal:20000.0,*/ scale:1, unit:'µS/cm', title:'<b>Electrical Conductivity maximal value</b>'],
+                [dp:109, name:'ecMmin',               type:'decimal', rw: 'rw',  min:0,   max:100,  /*defVal:0.0,*/   scale:1,   unit:'µS/cm', title:'<b>Electrical Conductivity minimal value</b>'],
+                [dp:110, name:'orpMmax',              type:'decimal', rw: 'rw',  min:0,   max:1000, /*defVal:999.0,*/ scale:1,   unit:'mV',    title:'<b>Oxidation Reduction Potential maximal value</b>'],
+                [dp:111, name:'orpMmin',              type:'decimal', rw: 'rw',  min:0,   max:1000, /*defVal:0.0,*/   scale:1,   unit:'mV',    title:'<b>Oxidation Reduction Potential minimal value</b>'],
+                [dp:112, name:'freeChlorineMax',      type:'decimal', rw: 'rw',  min:0,   max:15,   /*defVal:20.0,*/  scale:10,  unit:'mg/L',  title:'<b>Free Chlorine maximal value</b>'],
+                [dp:113, name:'freeChlorineMin',      type:'decimal', rw: 'rw',  min:0,   max:15,   /*defVal:20.0,*/  scale:10,  unit:'mg/L',  title:'<b>Free Chlorine minimal value</b>'],
+                [dp:114, name:'phCalibration2',       type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'pH Calibration 2'],                       // "72": { "sensor_type": "phCalibration2" },
+                [dp:115, name:'ecCalibration',        type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'EC Calibration'],                         // "73": { "sensor_type": "ecCalibration" },
+                [dp:116, name:'orpCalibration',       type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'ORP Calibration'],                        // "74": { "sensor_type": "orpCalibration" },
+                [dp:117, name:'salinity',             type:'decimal', rw: 'ro',  scale:1,   unit:'gg',    description:'Salt value'],
+                [dp:118, name:'salinityCalibration',  type:'number',  rw: 'ro',  scale:1,   unit:'',     description:'Salinity? Calibration ?(0x76)'],            // "76": { "sensor_type": "salinityCalibration" },
             ],
             refresh:        ['refreshQueryAllTuyaDP'],
             configuration : ['battery': false],
@@ -154,6 +154,13 @@ Measures :
 
 ]
 
+Number checkInvalidValue(Number value) {
+    if (value == -1) {
+        logDebug "Invalid value -1.0 detected, returning null"
+        return null
+    }
+    return value
+}
 
 // called from standardProcessTuyaDP in the commonLib for each Tuya dp report in a Zigbee message
 // should always return true, as we are processing all the dp reports here
