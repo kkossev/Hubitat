@@ -1,8 +1,8 @@
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NestedBlockDepth, NoDouble, NoFloat, NoWildcardImports, ParameterName, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NestedBlockDepth, NoDouble, NoFloat, NoWildcardImports, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy', documentationLink: '',
-    version: '3.3.2'
+    version: '3.3.3'
 )
 /*
  *  Device Profile Library
@@ -30,6 +30,7 @@ library(
  * ver. 3.3.0  2024-06-29 kkossev  - empty preferences bug fix; zclWriteAttribute delay 50 ms; added advanced check in inputIt(); fixed 'Cannot get property 'rw' on null object' bug; fixed enum attributes first event numeric value bug;
  * ver. 3.3.1  2024-07-06 kkossev  - added powerSource event in the initEventsDeviceProfile
  * ver. 3.3.2  2024-08-18 kkossev  - release 3.3.2
+ * ver. 3.3.3  2024-08-18 kkossev  - (dev. branch) sendCommand and setPar commands commented out; must be declared in the main driver where really needed
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
@@ -42,8 +43,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.3.2' }
-static String deviceProfileLibStamp() { '2024/08/18 11:29 PM' }
+static String deviceProfileLibVersion()   { '3.3.3' }
+static String deviceProfileLibStamp() { '2024/08/30 9:05 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -55,6 +56,8 @@ import groovy.transform.CompileStatic
 metadata {
     // no capabilities
     // no attributes
+    /*
+    // copy the following commands to the main driver, if needed
     command 'sendCommand', [
         [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
         [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
@@ -63,7 +66,7 @@ metadata {
             [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
             [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
     ]
-
+    */
     preferences {
         if (device) {
             // itterate over DEVICE.preferences map and inputIt all
@@ -102,7 +105,6 @@ public List<String> getDeviceProfilesMap()   {
     }
     return activeProfiles
 }
-
 
 // ---------------------------------- deviceProfilesV3 helper functions --------------------------------------------
 
@@ -585,7 +587,7 @@ public boolean sendAttribute(String par=null, val=null ) {
     List<String> cmds = []
     //Boolean validated = false
     logDebug "sendAttribute(${par}, ${val})"
-    if (par == null || DEVICE?.preferences == null || DEVICE?.preferences == [:]) { logDebug "DEVICE.preferences is empty!" ; return false }
+    if (par == null || DEVICE?.preferences == null || DEVICE?.preferences == [:]) { logDebug 'DEVICE.preferences is empty!' ; return false }
 
     Map dpMap = getAttributesMap(par, false)                                   // get the map for the attribute
     l//log.trace "sendAttribute: dpMap=${dpMap}"
@@ -790,7 +792,7 @@ Map inputIt(String paramPar, boolean debug = false) {
             input.range = "${foundMap.min}..${foundMap.max}"
         }
         if (input.range != null && input.description != null) {
-            if (input.description != '') { input.description += "<br>" }
+            if (input.description != '') { input.description += '<br>' }
             input.description += "<i>Range: ${input.range}</i>"
             if (foundMap.unit != null && foundMap.unit != '') {
                 input.description += " <i>(${foundMap.unit})</i>"

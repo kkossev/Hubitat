@@ -18,7 +18,8 @@
  * ver. 3.2.0  2024-05-26 kkossev  - first version, based on the mmWave radar driver code : depricated Linptech; added TS0202 add _TYZB01_vwqnz1sn; 
  * ver. 3.2.1  2024-05-31 kkossev  - commonLib ver 3.2.1 allignment; tested 2In1 _TZE200_3towulqd ; new device profile group 'RH3040_TUYATEC'; SiHAS; 
  * ver. 3.2.2  2024-07-05 kkossev  - created motionLib; restored 'all' attribute
- * ver. 3.2.3  2024-07-27 kkossev  - (dev.branch) added Sonoff SNZB-03P
+ * ver. 3.2.3  2024-07-27 kkossev  - added Sonoff SNZB-03P
+ * ver. 3.3.0  2024-08-30 kkossev  - (dev.branch)
  *                                   
  *                                   TODO: Sensor 3in1 _warning: couldn't find map for preference motionReset
  *                                   TODO: Sensor 3in1 _TZE200_7hfcudw5 - fix battery percentage (shows 4)
@@ -45,8 +46,8 @@
  *                                   TODO: check temperatureOffset and humidityOffset
 */
 
-static String version() { "3.2.3" }
-static String timeStamp() {"2024/07/27 8:29 AM"}
+static String version() { "3.3.0" }
+static String timeStamp() {"2024/08/30 9:12 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -99,7 +100,16 @@ metadata {
         attribute 'ledEnable', 'enum', ['disabled', 'enabled']
         attribute 'WARNING', 'string'
 
-       // command 'setMotion', [[name: 'setMotion', type: 'ENUM', constraints: ['No selection', 'active', 'inactive'], description: 'Force motion active/inactive (for tests)']]
+        // command 'setMotion' is defined in motionLib
+        // version 3.3.0
+        command 'sendCommand', [
+            [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
+            [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
+        ]
+        command 'setPar', [
+                [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
+                [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
+        ]       
 
         // itterate through all the figerprints and add them on the fly
         deviceProfilesV3.each { profileName, profileMap ->

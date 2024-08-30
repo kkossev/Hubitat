@@ -27,7 +27,8 @@
  * ver. 3.2.1  2024-05-25 kkossev  - Tuya radars bug fix
  * ver. 3.2.2  2024-06-04 kkossev  - commonLib 3.2.1 allignment; deviceProfile preference bug fix.
  * ver. 3.2.3  2024-06-21 kkossev  - added _TZE204_nbkshs6k and _TZE204_dapwryy7 @CheesyPotato 
- * ver. 3.2.4  2024-07-31 kkossev  - (dev.branch) using motionLib.groovy; added batteryLib; added _TZE200_jkbljri7; TS0601 _TZE204_dapwryy7 all DPs defined; added Wenzhi TS0601 _TZE204_laokfqwu
+ * ver. 3.2.4  2024-07-31 kkossev  - using motionLib.groovy; added batteryLib; added _TZE200_jkbljri7; TS0601 _TZE204_dapwryy7 all DPs defined; added Wenzhi TS0601 _TZE204_laokfqwu
+ * ver. 3.3.0  2024-08-30 kkossev  - (dev.branch) deviceProfileLib 3.3.3
  *                                   
  *                                   TODO: check batterySource for the radars (all dc/mains except the _TZE200_2aaelwxk)
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
@@ -44,8 +45,8 @@
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
 */
 
-static String version() { "3.2.4" }
-static String timeStamp() {"2024/07/31 5:20 PM"}
+static String version() { "3.3.0" }
+static String timeStamp() {"2024/08/30 9:24 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -109,6 +110,14 @@ metadata {
         attribute 'ledIndicator', 'number'
         attribute 'WARNING', 'string'
 
+        command 'sendCommand', [
+            [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
+            [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
+        ]
+        command 'setPar', [
+                [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
+                [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
+        ]
         if (_DEBUG) {
             command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]] 
             command 'parseTest', [[name: "parseTest", type: "STRING", description: "parseTest", defaultValue : ""]]

@@ -39,6 +39,7 @@ library(
   * ver. 3.3.0  2024-06-25 kkossev  - fixed exception for unknown clusters; added cluster 0xE001; added powerSource - if 5 minutes after initialize() the powerSource is still unknown, query the device for the powerSource
   * ver. 3.3.1  2024-07-06 kkossev  - removed isFingerbot() dependancy; added FC03 cluster (Frient); removed noDef from the linter; added customParseIasMessage and standardParseIasMessage; powerSource set to unknown on initialize();
   * ver. 3.3.2  2024-07-12 kkossev  - added PollControl (0x0020) cluster; ping for SONOFF
+  * ver. 3.3.3  2024-08-30 kkossev  - (dev.branch) added queryAllTuyaDP()
   *
   *                                   TODO: check deviceCommandTimeout()
   *                                   TODO: offlineCtr is not increasing! (ZBMicro);
@@ -53,8 +54,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.3.2' }
-String commonLibStamp() { '2024/07/12 8:53 PM' }
+String commonLibVersion() { '3.3.3' }
+String commonLibStamp() { '2024/07/30 4:45 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -880,14 +881,18 @@ public void tuyaTest(String dpCommand, String dpValue, String dpTypeString ) {
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
 }
 
-//private getANALOG_INPUT_BASIC_CLUSTER() { 0x000C }
-//private getANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE() { 0x0055 }
 
 public List<String> tuyaBlackMagic() {
     int ep = safeToInt(state.destinationEP ?: 01)
     if (ep == null || ep == 0) { ep = 1 }
     logInfo 'tuyaBlackMagic()...'
     return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :ep], delay = 200)
+}
+
+List<String> queryAllTuyaDP() {
+    logTrace 'queryAllTuyaDP()'
+    List<String> cmds = zigbee.command(0xEF00, 0x03)
+    return cmds
 }
 
 public void aqaraBlackMagic() {
