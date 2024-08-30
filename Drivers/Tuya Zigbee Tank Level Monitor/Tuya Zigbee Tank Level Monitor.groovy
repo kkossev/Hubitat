@@ -15,10 +15,10 @@
  * ver. 3.3.0  2024-08-03 kkossev  - first test version
  * ver. 3.3.1  2024-08-08 kkossev  - driver renamed to 'Tuya Zigbee Tank Level Monitor'
  * ver. 3.3.2  2024-08-11 kkossev  - driver renamed to 'Tuya Zigbee Tank Level Monitor', pars renamed to upperLimit/lowerLimit; added MOREYALEC_TUYA_ME201WZ device profile for tests;
- * ver. 3.3.3  2024-08-30 kkossev  - (dev. branch_) updated _TZE284_kyyu8rbj fingerprint for Morayelec ME201WZ; changeed battery from percentage to voltage; queryAllTuyaDPs on refresh
+ * ver. 3.3.3  2024-08-30 kkossev  - (dev. branch_) updated _TZE284_kyyu8rbj fingerprint for Morayelec ME201WZ; changeed battery from percentage to voltage; queryAllTuyaDP on refresh
  *                                   
  *                                   TODO: 'Installation Height' not updating @digitalturbo
- *                                   TODO: queryAllTuyaDPs on refresh to be made optional
+ *                                   TODO: queryAllTuyaDP on refresh to be made optional
  *                                   TODO: HPM
  */
 

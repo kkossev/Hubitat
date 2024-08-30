@@ -13,23 +13,17 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.3.0  2024-08-03 kkossev  - first test version
+ * ver. 3.3.1  2024-08-30 kkossev  - (dev.branch) added tuyaDataQuery
  *                                   
- *                                   TODO:
+ *                                   TODO: put in HPM
  */
 
-static String version() { "3.3.0" }
-static String timeStamp() {"2024/08/18 11:41 PM"}
+static String version() { "3.3.1" }
+static String timeStamp() {"2024/08/30 5:40 PM"}
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for production
-
-/*
-import groovy.transform.Field
-import groovy.transform.CompileStatic
-import hubitat.helper.HexUtils
-import hubitat.zigbee.zcl.DataType
-*/
 
 #include kkossev.deviceProfileLib
 #include kkossev.commonLib
@@ -150,7 +144,7 @@ Measures :
                 // "78": { "store_tuya_attribute": "ORP_Calibration" }
 
             ],
-            refresh:        ['tuyaDataQuery'],
+            refresh:        ['refreshQueryAllTuyaDP'],
             configuration : ['battery': false],
             deviceJoinName: 'BLE_YL01 Tuya Zigbee Chlorine Meter'
     ]
@@ -242,7 +236,7 @@ void customUpdated() {
 void customInitializeVars(final boolean fullInit=false) {
     logDebug "customInitializeVars(${fullInit})"
     if (state.deviceProfile == null || state.deviceProfile == '' || state.deviceProfile == 'UNKNOWN') {
-        setDeviceNameAndProfile('TS0601', '_TZE200_lvkk0hdg')               // in deviceProfileiLib.groovy
+        setDeviceNameAndProfile('TS0601', '_TZE200_v1jqz5cy')               // in deviceProfileiLib.groovy
     }
     if (fullInit == true) {
         resetPreferencesToDefaults()
@@ -258,18 +252,13 @@ void customInitEvents(final boolean fullInit=false) {
 void customParseZdoClusters(Map descMap) {
     if (descMap.clusterInt == 0x0013) {
         logDebug "customParseZdoClusters() - device announce"
-        tyyaDataQuery()
+        sendZigbeeCommands(refreshQueryAllTuyaDP())
     }
 }
 
-void tuyaDataQuery() {
-    logDebug "tuyaDataQuery()"
-    List<String> cmds = []
-    //cmds = zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], delay = 201, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd )
-    cmds += zigbee.command(0xEF00, 0x03)    // Tuya Data Query
-    sendZigbeeCommands(cmds)
+List<String> refreshQueryAllTuyaDP() {
+    return queryAllTuyaDP()
 }
-
 
 void test(String par) {
     long startTime = now()
