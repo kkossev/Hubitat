@@ -13,15 +13,15 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.3.0  2024-08-03 kkossev  - first test version
- * ver. 3.3.1  2024-08-30 kkossev  - (dev.branch) added tuyaDataQuery; added dp 103 104 114 115 116 118 decoding; filter invalid freeChlorine value -1.0  (0xFFFFFFFFF)
+ * ver. 3.3.1  2024-08-31 kkossev  - (dev.branch) added tuyaDataQuery; added dp 103 104 114 115 116 118 decoding; invalid freeChlorine value -1.0  (0xFFFFFFFFF) returned as 0 (zero), added automatic polling (configurable)
  *                                   
  *                                   TODO: 
- *                                   TODO: unprocessed Tuya cluster command 11
+ *                                   TODO: unprocessed Tuya cluster command 11 ?
  *                                   TODO: put in HPM
  */
 
 static String version() { "3.3.1" }
-static String timeStamp() {"2024/08/30 10:01 PM"}
+static String timeStamp() { "2024/08/31 11:25 AM" }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -85,10 +85,18 @@ metadata {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables events logging.'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_DEBUG_LOGGING, description: 'Turns on debug logging for 24 hours.'
         // the rest of the preferences are inputIt from the deviceProfileLib and from the included libraries
+        if (device) {
+            input name: 'pollingInterval', type: 'enum', title: '<b>Polling Interval</b>', options: PollingIntervalOpts.options, defaultValue: PollingIntervalOpts.defaultValue, required: true, description: 'Changes how often the hub will poll the sensor.'
+        }
     }
 }
 
 @Field static String ttStyleStr = '<style>.tTip {display:inline-block;border-bottom: 1px dotted black;}.tTip .tTipText {display:none;border-radius: 6px;padding: 5px 0;position: absolute;z-index: 1;}.tTip:hover .tTipText {display:inline-block;background-color:red;color:red;}</style>'
+
+@Field static final Map PollingIntervalOpts = [
+    defaultValue: 300,
+    options     : [0: 'Disabled', 5: 'Every 5 seconds (DONT DO THAT!)', 60: 'Every minute (not recommended)', 120: 'Every 2 minutes', 300: 'Every 5 minutes (default)', 600: 'Every 10 minutes', 900: 'Every 15 minutes', 1800: 'Every 30 minutes', 3600: 'Every 1 hour']
+]
 
 /*
 Measures :
@@ -156,8 +164,8 @@ Measures :
 
 Number checkInvalidValue(Number value) {
     if (value == -1) {
-        logDebug "Invalid value -1.0 detected, returning null"
-        return null
+        logDebug "Invalid value -1.0 detected, returning zero"
+        return 0
     }
     return value
 }
@@ -197,11 +205,6 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, value
     }
 }
 
-List<String> refreshFantem() {
-    List<String>  cmds = zigbee.command(0xEF00, 0x07, '00')    // Fantem Tuya Magic
-    return cmds
-}
-
 List<String> customRefresh() {
     logDebug "customRefresh()"
     List<String> cmds = []
@@ -235,10 +238,49 @@ void customUpdated() {
         logDebug "forcedProfile is not set"
     }
 
+    final int interval = (settings?.pollingInterval as Integer) ?: 0
+    if (interval > 0) {
+        logInfo "customUpdated: scheduling polling every ${interval} seconds"
+        schedulePolling(interval)
+    }
+    else {
+        unSchedulePolling()
+        logInfo 'customUpdated: polling is disabled!'
+    }
+
     // Itterates through all settings
     cmds += updateAllPreferences()  // defined in deviceProfileLib
     sendZigbeeCommands(cmds)
 }
+
+/**
+ * Schedule polling
+ * @param intervalMins interval in seconds
+ */
+private void schedulePolling(final int intervalSecs) {
+    String cron = getCron( intervalSecs )
+    logDebug "cron = ${cron}"
+    schedule(cron, 'autoPoll')
+}
+
+private void unSchedulePolling() {
+    unschedule('autoPoll')
+}
+
+/**
+ * Scheduled job for polling device specific attribute(s)
+ */
+void autoPoll() {
+    logDebug 'autoPoll()...'
+    checkDriverVersion(state)
+    List<String> cmds = []
+    cmds = refreshFromDeviceProfileList()
+    if (cmds != null && cmds != [] ) {
+        sendZigbeeCommands(cmds)
+    }
+}
+
+
 
 void customInitializeVars(final boolean fullInit=false) {
     logDebug "customInitializeVars(${fullInit})"
@@ -248,6 +290,7 @@ void customInitializeVars(final boolean fullInit=false) {
     if (fullInit == true) {
         resetPreferencesToDefaults()
     }
+    if (fullInit || settings?.pollingInterval == null) { device.updateSetting('pollingInterval', [value: PollingIntervalOpts.defaultValue.toString(), type: 'enum']) }
 }
 
 void customInitEvents(final boolean fullInit=false) {
