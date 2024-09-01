@@ -21,12 +21,14 @@
  * ver. 3.3.4  2024-06-29 kkossev  - added NAMRON_RADIATOR device profile and attributes;
  * ver. 3.3.5  2024-07-09 kkossev  - release 3.3.5
  * ver. 3.3.6  2024-08-28 kkossev  - added Sunricher thermostat model 'HK-LN-HEATER-A' fingerprint
- * ver. 3.3.7  2024-08-31 kkossev  - (dev. branch) New 'Sunricher Thermostat' device profile;
+ * ver. 3.3.7  2024-09-01 kkossev  - (dev. branch) New 'Sunricher Thermostat' device profile; fixed missing eco() method; rounded the floorTemperature to 0.1; heatingSetpoint is updated to the ecoSetpoint when eco mode is activated; added ecoSetPoint attribute;
+ *                                   removed systemMode'; added command 'eco'; added state.lastHeatingSetpoint; fixed thermostatMode switching from 'eco' to 'off'; fixed emergencyHeating mode update; 
  *
- */
+ *                                   TODO:
+*/
 
 static String version() { '3.3.7' }
-static String timeStamp() { '2024/08/31 10:11 PM' }
+static String timeStamp() { '2024/09/01 5:08 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
@@ -66,7 +68,7 @@ metadata {
         attribute 'floorCalibrationTemp', 'number'                  // NAMRON
         attribute 'childLock', 'enum', ['off', 'on']                // BRT-100, Aqara E1, Sonoff, AVATTO, NAMRON
         attribute 'ecoMode', 'enum', ['off', 'on']                  // BRT-100, NAMRON
-        attribute 'ecoTemp', 'number'                               // BRT-100
+        attribute 'ecoSetPoint', 'number'                           // NAMRON
         attribute 'emergencyHeating', 'enum', ['off', 'on']         // BRT-100
         attribute 'emergencyHeatingTime', 'number'                  // BRT-100
         attribute 'floorTemperature', 'number'                      // AVATTO/MOES floor thermostats NAMRON
@@ -81,13 +83,13 @@ metadata {
         attribute 'modeAfterDry', 'enum', ['off', 'manual', 'auto', 'eco']      // NAMRON
         attribute 'overHeatAlarm', 'number'                         // NAMRON
         attribute 'powerUpStatus', 'enum', ['default', 'last']      // NAMRON
-        attribute 'systemMode', 'enum', ['off', 'heat', 'on']               // GENERIC
         attribute 'temperatureDisplayMode', 'enum', ['room Temp', 'floor temp']  // NAMRON
         attribute 'windowOpenCheck', 'number'                       // NAMRON
         attribute 'windowOpenCheckActivation', 'enum', ['enabled', 'disabled']  // NAMRON_RADIATOR
         attribute 'windowOpenState', 'enum', ['notOpened', 'opened']  // NAMRON_RADIATOR
         attribute 'overHeatMark', 'enum', ['no', 'temperature over 85ºC and lower than 90ºC', 'temperature over 90ºC']  // NAMRON_RADIATOR
 
+        command 'eco', [[name: 'eco', type: 'STRING', description: 'Set the thermostat to Eco mode', defaultValue : '']]
         command 'refreshAll', [[name: 'refreshAll', type: 'STRING', description: 'Refreshes all parameters', defaultValue : '']]
         command 'factoryResetThermostat', [[name: 'factoryResetThermostat', type: 'STRING', description: 'Factory reset the thermostat', defaultValue : '']]
         if (_DEBUG) { command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  }
@@ -139,7 +141,7 @@ metadata {
                 [at:'0x0201:0x0010',  name:'calibrationTemp',          type:'decimal', dt:'0x28', rw: 'rw', min:-3.0, max:3.0,  defVal:0.0, step:0.1, scale:10,  unit:'°C', title: '<b>Local Temperature Calibration</b>', description:'Room temperature calibration'],         // ^^^ (Int8S, reportable) TODO: check dt!!!    LocalTemperatureCalibration : Room temperature calibration, range is -30-30, the maximum resolution this format allows 0.1°C. Default value: 0
                 [at:'0x0201:0x0011',  name:'coolingSetpoint',          type:'decimal', dt:'0x29', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Cooling Setpoint</b>',              description:'This system is not invalid'],                      // not used
                 [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt:'0x29', rw: 'rw', min:0.0,  max:40.0, defVal:30.0, step:0.01, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],          // ^^^(int16S, reportable)  OccupiedHeatingSetpoint : Range is 0-4000,the maximum resolution this format allows is 0.01 ºC. Default is 0xbb8(30.00ºC)
-                [at:'0x0201:0x0014',  name:'ecoSetPoint',             type:'decimal', dt:'0x29', rw: 'rw', min:0.0,  max:40.0, defVal:6.0,  step:0.01, scale:100,  unit:'°C', title: '<b>Eco (Away) Heating Setpoint</b>',    description:'Away (Eco, unoccupied) heating setpoint'],                // ^^^(int16S, reportable)  Un-OccupiedHeatingSetpoint : Range is 0-4000,the maximum resolution this format allows is 0.01 ºC. Default is 0x258(6.00ºC)
+                [at:'0x0201:0x0014',  name:'ecoSetPoint',              type:'decimal', dt:'0x29', rw: 'rw', min:0.0,  max:40.0, defVal:6.0,  step:0.01, scale:100,  unit:'°C', title: '<b>Eco (Away) Heating Setpoint</b>',    description:'Away (Eco, unoccupied) heating setpoint'],                // ^^^(int16S, reportable)  Un-OccupiedHeatingSetpoint : Range is 0-4000,the maximum resolution this format allows is 0.01 ºC. Default is 0x258(6.00ºC)
                 [at:'0x0201:0x001B',  name:'controlSequenceOfOperation', type:'enum',  dt:'0x30', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 2: 'heat'], unit:'',  description:'device supported operation type'],  // always 2 (heat)                   // ^^^(Map16, read-only, reportable) HVAC relay state/ termostatRunningState Indicates the relay on/off status, here only supports bit0( Heat State)
                 [at:'0x0201:0x001C',  name:'thermostatMode',           type:'enum',    dt:'0x30', rw: 'rw', map:[0: 'off', 1: 'auto', 4: 'heat', 8: 'emergency heat'], title: '<b>Thermostat Mode</b>', description:'Thermostat (System) Mode'],
                 [at:'0x0201:0x0029',  name:'thermostatOperatingState', type:'enum',    dt:'0x30', rw: 'ro', min:0,    max:1,    step:1,  scale:1,    map:[0: 'idle', 1: 'heating'], unit:'',  description:'Thermostat Operating State (relay on/off status)'],                  // ^^^(Map16, read-only, reportable) HVAC relay state/ termostatRunningState Indicates the relay on/off status, here only supports bit0( Heat State)
@@ -165,7 +167,7 @@ metadata {
             ],
             supportedThermostatModes : ['off', 'heat', 'auto', 'emergency heat', 'eco'],
             supportedThermostatFanModes : ['off'],
-            refresh: ['pollThermostatCluster'],
+            refresh: ['pollThermostatCluster'], // definded in the thermostatLib
             deviceJoinName: 'NAMRON Thermostat',
             configuration : [:]
     ],
@@ -209,14 +211,14 @@ metadata {
                 [at:'0x0201:0x1000',  name:'lcdBrightnesss',           type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:1,    max:7, defVal:'1', map:[1: 'Level 1', 2: 'Level 2', 3: 'Level 3', 4: 'Level 4', 5: 'Level 5', 6: 'Level 6', 7: 'Level 7'], unit:'',  title: '<b>OLED brightness</b>', description:'OLED brightness'],
                 [at:'0x0201:0x1001',  name:'displayAutoOffActivation', type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'0', map:[0: 'deactivated', 1: 'activated'], title: '<b>Display Auto Off Activation</b>', description:'Display auto off activation'],
                 [at:'0x0201:0x1004',  name:'powerUpStatus',            type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'1',   step:1,  scale:1,    map:[0: 'default', 1: 'last'], title: '<b>Power Up Status</b>',description:'Power Up Status'],
-                [at:'0x0201:0x1009',  name:'windowOpenCheckActivation', type:'enum',   dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'1',   step:1,  scale:1,    map:[0: 'enabled', 1: 'disabled'], title: '<b>Window Open Check Activation</b>',description:'Window open check activation'], 
+                [at:'0x0201:0x1009',  name:'windowOpenCheckActivation', type:'enum',   dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'1',   step:1,  scale:1,    map:[0: 'enabled', 1: 'disabled'], title: '<b>Window Open Check Activation</b>',description:'Window open check activation'],
                 [at:'0x0201:0x100A',  name:'hysteresis',               type:'decimal', dt:'0x20',  mfgCode:'0x1224', rw: 'rw', min:0.5, max:5.0, defVal:0.5, step:0.1, scale:10,  unit:'°C', title: '<b>Hysteresis</b>', description:'Hysteresis'],
                 [at:'0x0201:0x100B',  name:'windowOpenState',          type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'ro', min:0,    max:1, defVal:'0', map:[0: 'notOpened', 1: 'opened'], title: '<b>Window Open State/b>',description:'Window open state'],
                 [at:'0x0201:0x2002',  name:'overHeatMark',             type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'ro', min:0,    max:2, defVal:'0', map:[0: 'no', 1: 'temperature over 85ºC and lower than 90ºC', 2: 'temperature over 90ºC'], description:'OoverHeatMark'],
                 // commands supported
                 [cmd:'0x0201:0x0000',  name:'setpointRaiseLower',      type:'decimal', dt:'0x21', rw: 'ow', min:5.0,  max:35.0, step:0.5, scale:10,  unit:'°C', description:'Setpoint Raise/Lower'],
                 [cmd:'0x0201:0x0001',  name:'setWeeklySchedule',       type:'decimal', dt:'0x21', rw: 'ow', description:'Set Weekly Schedule'],
-                [cmd:'0x0201:0x0002',  name:'gettWeeklySchedule',      type:'decimal', dt:'0x21', rw: 'ro', description:'Get Weekly Schedule'] 
+                [cmd:'0x0201:0x0002',  name:'gettWeeklySchedule',      type:'decimal', dt:'0x21', rw: 'ro', description:'Get Weekly Schedule']
             ],
             supportedThermostatModes : ['off', 'heat', 'auto'],
             supportedThermostatFanModes : ['off'],
@@ -243,7 +245,7 @@ metadata {
             attributes    : [
                 [at:'0x0201:0x0000',  name:'temperature',              type:'decimal', dt:'0x29', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', description:'Measured room temperature'],
                 [at:'0x0201:0x0001',  name:'floorTemperature',         type:'decimal', dt:'0x29', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C',  description:'Floor temperature'],
-                [at:'0x0201:0x0002',  name:'occupancy',                type:'enum',    dt:'0x30', rw: 'ro', min:0,    max:1,    step:1,  scale:1,    map:[0: 'away', 1: 'occupied'], unit:'',  description:'Occupancy'],    // When this flag is set as 1, it means occupied, OccupiedHeatingSetpoint will be used, otherwise UnoccupiedHeatingSetpoint will be used.                                                          // ^^^ (bitmap8, read-only) Occupancy : When this flag is set as 1, it means occupied, OccupiedHeatingSetpoint will be used, otherwise UnoccupiedHeatingSetpoint will be used
+                [at:'0x0201:0x0002',  name:'occupancy',                type:'enum',    dt:'0x30', rw: 'ro', min:0,    max:1,    step:1,  scale:1,    map:[0: 'away', 1: 'heat'], unit:'',  description:'Occupancy'],    // When this flag is set as 1, it means occupied, OccupiedHeatingSetpoint will be used, otherwise UnoccupiedHeatingSetpoint will be used.                                                          // ^^^ (bitmap8, read-only) Occupancy : When this flag is set as 1, it means occupied, OccupiedHeatingSetpoint will be used, otherwise UnoccupiedHeatingSetpoint will be used
                 [at:'0x0201:0x0010',  name:'calibrationTemp',          type:'decimal', dt:'0x28', rw: 'rw', min:-3.0, max:3.0,  defVal:0.0, step:0.1, scale:10,  unit:'°C', title: '<b>Local Temperature Calibration</b>', description:'Room temperature calibration'],
                 [at:'0x0201:0x0011',  name:'coolingSetpoint',          type:'decimal', dt:'0x29', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Cooling Setpoint</b>',              description:'This system is not invalid'],
                 [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt:'0x29', rw: 'rw', min:0.0,  max:40.0, defVal:30.0, step:0.01, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
@@ -272,7 +274,7 @@ metadata {
             ],
             supportedThermostatModes : ['off', 'heat', 'auto', 'emergency heat', 'eco'],
             supportedThermostatFanModes : ['off'],
-            refresh: ['pollThermostatCluster'],
+            refresh: ['pollThermostatCluster'/*, 'pollOccupancy'*/],
             deviceJoinName: 'Sunricher Thermostat',
             configuration : [:]
     ],
@@ -295,7 +297,7 @@ metadata {
                 [at:'0x0201:0x0000',  name:'temperature',              type:'decimal', dt: '0x21', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Temperature</b>',                   description:'Measured temperature'],
                 [at:'0x0201:0x0011',  name:'coolingSetpoint',          type:'decimal', dt: '0x21', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Cooling Setpoint</b>',              description:'cooling setpoint'],
                 [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt: '0x21', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
-                [at:'0x0201:0x001C',  name:'systemMode',                     type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b> Mode</b>',                   description:'System Mode ?'],
+                [at:'0x0201:0x001C',  name:'thermostatMode',           type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'auto', 2:'unknown_2', 4:'heat', 8:'emergency heat'], unit:'', title: '<b>thermostatMode</b>', description:'System Mode ?'],
                 [at:'0x0201:0x001E',  name:'thermostatRunMode',        type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatRunMode</b>',                   description:'thermostatRunMode'],
                 [at:'0x0201:0x0020',  name:'battery2',                 type:'number',  dt: '0x21', rw: 'ro', min:0,    max:100,  step:1,  scale:1,    unit:'%',  description:'Battery percentage remaining'],
                 [at:'0x0201:0x0023',  name:'thermostatHoldMode',       type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatHoldMode</b>',                   description:'thermostatHoldMode'],
@@ -337,7 +339,6 @@ void customParseThermostatConfigCluster(final Map descMap) {
     }
 
 }
-
 
 //
 // called from updated() in the main code
@@ -468,7 +469,6 @@ void customInitEvents(final boolean fullInit=false) {
 
 // called from processFoundItem  (processTuyaDPfromDeviceProfile and ) processClusterAttributeFromDeviceProfile in deviceProfileLib when a Zigbee message was found defined in the device profile map
 //
-//  TODO !!!!!!!!!!!!!!!!!!!
 /* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
 void customProcessDeviceProfileEvent(final Map descMap, final String name, final valueScaled, final String unitText, final String descText) {
     logTrace "customProcessDeviceProfileEvent(${name}, ${valueScaled}) called"
@@ -477,86 +477,69 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
         case 'temperature' :
             handleTemperatureEvent(valueScaled as Float)
             break
+        case 'floorTemperature' :
+            eventMap.value = Math.round(valueScaled * 10) / 10
+            eventMap.unit = '°C'
+            sendThermostatEvent(eventMap)
+            break
         case 'humidity' :
             handleHumidityEvent(valueScaled)
             break
         case 'heatingSetpoint' :
             sendHeatingSetpointEvent(valueScaled)
+            state.lastHeatingSetpoint = valueScaled
             break
-        case 'systemMode' : // Aqara E1 and AVATTO thermostat (off/on)
-            sendEvent(eventMap)
-            logInfo "${descText}"
-            if (valueScaled == 'on') {  // should be initialized with 'unknown' value
-                String lastThermostatMode = state.lastThermostatMode
-                sendEvent(name: 'thermostatMode', value: lastThermostatMode, isStateChange: true, description: 'TRV systemMode is on', type: 'digital')
+        case 'thermostatMode' :  // changed 09/01/2024 (0x0201:0x001c)
+            if (device.currentValue('ecoMode') == 'on' && valueScaled != 'off') {
+                logWarn "customProcessDeviceProfileEvent: ignoring the thermostatMode <b>${valueScaled}</b> event, because the ecoMode is on!"
             }
             else {
-                sendEvent(name: 'thermostatMode', value: 'off', isStateChange: true, description: 'TRV systemMode is off', type: 'digital')
-            }
-            break
-        case 'thermostatMode' :  // AVATTO send the thermostat mode a second after being switched off - ignore it !
-            if (device.currentValue('systemMode') == 'off' ) {
-                logWarn "customProcessDeviceProfileEvent: ignoring the thermostatMode <b>${valueScaled}</b> event, because the systemMode is off"
-            }
-            else {
-                sendEvent(eventMap)
-                logInfo "${descText}"
+                sendThermostatEvent(eventMap)
                 state.lastThermostatMode = valueScaled
             }
             break
-        case 'ecoMode' :    // BRT-100 - simulate OFF mode ?? or keep the ecoMode on ?
-            sendEvent(eventMap)
-            logInfo "${descText}"
+        case 'ecoMode' :    // changed 09/01/2024
+            logTrace "ecoMode = ${valueScaled}"
+            sendThermostatEvent(eventMap)
             if (valueScaled == 'on') {  // ecoMode is on
-                sendEvent(name: 'thermostatMode', value: 'eco', isStateChange: true, description: 'BRT-100 ecoMode is on', type: 'digital')
-                sendEvent(name: 'thermostatOperatingState', value: 'idle', isStateChange: true, description: 'BRT-100 ecoMode is on', type: 'digital')
+                sendThermostatEvent([name: 'thermostatMode', value: 'eco', isStateChange: true, descriptionText: 'thermostatMode is eco (eco on)', type: 'digital'])
                 state.lastThermostatMode = 'eco'
+                // added 09/01/2024
+                Float ecoSetpoint = device.currentValue('ecoSetPoint') as Float ?: 6.0
+                sendThermostatEvent([name: 'heatingSetpoint',    value: ecoSetpoint, isStateChange: true, descriptionText: 'heatingSetpoint is ecoSetpoint', type: 'digital'])
+                sendThermostatEvent([name: 'thermostatSetpoint', value: ecoSetpoint, isStateChange: true, descriptionText: 'thermostatSetpoint is ecoSetpoint', type: 'digital'])
             }
             else {
-                sendEvent(name: 'thermostatMode', value: 'heat', isStateChange: true, description: 'BRT-100 ecoMode is off')
+                sendThermostatEvent([name: 'thermostatMode', value: 'heat', isStateChange: true, descriptionText: 'thermostatMode is heat (eco off)', type: 'digital'])
                 state.lastThermostatMode = 'heat'
+                // added 09/01/2024
+                Float lastHeatingSetpoint = state.lastHeatingSetpoint as Float ?: 20.0
+                sendThermostatEvent([name: 'heatingSetpoint',    value: state.lastHeatingSetpoint, isStateChange: true, descriptionText: 'heatingSetpoint is lastHeatingSetpoint', type: 'digital'])
+                sendThermostatEvent([name: 'thermostatSetpoint', value: state.lastHeatingSetpoint, isStateChange: true, descriptionText: 'thermostatSetpoint is lastHeatingSetpoint', type: 'digital'])
             }
             break
-
-        case 'emergencyHeating' :   // BRT-100
+        case 'ecoSetPoint' :
+            sendThermostatEvent(eventMap)
+            if (device.currentValue('ecoMode') == 'on') {
+                sendThermostatEvent([name: 'heatingSetpoint', value: valueScaled, isStateChange: true, descriptionText: 'heatingSetpoint is ecoSetpoint', type: 'digital'])
+                sendThermostatEvent([name: 'thermostatSetpoint', value: valueScaled, isStateChange: true, descriptionText: 'thermostatSetpoint is ecoSetpoint', type: 'digital'])
+            }
+            break
+        case 'emergencyHeating' :
             sendEvent(eventMap)
             logInfo "${descText}"
             if (valueScaled == 'on') {  // the valve shoud be completely open, however the level and the working states are NOT updated! :(
-                sendEvent(name: 'thermostatMode', value: 'emergency heat', isStateChange: true, description: 'BRT-100 emergencyHeating is on')
-                sendEvent(name: 'thermostatOperatingState', value: 'heating', isStateChange: true, description: 'BRT-100 emergencyHeating is on')
+                sendEvent(name: 'thermostatMode', value: 'emergency heat', isStateChange: true, descriptionText: 'emergencyHeating is on')
+                sendEvent(name: 'thermostatOperatingState', value: 'heating', isStateChange: true, descriptionText: 'emergencyHeating is on')
             }
             else {
-                sendEvent(name: 'thermostatMode', value: 'heat', isStateChange: true, description: 'BRT-100 emergencyHeating is off')
+                sendEvent(name: 'thermostatMode', value: 'heat', isStateChange: true, descriptionText: 'emergencyHeating is off')
             }
             break
-        case 'level' :      // BRT-100
-            sendEvent(eventMap)
-            logInfo "${descText}"
-            if (valueScaled == 0) {  // the valve is closed
-                sendEvent(name: 'thermostatOperatingState', value: 'idle', isStateChange: true, description: 'BRT-100 valve is closed')
-            }
-            else {
-                sendEvent(name: 'thermostatOperatingState', value: 'heating', isStateChange: true, description: 'BRT-100 valve is open %{valueScaled} %')
-            }
-            break
-            /*
-        case "workingState" :      // BRT-100   replaced with thermostatOperatingState
-            sendEvent(eventMap)
-            logInfo "${descText}"
-            if (valueScaled == "closed") {  // the valve is closed
-                sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: "BRT-100 workingState is closed")
-            }
-            else {
-                sendEvent(name: "thermostatOperatingState", value: "heating", isStateChange: true, description: "BRT-100 workingState is open")
-            }
-            break
-            */
         default :
             sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
-                //if (!doNotTrace) {
             logDebug "event ${name} sent w/ value ${valueScaled}"
             logInfo "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy DPs ?
-            //}
             break
     }
 }
@@ -565,66 +548,13 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.LocalDateTime
 
-
-
 void testT(String par) {
-    /*
-    log.trace "testT(${par}) : DEVICE.preferences = ${DEVICE.preferences}"
-    Map result
-    if (DEVICE != null && DEVICE.preferences != null && DEVICE.preferences != [:]) {
-        (DEVICE.preferences).each { key, value ->
-            log.trace "testT: ${key} = ${value}"
-            result = inputIt(key, debug = true)
-            logDebug "inputIt: ${result}"
-        }
-    }
-    */
-    
-    /*
-    //log.trace "device.lastActivity = ${device.lastActivity}"
-    //log.trace "device.lastMessage = ${device.lastMessage}"
-    device.name = 'testT'
-    //device.roomName = 'TestRoom' read only
-    //updateDataValue('lastRunningMode', 'heat')
-    device.properties.each { property ->
-        log.trace "${property.key} = ${property.value}"
-    }
-    */
-
-
 
     List<String> cmds = []
 
     cmds =   ["he raw 0x${device.deviceNetworkId} 1 1 0x000a {40 01 01 00 00 00 e2 78 83 1f 2e       07 00  00    23      a8 ad 1f 2e}", "delay 200",]
-    //                                                                                                          ^ uint32  ^
 
     sendZigbeeCommands(cmds)
-
-
-
-
-/*
-// Step 1: Current time in seconds since Unix epoch
-long currentTime = Instant.now().getEpochSecond()
-
-// Step 2: Zigbee base time in seconds since Unix epoch
-LocalDateTime zigbeeBaseTime = LocalDateTime.of(2000, 1, 1, 0, 0, 0)
-long zigbeeBaseTimeSeconds = zigbeeBaseTime.toEpochSecond(ZoneOffset.UTC)
-
-// Step 3: Calculate Zigbee UTC time
-long zigbeeUTCTime = currentTime - zigbeeBaseTimeSeconds
-
-// Step 4: Convert to 32-bit unsigned integer (if necessary)
-long zigbeeUTCTime32bit = zigbeeUTCTime & 0xFFFFFFFFL
-
-logDebug "Zigbee UTC Time: $zigbeeUTCTime32bit"
-
-long value = zigbeeUTCTime32bit
-String hex = Long.toHexString(value).padLeft(8, '0') // Ensure it's 8 characters for a 32 bit
-String reversedHex = hex.toList().collate(2).reverse().flatten().join()
-
-logDebug "hex=${hex} reverse=${reversedHex}"
-*/
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////

@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Thermostat Library', name: 'thermostatLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy', documentationLink: '',
-    version: '3.3.2')
+    version: '3.3.3')
 /*
  *  Zigbee Thermostat Library
  *
@@ -18,12 +18,14 @@ library(
  * ver. 3.3.0  2024-06-09 kkossev  - added thermostatLib.groovy
  * ver. 3.3.1  2024-06-16 kkossev  - added factoryResetThermostat() command
  * ver. 3.3.2  2024-07-09 kkossev  - release 3.3.2
+ * ver. 3.3.3  2024-09-01 kkossev  - (dev.branch)
  *
+ *                                   TODO: add eco() method
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
-static String thermostatLibVersion()   { '3.3.2' }
-static String illuminanceLibStamp() { '2024/07/09 8:59 AM' }
+public static String thermostatLibVersion()   { '3.3.3' }
+public static String thermostatLibStamp() { '2024/09/01 10:44 AM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib
@@ -59,18 +61,19 @@ metadata {
     options     : [0: 'off', 1: 'heat', 2: 'cool', 3: 'auto', 4: 'emergency heat', 5: 'eco']
 ]
 
-void heat() { setThermostatMode('heat') }
-void auto() { setThermostatMode('auto') }
-void cool() { setThermostatMode('cool') }
-void emergencyHeat() { setThermostatMode('emergency heat') }
+public void heat() { setThermostatMode('heat') }
+public void auto() { setThermostatMode('auto') }
+public void cool() { setThermostatMode('cool') }
+public void emergencyHeat() { setThermostatMode('emergency heat') }
+public void eco() { setThermostatMode('eco') }
 
-void setThermostatFanMode(final String fanMode) { sendEvent(name: 'thermostatFanMode', value: "${fanMode}", descriptionText: getDescriptionText("thermostatFanMode is ${fanMode}")) }
-void fanAuto() { setThermostatFanMode('auto') }
-void fanCirculate() { setThermostatFanMode('circulate') }
-void fanOn() { setThermostatFanMode('on') }
+public void setThermostatFanMode(final String fanMode) { sendEvent(name: 'thermostatFanMode', value: "${fanMode}", descriptionText: getDescriptionText("thermostatFanMode is ${fanMode}")) }
+public void fanAuto() { setThermostatFanMode('auto') }
+public void fanCirculate() { setThermostatFanMode('circulate') }
+public void fanOn() { setThermostatFanMode('on') }
 
-void customOff() { setThermostatMode('off') }    // invoked from the common library
-void customOn()  { setThermostatMode('heat') }   // invoked from the common library
+public void customOff() { setThermostatMode('off') }    // invoked from the common library
+public void customOn()  { setThermostatMode('heat') }   // invoked from the common library
 
 /*
  * -----------------------------------------------------------------------------
@@ -78,7 +81,7 @@ void customOn()  { setThermostatMode('heat') }   // invoked from the common libr
  * -----------------------------------------------------------------------------
 */
 // * should be implemented in the custom driver code ...
-void standardParseThermostatCluster(final Map descMap) {
+public void standardParseThermostatCluster(final Map descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "standardParseThermostatCluster: zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
@@ -157,21 +160,18 @@ void setCoolingSetpoint(Number temperaturePar) {
     logInfo "${descText}"
 }
 
-// TODO - use for all events sent by this driver !!
-/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
-void sendThermostatEvent(final String eventName, final value, final raw, final boolean isDigital = false) {
-    final String descriptionText = "${eventName} is ${value}"
-    Map eventMap = [name: eventName, value: value, descriptionText: descriptionText, type: isDigital ? 'digital' : 'physical']
+public void sendThermostatEvent(Map eventMap, final boolean isDigital = false) {
+    if (eventMap.descriptionText == null) { eventMap.descriptionText = "${eventName} is ${value}" }
+    if (eventMap.type == null) { eventMap.type = isDigital == true ? 'digital' : 'physical' }
     if (state.states['isRefresh'] == true) {
         eventMap.descriptionText += ' [refresh]'
         eventMap.isStateChange = true   // force event to be sent
     }
-    if (logEnable) { eventMap.descriptionText += " (raw ${raw})" }
     sendEvent(eventMap)
     logInfo "${eventMap.descriptionText}"
 }
 
-void sendEventMap(final Map event, final boolean isDigital = false) {
+private void sendEventMap(final Map event, final boolean isDigital = false) {
     if (event.descriptionText == null) {
         event.descriptionText = "${event.name} is ${event.value} ${event.unit ?: ''}"
     }
@@ -202,7 +202,7 @@ private String getDescriptionText(final String msg) {
  *
  * @param requestedMode The mode to set the thermostat to.
  */
-void setThermostatMode(final String requestedMode) {
+public void setThermostatMode(final String requestedMode) {
     String mode = requestedMode
     boolean result = false
     List nativelySupportedModesList = getAttributesMap('thermostatMode')?.map?.values() as List ?: []
@@ -318,18 +318,13 @@ void setThermostatMode(final String requestedMode) {
         case 'heat' :
         case 'auto' :
         case 'off' :
+        case 'eco' :
             logTrace "setThermostatMode: post-processing: no post-processing required for mode ${mode}"
             break
         case 'emergency heat' :
             logDebug "setThermostatMode: post-processing: setting emergency heat mode on (${settings.emergencyHeatingTime} minutes)"
             sendAttribute('emergencyHeating', 1)
             break
-            /*
-        case 'eco' :
-            logDebug "setThermostatMode: post-processing: switching the eco mode on"
-            sendAttribute("ecoMode", 1)
-            break
-            */
         default :
             logWarn "setThermostatMode: post-processing: unsupported thermostat mode '${mode}'"
             break
@@ -337,6 +332,7 @@ void setThermostatMode(final String requestedMode) {
     return
 }
 
+/* groovylint-disable-next-line UnusedMethodParameter */
 void sendSupportedThermostatModes(boolean debug = false) {
     List<String> supportedThermostatModes = []
     supportedThermostatModes = ['off', 'heat', 'auto', 'emergency heat']
@@ -357,8 +353,9 @@ void sendSupportedThermostatModes(boolean debug = false) {
     }
 }
 
+/* groovylint-disable-next-line UnusedMethodParameter */
 void standardHandleThermostatEvent(int value, boolean isDigital=false) {
-    logWarn "standardHandleThermostatEvent()... NOT IMPLEMENTED!"
+    logWarn 'standardHandleThermostatEvent()... NOT IMPLEMENTED!'
 }
 
 /* groovylint-disable-next-line UnusedPrivateMethod */
@@ -375,30 +372,29 @@ void thermostatProcessTuyaDP(final Map descMap, int dp, int dp_id, int fncmd) {
  * Schedule thermostat polling
  * @param intervalMins interval in seconds
  */
-private void scheduleThermostatPolling(final int intervalSecs) {
+public void scheduleThermostatPolling(final int intervalSecs) {
     String cron = getCron( intervalSecs )
     logDebug "cron = ${cron}"
     schedule(cron, 'autoPollThermostat')
 }
 
-private void unScheduleThermostatPolling() {
+public void unScheduleThermostatPolling() {
     unschedule('autoPollThermostat')
 }
 
 /**
  * Scheduled job for polling device specific attribute(s)
  */
-void autoPollThermostat() {
+public void autoPollThermostat() {
     logDebug 'autoPollThermostat()...'
     checkDriverVersion(state)
-    List<String> cmds = []
-    cmds = refreshFromDeviceProfileList()
+    List<String> cmds = refreshFromDeviceProfileList()
     if (cmds != null && cmds != [] ) {
         sendZigbeeCommands(cmds)
     }
 }
 
-int getElapsedTimeFromEventInSeconds(final String eventName) {
+private int getElapsedTimeFromEventInSeconds(final String eventName) {
     /* groovylint-disable-next-line NoJavaUtilDate */
     final Long now = new Date().time
     final Object lastEventState = device.currentState(eventName)
@@ -415,7 +411,8 @@ int getElapsedTimeFromEventInSeconds(final String eventName) {
     return diff
 }
 
-void sendDigitalEventIfNeeded(final String eventName) {
+// called from pollTuya()
+public void sendDigitalEventIfNeeded(final String eventName) {
     final Object lastEventState = device.currentState(eventName)
     final int diff = getElapsedTimeFromEventInSeconds(eventName)
     final String diffStr = timeToHMS(diff)
@@ -428,7 +425,7 @@ void sendDigitalEventIfNeeded(final String eventName) {
     }
 }
 
-void thermostatInitializeVars( boolean fullInit = false ) {
+public void thermostatInitializeVars( boolean fullInit = false ) {
     logDebug "thermostatInitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true || state.lastThermostatMode == null) { state.lastThermostatMode = 'unknown' }
     if (fullInit == true || state.lastThermostatOperatingState == null) { state.lastThermostatOperatingState = 'unknown' }
@@ -436,7 +433,7 @@ void thermostatInitializeVars( boolean fullInit = false ) {
 }
 
 // called from initializeVars() in the main code ...
-void thermostatInitEvents(final boolean fullInit=false) {
+public void thermostatInitEvents(final boolean fullInit=false) {
     logDebug "thermostatInitEvents()... fullInit = ${fullInit}"
     if (fullInit == true) {
         String descText = 'inital attribute setting'
@@ -448,6 +445,7 @@ void thermostatInitEvents(final boolean fullInit=false) {
         sendEvent(name: 'thermostatOperatingState', value: 'idle', isStateChange: true, description: descText)
         sendEvent(name: 'thermostatSetpoint', value:  20.0, unit: '\u00B0C', isStateChange: true, description: descText)        // Google Home compatibility
         sendEvent(name: 'heatingSetpoint', value: 20.0, unit: '\u00B0C', isStateChange: true, description: descText)
+        state.lastHeatingSetpoint = 20.0
         sendEvent(name: 'coolingSetpoint', value: 35.0, unit: '\u00B0C', isStateChange: true, description: descText)
         sendEvent(name: 'temperature', value: 18.0, unit: '\u00B0', isStateChange: true, description: descText)
         updateDataValue('lastRunningMode', 'heat')
@@ -458,11 +456,11 @@ void thermostatInitEvents(final boolean fullInit=false) {
 }
 
 /*
-  Reset to Factory Defaults Command - TODO!
+  Reset to Factory Defaults Command (0x00)
   On receipt of this command, the device resets all the attributes of all its clusters to their factory defaults.
   Note that networking functionality, bindings, groups, or other persistent data are not affected by this command
 */
-void factoryResetThermostat() {
+public void factoryResetThermostat() {
     logDebug 'factoryResetThermostat() called!'
     List<String> cmds  = zigbee.command(0x0000, 0x00)
     sendZigbeeCommands(cmds)
@@ -474,12 +472,11 @@ void factoryResetThermostat() {
 
 // ========================================= Virtual thermostat functions  =========================================
 
-/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
-void setTemperature(temperature) {
+public void setTemperature(Number temperaturePar) {
     logDebug "setTemperature(${temperature}) called!"
     if (isVirtual()) {
         /* groovylint-disable-next-line ParameterReassignment */
-        temperature = Math.round(temperature * 2) / 2
+        double temperature = Math.round(temperaturePar * 2) / 2
         String descText = "temperature is set to ${temperature} \u00B0C"
         sendEvent(name: 'temperature', value: temperature, unit: '\u00B0C', descriptionText: descText, type: 'digital')
         logInfo "${descText}"
@@ -489,21 +486,22 @@ void setTemperature(temperature) {
     }
 }
 
+// TODO - not used?
 List<String> thermostatRefresh() {
-    logDebug "thermostatRefresh()..."
-/*
-    List<String> cmds = []
-    cmds = zigbee.readAttribute(0x0400, 0x0000, [:], delay = 200) // illuminance
-    return cmds
-*/
+    logDebug 'thermostatRefresh()...'
+    return []
 }
 
-// TODO - configure in the deviceProfile
-List pollThermostatCluster() {
-    return  zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x001B, 0x001C, 0x0029], [:], delay = 3500)      // 0x0000 = local temperature, 0x0012 = heating setpoint, 0x001B = controlledSequenceOfOperation, 0x001C = system mode (enum8 )
+// TODO - configure in the deviceProfile refresh: tag
+public List<String> pollThermostatCluster() {
+    return  zigbee.readAttribute(0x0201, [0x0000, 0x0001, /*0x0002,*/ 0x0012, 0x001B, 0x001C, 0x0029], [:], delay = 1500)      // 0x0000 = local temperature, 0x0001 = outdoor temperature, 0x0002 = occupancy, 0x0012 = heating setpoint, 0x001B = controlledSequenceOfOperation, 0x001C = system mode (enum8 )
 }
 
-// TODO - configure in the deviceProfile
-List pollBatteryPercentage() {
+// TODO - configure in the deviceProfile refresh: tag
+public List<String> pollBatteryPercentage() {
     return zigbee.readAttribute(0x0001, 0x0021, [:], delay = 200)                          // battery percentage
+}
+
+public List<String> pollOccupancy() {
+    return  zigbee.readAttribute(0x0406, 0x0000, [:], delay = 100)      // Bit 0 specifies the sensed occupancy as follows: 1 = occupied, 0 = unoccupied. This flag bit will affect the Occupancy attribute of HVAC cluster, and the operation mode.
 }

@@ -106,7 +106,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/thermostatLib.groovy",
       "codeType": "library",
       "id": 179,
-      "version": 24
+      "version": 31
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/motionLib.groovy",
