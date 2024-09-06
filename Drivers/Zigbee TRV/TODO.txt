@@ -1,0 +1,32 @@
+
+Namron Zigbee Thermostat
+=========================
+
+
+ *                                   TODO: 
+ *                                   TODO: 
+ *                                   TODO: 
+ *                                   TODO: make new device profile for Sunricher
+ *                                   TODO: fix the forcedDeviceProfile
+ *                                   TODO: add a link to GitHub WiKi
+ *                                   TODO: test Alexa compatibility
+ *                                   TODO: test Google Home compatibility
+ *                                   TODO: modeAfterDry preference is not saved?
+ *                                   TODO: research how the Namron internal clock is set (Zigbee2MQTT sniff)?
+ *                                   TODO: add other Namron models fingerprints
+ *                                   TODO: improve the 'controlSequenceOfOperation is 2 'info log
+ *                                   TODO: warning Info message (permanent) when both model and manufacturer are missing (commonLib)
+ *                                   TODO: warning Info message (temporary when device is unknown.
+ *                                   TODO: cluster 0x0204  improve the logging  Namron setPar: (3) successfluly executed setPar customSetCalibrationTemp(-1) - without customSet prefix
+ *                                   TODO: deviceProfileV3 - default configuration if not found
+ *                                   TODO: energy automatic reporting configuration (this driver)
+ *                                   TODO: add powerSource capability
+ *                                   TODO: add Info dummy preference to the driver with a hyperlink
+ *                                   TODO: add state.thermostat for storing last attributesthermostatOperatingState 
+ *                                   TODO: Healthcheck to be every hour (not 4 hours) for mains powered thermostats
+ *                                   TODO: initializeDeviceThermostat() - configure in the device profile !
+ *                                   TODO: Ping the device on initialize; refresh the device on initialize
+ *                                   TODO: add factoryReset command Basic -0x0000 (Server); command 0x00
+ *                                   TODO: add option 'Simple TRV' (no additinal attributes)
+ *                                   TODO: add receiveCheck() methods for heatingSetpint and mode (option)
+ *                                   TODO: separate the autoPoll commands from the refresh commands (lite)
