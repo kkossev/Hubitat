@@ -15,19 +15,20 @@
  * ver. 3.3.0  2024-08-03 kkossev  - first test version
  * ver. 3.3.1  2024-08-08 kkossev  - driver renamed to 'Tuya Zigbee Tank Level Monitor'
  * ver. 3.3.2  2024-08-11 kkossev  - driver renamed to 'Tuya Zigbee Tank Level Monitor', pars renamed to upperLimit/lowerLimit; added MOREYALEC_TUYA_ME201WZ device profile for tests;
- * ver. 3.3.3  2024-08-30 kkossev  - (dev. branch_) updated _TZE284_kyyu8rbj fingerprint for Morayelec ME201WZ; changeed battery from percentage to voltage; queryAllTuyaDPs on refresh
+ * ver. 3.3.3  2024-08-30 kkossev  - updated _TZE284_kyyu8rbj fingerprint for Morayelec ME201WZ; changeed battery from percentage to voltage; queryAllTuyaDP on refresh
+ * ver. 3.3.4  2024-09-06 kkossev  - (dev.branch) default Debig option is off; installationHeight is now a in meters;
  *                                   
  *                                   TODO: 'Installation Height' not updating @digitalturbo
- *                                   TODO: queryAllTuyaDPs on refresh to be made optional
+ *                                   TODO: queryAllTuyaDP on refresh to be made optional
  *                                   TODO: HPM
  */
 
-static String version() { "3.3.3" }
-static String timeStamp() {"2024/08/30 4:56 PM"}
+static String version() { "3.3.4" }
+static String timeStamp() {"2024/09/06 1:04 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
-@Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for production
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = false    // disable it for production
 
 
 
@@ -134,7 +135,7 @@ metadata {
                 [dp:5,   name:'batteryVoltage',       type:'decimal', rw: 'ro', scale:10,  unit:'V',  description:'Battery voltage'],        // or ???? Supply voltage ?
                 [dp:7,   name:'upperLimit',           type:'number',  rw: 'rw', min:0,   max:100,  defVal:75,    scale:1,   unit:'%',  title:'<b>Upper Limit Setting</b>', description:'Liquid percentage to set high state (above this value)'],
                 [dp:8,   name:'lowerLimit',           type:'number',  rw: 'rw', min:0,   max:100,  defVal:25,    scale:1,   unit:'%',  title:'<b>Lower Limit Setting</b>', description:'Liquid percentage to set low state (below this value)'],
-                [dp:19,  name:'installationHeight',   type:'number',  rw: 'rw', min:0,   max:4000, defVal:2000,  scale:1,   unit:'mm', title:'<b>Installation Height</b>', description:'Height from sensor to tank bottom'], 
+                [dp:19,  name:'installationHeight',   type:'decimal', rw: 'rw', min:0.0, max:4.0,  defVal:2.0,   scale:100, unit:'m', title:'<b>Installation Height</b>', description:'Height from sensor to tank bottom (meters)'], 
                 [dp:22,  name:'level',                type:'number',  rw: 'ro', min:0,   max:100,  defVal:0,     scale:1,   unit:'%',  title:'<b>Liquid Level Percent</b>', description:'Liquid level percentage"'], 
                 [dp:24,  name:'relaySwitch',          type:'enum',    rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'Relay Switch', description:'Relay Switch'],
             ],
@@ -226,9 +227,11 @@ void customUpdated() {
 
 void customInitializeVars(final boolean fullInit=false) {
     logDebug "customInitializeVars(${fullInit})"
+    /*
     if (state.deviceProfile == null || state.deviceProfile == '' || state.deviceProfile == 'UNKNOWN') {
         setDeviceNameAndProfile('TS0601', '_TZE200_lvkk0hdg')               // in deviceProfileiLib.groovy
     }
+    */
     if (fullInit == true) {
         resetPreferencesToDefaults()
     }
