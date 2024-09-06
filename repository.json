@@ -301,8 +301,22 @@
       "id":"74b72270-8de7-4064-964f-a27e4887adeb",
       "name":"Tuya Zigbee Tank Level Monitor",
       "category":"Control",
-      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/repository.json",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Tank%20Level%20Monitor/packageManifest.json",
       "description":"Tuya Zigbee Tank Level Monitor",
+      "tags":[
+        "Misc. Devices",
+        "Monitoring",
+        "Pools & Spas",
+        "Water",
+        "Zigbee"
+       ]
+    },
+    {
+      "id":"71fc3487-1559-47a3-a25b-838c18ad260d",
+      "name":"Tuya Zigbee Chlorine Meter",
+      "category":"Control",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Chlorine%20Meter/packageManifest.json",
+      "description":"Tuya Zigbee Chlorine Meter",
       "tags":[
         "Misc. Devices",
         "Monitoring",

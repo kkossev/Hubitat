@@ -1,0 +1,9 @@
+{
+ "packageName":"Tuya Zigbee Tank Level Monitor",
+ "author":"kkossev",
+ "version":"3.3.2",
+ "minimumHEVersion":"2.3.7.100",
+ "dateReleased":"2024-09-06",
+ "releaseNotes":"first version pushed to HPM",
+ "communityLink":"https://community.hubitat.com/t/beta-tuya-zigbee-tank-level-monitor/141666"
+}
