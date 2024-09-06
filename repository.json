@@ -197,6 +197,36 @@
       "description": "Device Health Status - app for Hubitat Elevation hub"
     },
     {
+      "id": "9a6bfb6e-f5a7-4901-a031-3d354387f5b5",
+      "name": "Tuya Zigbee Light Sensor",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Light%20Sensor/packageManifest.json",
+      "description": "Tuya Zigbee Light Sensor - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "922c95be-07e9-4376-a94d-fc702bea7ec9",
+      "name": "VINDSTYRKA Air Quality Monitor",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/VINDSTYRKA%20Air%20Quality%20Monitor/packageManifest.json",
+      "description": "VINDSTYRKA Air Quality Monitor - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "fbae2080-22f0-48e0-8788-f57dd5e571da",
+      "name": "Tuya Zigbee Fingerbot",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Fingerbot/packageManifest.json",
+      "description": "Tuya Zigbee Fingerbot - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+	},
+    {
       "id":"7f4e2c19-5159-44bd-a2bf-afb8432c3de4",
       "name":"Matter Advanced Bridge (ALPHA testing)",
       "category":"Integrations",

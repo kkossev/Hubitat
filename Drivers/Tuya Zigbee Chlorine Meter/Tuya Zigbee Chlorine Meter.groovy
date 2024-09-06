@@ -13,19 +13,18 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.3.0  2024-08-03 kkossev  - first test version
- * ver. 3.3.1  2024-08-31 kkossev  - (dev.branch) added tuyaDataQuery; added dp 103 104 114 115 116 118 decoding; invalid freeChlorine value -1.0  (0xFFFFFFFFF) returned as 0 (zero), added automatic polling (configurable)
+ * ver. 3.3.1  2024-08-31 kkossev  - added tuyaDataQuery; added dp 103 104 114 115 116 118 decoding; invalid freeChlorine value -1.0  (0xFFFFFFFFF) returned as 0 (zero), added automatic polling (configurable)
+ * ver. 3.3.2  2024-09-06 kkossev  - (release candidate) debug is off by default; freeChlorine is divided by 10;
  *                                   
  *                                   TODO: 
- *                                   TODO: unprocessed Tuya cluster command 11 ?
- *                                   TODO: put in HPM
  */
 
-static String version() { "3.3.1" }
-static String timeStamp() { "2024/08/31 11:25 AM" }
+static String version() { "3.3.2" }
+static String timeStamp() { "2024/09/06 1:32 PM" }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
-@Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for production
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = false  // disable it for production
 
 #include kkossev.deviceProfileLib
 #include kkossev.commonLib
@@ -134,7 +133,7 @@ Measures :
                 [dp:10,  name:'ph',                   type:'decimal', rw: 'ro',  scale:100, unit:'pH',    description:'pH value'],                              // 'pH value, if the pH value is lower than 6.5, it means that the water quality is too acidic and has impurities, and it is necessary to add disinfectant water for disinfection
                 [dp:11,  name:'ec',                   type:'decimal', rw: 'ro',  scale:1,   unit:'µS/cm', description:'Electrical conductivity'],
                 [dp:101, name:'orp',                  type:'decimal', rw: 'ro',  scale:1,   unit:'mV',    description:'Oxidation Reduction Potential value'],   // 'Oxidation Reduction Potential value. If the ORP value is above 850mv, it means that the disinfectant has been added too much, and it is necessary to add water or change the water for neutralization. If the ORP value is below 487mv, it means that too little disinfectant has been added and the pool needs to be disinfected again'
-                [dp:102, name:'freeChlorine', preProc:'checkInvalidValue',       type:'decimal', rw: 'ro',  scale:1,   unit:'mg/L',  description:'Free chlorine value'],                   // The water in the swimming pool should be between 6.5-8ph and ORP should be between 487-840mv, and the chlorine value will be displayed normally. Chlorine will not be displayed if either value is out of range
+                [dp:102, name:'freeChlorine', preProc:'checkInvalidValue',       type:'decimal', rw: 'ro',  scale:10,   unit:'mg/L',  description:'Free chlorine value'],                   // The water in the swimming pool should be between 6.5-8ph and ORP should be between 487-840mv, and the chlorine value will be displayed normally. Chlorine will not be displayed if either value is out of range
                 [dp:103, name:'phCalibration1',       type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'pH Calibration 1'],                      // "67": { "sensor_type": "phCalibration1" },
                 [dp:104, name:'backlightStatus',      type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'Backlight status'],                      // "68": { "store_tuya_attribute": "backlight_status", "EvalExp": "(value)" },
                 [dp:105, name:'backlightLevel',       type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'Backlight level'],                                                                   // "69": { "store_tuya_attribute": "backlight_level", "EvalExp": "(value)" }, dp:105
@@ -163,8 +162,8 @@ Measures :
 ]
 
 Number checkInvalidValue(Number value) {
-    if (value == -1) {
-        logDebug "Invalid value -1.0 detected, returning zero"
+    if (value < 0) {
+        logDebug "freeChlorine Invalid value -1.0 detected, returning zero!"
         return 0
     }
     return value
