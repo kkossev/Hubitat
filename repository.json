@@ -296,6 +296,20 @@
         "Lights & Switches",
         "Zigbee"
        ]
-    }	
+    },
+    {
+      "id":"74b72270-8de7-4064-964f-a27e4887adeb",
+      "name":"Tuya Zigbee Tank Level Monitor",
+      "category":"Control",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/repository.json",
+      "description":"Tuya Zigbee Tank Level Monitor",
+      "tags":[
+        "Misc. Devices",
+        "Monitoring",
+        "Pools & Spas",
+        "Water",
+        "Zigbee"
+       ]
+    }
   ]
 }
