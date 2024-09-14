@@ -28,7 +28,7 @@
  * ver. 3.2.2  2024-06-04 kkossev  - commonLib 3.2.1 allignment; deviceProfile preference bug fix.
  * ver. 3.2.3  2024-06-21 kkossev  - added _TZE204_nbkshs6k and _TZE204_dapwryy7 @CheesyPotato 
  * ver. 3.2.4  2024-07-31 kkossev  - using motionLib.groovy; added batteryLib; added _TZE200_jkbljri7; TS0601 _TZE204_dapwryy7 all DPs defined; added Wenzhi TS0601 _TZE204_laokfqwu
- * ver. 3.3.0  2024-08-30 kkossev  - (dev.branch) deviceProfileLib 3.3.3
+ * ver. 3.3.0  2024-09-14 kkossev  - (dev.branch) deviceProfileLib 3.3.3 ; added _TZE204_ex3rcdha
  *                                   
  *                                   TODO: check batterySource for the radars (all dc/mains except the _TZE200_2aaelwxk)
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
@@ -46,7 +46,7 @@
 */
 
 static String version() { "3.3.0" }
-static String timeStamp() {"2024/08/30 9:24 AM"}
+static String timeStamp() {"2024/09/14 10:44 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -822,7 +822,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             models        : ['TS0601'],
             device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true, 'DistanceMeasurement':true, 'IlluminanceMeasurement': true],
-            preferences   : ['fadingTime':'103', 'radarSensitivity':'116', 'minimumDistance':'108', 'maximumDistance':'107', 'ledIndicator':'104', staticDetectionDistance:'109', staticDetectionMinDistance:'110', smallMotionDetectionDistance:'114', smallMotionDetectionMinDistance:'115', radarSensitivity:'116', smallMotionDetectionSensitivity:'117', staticDetectionSensitivity:'118'],
+            preferences   : ['fadingTime':'103', 'radarSensitivity':'116', 'minimumDistance':'108', 'maximumDistance':'107', 'ledIndicator':'104', staticDetectionDistance:'109', staticDetectionMinDistance:'110', smallMotionDetectionDistance:'114', smallMotionDetectionMinDistance:'115', smallMotionDetectionSensitivity:'117', staticDetectionSensitivity:'118'],
             commands      : ['resetStats':'resetStats'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_dapwryy7', deviceJoinName: '5GHz Tuya Thick White Square with Sqr Button']
@@ -847,6 +847,31 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             spammyDPsToIgnore : [101],           
             spammyDPsToNotTrace : [101],    
             deviceJoinName: '5GHz Tuya Thick White Square with Sqr Button'
+    ],
+
+'TS0601_EX3RCDHA_RADAR'   : [        // white box human presence detector _TZE204_ex3rcdha ZHPS01
+            description   : 'Tuya mmWave Radar ZHPS01',
+            models        : ['TS0601'],
+            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            capabilities  : ['MotionSensor': true, 'DistanceMeasurement':false, 'IlluminanceMeasurement': true],
+            preferences   : ['fadingTime':'104', 'radarSensitivity':'105', 'minimumDistance':'110', 'maximumDistance':'109', 'ledIndicator':'104', staticDetectionDistance:'111', staticDetectionMinDistance:'112', staticDetectionSensitivity:'107'],
+            commands      : ['resetStats':'resetStats'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_ex3rcdha', deviceJoinName: 'Tuya mmWave Radar ZHPS01']
+            ],
+            tuyaDPs:        [
+                [dp:12,  name:'illuminance',       type:'number',  rw: 'ro', scale:1,    unit:'lx',       description:'Illuminance'],
+                [dp:101, name:'motion',            type:'enum',    rw: 'ro', min:0, max:1,    defVal: '0', map:[0:'active', 1:'inactive'],     description:'Presence'],
+                [dp:104, name:'fadingTime',        type:'number',  rw: 'rw', min:0, max:180,  defVal:30,  unit:'seconds',  title:'<b>Fading time</b>', description:'<i>Presence (fading) delay time</i>'],
+                [dp:105, name:'radarSensitivity',  type:'number',  rw: 'rw', min:0, max:10 ,  defVal:5,   title:'<b>Radar Sensitivity</b>',    description:'<i>Sensitivity of the radar</i>'],  // move_sensitivity
+                [dp:107, name:'staticDetectionSensitivity',      type:'number',  rw: 'rw', min:0,    max:10,   defVal:7,   title:'<b>Static Detection Sensitivity</b>',       description:'<i>Static detection sensitivity</i>'],                 //  dt: "UINT8", aka Motionless Detection Sensitivity
+                [dp:109, name:'maximumDistance',   type:'decimal', rw: 'rw', min:0.0, max:6.0,  defVal:6.0,  scale:100, step:10, unit:'meters',   title:'<b>Maximum distance</b>',     description:'<i>Maximum detection distance</i>'],
+                [dp:110, name:'minimumDistance',   type:'decimal', rw: 'rw', min:0.0, max:6.0,  defVal:1.0,  scale:100, step:10, unit:'meters',   title:'<b>Minimum distance</b>',     description:'<i>Minimum detection distance</i>'],
+                [dp:111, name:'staticDetectionDistance',         type:'decimal', rw: 'rw', min:0.0,  max:6.0,  defVal:6.0,   scale:100, step:10, unit:'meters',    title:'<b>Static detection Max distance</b>',          description:'<i>Static detection Max distance</i>'],
+                [dp:112, name:'staticDetectionMinDistance',      type:'decimal', rw: 'rw', min:0.0,  max:6.0,  defVal:4.0,   scale:100, step:10, unit:'meters',    title:'<b>Static detection Min distance</b>',          description:'<i>Static detection Min distance</i>'],
+            ], 
+            //spammyDPsToNotTrace : [12],    
+            deviceJoinName: 'Tuya mmWave Radar ZHPS01'
     ]        
 ]
 
