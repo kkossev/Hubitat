@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy', documentationLink: '',
-    version: '3.3.3'
+    version: '3.3.4'
 )
 /*
  *  Device Profile Library
@@ -30,7 +30,8 @@ library(
  * ver. 3.3.0  2024-06-29 kkossev  - empty preferences bug fix; zclWriteAttribute delay 50 ms; added advanced check in inputIt(); fixed 'Cannot get property 'rw' on null object' bug; fixed enum attributes first event numeric value bug;
  * ver. 3.3.1  2024-07-06 kkossev  - added powerSource event in the initEventsDeviceProfile
  * ver. 3.3.2  2024-08-18 kkossev  - release 3.3.2
- * ver. 3.3.3  2024-08-18 kkossev  - (dev. branch) sendCommand and setPar commands commented out; must be declared in the main driver where really needed
+ * ver. 3.3.3  2024-08-18 kkossev  - sendCommand and setPar commands commented out; must be declared in the main driver where really needed
+ * ver. 3.3.4  2024-09-14 kkossev  - (dev.branch) fixed exceptions in resetPreferencesToDefaults() and initEventsDeviceProfile()
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
@@ -43,8 +44,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.3.3' }
-static String deviceProfileLibStamp() { '2024/08/30 9:05 AM' }
+static String deviceProfileLibVersion()   { '3.3.4' }
+static String deviceProfileLibStamp() { '2024/09/15 10:22 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -188,8 +189,9 @@ Map getAttributesMap(String attribName, boolean debug=false) {
  */
 void resetPreferencesToDefaults(boolean debug=false) {
     logDebug "resetPreferencesToDefaults: DEVICE=${DEVICE?.description} preferences=${DEVICE?.preferences}"
-    Map preferences = DEVICE?.preferences
-    if (preferences == null || preferences?.isEmpty()) { logDebug 'Preferences not found!' ; return }
+    if (DEVICE == null || DEVICE?.preferences == null || DEVICE?.preferences == [:]) { logDebug 'Preferences not found!' ; return }
+    Map preferences = DEVICE?.preferences ?: [:]
+    if (preferences == null || preferences == [:]) { logDebug 'Preferences not found!' ; return }
     Map parMap = [:]
     preferences.each { parName, mapValue ->
         if (debug) { log.trace "$parName $mapValue" }
@@ -920,8 +922,8 @@ public void deviceProfileInitializeVars(boolean fullInit=false) {
 
 void initEventsDeviceProfile(boolean fullInit=false) {
     String ps = DEVICE?.device?.powerSource
-    logDebug "initEventsDeviceProfile(${fullInit}) for deviceProfile=${state.deviceProfile} DEVICE?.device?.powerSource=${ps} ps.isEmpty()=${ps.isEmpty()}"
-    if (ps != null && ps.isEmpty() == false) {
+    logDebug "initEventsDeviceProfile(${fullInit}) for deviceProfile=${state.deviceProfile} DEVICE?.device?.powerSource=${ps} ps.isEmpty()=${ps?.isEmpty()}"
+    if (ps != null && !ps.isEmpty()) {
         sendEvent(name: 'powerSource', value: ps, descriptionText: "Power Source set to '${ps}'", type: 'digital')
     }
 }

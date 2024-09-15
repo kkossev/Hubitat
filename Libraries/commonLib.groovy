@@ -39,7 +39,7 @@ library(
   * ver. 3.3.0  2024-06-25 kkossev  - fixed exception for unknown clusters; added cluster 0xE001; added powerSource - if 5 minutes after initialize() the powerSource is still unknown, query the device for the powerSource
   * ver. 3.3.1  2024-07-06 kkossev  - removed isFingerbot() dependancy; added FC03 cluster (Frient); removed noDef from the linter; added customParseIasMessage and standardParseIasMessage; powerSource set to unknown on initialize();
   * ver. 3.3.2  2024-07-12 kkossev  - added PollControl (0x0020) cluster; ping for SONOFF
-  * ver. 3.3.3  2024-08-30 kkossev  - (dev.branch) added queryAllTuyaDP()
+  * ver. 3.3.3  2024-09-15 kkossev  - added queryAllTuyaDP(); 2 minutes healthCheck option;
   *
   *                                   TODO: check deviceCommandTimeout()
   *                                   TODO: offlineCtr is not increasing! (ZBMicro);
@@ -55,7 +55,7 @@ library(
 */
 
 String commonLibVersion() { '3.3.3' }
-String commonLibStamp() { '2024/07/30 4:45 PM' }
+String commonLibStamp() { '2024/09/15 10:22 AM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -127,7 +127,7 @@ metadata {
     defaultValue: 1, options: [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
 ]
 @Field static final Map HealthcheckIntervalOpts = [          // used by healthCheckInterval
-    defaultValue: 240, options: [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
+    defaultValue: 240, options: [2: 'Every 2 Mins', 10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
 ]
 
 @Field static final Map ConfigureOpts = [
@@ -1102,7 +1102,7 @@ private void deviceHealthCheck() {
         }
     }
     else {
-        logDebug "deviceHealthCheck - online (notPresentCounter=${ctr})"
+        logDebug "deviceHealthCheck - online (notPresentCounter=${(ctr + 1)})"
     }
     state.health['checkCtr3'] = ctr + 1
 }
@@ -1189,7 +1189,7 @@ void configureHelp(final String val) {
 }
 
 public void loadAllDefaults() {
-    logWarn 'loadAllDefaults() !!!'
+    logDebug 'loadAllDefaults() !!!'
     deleteAllSettings()
     deleteAllCurrentStates()
     deleteAllScheduledJobs()

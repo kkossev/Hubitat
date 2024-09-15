@@ -44,3 +44,5 @@ Drivers/Tuya Zigbee Tank Level Monitor/Tuya Zigbee Tank Level Monitor.code-works
 Drivers/Tuya Multi Sensor 4 In 1/Tuya Multi Sensor 4 In 1.code-workspace
 Drivers/Tuya Zigbee Chlorine Meter/scratchPad.txt
 Drivers/AWTRIX 3 MQTT/.hubitat/metadata.json
+Drivers/Tuya Zigbee Rain Sensor/.hubitat/metadata.json
+Libraries/.hubitat/metadata.json
