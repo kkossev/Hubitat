@@ -324,6 +324,22 @@
         "Water",
         "Zigbee"
        ]
-    }
+    },
+    {
+      "id":"b2212052-92d1-450f-9dca-08c0789c9c0c",
+      "name":"Tuya Zigbee Rain Sensor",
+      "category":"Convenience",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Rain%20Sensor/manifest.json",
+      "description":"Tuya Zigbee Rain Sensor",
+      "tags":[
+        "Climate Control",
+        "Irrigation",
+        "Monitoring",
+        "Multi Sensors",
+        "Water",
+        "Zigbee"
+       ]
+    }	
   ]
 }
+
