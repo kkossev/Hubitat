@@ -13,17 +13,18 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.0.0  2024-08-08 kkossev  - first test version
- * ver. 3.0.1  2024-08-09 kkossev  - (dev.branch) added capability 'WaterSensor'; rainSensorVoltage scale 1000; illuminance changed to illuminanceVoltage and scale 1000; 
+ * ver. 3.0.1  2024-08-09 kkossev  - added capability 'WaterSensor'; rainSensorVoltage scale 1000; illuminance changed to illuminanceVoltage and scale 1000; 
+ * ver. 3.0.2  2024-09-15 kkossev  - fixed exception in resetPreferencesToDefaults(); refresh using queryAllTuyaDP(); force 2 minutes health check interval; illuminanceVoltage event bug fix;
  *                                   
  *                                   TODO: HPM
  */
 
-static String version() { "3.0.1" }
-static String timeStamp() {"2024/08/09 12:36 PM"}
+static String version() { "3.0.2" }
+static String timeStamp() {"2024/09/15 10:22 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
-@Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for production
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = false   // disable it for production
 
 import groovy.transform.Field
 import groovy.transform.CompileStatic
@@ -32,7 +33,6 @@ import groovy.transform.CompileStatic
 #include kkossev.commonLib
 #include kkossev.batteryLib
 #include kkossev.iasLib
-//#include kkossev.illuminanceLib
 
 deviceType = "RainSensor"
 @Field static final String DEVICE_TYPE = "RainSensor"
@@ -89,23 +89,21 @@ metadata {
             models        : ['TS0601'],
             device        : [type: 'Sensor', isIAS:true, powerSource: 'battery', isSleepy:true],    // check powerSource
             capabilities  : ['Battery': true],
-            preferences   : [],
+            preferences   : [:],
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences', 'printFingerprints':'printFingerprints', 'printPreferences':'printPreferences'],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0001,0500,EF00", outClusters:"0003,0004,0006,1000,000A,0019", model:"TS0207", manufacturer:"_TZ3210_tgvtvdoc", controllerType: "ZGB", deviceJoinName: 'Tuya Zigbee Rain Sensor'],
-                // for tests only!  TOBEDEL
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0001,0500,EF00", outClusters:"0003,0004,0006,1000,000A,0019", model:"TS0222", manufacturer:"_TYZB01_4mdqxxnn", controllerType: "ZGB", deviceJoinName: 'TEST Tuya Zigbee Rain Sensor'],
             ],
             tuyaDPs:        [
                 [dp:1,   name:'dropletDetectionState',       type:'enum',    rw: 'ro', defVal:'0', map:[0:'off', 1:'on'], description:'Droplet Detection State'],
                 [dp:4,   name:'battery',                     type:'number',  rw: 'ro', unit:'%', description:'Battery level'],
                 [dp:101, name:'illuminanceVoltage',          type:'decimal', rw: 'ro', unit:'V', scale:1000, description:'Illuminance voltage'],
-                [dp:102, name:'averageLightIntensity20mins', type:'decimal',  rw: 'ro', unit:'V', scale:1000, description:'20 mins average light intensity'],
-                [dp:103, name:'todaysMaxLightIntensity',     type:'decimal',  rw: 'ro', unit:'V', scale:1000, description:'Todays max light intensity'],
+                [dp:102, name:'averageLightIntensity20mins', type:'decimal', rw: 'ro', unit:'V', scale:1000, description:'20 mins average light intensity'],
+                [dp:103, name:'todaysMaxLightIntensity',     type:'decimal', rw: 'ro', unit:'V', scale:1000, description:'Todays max light intensity'],
                 [dp:104, name:'cleaningReminder',            type:'enum',    rw: 'ro', defVal:'0', map:[0:'off', 1:'on'], description:'Cleaning reminder'],
                 [dp:105, name:'rainSensorVoltage',           type:'decimal', rw: 'ro', unit:'V', scale:1000, description:'Rain Sensor Voltage'],
             ],
-            //refresh:        ['refreshFantem'],
+            refresh:        ['queryAllTuyaDP'],
             configuration : ['battery': false],
             deviceJoinName: 'Tuya Zigbee Rain Sensor'
     ]
@@ -193,12 +191,6 @@ void sendWaterEvent( String value, boolean isDigital=false) {
     sendEvent(name: "water", value: value, descriptionText: descriptionText, type: type , isStateChange: true)    
 }
 
-
-List<String> refreshFantem() {
-    List<String>  cmds = zigbee.command(0xEF00, 0x07, '00')    // Fantem Tuya Magic
-    return cmds
-}
-
 List<String> customRefresh() {
     logDebug "customRefresh()"
     List<String> cmds = []
@@ -233,16 +225,20 @@ void customUpdated() {
     }
 
     // Itterates through all settings
-    cmds += updateAllPreferences()  // defined in deviceProfileLib
-    sendZigbeeCommands(cmds)
+    updateAllPreferences()  // defined in deviceProfileLib - calls setPar; returns void!
+    if (cmds != null && !cmds.isEmpty()) {
+        sendZigbeeCommands(cmds)
+    }
 }
 
 void customInitializeVars(final boolean fullInit=false) {
     logDebug "customInitializeVars(${fullInit})"
     if (state.deviceProfile == null || state.deviceProfile == '' || state.deviceProfile == 'UNKNOWN') {
-        setDeviceNameAndProfile('TS0601', '_TZE200_lvkk0hdg')               // in deviceProfileiLib.groovy
+        setDeviceNameAndProfile('TS0207', '_TZ3210_tgvtvdoc')               // in deviceProfileiLib.groovy
+        initEventsDeviceProfile()   // fix the powerSource
     }
     if (fullInit == true) {
+        device.updateSetting('healthCheckInterval', [value: '2', type: 'enum'])     // force 2 minutes health check interval
         resetPreferencesToDefaults()
     }
 }
@@ -251,7 +247,7 @@ void customInitEvents(final boolean fullInit=false) {
     logDebug "customInitEvents()"
     if ((device.currentState('dropletDetectionState')?.value == null)) { sendEvent(name: 'dropletDetectionState', value: 'off', type:'digital') }
     if ((device.currentState('battery')?.value == null)) { sendEvent(name: 'battery', value: 0, unit:'%', type:'digital') }
-    if ((device.currentState('illuminanceVoltage')?.value == null)) { sendEvent(name: 'illuminance', value: 0.0, unit:'V', type:'digital') }
+    if ((device.currentState('illuminanceVoltage')?.value == null)) { sendEvent(name: 'illuminanceVoltage', value: 0.0, unit:'V', type:'digital') }
     if ((device.currentState('averageLightIntensity20mins')?.value == null)) { sendEvent(name: 'averageLightIntensity20mins', value: 0.0, unit:'V', type:'digital') }
     if ((device.currentState('todaysMaxLightIntensity')?.value == null)) { sendEvent(name: 'todaysMaxLightIntensity', value: 0.0, unit:'V', type:'digital') }
     if ((device.currentState('cleaningReminder')?.value == null)) { sendEvent(name: 'cleaningReminder', value: 'off', type:'digital') }
