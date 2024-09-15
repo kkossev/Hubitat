@@ -1,0 +1,19 @@
+{
+ "packageName":"Tuya Zigbee Rain Sensor",
+ "author":"Krassimir Kossev",
+ "version":"3.0.2",
+ "minimumHEVersion":"2.3.9.180",
+ "dateReleased":"2024-09-15",
+ "releaseNotes":"First HPM version",
+ "documentationLink":"https://community.hubitat.com/t/release-tuya-zigbee-light-and-rain-sensor/141057",
+ "communityLink":"https://community.hubitat.com/t/release-tuya-zigbee-light-and-rain-sensor/141057",
+ "drivers": [
+  {
+     "id":"3e46f1ae-9d4c-4cc6-9927-f0502232cc32",
+     "name":"Tuya Zigbee Rain Sensor",
+     "namespace":"kkossev",
+     "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Rain%20Sensor/Tuya_Zigbee_Rain_Sensor_lib_included.groovy",
+     "required":true
+  }
+  ]
+}
