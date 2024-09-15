@@ -28,14 +28,11 @@
  * ver. 3.2.2  2024-06-04 kkossev  - commonLib 3.2.1 allignment; deviceProfile preference bug fix.
  * ver. 3.2.3  2024-06-21 kkossev  - added _TZE204_nbkshs6k and _TZE204_dapwryy7 @CheesyPotato 
  * ver. 3.2.4  2024-07-31 kkossev  - using motionLib.groovy; added batteryLib; added _TZE200_jkbljri7; TS0601 _TZE204_dapwryy7 all DPs defined; added Wenzhi TS0601 _TZE204_laokfqwu
- * ver. 3.3.0  2024-09-14 kkossev  - (dev.branch) deviceProfileLib 3.3.3 ; added _TZE204_ex3rcdha
+ * ver. 3.3.0  2024-09-15 kkossev  - deviceProfileLib 3.3.3 ; added _TZE204_ex3rcdha; added almost all DPs of the most spammy ZY-M100 radars into spammyDPsToNotTrace filter; fixed powerSource for _TZE200_2aaelwxk (battery); added queryAllTuyaDP for refresh; 
  *                                   
- *                                   TODO: check batterySource for the radars (all dc/mains except the _TZE200_2aaelwxk)
+ *                                   TODO: update the top post in the forum with the new models mmWave radars
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
- *                                   TODO: cleanup the 4-in-1 state variables.
  *                                   TODO: enable the OWON radar configuration : ['0x0406':'bind']
- *                                   TODO: add response to ZDO Match Descriptor Request (Sonoff SNZB-06)
- *                                   TODO: illumState default value is 0 - should be 'unknown' ?
  *                                   TODO: Motion reset to inactive after 43648s - convert to H:M:S
  *                                   TODO: Black Square Radar validateAndFixPreferences: map not found for preference indicatorLight
  *                                   TODO: command for black radar LED
@@ -46,7 +43,7 @@
 */
 
 static String version() { "3.3.0" }
-static String timeStamp() {"2024/09/14 10:44 AM"}
+static String timeStamp() {"2024/09/15 11:50 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -193,8 +190,9 @@ metadata {
                 [dp:104, name:'illuminance',        type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,    scale:1,    unit:'lx',       title:'<b>illuminance</b>',                description:'<i>illuminance</i>'],
 
             ],
+            refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [9],
-            spammyDPsToNotTrace : [9, 103, 104], // added the illuminance as a spammyDP - 05/30/10114
+            spammyDPsToNotTrace : [2, 3, 4, 6, 9, 101, 102, 103, 104], // added the illuminance as a spammyDP - 05/30/10114
             deviceJoinName: 'Tuya Human Presence Detector ZY-M100'
     ],
     
@@ -219,6 +217,7 @@ metadata {
                 [dp:19,  name:'distance',            type:'decimal', rw: 'ro', min:0.0, max:10.0,  defVal:0.0,  scale:100, unit:'meters',     title:'<b>Distance</b>',                   description:'<i>detected distance</i>'],
                 [dp:101, name:'battery',             type:'number',  rw: 'ro', min:0,   max:100,   defVal:100,  scale:1,   unit:'%',          title:'<b>Battery level</b>',              description:'<i>Battery level</i>']
             ],
+            refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [19], spammyDPsToNotTrace : [19],
             deviceJoinName: 'Tuya 24 GHz Human Presence Detector NEW'
     ],
@@ -251,6 +250,7 @@ metadata {
                 //[dp:117, name:'staticDwellAalarm',  type:"text",    rw: "ro", min:0,   max:9999,  defVal:0, scale:1,    unit:"-",        title:"<b>Static dwell alarm</b>",                   description:'<i>Static dwell alarm</i>'],
                 [dp:118, name:'fallSensitivity',    type:'number',  rw: 'rw', min:1,   max:10,    defVal:7,   scale:1,    unit:'',        title:'<b>Fall sensitivity</b>',          description:'<i>Fall sensitivity of the radar</i>'],
             ],
+            refresh: ['queryAllTuyaDP'],
             deviceJoinName: 'Tuya Human Presence Sensor MIR-HE200-TY'
     ],
     
@@ -298,6 +298,7 @@ metadata {
                 [dp:104, name:'radar_scene',            type:'enum',    rw: 'rw', min:0,   max:4,     defVal:'0',  map:[0:'default', 1:'bathroom', 2:'bedroom', 3:'sleeping'],  description:'Presets for sensitivity for presence and movement'],    // https://github.com/kirovilya/zigbee-herdsman-converters/blob/b9bb6695fdf5d26ab4195cca9fcb1f2bd73afa71/src/devices/tuya.ts
                 [dp:105, name:'distance',               type:'decimal', rw: 'ro', min:0.0, max:10.0,  scale:100,  unit:'meters',   description:'Distance']
             ],                    // https://github.com/zigpy/zha-device-handlers/issues/2429
+            refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [105], spammyDPsToNotTrace : [105],
             deviceJoinName: 'Tuya Human Presence Detector YXZBRB58'    // https://www.aliexpress.com/item/1005005764168560.html
     ],
@@ -324,6 +325,7 @@ metadata {
                 [dp:110, name:'fadingTime',             type:'decimal', rw: 'rw', min:0.5, max:150.0, defVal:60.0, step:5,    scale:10,   unit:'seconds',  title: '<b>Fading time</b>', description:'<i>Presence inactivity timer</i>'],
                 [dp:111, name:'detectionDelay',         type:'decimal', rw: 'rw', min:0.0,  max:10.0, defVal:0.5, scale:10,   unit:'seconds',              title: '<b>Detection delay</b>', description:'<i>Detection delay</i>']
             ],
+            refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [109], spammyDPsToNotTrace : [109],
             deviceJoinName: 'Tuya Human Presence Detector SXM7L9XA'
     ],
@@ -353,6 +355,7 @@ metadata {
                 [dp:112, name:'motion',                 type:'enum',    rw: 'ro', min:0,   max:1,    defVal:'0',       scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
                 [dp:123, name:'presence',               type:'enum',    rw: 'ro', min:0,   max:1,    defVal:'0', map:[0:'none', 1:'presence'],            description:'Presence']    // TODO -- check if used?
             ],
+            refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [109, 9], // dp 9 test
             spammyDPsToNotTrace : [109, 104],   // illuminance reporting is extremly spammy !
             deviceJoinName: 'Tuya Human Presence Detector ZY-M100-24G'
@@ -393,6 +396,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [dp:115, name:'large_flag',         type:'enum',  rw: 'rw'],
                 [dp:116, name:'fadingTime',         type:'number', rw: 'rw', min:0,  max:3600,  defVal:30, scale:1,   unit:'seconds',  title:'<b>Fading time</b>', description:'<i>Presence (fading) delay time</i>']
             ],
+            refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [19], spammyDPsToNotTrace : [19],
             deviceJoinName: 'Tuya Human Presence Detector YENSYA2C'
     ],
@@ -444,6 +448,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [dp:117, name:'absenceTime',                      type:'number',  rw: 'ro', min:0,    max:60 ,   scale:1,   unit:'seconds',   description:'Radar absence duration'],     // not received
                 [dp:118, name:'radarDurationStatus',             type:'number',  rw: 'ro', min:0,    max:60 ,   scale:1,   unit:'seconds',   description:'Radar duration status']       // not received
             ],
+            refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [],
             spammyDPsToNotTrace : [11],
             deviceJoinName: 'Tuya TS0225_HL0SS9OA Human Presence Detector'
@@ -454,7 +459,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
     'TS0225_2AAELWXK_RADAR'   : [                                     // https://github.com/Koenkk/zigbee2mqtt/issues/18612
             description   : 'Tuya TS0225_2AAELWXK 5.8 GHz Radar',        // https://community.hubitat.com/t/the-new-tuya-24ghz-human-presence-sensor-ts0225-tze200-hl0ss9oa-finally-a-good-one/122283/72?u=kkossev
             models        : ['TS0225'],                                // ZG-205Z   https://github.com/Koenkk/zigbee-herdsman-converters/blob/38bf79304292c380dc8366966aaefb71ca0b03da/src/devices/tuya.ts#L4793
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false, ignoreIAS: true],    // ignore the illuminance reports from the IAS cluster
+            device        : [type: 'radar', powerSource: 'battery', isSleepy:false, ignoreIAS: true],    // ignore the illuminance reports from the IAS cluster
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'HumanMotionState':true],
             preferences   : ['presenceKeepTime':'102', 'ledIndicator':'107', 'radarAlarmMode':'117', 'radarAlarmVolume':'116', 'radarAlarmTime':'115', \
                              'motionFalseDetection':'103', 'motionDetectionSensitivity':'2', 'motionMinimumDistance':'3', 'motionDetectionDistance':'4', \
@@ -496,6 +501,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 //[dp:117, name:'absenceTime',                      type:"number",  rw: "ro", min:0, max:60 ,   scale:1,   unit:"seconds",   description:'Radar absence duration'],     // not received
                 //[dp:118, name:'radarDurationStatus',             type:"number",  rw: "ro", min:0, max:60 ,   scale:1,   unit:"seconds",   description:'Radar duration status']       // not received
             ],
+            refresh: ['queryAllTuyaDP'],
             deviceJoinName: 'Tuya TS0225_2AAELWXK 5.8 Ghz Human Presence Detector'
     ],
     
@@ -526,6 +532,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [dp:122, name:'motionDetectionMode',             type:'enum',    rw: 'ro', min:0,    max:2,     defVal:'1',  map:[0:'0 - onlyPIR', 1:'1 - PIRandRadar', 2:'2 - onlyRadar'],     title:'<b>Motion detection mode</b>',       description:'<i>Motion detection mode</i>'],
                 [dp:123, name:'radarSensitivity',                type:'number',  rw: 'rw', min:1,   max:9,     defVal:5,     scale:1,    unit:'',        title:'<b>Motion Detection sensitivity</b>',     description:'<i>Motion detection sensitivity</i>'],  // motion_detection_sensitivity
             ],
+            refresh: ['queryAllTuyaDP'],
             deviceJoinName: 'Tuya TS0601 24 GHz + PIR Radar'
     ],
     
@@ -589,6 +596,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [dp:114, name:'factoryParameters',  type:'number',  rw: 'ro',                                                  scale:1,    unit:'-',        description:'Factory Reset'],
                 [dp:115, name:'sensor',             type:'enum',    rw: 'ro', min:0,   max:2,     defVal:'0',   scale:1,    map:[0:'on', 1:'off', 2:'report occupy', 3:'report unoccupy'] ,   unit:'',    description:'<i>Sensor state</i>'],
             ],
+            refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [9], spammyDPsToNotTrace : [9],
             deviceJoinName: 'Tuya Human Presence Detector SBYX0LM6'
     ],
@@ -615,6 +623,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [dp:104, name:'motion',             type:'enum',    rw: 'ro', min:0,    max:1,       defVal:'0',  scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
                 [dp:105, name:'fadingTime',         type:'decimal', rw: 'rw', min:0,    max:600,     defVal:5,   scale:1,   unit:'seconds',   title:'<b<Delay time</b>',         description:'<i>Delay (fading) time</i>']
             ],
+            refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [9],
             spammyDPsToNotTrace : [9],
             deviceJoinName: 'Tuya Human Presence Detector ZY-M100-24G'
@@ -641,6 +650,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [dp:105, name:'detectionDelay',     type:'decimal', rw: 'rw', min:0.0,  max:10.0,  defVal:0.5,  scale:10, unit:'seconds',  title:'<b>Detection Delay</b>',   description:'Presence detection delay time'],
                 [dp:106, name:'fadingTime',         type:'decimal', rw: 'rw', min:0.5,  max:150.0, defVal:30.0, scale:10, step:5, unit:'seconds', title:'<b<Delay time</b>', description:'Presence timeout']
             ],
+            refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [9],
             spammyDPsToNotTrace : [9],
             deviceJoinName: 'Tuya/Wenzhi Human Presence Detector WZ-M100'
@@ -671,6 +681,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [at:'0xE002:0xE00B', name:'motionDetectionDistance',    type:'enum',   dt: '0x21', rw: 'rw', min:0.75, max:6.00,   defVal:'450', step:75, scale:100, map:['75': '0.75 meters', '150': '1.50 meters', '225': '2.25 meters', '300': '3.00 meters', '375': '3.75 meters', '450': '4.50 meters', '525': '5.25 meters', '600' : '6.00 meters'], unit:'meters', title: '<b>Motion Detection Distance</b>', description:'<i>Large motion detection distance, meters</i>']               // aka Far Detection
             ],
             // returns zeroes !!!refresh: ['motion', 'occupiedTime', 'motionDetectionSensitivity', 'staticDetectionSensitivity', 'ledIndicator', 'motionDetectionDistance'],
+            refresh: ['queryAllTuyaDP'],
             deviceJoinName: 'Tuya TS0225_LINPTECH 24Ghz Human Presence Detector',
             configuration : [:]
     ],
@@ -691,7 +702,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             tuyaDPs:        [
                 [dp:101, name:'illuminance',        type:'number',  rw: 'ro', min:0,  max:10000, scale:1,   unit:'lx'],        // https://github.com/Koenkk/zigbee-herdsman-converters/issues/6001
                 [dp:103, name:'distance',           type:'decimal', rw: 'ro', min:0.0,  max:10.0,  defVal:0.0, scale:10,  unit:'meters']
-                
+                // 09/15/2024 - no additional information can be found for this device ... :( 
                 //[dp:104, name:'unknown 104 0x68',            type:'number',  rw: 'ro'],    //68
                 //[dp:105, name:'unknown 105 0x69',            type:'number',  rw: 'ro'],    //69
                 //[dp:109, name:'unknown 109 0x6D',            type:'number',  rw: 'ro'],    //6D
@@ -704,6 +715,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 //[dp:119, name:'unknown 119 0x77',            type:'number',  rw: 'ro']     //77
                 
             ],
+            refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [103], spammyDPsToNotTrace : [103],
             deviceJoinName: 'Tuya TS0225_AWARHUSB 24Ghz Human Presence Detector',
             configuration : ['battery': false]
@@ -733,6 +745,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [dp:182, name:'distance',               type:'decimal', rw: 'ro', min:0.0, max:10.0,  defVal:0.0, scale:100, unit:'meters',  description:'Distance to target'],
                 [dp:183, name:'distanceIntervalData',   type:'number',  rw: 'ro', min:0,   max:10000, scale:1,    unit:'',   description:'Distance interval data'],     // to be checked/clarified
             ],
+            refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [182], spammyDPsToNotTrace : [182],
             deviceJoinName: 'Aubess Human Presence Detector O7OE4N9A'
     ],
@@ -793,28 +806,30 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [dp:102, name:'powerSwitch',        type:'enum',    rw: 'rw', min:0,   max:1,    defVal:'1', map:[0:'OFF', 1:'ON'], title:'<b>powerSwitch</b>', description:'<i>Switch</i>'],
                 [dp:103, name:'fadingTime',         type:'number',  rw: 'rw', min:3,   max:1799, defVal:30,  scale:1,   unit:'seconds',  title:'<b>Fading time</b>', description:'<i>Presence (fading) delay time</i>']
             ],
+            refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [19], spammyDPsToNotTrace : [19],
             deviceJoinName: 'Tuya Human Presence Detector MUVJRJR5'
     ],
 
-    'TS0601_NBKSHS6K_RADAR'   : [        //5GHz Tuya Thick White Square with Sqr Button
-                description   : '5GHz Tuya Generic White Square Basic',
-                models        : ['TS0601'],
-                device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
-                capabilities  : ['MotionSensor': true],
-                preferences   : ["unknownDP12":"12"],
-                commands      : ['resetStats':'resetStats'],
-                fingerprints  : [
-                    [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_nbkshs6k', deviceJoinName: '5GHz Tuya Generic White Square Basic']
-                ],
-                tuyaDPs:        [
-                    [dp:1,   name:'motion',         type:'enum',   rw: 'ro', min:0, max:1,    defVal: '0', map:[0:'active', 1:'inactive'],     description:'Presence'],
-                    //[dp:12,   name:'unknownDP12',         type:'number',   rw: 'rw', min:0, max:9999,    defVal: 1,      description:'UnknownDP12'],
-
-                ],
-                spammyDPsToIgnore : [],           
-                spammyDPsToNotTrace : [],    
-                deviceJoinName: '5GHz Tuya Generic White Square Basic'
+    'TS0601_NBKSHS6K_RADAR'   : [        //5GHz Tuya Thick White Square with Sqr Button model: 'ZY-M100-S_2'
+            description   : '5GHz Tuya Generic White Square Basic',     // https://github.com/Koenkk/zigbee2mqtt/issues/23183
+            models        : ['TS0601'],
+            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            capabilities  : ['MotionSensor': true],
+            preferences   : ["unknownDP12":"12"],
+            commands      : ['resetStats':'resetStats'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_nbkshs6k', deviceJoinName: '5GHz Tuya Generic White Square Basic']
+            ],
+            tuyaDPs:        [
+                [dp:1,   name:'motion',         type:'enum',   rw: 'ro', min:0, max:1,    defVal: '0', map:[0:'active', 1:'inactive'],     description:'Presence'],
+                //[dp:12,   name:'unknownDP12',         type:'number',   rw: 'rw', min:0, max:9999,    defVal: 1,      description:'UnknownDP12'],
+                // TODO
+            ],
+            refresh: ['queryAllTuyaDP'],
+            spammyDPsToIgnore : [],           
+            spammyDPsToNotTrace : [],    
+            deviceJoinName: '5GHz Tuya Generic White Square Basic'
         ],
 
 'TS0601_DAPWRYY7_RADAR'   : [        //5GHz Tuya Thick White Square with Sqr Button
@@ -844,6 +859,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [dp:117, name:'smallMotionDetectionSensitivity', type:'number',  rw: 'rw', min:0,    max:10 ,  defVal:7,     scale:1,   unit:'',          title:'<b>Small motion detection sensitivity</b>', description:'<i>Small motion detection sensitivity</i>'],
                 [dp:118, name:'staticDetectionSensitivity',      type:'number',  rw: 'rw', min:0,    max:10,   defVal:7,     scale:1,   unit:'',          title:'<b>Static Detection Sensitivity</b>',       description:'<i>Static detection sensitivity</i>'],                 //  dt: "UINT8", aka Motionless Detection Sensitivity
             ], 
+            refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [101],           
             spammyDPsToNotTrace : [101],    
             deviceJoinName: '5GHz Tuya Thick White Square with Sqr Button'
@@ -854,7 +870,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             models        : ['TS0601'],
             device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true, 'DistanceMeasurement':false, 'IlluminanceMeasurement': true],
-            preferences   : ['fadingTime':'104', 'radarSensitivity':'105', 'minimumDistance':'110', 'maximumDistance':'109', 'ledIndicator':'104', staticDetectionDistance:'111', staticDetectionMinDistance:'112', staticDetectionSensitivity:'107'],
+            preferences   : [fadingTime:'104', radarSensitivity:'105', maximumDistance:'109', minimumDistance:'110', staticDetectionDistance:'111', staticDetectionMinDistance:'112', staticDetectionSensitivity:'107'],
             commands      : ['resetStats':'resetStats'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_ex3rcdha', deviceJoinName: 'Tuya mmWave Radar ZHPS01']
@@ -870,7 +886,8 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [dp:111, name:'staticDetectionDistance',         type:'decimal', rw: 'rw', min:0.0,  max:6.0,  defVal:6.0,   scale:100, step:10, unit:'meters',    title:'<b>Static detection Max distance</b>',          description:'<i>Static detection Max distance</i>'],
                 [dp:112, name:'staticDetectionMinDistance',      type:'decimal', rw: 'rw', min:0.0,  max:6.0,  defVal:4.0,   scale:100, step:10, unit:'meters',    title:'<b>Static detection Min distance</b>',          description:'<i>Static detection Min distance</i>'],
             ], 
-            //spammyDPsToNotTrace : [12],    
+            refresh: ['queryAllTuyaDP'],
+            spammyDPsToNotTrace : [12],    
             deviceJoinName: 'Tuya mmWave Radar ZHPS01'
     ]        
 ]
