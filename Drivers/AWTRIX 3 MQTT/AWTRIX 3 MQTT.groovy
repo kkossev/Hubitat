@@ -1,0 +1,500 @@
+/**
+ *  AWTRIX 3 MQTT  - driver for Hubitat Elevation
+ *
+ *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
+ *
+ * 	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ * 	in compliance with the License. You may obtain a copy of the License at:
+ *
+ * 		http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * 	Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ * 	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+ * 	for the specific language governing permissions and limitations under the License.
+ *
+ * Changelog:
+ *
+ * ver. 1.0.0  2024-09-14 kkossev  - Initial dummy version
+ * ver. 1.0.1  2024-09-15 kkossev  - (dev. branch)
+ *                                   
+ *                                   TODO: importURL, healthStatus
+ *                                   TODO: replease buttonSelect, buttonLeft, buttonRight with HE standard button events (pushed, released)
+*/
+
+// https://blueforcer.github.io/awtrix3/#/api
+// https://github.com/Blueforcer/awtrix3/releases  (ulanzi_TC001_0.96.bin)	http://192.168.0.234/
+
+import groovy.transform.Field
+
+@Field static String version = "1.0.1"
+@Field static String timeStamp = "2024/09/15 11:34 PM"
+
+metadata {
+	definition(name: "AWTRIX 3 MQTT Driver", namespace: "kkossev", author: "Krassimir Kossev", importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/AWTRIX%203%20MQTT/AWTRIX%203%20MQTT.groovy' ) { 
+		capability "Initialize"
+		capability "Refresh"
+		capability "Switch"
+		capability "Sensor"
+		capability "Notification"
+        capability 'HealthCheck'
+		
+		//command "deviceNotification", ["string"]	// "Notification" capability is already included
+        command 'configure', [[name:'normally it is not needed to configure anything', type: 'ENUM',   constraints: /*['--- select ---'] +*/ ConfigureOpts.keySet() as List<String>]]
+		//if (_DEBUG) {
+        	command "mqttConnect"
+        	command "disconnect"
+			command 'subscribe', [[name: 'Subscribe to a topic', type: 'STRING', description: 'Topic to subscribe to']]
+			command 'unsubscribe', [[name: 'Unsubscribe from a topic', type: 'STRING', description: 'Topic to unsubscribe from']]
+			command 'publish', [
+				[name: 'Publish to a topic', type: 'STRING', description: 'Topic to publish to', constraints: ['STRING']], 
+				[name: 'Payload', type: 'STRING', description: 'Payload to publish', constraints: ['STRING']]
+			]	
+
+		//}
+
+        attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
+        attribute 'rtt', 'number'
+        attribute 'Status', 'string'
+		attribute "switch", "string"
+		attribute "battery", "number"
+		attribute "temperature", "number"
+		attribute "humidity", "number"
+		attribute "brightness", "number"
+		attribute "lux", "number"
+		attribute "ram", "number"
+		attribute "uptime", "number"
+		attribute "wifi_signal", "number"
+		attribute "messages", "number"
+		attribute "version", "string"
+		attribute "indicator1", "string"
+		attribute "indicator2", "string"
+		attribute "indicator3", "string"
+		attribute "uid", "string"
+		attribute "matrix", "string"
+		attribute "ip_address", "string"
+		attribute "currentApp", "string"
+		attribute "buttonSelect", "string"
+		attribute "buttonLeft", "string"
+		attribute "buttonRight", "string"
+	}
+
+	preferences {
+        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables events logging.'
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_DEBUG_LOGGING, description: 'Turns on debug logging for 24 hours.'
+		input name: "mqttBroker", type: "text", title: "<b>MQTT Broker</b>", description: "MQTT Broker Address", required: true, defaultValue: '192.168.0.159'
+		input name: "mqttPort", type: "number", title: "<b>MQTT Port</b>", description: "MQTT Broker Port", required: true, defaultValue: 1883
+		input name: "mqttUsername", type: "text", title: "<b>MQTT Username</b>", description: "MQTT Username", required: false, defaultValue: "mqtt_user"
+		input name: "mqttPassword", type: "password", title: "<b>MQTT Password</b>", description: "MQTT Password", required: false, defaultValue: "mqtt_pass"
+		input name: "mqttTopic", type: "text", title: "<b>MQTT Topic</b>", description: "MQTT Topic", required: false, defaultValue: "awtrix_21b0c0"
+		input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: 'These advanced options should be already automatically set in an optimal way for your device...', defaultValue: true
+		if (advancedOptions == true) {
+			input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: 'Method to check device online/offline status.'
+			input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: 'How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"'
+			input name: 'traceEnable', type: 'bool', title: '<b>Enable trace logging</b>', defaultValue: false, description: 'Turns on detailed extra trace logging for 30 minutes.'
+			input name: 'extendedStats', type: 'bool', title: '<b>Extended Statustics</b>', defaultValue: false, description: 'If not interested in all the statistics, disable this option to reduce the HE CPU usage.'
+		}
+	}
+}
+
+
+
+@Field static final Boolean _DEBUG = false
+@Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for production
+
+@Field static final List<String> TopicsToSubscribe = ['stats', 'stats/currentApp', 'stats/buttonSelect', 'stats/buttonLeft', 'stats/buttonRight']
+
+
+void installed() {
+	logDebug "Installed"
+	initialize()
+}
+
+@Field static List<String> StatAttributesList = ['app', 'battery', 'brightness', 'hum', 'indicator1', 'indicator2', 'indicator3', 'ip_address', 'ldr_raw', 'lux', 'matrix', 'messages', 'ram', 'temp', 'type', 'uid', 'uptime', 'version', 'wifi_signal']
+
+void updated() {
+	logDebug "Updated"
+	// initialize() 	// not needed here?
+	if (settings?.extendedStats != true) {
+		String attributesDeleted = ''
+		StatAttributesList.each { it -> 
+			attributesDeleted += "${it}, " ; device.deleteCurrentState("$it") 
+		}
+		logDebug "Deleted attributes: ${attributesDeleted}";
+	}
+}
+
+void initialize() {
+	logDebug "Initializing"
+	try {
+		interfaces.mqtt.connect("tcp://${settings?.mqttBroker}:${settings?.mqttPort}", "hubitat_${device.deviceNetworkId}", settings?.mqttUsername, settings?.mqttPassword)
+		//interfaces.mqtt.subscribe("${settings?.mqttTopic}/#")
+		subscribeMultipleTopics(TopicsToSubscribe)
+	} catch (e) {
+		logError "MQTT Initialization Error: ${e.message}"
+	}
+}
+
+// max 10 topics !
+void subscribeMultipleTopics(List<String> topics) {
+	String subscribedTopics = ""
+	topics.each { topic ->
+		String fullTopic = "${settings?.mqttTopic}/${topic}"
+		interfaces.mqtt.subscribe(fullTopic)
+		subscribedTopics += "${fullTopic}, "
+	}
+	logDebug "Subscribed to topics: ${subscribedTopics}"
+}
+
+
+void disconnect() {
+	interfaces.mqtt.disconnect()
+	logDebug "disconnect: Disconnected from broker ${settings.mqttBroker} (${settings.mqttTopic})."
+}
+
+void subscribe(String topicParam) {
+	String topic = settings?.mqttTopic + '/' + topicParam
+	logDebug "Subscribing to topic ${topic}"
+	interfaces.mqtt.subscribe(topic)
+}
+
+void unsubscribe(String topicParam) {
+	String topic = settings?.mqttTopic + '/' + topicParam
+	logDebug "Unsubscribing from topic ${topic}"
+	interfaces.mqtt.unsubscribe(topic)
+}
+
+@Field static Map<String, String> TopicParsers = [
+	"stats" : "parseStats",
+	"stats/currentApp" : "parseCurrentApp",
+	"stats/buttonSelect" : "parseButtonSelect",
+	"stats/buttonLeft" : "parseButtonLeft",
+	"stats/buttonRight" : "parseButtonRight",
+]
+
+def parse(String description) {
+    Map msg = interfaces.mqtt.parseMessage(description)
+    logDebug "Received MQTT message: ${msg}"
+
+    // Extract topic and payload
+    String topic = msg.topic
+    String payload = msg.payload
+    // Exclude the characters before the first '/'
+    String[] topicParts = topic.split('/')
+    String subTopic = topicParts[1..-1].join('/')
+	logTrace "Topic: ${topic} Payload: ${payload} <b>subTopic : ${subTopic}</b>"	
+	// find the handler for the topic in the TopicParsers map
+	String handler = TopicParsers[subTopic]
+	if (handler) {
+		logTrace "Calling handler ${handler} for topic ${subTopic} with payload ${payload}"
+		this."${handler}"(subTopic, payload)
+	} else {
+		logDebug "<b> no handler</b> for Topic <b>${topic}</b>, ignoring message."
+	}
+	
+}// Parse JSON payload
+
+
+void parseStats(String topic, String payload) {
+	logTrace "parseStats: topic: ${topic}, payload:${payload}"
+	def jsonPayload = new groovy.json.JsonSlurper().parseText(payload)
+
+	logTrace "Battery: ${jsonPayload.bat}"
+	logTrace "Battery Raw: ${jsonPayload.bat_raw}"
+	logTrace "Type: ${jsonPayload.type}"
+	logTrace "Lux: ${jsonPayload.lux}"
+	logTrace "LDR Raw: ${jsonPayload.ldr_raw}"
+	logTrace "RAM: ${jsonPayload.ram}"
+	logTrace "Brightness: ${jsonPayload.bri}"
+	logTrace "Temperature: ${jsonPayload.temp}"
+	logTrace "Humidity: ${jsonPayload.hum}"
+	logTrace "Uptime: ${jsonPayload.uptime}"
+	logTrace "WiFi Signal: ${jsonPayload.wifi_signal}"
+	logTrace "Messages: ${jsonPayload.messages}"
+	logTrace "Version: ${jsonPayload.version}"
+	logTrace "Indicator1: ${jsonPayload.indicator1}"
+	logTrace "Indicator2: ${jsonPayload.indicator2}"
+	logTrace "Indicator3: ${jsonPayload.indicator3}"
+	logTrace "App: ${jsonPayload.app}"
+	logTrace "UID: ${jsonPayload.uid}"
+	logTrace "Matrix: ${jsonPayload.matrix}"
+	logTrace "IP Address: ${jsonPayload.ip_address}"
+
+	sendEvent(name: "battery", value: jsonPayload.bat)
+	sendEvent(name: "temperature", value: jsonPayload.temp)
+	sendEvent(name: "humidity", value: jsonPayload.hum)
+	sendEvent(name: "brightness", value: jsonPayload.bri)
+	if (settings?.extendedStats == true) {
+		// send events also for the extended statistics
+		sendEvent(name: "lux", value: jsonPayload.lux)
+		sendEvent(name: "ram", value: jsonPayload.ram)
+		sendEvent(name: "uptime", value: jsonPayload.uptime)
+		sendEvent(name: "wifi_signal", value: jsonPayload.wifi_signal)
+		sendEvent(name: "messages", value: jsonPayload.messages)
+		sendEvent(name: "version", value: jsonPayload.version)
+		sendEvent(name: "indicator1", value: jsonPayload.indicator1)
+		sendEvent(name: "indicator2", value: jsonPayload.indicator2)
+		sendEvent(name: "indicator3", value: jsonPayload.indicator3)
+		sendEvent(name: "currentApp", value: jsonPayload.app)
+		sendEvent(name: "uid", value: jsonPayload.uid)
+		sendEvent(name: "matrix", value: jsonPayload.matrix)
+		sendEvent(name: "ip_address", value: jsonPayload.ip_address)
+	}
+}
+
+void parseCurrentApp(String topic, String payload) {
+	logTrace "parseCurrentApp: topic: ${topic}, payload:${payload}"
+	sendEvent(name: "currentApp", value: payload)
+}
+
+void parseButtonSelect(String topic, String payload) {
+	logTrace "parseButtonSelect: topic: ${topic}, payload:${payload}"
+	sendEvent(name: "buttonSelect", value: payload)
+}
+
+void parseButtonLeft(String topic, String payload) {
+	logTrace "parseButtonLeft: topic: ${topic}, payload:${payload}"
+	sendEvent(name: "buttonLeft", value: payload)
+}
+
+void parseButtonRight(String topic, String payload) {
+	logTrace "parseButtonRight: topic: ${topic}, payload:${payload}"
+	sendEvent(name: "buttonRight", value: payload)
+}
+
+
+def on() {
+	publish("power", "{'power': true}")
+	sendEvent(name: "switch", value: "on")
+}
+
+def off() {
+	publish("power", "{'power': false}")
+	sendEvent(name: "switch", value: "off")
+}
+
+void ping() {
+	logWarn "ping: Not implemented yet"
+}
+
+def refresh() {
+	logDebug "Refreshing"
+	// Implement refresh logic if needed
+}
+
+// {text: "Hubitat", rainbow:true}
+// {"text": [{"t": "Hello, ", "c": "FF0000"}, {"t": "world!", "c": "00FF00"}], "repeat": 2}
+
+def deviceNotification(message) {
+	publish("notify", message)
+}
+
+void publish(String topicParam, String payload) {
+	String topic = settings?.mqttTopic + '/' + topicParam
+	logTrace "Publishing to topic ${topic} : ${payload}"
+	//interfaces.mqtt.publish(topic, payload)
+	sendMqttMessage(topic, payload)
+}
+
+void sendMqttMessage(topic, payload) {
+	try {
+		interfaces.mqtt.publish(topic, payload)
+		logDebug "Published MQTT message: ${topic} - ${payload}"
+	} catch (e) {
+		logError "MQTT Publish Error: ${e.message}"
+	}
+}
+
+
+// ---------------- credits to Andrew Davison (BirdsLikeWires) ----------------
+
+void mqttConnect() {
+    logDebug "Connecting to the MQTT broker ${settings?.mqttBroker} (${settings?.mqttTopic})"
+	try {
+
+		def mqttInt = interfaces.mqtt
+        mqttInt.each { logDebug "MQTT Interface: ${it}" }
+
+		if (mqttInt.isConnected()) {
+			logDebug "mqttConnect : Connection to broker ${settings?.mqttBroker} (${settings?.mqttTopic}) is live."
+			//return
+		}
+
+		if (settings?.mqttTopic == null || settings?.mqttTopic == "") {
+			logError "mqttConnect : Topic is not set." 
+			return
+		}
+
+		String clientID = "hubitat-" + device.deviceNetworkId
+		mqttBrokerUrl = "tcp://" + settings?.mqttBroker + ":1883"
+		mqttInt.connect(mqttBrokerUrl, clientID, settings?.mqttUsername, settings?.mqttPassword)
+		pauseExecution(500)
+
+	    logDebug "Subscribing to topic ${settings?.mqttTopic}"
+		mqttInt.subscribe(settings?.mqttTopic)
+
+	} catch (Exception e) {
+		if (settings?.mqttBroker == null || settings?.mqttBroker == "") {
+			logWarn "mqttConnect : No broker configured."
+		} else {
+			logError "mqttConnect : ${e.message}"
+		}
+	}
+} 
+
+void mqttClientStatus(String status) {
+    logDebug "mqttClientStatus : ${status}"
+	if (status.indexOf('Connection succeeded') >= 0) {
+		logDebug "mqttClientStatus : Connection to broker ${settings?.mqttBroker} (${settings?.mqttTopic}) is live."
+	} else {
+		logError "mqttClientStatus : ${status}"
+	}
+}
+
+// ----------- kkossev commonLib methods --------------
+
+@Field static final Integer DIGITAL_TIMER = 1000             // command was sent by this driver
+@Field static final Integer REFRESH_TIMER = 6000             // refresh time in miliseconds
+@Field static final Integer DEBOUNCING_TIMER = 300           // ignore switch events
+@Field static final Integer COMMAND_TIMEOUT = 10             // timeout time in seconds
+@Field static final Integer MAX_PING_MILISECONDS = 10000     // rtt more than 10 seconds will be ignored
+@Field static final String  UNKNOWN = 'UNKNOWN'
+@Field static final Integer DEFAULT_MIN_REPORTING_TIME = 10  // send the report event no more often than 10 seconds by default
+@Field static final Integer DEFAULT_MAX_REPORTING_TIME = 3600
+@Field static final Integer PRESENCE_COUNT_THRESHOLD = 3     // missing 3 checks will set the device healthStatus to offline
+@Field static final int DELAY_MS = 200                       // Delay in between zigbee commands
+@Field static final Integer INFO_AUTO_CLEAR_PERIOD = 60      // automatically clear the Info attribute after 60 seconds
+
+@Field static final Map HealthcheckMethodOpts = [            // used by healthCheckMethod
+    defaultValue: 1, options: [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
+]
+@Field static final Map HealthcheckIntervalOpts = [          // used by healthCheckInterval
+    defaultValue: 240, options: [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
+]
+@Field static final Map ConfigureOpts = [
+    'Configure the device'       : [key:2, function: 'configureNow'],
+    'Reset Statistics'           : [key:9, function: 'resetStatistics'],
+    '           --            '  : [key:3, function: 'configureHelp'],
+    'Delete All Preferences'     : [key:4, function: 'deleteAllSettings'],
+    'Delete All Current States'  : [key:5, function: 'deleteAllCurrentStates'],
+    'Delete All Scheduled Jobs'  : [key:6, function: 'deleteAllScheduledJobs'],
+    'Delete All State Variables' : [key:7, function: 'deleteAllStates'],
+    'Delete All Child Devices'   : [key:8, function: 'deleteAllChildDevices'],
+    '           -             '  : [key:1, function: 'configureHelp'],
+    '*** LOAD ALL DEFAULTS ***'  : [key:0, function: 'loadAllDefaults']
+]
+
+void logDebug(final String msg) { if (settings?.logEnable)   { log.debug "${device.displayName} " + msg } }
+void logInfo(final String msg)  { if (settings?.txtEnable)   { log.info  "${device.displayName} " + msg } }
+void logWarn(final String msg)  { if (settings?.logEnable)   { log.warn  "${device.displayName} " + msg } }
+void logTrace(final String msg) { if (settings?.traceEnable) { log.trace "${device.displayName} " + msg } }
+void logError(final String msg) { if (settings?.logEnable)   { log.error "${device.displayName} " + msg } }
+
+void configure(String command) {
+    logInfo "configure(${command})..."
+    if (!(command in (ConfigureOpts.keySet() as List))) {
+        logWarn "configure: command <b>${command}</b> must be one of these : ${ConfigureOpts.keySet() as List}"
+        return
+    }
+    //
+    String func
+    try {
+        func = ConfigureOpts[command]?.function
+        "$func"()
+    }
+    catch (e) {
+        logWarn "Exception ${e} caught while processing <b>$func</b>(<b>$value</b>)"
+        return
+    }
+    logInfo "executed '${func}'"
+}
+
+void configure() {
+    List<String> cmds = []
+    if (state.stats == null) { state.stats = [:] } ; state.stats.cfgCtr = (state.stats.cfgCtr ?: 0) + 1
+    logInfo "configure()... cfgCtr=${state.stats.cfgCtr}"
+    logDebug "configure(): settings: $settings"
+/*	
+    List<String> initCmds = initializeDevice()
+    if (initCmds != null && !initCmds.isEmpty()) { cmds += initCmds }
+    List<String> cfgCmds = configureDevice()
+    if (cfgCmds != null && !cfgCmds.isEmpty()) { cmds += cfgCmds }
+    if (cmds != null && !cmds.isEmpty()) {
+        sendZigbeeCommands(cmds)
+        logDebug "configure(): sent cmds = ${cmds}"
+        sendInfoEvent('sent device configuration')
+    }
+    else {
+        logDebug "configure(): no commands defined for device type ${DEVICE_TYPE}"
+    }
+*/	
+}
+
+/* groovylint-disable-next-line UnusedMethodParameter */
+void configureHelp(final String val) {
+    if (settings?.txtEnable) { log.warn "${device.displayName} configureHelp: select one of the commands in this list!" }
+}
+
+void configureNow() {
+    configure()
+}
+
+// delete all Preferences
+void deleteAllSettings() {
+    String preferencesDeleted = ''
+    settings.each { it -> preferencesDeleted += "${it.key} (${it.value}), " ; device.removeSetting("${it.key}") }
+    logDebug "Deleted settings: ${preferencesDeleted}"
+    logInfo  'All settings (preferences) DELETED'
+}
+
+// delete all attributes
+void deleteAllCurrentStates() {
+    String attributesDeleted = ''
+    device.properties.supportedAttributes.each { it -> attributesDeleted += "${it}, " ; device.deleteCurrentState("$it") }
+    logDebug "Deleted attributes: ${attributesDeleted}" ; logInfo 'All current states (attributes) DELETED'
+}
+
+// delete all State Variables
+void deleteAllStates() {
+    String stateDeleted = ''
+    state.each { it -> stateDeleted += "${it.key}, " }
+    state.clear()
+    logDebug "Deleted states: ${stateDeleted}" ; logInfo 'All States DELETED'
+}
+
+void deleteAllScheduledJobs() {
+    unschedule() ; logInfo 'All scheduled jobs DELETED'
+}
+
+void deleteAllChildDevices() {
+    getChildDevices().each { child -> log.info "${device.displayName} Deleting ${child.deviceNetworkId}" ; deleteChildDevice(child.deviceNetworkId) }
+    sendInfoEvent 'All child devices DELETED'
+}
+
+void loadAllDefaults() {
+    logDebug 'loadAllDefaults() !!!'
+    deleteAllSettings()
+    deleteAllCurrentStates()
+    deleteAllScheduledJobs()
+    deleteAllStates()
+    deleteAllChildDevices()
+
+    initialize()
+    configureNow()     // calls  also   configureDevice()
+    updated()
+    sendInfoEvent('All Defaults Loaded! F5 to refresh')
+}
+
+void clearInfoEvent()      { sendInfoEvent('clear') }
+
+void sendInfoEvent(String info=null) {
+    if (info == null || info == 'clear') {
+        logDebug 'clearing the Status event'
+        sendEvent(name: 'Status', value: 'clear', type: 'digital')
+    }
+    else {
+        logInfo "${info}"
+        sendEvent(name: 'Status', value: info, type: 'digital')
+        runIn(INFO_AUTO_CLEAR_PERIOD, 'clearInfoEvent')            // automatically clear the Info attribute after 1 minute
+    }
+}
