@@ -38,7 +38,7 @@
  *  ver. 1.3.2 2024-07-31 kkossev - added SONOFF SWV (+onWithTimedOff)
  *  ver. 1.3.3 2024-08-02 kkossev - added FrankEver FK_V02 _TZE200_1n2zev06 Valve Open Percentage and timeout timer; separated valveOpenThreshold and valveOpenPercentage
  *  ver. 1.3.4 2024-08-02 dstutz  - added Giex _TZE204_7ytb3h8u 
- *  ver. 1.3.5 2024-08-03 kkossev - (dev. branch)
+ *  ver. 1.3.5 2024-09-22 kkossev - (dev. branch) removed tuyaVersion for non-Tuya devices; combined on() + timedOff() command for opening the Sonoff valve;
  *
  *                                  TODO: bugFix: deviceProfule not found automatically; 
  *                                  TODO: bugFix: powerSource : []
@@ -50,7 +50,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 String version() { '1.3.5' }
-String timeStamp() { '2024/08/03 8:52 AM' }
+String timeStamp() { '2024/09/22 1:42 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -1269,7 +1269,7 @@ void open() {
         String delayHex = zigbee.convertToHexString(delay as int, 4)
         String payload = zigbee.swapOctets(delayHex)
         log.trace "SONOFF delay: ${delay} delayHex: ${delayHex} payload: ${payload}"
-        cmds = zigbee.command(0x0006, 0x42, [:],  delay=300, "00 ${payload} 0000")
+        cmds = zigbee.on(200) + zigbee.command(0x0006, 0x42, [:],  delay=300, "00 ${payload} 0000")
         log.trace "SONOFF cmds: ${cmds}"
     }
     else {
@@ -1904,6 +1904,14 @@ void testTuyaCmd(String dpCommand, String dpValue, String dpTypeString) {
 }
 
 void updateTuyaVersion() {
+    if (!isTuya()) {
+        logDebug 'updateTuyaVersion() - not a Tuya device'
+        if (device?.getDataValue('tuyaVersion') != null)  {
+            device.removeDataValue('tuyaVersion')
+            logInfo 'tuyaVersion cleared'
+        }
+        return
+    }
     def application = device.getDataValue('application')
     Integer ver
     if (application != null) {
@@ -1920,6 +1928,14 @@ void updateTuyaVersion() {
             logInfo "tuyaVersion set to $str"
         }
     }
+}
+
+boolean isTuya() {
+    if (!device) { return true }    // fallback - added 04/03/2024
+    String model = device.getDataValue('model')
+    String manufacturer = device.getDataValue('manufacturer')
+    /* groovylint-disable-next-line UnnecessaryTernaryExpression */
+    return (model?.startsWith('TS') && manufacturer?.startsWith('_T')) ? true : false
 }
 
 /* groovylint-disable-next-line MethodParameterTypeRequired, UnusedMethodParameter */
