@@ -38,7 +38,7 @@
  *  ver. 1.3.2 2024-07-31 kkossev - added SONOFF SWV (+onWithTimedOff)
  *  ver. 1.3.3 2024-08-02 kkossev - added FrankEver FK_V02 _TZE200_1n2zev06 Valve Open Percentage and timeout timer; separated valveOpenThreshold and valveOpenPercentage
  *  ver. 1.3.4 2024-08-02 dstutz  - added Giex _TZE204_7ytb3h8u 
- *  ver. 1.3.5 2024-09-22 kkossev - (dev. branch) removed tuyaVersion for non-Tuya devices; combined on() + timedOff() command for opening the Sonoff valve;
+ *  ver. 1.3.5 2024-09-22 kkossev - removed tuyaVersion for non-Tuya devices; combined on() + timedOff() command for opening the Sonoff valve;
  *
  *                                  TODO: bugFix: deviceProfule not found automatically; 
  *                                  TODO: bugFix: powerSource : []
