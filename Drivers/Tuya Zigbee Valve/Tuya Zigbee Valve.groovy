@@ -39,18 +39,18 @@
  *  ver. 1.3.3 2024-08-02 kkossev - added FrankEver FK_V02 _TZE200_1n2zev06 Valve Open Percentage and timeout timer; separated valveOpenThreshold and valveOpenPercentage
  *  ver. 1.3.4 2024-08-02 dstutz  - added Giex _TZE204_7ytb3h8u 
  *  ver. 1.3.5 2024-09-22 kkossev - removed tuyaVersion for non-Tuya devices; combined on() + timedOff() command for opening the Sonoff valve;
+ *  ver. 1.3.6 2024-09-23 kkossev - Sonoff valve: irrigationDuration 0 will disable the valve auto-off; default auto-off timer changed to 0 (was 60 seconds); invalid 'digital' type of autoClose fixed; added workState attribute; logging improvements;
  *
- *                                  TODO: bugFix: deviceProfule not found automatically; 
- *                                  TODO: bugFix: powerSource : []
- *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
+ *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages;
+ *                                  TODO: set the device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
  *                                  TODO: clear the old states on update; add rejoinCtr;
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-String version() { '1.3.5' }
-String timeStamp() { '2024/09/22 1:42 PM' }
+static String version() { '1.3.6' }
+static String timeStamp() { '2024/09/23 12:55 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -75,17 +75,19 @@ metadata {
         attribute 'weatherDelay', 'enum', ['disabled', '24h', '48h', '72h']
         attribute 'irrigationStartTime', 'string'
         attribute 'irrigationEndTime', 'string'
-        attribute 'lastIrrigationDuration', 'string'
+        attribute 'lastIrrigationDuration', 'string'    // Ex: "00:01:10,0"
         attribute 'waterConsumed', 'number'
         attribute 'irrigationVolume', 'number'
-        attribute 'irrigationDuration', 'number'
+        attribute 'irrigationDuration', 'number'        // Sonoff SWV, frankEver FK_V02
         attribute 'irrigationCapacity', 'number'
         attribute 'valveStatus', 'enum', ['normal', 'shortage', 'leakage', 'shortageAndLeakage', 'clear']    // SONOFF {ID: 0x500c, type: 0x20},
         attribute 'valveOpenThreshold', 'number'   // FrankEver FK_V02 - the set threshold for valve open 
         attribute 'valveOpenPercentage', 'number'   // FrankEver FK_V02 - the current valve open percentage reported by the device
+        attribute 'workState', 'enum', ['manual control', 'Cycle timing / quantity control', 'Schedule control']
+        //attribute 'workState', 'enum', SonoffWorkStateOptions.values() as List<String>
 
         command 'initialize', [[name: 'Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****']]
-        command 'setIrrigationTimer', [[name:'auto-off timer, in seconds or minutes (depending on the model)', type: 'NUMBER', description: 'Set the irrigation duration timer<br>, in seconds or minutes (depending on the model', constraints: ['0..86400']]]
+        command 'setIrrigationTimer', [[name:'auto-off timer (irrigationDuration ), in seconds or minutes (depending on the model)', type: 'NUMBER', description: 'Set the irrigation duration timer<br>, in seconds or minutes (depending on the model). Zero value disables the auto-off!', constraints: ['0..86400']]]
         command 'setIrrigationCapacity', [[name:'capacity, liters (Saswell and GiEX)', type: 'NUMBER', description: 'Set Irrigation Capacity, litres', constraints: ['0..9999']]]
         command 'setIrrigationMode', [[name:'select the mode (Saswell and GiEX)', type: 'ENUM', description: 'Set Irrigation Mode', constraints: ['--select--', 'duration', 'capacity']]]
         command 'setValveOpenThreshold', [[name:'Valve Open Threshold, % (FrankEver FK_V02)', type: 'NUMBER', description: 'Valve Open Threshold, % (FrankEver FK_V02)', constraints: ['0..100']]]
@@ -117,7 +119,7 @@ metadata {
                 input(name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options: powerOnBehaviourOptions)
             }
             if (isSASWELL() || isGIEX() || isSonoff() || isFankEver()) {
-                input(name: 'autoOffTimer', type: 'number', title: '<b>Auto off timer</b>', description: 'Automatically turn off after how many seconds or minutes<br>(depending on the model)', defaultValue: DEFAULT_AUTOOFF_TIMER, required: false)
+                input(name: 'autoOffTimer', type: 'number', title: '<b>Auto off timer (Irrigation Duration)</b> ', description: 'Automatically turn off after how many seconds or minutes<br>(depending on the model).<br>Zero value disables the auto-off!', defaultValue: DEFAULT_AUTOOFF_TIMER, required: false)
             }
             if (isSASWELL() || isGIEX()) {
                 input(name: 'irrigationCapacity', type: 'number', title: '<b>Irrigation Capacity</b>', description: 'Automatically turn off agter how many liters?', defaultValue: DEFAULT_CAPACITY, required: false)
@@ -162,14 +164,14 @@ boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
 // Constants
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3
 @Field static final Integer DEFAULT_POLLING_INTERVAL = 15
-@Field static final Integer DEFAULT_AUTOOFF_TIMER = 60
+@Field static final Integer DEFAULT_AUTOOFF_TIMER = 0   // 0 means no auto-off - changed 2024-09-23
 @Field static final Integer MAX_AUTOOFF_TIMER = 86400
 @Field static final Integer DEFAULT_CAPACITY = 99
 @Field static final Integer MAX_CAPACITY = 999
 @Field static final Integer DEBOUNCING_TIMER = 300
 @Field static final Integer DIGITAL_TIMER = 3000
 @Field static final Integer REFRESH_TIMER = 3000
-@Field static final Integer COMMAND_TIMEOUT = 10
+@Field static final Integer COMMAND_TIMEOUT = 6
 @Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
 @Field static String UNKNOWN = 'UNKNOWN'
 @Field static final String  DATE_TIME_UNKNOWN = '****-**-** **:**:**'
@@ -221,6 +223,13 @@ boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
     '4': 'rainy',
     '5': 'snow',
     '6': 'fog'
+]
+
+// // Valve Work State (Valve working status)  // 0 - 'manual control'; 1 - 'Cycle timing / quantity control''; 2 - 'Schedule control'
+@Field static final Map SonoffWorkStateOptions = [
+    '0': 'manual control',
+    '1': 'Cycle timing / quantity control',
+    '2': 'Schedule control'
 ]
 
 // TODO : change 'model' to 'models' list; combine TS0001_VALVE_ONOFF TS0011_VALVE_ONOFF TS011F_VALVE_ONOFF in one profile;
@@ -561,7 +570,7 @@ void sendSwitchEvent(final String switchValue) {
         return
     }
     logDebug "sendSwitchEvent: value=${value}  lastSwitch=${state.states['lastSwitch']}"
-    boolean isDigital = state.states['isDigital'] ?: true
+    boolean isDigital = state.states['isDigital'] ?: false  // bug fixed 2024-09-23
     map.type = isDigital == true ? 'digital' : 'physical'
     if (lastSwitch != value) {
         //bWasChange = true
@@ -1046,6 +1055,7 @@ void parseSonoffCluster(Map it, String description) {
     // Define a date format
     SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
     Integer intValue = 0
+    String descText = ''
     try {
         intValue = zigbee.convertHexToInt(it.value)
     }
@@ -1055,61 +1065,60 @@ void parseSonoffCluster(Map it, String description) {
     switch (it.attrId) {
         case '5006' :   // Real-time irrigation duration (0..86400, seconds)
             logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} value is ${intValue} (raw: ${it.value})"
-            String descText = "lastValveOpenDuration is ${intValue} seconds"
+            descText = "lastValveOpenDuration is ${intValue} seconds"
             sendEvent(name: 'lastValveOpenDuration', value: intValue, descriptionText: descText, type: 'physical')
-            logInfo descText
+            logInfo "${descText}"
             break
         case '5007' :   // Real-time Irrigation Volume (0..1000, divisor:10, unit: 'L')
             logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} value is ${intValue} (raw: ${it.value})"
-            String descText = "irrigationVolume is ${intValue} L"
+            descText = "irrigationVolume is ${intValue} L"
             sendEvent(name: 'irrigationVolume', value: intValue, descriptionText: descText, type: 'physical')
-            logInfo descText
+            logInfo "${descText}"
             break
         case '5008' :   // Cyclic Timed Irrigation // data type: Char string      0x0A 01 01 00 00 04 B0 00 00 0E 10
             //                                                      raw: E9D701FC11 0A 08 50 42 00,
-            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} description is ${description}"
-            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Cyclic Timed Irrigation : value is ${intValue} (raw: ${it.value})"
-            //decodeSonoffCiclicTimedIrrigationAtt0x5008(it)
+            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Cyclic Timed Irrigation : value is ${intValue} (raw: ${it.value})"
             break
         case '5009' :   // Cyclic Volume Irrigation // data type: Char string     0x0A 01 01 00 00 00 1E 00 00 0E 10
             //                                                           E9D701FC11 0A 09 50 42 00
-            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} description is ${description}"
-            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Cyclic Volume Irrigation : value is ${intValue} (raw: ${it.value})"
+            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Cyclic Volume Irrigation : value is ${intValue} (raw: ${it.value})"
             break
         case '500A' :   // Weekly Schedule  // data type: Char string
-            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Weekly Schedule : value is ${intValue} (raw: ${it.value})"
+            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Weekly Schedule : value is ${intValue} (raw: ${it.value})"
             break
         case '500B' :   // Schedule Skip
-            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Schedule Skip : value is ${intValue} (raw: ${it.value})"
+            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Schedule Skip : value is ${intValue} (raw: ${it.value})"
             break
         case '500C' :	// Valve Abnormal State // valveStatus :  0 - 'normal'; 1 - 'shortage'; 2 - 'leakage'; 3 - 'shortage and leakage'
             logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Valve Abnormal State value is ${intValue} (raw: ${it.value})"
             String valveStatus = valveStatusOptions[intValue.toString()]
-            logInfo "valveStatus is: ${valveStatus} (${intValue})"
-            sendEvent(name: 'valveStatus', value: valveStatus, type: 'physical')
+            descText = "valveStatus is ${valveStatus}"
+            logInfo "${descText} (${intValue})"
+            sendEvent(name: 'valveStatus', value: valveStatus, descriptionText:descText, type: 'physical')
             break
         case '500D' :   // Irrigation Start Time // uint32  // Local time (since 1970)
             logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Irrigation Start Time : value is ${intValue} (raw: ${it.value})"
             Date startDate = new Date((intValue + 946684800L)  * 1000L)
             String startDateString = dateFormat.format(startDate)
-            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Irrigation Start Time : value is ${startDateString} (raw: ${it.value})"
-            sendEvent(name: 'irrigationStartTime', value: startDateString, type: 'physical')
-            //
-            //sendSwitchEvent('on')
+            descText = "Irrigation Start Time is ${startDateString}" ; if (settings?.logEnable) { descText += " (raw: ${it.value})" }
+            logInfo "${descText}"
+            sendEvent(name: 'irrigationStartTime', value: startDateString, descriptionText:descText, type: 'physical')
             break
         case '500E' :   // Irrigation End Time //  uint32  // Local time (since 1970)
             Date endDate = new Date((intValue + 946684800L)  * 1000L)
             String endDateString = dateFormat.format(endDate)
-            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Irrigation End Time : value is ${endDateString} (raw: ${it.value})"
-            sendEvent(name: 'irrigationEndTime', value: endDateString, type: 'physical')
-            //
-            //sendSwitchEvent('off')
+            descText = "Irrigation End Time is ${endDateString}"  ; if (settings?.logEnable) { descText += " (raw: ${it.value})" }
+            logInfo "${descText}"
+            sendEvent(name: 'irrigationEndTime', value: endDateString, descriptionText:descText, type: 'physical')
             break
         case '500F' :   // Daily Irrigation Volume (Irrigation water volume for the day)    // uint32 (Liter)
             logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Daily Irrigation Volume : value is ${intValue} (raw: ${it.value})"
             break
         case '5010' :   // Valve Work State (Valve working status)  // 0 - 'manual control'; 1 - 'Cycle timing / quantity control''; 2 - 'Schedule control'
-            logInfo "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Valve Work State  : value is ${intValue} (raw: ${it.value})"
+            String workState = SonoffWorkStateOptions[intValue.toString()]
+            descText = "Valve Work State is ${workState}" ; if (settings?.logEnable) { descText += " (raw: ${it.value})" }
+            logInfo "${descText}"
+            sendEvent(name: 'workState', value: workState, descriptionText:descText, type: 'physical')
             break
         default :
             logDebug "Sonoff cluster 0x${it.cluster} <b>unknown attribute ${it.attrId}</b> value is ${intValue} (raw: ${it.value})"
@@ -1265,12 +1274,18 @@ void open() {
         cmds = sendTuyaCommand('65', DP_TYPE_BOOL, '01')
     }
     else if (getModelGroup().contains('SONOFF')) {
-        int delay = settings?.autoOffTimer ?: MAX_AUTOOFF_TIMER
-        String delayHex = zigbee.convertToHexString(delay as int, 4)
-        String payload = zigbee.swapOctets(delayHex)
-        log.trace "SONOFF delay: ${delay} delayHex: ${delayHex} payload: ${payload}"
-        cmds = zigbee.on(200) + zigbee.command(0x0006, 0x42, [:],  delay=300, "00 ${payload} 0000")
-        log.trace "SONOFF cmds: ${cmds}"
+        cmds = zigbee.on(200)
+        int delay = settings?.autoOffTimer == null ? MAX_AUTOOFF_TIMER : settings?.autoOffTimer as int
+        if (delay != 0) {
+            String delayHex = zigbee.convertToHexString(delay as int, 4)
+            String payload = zigbee.swapOctets(delayHex)
+            logDebug "SONOFF delay: ${delay} delayHex: ${delayHex} payload: ${payload}"
+            cmds += zigbee.command(0x0006, 0x42, [:],  delay=300, "00 ${payload} 0000")
+        }
+        else {
+            logDebug "SONOFF - no autoOffTimer!"
+        }
+        logDebug "SONOFF cmds: ${cmds}"
     }
     else {
         cmds =  zigbee.on()
@@ -1414,9 +1429,10 @@ void configure() {
     if (txtEnable == true) { log.info "${device.displayName} configure().." }
     List<String> cmds = []
     cmds += tuyaBlackMagic()
-    // changed in version 1.2.2 - refresh() is not called here! (executes instantly, returns null)
-    if (settings?.autoOffTimer != null && settings?.autoSendTimer != false) {
-        sendEvent(name: 'irrigationDuration', value: settings?.autoOffTimer, type: 'digital')
+    //
+    if (settings?.autoOffTimer != null /*&& settings?.autoSendTimer != false*/) {
+        String timerText = settings?.autoOffTimer == 0 ? 'disabled' : (settings?.autoOffTimer).toString()
+        sendEvent(name: 'irrigationDuration', value: timerText, type: 'digital')
     }
 
     if (settings?.forcedProfile != null) {
@@ -1802,7 +1818,8 @@ void setIrrigationTimer(BigDecimal timer) {
     }
     logDebug "setting the irrigation timer to ${timerSec} seconds"
     device.updateSetting('autoOffTimer', [value: timerSec, type: 'number'])
-    sendEvent(name: 'irrigationDuration', value: timerSec, type: 'digital')
+    String timerText = timerSec == 0 ? 'disabled' : timerSec.toString()
+    sendEvent(name: 'irrigationDuration', value: timerText, type: 'digital')
     runIn( 1, 'sendIrrigationDuration')
 }
 

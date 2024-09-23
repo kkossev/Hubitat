@@ -22,13 +22,13 @@
  *                                   TODO: try the HTTP interface
 */
 
-// https://blueforcer.github.io/awtrix3/#/api
+// https://blueforcer.github.io/awtriix3/#/api
 // https://github.com/Blueforcer/awtrix3/releases  (ulanzi_TC001_0.96.bin)	http://192.168.0.234/
 
 import groovy.transform.Field
 
 @Field static String version = "1.0.1"
-@Field static String timeStamp = "2024/09/23 12:30 AM"
+@Field static String timeStamp = "2024/09/23 9:45 AM"
 
 metadata {
 	definition(name: "AWTRIX 3 MQTT Driver", namespace: "kkossev", author: "Krassimir Kossev", importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/AWTRIX%203%20MQTT/AWTRIX%203%20MQTT.groovy' ) { 
@@ -87,6 +87,8 @@ metadata {
 		input name: "mqttPassword", type: "password", title: "<b>MQTT Password</b>", description: "MQTT Password", required: false, defaultValue: "mqtt_pass"
 		input name: "mqttTopic", type: "text", title: "<b>MQTT Topic</b>", description: "MQTT Topic", required: false, defaultValue: "awtrix_21b0c0"
 		input name: "awtrixIP", type: "text", title: "<b>AWTRIX IP</b>", description: "AWTRIX IP Address (optional)", required: false, defaultValue: '192.168.0.234'
+		input name: 'rainbowEffect', type: 'bool', title: '<b>Rainbow Effect</b>', defaultValue: false, description: 'Enable the rainbow effect for the text.'
+
 		input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: 'These advanced options should be already automatically set in an optimal way for your device...', defaultValue: true
 		if (advancedOptions == true) {
 			input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: 'Method to check device online/offline status.'
@@ -237,7 +239,6 @@ void installed() {
 void updated() {
 	logDebug "Updated"
     checkDriverVersion(state)
-    initializeVars(fullInit = true)
 	if (settings?.extendedStats != true) {
 		String attributesDeleted = ''
 		StatAttributesList.each { it -> 
@@ -300,6 +301,7 @@ void initializeVars( boolean fullInit = false ) {
 	if (fullInit || settings?.mqttTopic == null) { device.updateSetting('mqttTopic', [value: 'awtrix_21b0c0', type: 'text']) }
 	if (fullInit || settings?.awtrixIP == null) { device.updateSetting('awtrixIP', [value: '192.168.0.234', type: 'text']) }
 	if (fullInit || settings?.extendedStats == null) { device.updateSetting('extendedStats', [value: false, type: 'bool']) }
+	if (fullInit || settings?.rainbowEffect == null) { device.updateSetting('rainbowEffect', false) }
 
     if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
 
@@ -307,9 +309,8 @@ void initializeVars( boolean fullInit = false ) {
 
 private String driverVersionAndTimeStamp() { version + ' ' + timeStamp + ((_DEBUG) ? ' (debug version!) ' : ' ') + "(${getModel()} ${location.hub.firmwareVersionString})" }
 
-
-@CompileStatic
-public void checkDriverVersion(final Map state) {
+void checkDriverVersion(final Map state) {
+	logDebug "checkDriverVersion: driverVersion = ${state.driverVersion} driverVersionAndTimeStamp = ${driverVersionAndTimeStamp()}"
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         logDebug "checkDriverVersion: updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()}")
@@ -380,10 +381,12 @@ void ping() {
 boolean sendPing(ipAddress) {
 	if (ipAddress == null || ipAddress == "") {
 		logWarn "sendPing: ipAddress is not set."
+		sendRttEvent('ipAddress is not set')
 		return false
 	}
     if (!validIP (ipAddress)) {
-        logDebug "IP address $ipAddress failed pattern check - ping request terminated"
+        logWarn "IP address $ipAddress failed pattern check - ping request terminated"
+		sendRttEvent('invalid IP address')
 		return false
 	}			
 	logDebug "sendPing: pinging ${ipAddress}"
@@ -463,6 +466,7 @@ void deviceNotification(String messageParam) {
 	}
 	else {
 		parsedMessageMap.text = message
+		parsedMessageMap.rainbow = settings?.rainbowEffect
 		logDebug "deviceNotification: parsedMessageMap: ${parsedMessageMap}"
 		message = JsonOutput.toJson(parsedMessageMap)
 		logDebug "deviceNotification: message: ${message}"
