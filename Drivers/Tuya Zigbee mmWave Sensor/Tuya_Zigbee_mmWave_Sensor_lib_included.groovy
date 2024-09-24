@@ -29,6 +29,7 @@
  * ver. 3.2.3  2024-06-21 kkossev  - added _TZE204_nbkshs6k and _TZE204_dapwryy7 @CheesyPotato 
  * ver. 3.2.4  2024-07-31 kkossev  - using motionLib.groovy; added batteryLib; added _TZE200_jkbljri7; TS0601 _TZE204_dapwryy7 all DPs defined; added Wenzhi TS0601 _TZE204_laokfqwu
  * ver. 3.3.0  2024-09-15 kkossev  - deviceProfileLib 3.3.3 ; added _TZE204_ex3rcdha; added almost all DPs of the most spammy ZY-M100 radars into spammyDPsToNotTrace filter; fixed powerSource for _TZE200_2aaelwxk (battery); added queryAllTuyaDP for refresh; 
+ * ver. 3.3.1  2024-09-24 kkossev  - (dev.branch) - adding TS0601 _TZE204_ya4ft0w4 (Wenzhi);
  *                                   
  *                                   TODO: update the top post in the forum with the new models mmWave radars
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
@@ -42,8 +43,8 @@
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
 */
 
-static String version() { "3.3.0" }
-static String timeStamp() {"2024/09/15 11:50 AM"}
+static String version() { "3.3.1" }
+static String timeStamp() {"2024/09/24 9:54 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -629,6 +630,35 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             deviceJoinName: 'Tuya Human Presence Detector ZY-M100-24G'
     ],
         
+    'TS0601_YA4FT0W4_RADAR'   : [        //https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/68468dc630f19fdbea826538eddfaeafd964a1be/M100-ya4ft0-V3-20240907.js#L14
+            description   : 'Tuya Human Presence Detector YA4FT0W4',
+            models        : ['TS0601'],
+            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true, 'HumanMotionState':true],
+            preferences   : ['radarSensitivity':'2', 'staticDetectionSensitivity':'102', 'fadingTime':'105', 'minimumDistance':'3', 'maximumDistance':'4', 'distanceReporting':'101'],
+            commands      : ['resetStats':'resetStats'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_ya4ft0w4', deviceJoinName: 'Tuya Human Presence Detector YA4FT0W4 ZY-M100-24GV372']
+            ],
+            tuyaDPs:        [   
+                [dp:1,   name:'humanMotionState',   preProc:'motionOrNot', type:'enum',    rw: 'ro', map:[0:'none', 1:'present', 2:'moving', 3:'none'], description:'Presence state'],
+                [dp:2,   name:'radarSensitivity',   type:'number',  rw: 'rw', min:1,    max:10, title:'<b>Motion sensitivity</b>', description:'<i>Radar motion sensitivity</i>'],
+                [dp:3,   name:'minimumDistance',    type:'decimal', rw: 'rw', min:0.0,  max:8.25, step:75, scale:100,  unit:'meters',   title:'<b>Minimum distance</b>',      description:'<i>Shield range of the radar</i>'],         // was shieldRange
+                [dp:4,   name:'maximumDistance',    type:'decimal', rw: 'rw', min:0.75, max:8.25, step:75, scale:100,  unit:'meters',   title:'<b>Maximum distance</b>',      description:'<i>Detection range of the radar</i>'],      // was detectionRange
+                [dp:9,   name:'distance',           type:'decimal', rw: 'ro', min:0.0,  max:10.0, scale:10, unit:'meters', description:'Target distance'],
+                [dp:101, name:'distanceReporting',  type:'enum',    rw: 'rw', min:0,    max:1,       defVal:'0',  map:[0:'disabled', 1:'enabled'], description:'Effectively disable the distance reporting!'],
+                [dp:102, name:'staticDetectionSensitivity',   type:'number',  rw: 'rw', min:0, max:10, scale:1,   unit:'',      title:'<b>Static detection sensitivity</b>', description:'<i>Presence sensitivity</i>'],
+                [dp:103, name:'illuminance',        type:'number',  rw: 'ro', unit:'lx', description:'illuminance'],
+                [dp:104, name:'motion',             type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'<i>Presence state</i>'],
+                // TODO - DP:104 is missing - simulate it with the humanMotionState ?
+                [dp:105, name:'fadingTime',         type:'decimal', rw: 'rw', min:5,    max:15000, unit:'seconds',   title:'<b<Delay time</b>',         description:'<i>Delay (fading) time</i>']
+            ],
+            refresh: ['queryAllTuyaDP'],
+            spammyDPsToIgnore : [9],
+            spammyDPsToNotTrace : [9],
+            deviceJoinName: 'Tuya Human Presence Detector YA4FT0W4 ZY-M100-24GV372'
+    ],
+        
     'TS0601_LAOKFQWU_RADAR'   : [           // https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/d0e62c42726dca0c1a881d892129f3087c7d8bc7/wenzhi_tuya_M100_240704.js#L20
             description   : 'Tuya/Wenzhi Human Presence Detector LAOKFQWU WZ-M100',
             models        : ['TS0601'],
@@ -901,6 +931,16 @@ Integer skipIfDisabled(int val) {
     return val
 }
 
+// called from processFoundItem() for TS0601_YA4FT0W4_RADAR radar
+Integer motionOrNot(int val) {
+    // [dp:1,   name:'humanMotionState',   preProc:'motionOrNot', type:'enum',    rw: 'ro', min:0,    max:3,       defVal:'0',  map:[0:'none', 1:'present', 2:'moving', 3:'none'], description:'Presence state'],
+    if (val in [1, 2]) {
+        sendMotionEvent(true)
+    }
+    else {
+        sendMotionEvent(false)
+    }
+}
 
 void customParseIasMessage(final String description) {
     // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn

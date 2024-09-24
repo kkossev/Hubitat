@@ -1035,12 +1035,6 @@ void parseZHAcommand(Map descMap) {
     }
 }
 
-/*
-        attribute 'valveStatus', 'enum', ['normal', 'shortage', 'leakage', 'shortageAndLeakage']    // SONOFF {ID: 0x500c, type: 0x20},
-        attribute 'irrigationDuration', 'number'
-
-*/
-
 @Field static final Map valveStatusOptions = [
     '0': 'normal',
     '1': 'shortage',

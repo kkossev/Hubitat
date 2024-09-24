@@ -15,9 +15,8 @@
  * Changelog:
  *
  * ver. 1.0.0  2024-09-14 kkossev  - Initial dummy version
- * ver. 1.0.1  2024-09-23 kkossev  - (dev. branch) added ping, awtrixIP, healthStatus, parse deviceNotification JSON payload
+ * ver. 1.0.1  2024-09-23 kkossev  - (dev. branch) added ping, awtrixIP, healthStatus, parse deviceNotification JSON payload; added commonly used text preferences; dismiss; 
  *                                   
- *                                   TODO: add the rest of the JSON keys in a text message
  *                                   TODO: replease buttonSelect, buttonLeft, buttonRight with HE standard button events (pushed, released)
  *                                   TODO: try the HTTP interface
 */
@@ -28,7 +27,7 @@
 import groovy.transform.Field
 
 @Field static String version = "1.0.1"
-@Field static String timeStamp = "2024/09/23 9:45 AM"
+@Field static String timeStamp = "2024/09/23 7:42 PM"
 
 metadata {
 	definition(name: "AWTRIX 3 MQTT Driver", namespace: "kkossev", author: "Krassimir Kossev", importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/AWTRIX%203%20MQTT/AWTRIX%203%20MQTT.groovy' ) { 
@@ -41,6 +40,7 @@ metadata {
 		
 		//command "deviceNotification", ["string"]	// "Notification" capability is already included
         command 'configure', [[name:'normally it is not needed to configure anything', type: 'ENUM',   constraints: /*['--- select ---'] +*/ ConfigureOpts.keySet() as List<String>]]
+		command 'dismiss'
 		if (_DEBUG) {
         	command "mqttConnect"
         	command "disconnect"
@@ -49,7 +49,7 @@ metadata {
 			command 'publish', [
 				[name: 'Publish to a topic', type: 'STRING', description: 'Topic to publish to', constraints: ['STRING']], 
 				[name: 'Payload', type: 'STRING', description: 'Payload to publish', constraints: ['STRING']]
-			]	
+			]
 		}
 
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
@@ -81,13 +81,24 @@ metadata {
 	preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables events logging.'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_DEBUG_LOGGING, description: 'Turns on debug logging for 24 hours.'
-		input name: "mqttBroker", type: "text", title: "<b>MQTT Broker</b>", description: "MQTT Broker Address", required: true, defaultValue: '192.168.0.159'
-		input name: "mqttPort", type: "number", title: "<b>MQTT Port</b>", description: "MQTT Broker Port", required: true, defaultValue: 1883
-		input name: "mqttUsername", type: "text", title: "<b>MQTT Username</b>", description: "MQTT Username", required: false, defaultValue: "mqtt_user"
-		input name: "mqttPassword", type: "password", title: "<b>MQTT Password</b>", description: "MQTT Password", required: false, defaultValue: "mqtt_pass"
-		input name: "mqttTopic", type: "text", title: "<b>MQTT Topic</b>", description: "MQTT Topic", required: false, defaultValue: "awtrix_21b0c0"
-		input name: "awtrixIP", type: "text", title: "<b>AWTRIX IP</b>", description: "AWTRIX IP Address (optional)", required: false, defaultValue: '192.168.0.234'
+		input name: 'communicationMode', type: 'enum', title: '<b>Communication Mode</b>', options: CommunicationModes, defaultValue: 'HTTP', description: 'Select the communication mode.'
+		if (settings?.communicationMode == 'MQTT') {
+			input name: "mqttBroker", type: "text", title: "<b>MQTT Broker</b>", description: "MQTT Broker Address", required: true, defaultValue: '192.168.0.159'
+			input name: "mqttPort", type: "number", title: "<b>MQTT Port</b>", description: "MQTT Broker Port", required: true, defaultValue: 1883
+			input name: "mqttUsername", type: "text", title: "<b>MQTT Username</b>", description: "MQTT Username", required: false, defaultValue: "mqtt_user"
+			input name: "mqttPassword", type: "password", title: "<b>MQTT Password</b>", description: "MQTT Password", required: false, defaultValue: "mqtt_pass"
+			input name: "mqttTopic", type: "text", title: "<b>MQTT Topic</b>", description: "MQTT Topic", required: false, defaultValue: "awtrix_21b0c0"
+		}
+		input name: "awtrixIP", type: "text", title: "<b>AWTRIX IP</b>", description: getAwtrixIpDescription(settings), required: false, defaultValue: '192.168.0.234'
+
+		input name: 'color', type: 'enum', title: '<b>Color</b>', options: COLORS.keySet(), defaultValue: 'White', description: 'Select the color for the text.'
 		input name: 'rainbowEffect', type: 'bool', title: '<b>Rainbow Effect</b>', defaultValue: false, description: 'Enable the rainbow effect for the text.'
+		input name: "duration", type: "number", title: "<b>Notification Duration</b>", description: "Sets how long the notification should be displayed.", required: true, defaultValue: 5
+		input name: "repeat", type: "number", title: "<b>Repeat</b>", description: "Sets how many times the text should be scrolled through the matrix before the app ends..", required: true, defaultValue: -1
+		input name: 'hold', type: 'bool', title: '<b>Hold Notification</b>', defaultValue: false, description: 'Set it to true, to hold your notification on top until you press the middle button or dismiss it via command.'
+		input name: 'stack', type: 'bool', title: '<b>Stack Notification</b>', defaultValue: true, description: 'Defines if the notification will be stacked. false will immediately replace the current notification.'
+		input name: 'wakeup', type: 'bool', title: '<b>Wakeup Notification</b>', defaultValue: false, description: 'if the Matrix is off, the notification will wake it up for the time of the notification.'
+		input name: 'noScroll', type: 'bool', title: '<b>Disable Text Scrolling</b>', defaultValue: false, description: 'Disables the text scrolling.'
 
 		input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: 'These advanced options should be already automatically set in an optimal way for your device...', defaultValue: true
 		if (advancedOptions == true) {
@@ -109,6 +120,15 @@ metadata {
 @Field static final List<String> TopicsToSubscribe = ['stats', 'stats/currentApp', 'stats/buttonSelect', 'stats/buttonLeft', 'stats/buttonRight']
 
 import groovy.transform.CompileStatic
+
+@Field static final Map<String, String> CommunicationModes = [
+	"HTTP" : "HTTP (default)",
+	"MQTT" : "MQTT (requires MQTT broker)"
+]
+
+static String getAwtrixIpDescription(settings) {
+	return "AWTRIX IP Address ${(settings?.communicationMode == 'MQTT') ? ' (optional)' : ''}"
+}
 
 @Field static Map<String, String> TopicParsers = [
 	"stats" : "parseStats",
@@ -294,6 +314,7 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit || settings?.healthCheckMethod == null) { device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum']) }
     if (fullInit || settings?.healthCheckInterval == null) { device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum']) }
 
+	if (fullInit || settings?.communicationMode == null) { device.updateSetting('communicationMode', [value: 'HTTP', type: 'enum']) }
 	if (fullInit || settings?.mqttBroker == null) { device.updateSetting('mqttBroker', [value: '192.168.0.159', type: 'text']) }
 	if (fullInit || settings?.mqttPort == null) { device.updateSetting('mqttPort', [value: 1883, type: 'number']) }
 	if (fullInit || settings?.mqttUsername == null) { device.updateSetting('mqttUsername', [value: 'mqtt_user', type: 'text']) }
@@ -301,7 +322,14 @@ void initializeVars( boolean fullInit = false ) {
 	if (fullInit || settings?.mqttTopic == null) { device.updateSetting('mqttTopic', [value: 'awtrix_21b0c0', type: 'text']) }
 	if (fullInit || settings?.awtrixIP == null) { device.updateSetting('awtrixIP', [value: '192.168.0.234', type: 'text']) }
 	if (fullInit || settings?.extendedStats == null) { device.updateSetting('extendedStats', [value: false, type: 'bool']) }
+
 	if (fullInit || settings?.rainbowEffect == null) { device.updateSetting('rainbowEffect', false) }
+	if (fullInit || settings?.duration == null) { device.updateSetting('duration', [value: 5, type: 'number']) }
+	if (fullInit || settings?.repeat == null) { device.updateSetting('repeat', [value: -1, type: 'number']) }
+	if (fullInit || settings?.hold == null) { device.updateSetting('hold', [value: false, type: 'bool']) }
+	if (fullInit || settings?.stack == null) { device.updateSetting('stack', [value: true, type: 'bool']) }
+	if (fullInit || settings?.wakeup == null) { device.updateSetting('wakeup', [value: false, type: 'bool']) }
+	if (fullInit || settings?.noScroll == null) { device.updateSetting('noScroll', [value: false, type: 'bool']) }
 
     if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
 
@@ -439,6 +467,25 @@ def refresh() {
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 
+@Field static final Map<String, Map<String, Object>> COLORS = [
+    "Black"              : [hex: "#000000", rgb: [0, 0, 0]],
+    "White"              : [hex: "#FFFFFF", rgb: [255, 255, 255]],
+    "Red"                : [hex: "#FF0000", rgb: [255, 0, 0]],
+    "Lime"               : [hex: "#00FF00", rgb: [0, 255, 0]],
+    "Blue"               : [hex: "#0000FF", rgb: [0, 0, 255]],
+    "Yellow"             : [hex: "#FFFF00", rgb: [255, 255, 0]],
+    "Cyan"        		 : [hex: "#00FFFF", rgb: [0, 255, 255]],
+    "Magenta"  			 : [hex: "#FF00FF", rgb: [255, 0, 255]],
+    "Silver"             : [hex: "#C0C0C0", rgb: [192, 192, 192]],
+    "Gray"               : [hex: "#808080", rgb: [128, 128, 128]],
+    "Maroon"             : [hex: "#800000", rgb: [128, 0, 0]],
+    "Olive"              : [hex: "#808000", rgb: [128, 128, 0]],
+    "Green"              : [hex: "#008000", rgb: [0, 128, 0]],
+    "Purple"             : [hex: "#800080", rgb: [128, 0, 128]],
+    "Teal"               : [hex: "#008080", rgb: [0, 128, 128]],
+    "Navy"               : [hex: "#000080", rgb: [0, 0, 128]]
+]
+
 String ensureValidJsonString(String message) {
     // Add double quotes around keys, but exclude keys that are already quoted
     message = message.replaceAll(/(\w+):/, '"$1":')
@@ -461,12 +508,21 @@ void deviceNotification(String messageParam) {
         logWarn "Invalid JSON message: ${message}. Error: ${e.message}"
 		validJson = false
     }
+
 	if (validJson) {
-		// do something with the parsed message
+		logDebug "deviceNotification: validJson: ${parsedMessageMap}"
 	}
 	else {
 		parsedMessageMap.text = message
 		parsedMessageMap.rainbow = settings?.rainbowEffect
+		parsedMessageMap.duration = settings?.duration
+		parsedMessageMap.repeat = settings?.repeat
+		parsedMessageMap.hold = settings?.hold
+		parsedMessageMap.stack = settings?.stack
+		parsedMessageMap.wakeup = settings?.wakeup
+		parsedMessageMap.noScroll = settings?.noScroll
+		parsedMessageMap.color = COLORS[settings?.color]?.hex
+
 		logDebug "deviceNotification: parsedMessageMap: ${parsedMessageMap}"
 		message = JsonOutput.toJson(parsedMessageMap)
 		logDebug "deviceNotification: message: ${message}"
@@ -474,6 +530,10 @@ void deviceNotification(String messageParam) {
 	//
     publish("notify", message)
 
+}
+
+void dismiss() {
+	publish("notify/dismiss", "")
 }
 
 void publish(String topicParam, String payload) {
