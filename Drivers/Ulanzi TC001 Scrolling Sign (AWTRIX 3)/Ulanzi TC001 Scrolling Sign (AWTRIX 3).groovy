@@ -15,9 +15,11 @@
  * Changelog:
  *
  * ver. 1.0.0  2024-09-14 kkossev  - Initial dummy version
- * ver. 1.0.1  2024-09-25 kkossev  - (dev. branch) added ping, awtrixIP, healthStatus, parse deviceNotification JSON payload; added commonly used text preferences; dismiss; 
+ * ver. 1.0.1  2024-09-26 kkossev  - added ping, awtrixIP, healthStatus, parse deviceNotification JSON payload; added commonly used text preferences; dismiss; HTTP interface - HTTP stats
+ * ver. 1.1.0  2024-09-26 kkossev  - (dev. branch) renamed driver to 'Ulanzi TC001 Scrolling Sign (AWTRIX 3)'
  *                                   
  *                                   TODO: try the HTTP interface - HTTP stats
+ *                                   TODO: sound!
  *                                   TODO: implement HTTP /api/effects /api/transitions /api/loop
  *                                   TODO: replease buttonSelect, buttonLeft, buttonRight with HE standard button events (pushed, released)
 */
@@ -28,10 +30,10 @@
 import groovy.transform.Field
 
 @Field static String version = "1.0.1"
-@Field static String timeStamp = "2024/09/25 9:48 AM"
+@Field static String timeStamp = "2024/09/26 10:11 PM"
 
 metadata {
-	definition(name: "AWTRIX 3 MQTT Driver", namespace: "kkossev", author: "Krassimir Kossev", importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/AWTRIX%203%20MQTT/AWTRIX%203%20MQTT.groovy' ) { 
+	definition(name: "Ulanzi TC001 Scrolling Sign (AWTRIX 3)", namespace: "kkossev", author: "Krassimir Kossev", importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/AWTRIX%203%20MQTT/AWTRIX%203%20MQTT.groovy' ) { 
 		capability "Initialize"
 		capability "Refresh"
 		capability "Switch"
