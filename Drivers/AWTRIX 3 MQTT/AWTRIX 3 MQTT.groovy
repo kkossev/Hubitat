@@ -15,10 +15,11 @@
  * Changelog:
  *
  * ver. 1.0.0  2024-09-14 kkossev  - Initial dummy version
- * ver. 1.0.1  2024-09-23 kkossev  - (dev. branch) added ping, awtrixIP, healthStatus, parse deviceNotification JSON payload; added commonly used text preferences; dismiss; 
+ * ver. 1.0.1  2024-09-25 kkossev  - (dev. branch) added ping, awtrixIP, healthStatus, parse deviceNotification JSON payload; added commonly used text preferences; dismiss; 
  *                                   
+ *                                   TODO: try the HTTP interface - HTTP stats
+ *                                   TODO: implement HTTP /api/effects /api/transitions /api/loop
  *                                   TODO: replease buttonSelect, buttonLeft, buttonRight with HE standard button events (pushed, released)
- *                                   TODO: try the HTTP interface
 */
 
 // https://blueforcer.github.io/awtriix3/#/api
@@ -27,7 +28,7 @@
 import groovy.transform.Field
 
 @Field static String version = "1.0.1"
-@Field static String timeStamp = "2024/09/23 7:42 PM"
+@Field static String timeStamp = "2024/09/25 9:48 AM"
 
 metadata {
 	definition(name: "AWTRIX 3 MQTT Driver", namespace: "kkossev", author: "Krassimir Kossev", importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/AWTRIX%203%20MQTT/AWTRIX%203%20MQTT.groovy' ) { 
@@ -144,23 +145,27 @@ def parse(String description) {
     unscheduleCommandTimeoutCheck(state)
     setHealthStatusOnline(state)
 
-    Map msg = interfaces.mqtt.parseMessage(description)
-    logDebug "Received MQTT message: ${msg}"
+	if (settings?.communicationMode == 'MQTT') {
+		Map msg = interfaces.mqtt.parseMessage(description)
+		logDebug "Received MQTT message: ${msg}"
 
-    // Extract topic and payload
-    String topic = msg.topic
-    String payload = msg.payload
-    // Exclude the characters before the first '/'
-    String[] topicParts = topic.split('/')
-    String subTopic = topicParts[1..-1].join('/')
-	logTrace "Topic: ${topic} Payload: ${payload} <b>subTopic : ${subTopic}</b>"	
-	// find the handler for the topic in the TopicParsers map
-	String handler = TopicParsers[subTopic]
-	if (handler) {
-		logTrace "Calling handler ${handler} for topic ${subTopic} with payload ${payload}"
-		this."${handler}"(subTopic, payload)
+		// Extract topic and payload
+		String topic = msg.topic
+		String payload = msg.payload
+		// Exclude the characters before the first '/'
+		String[] topicParts = topic.split('/')
+		String subTopic = topicParts[1..-1].join('/')
+		logTrace "Topic: ${topic} Payload: ${payload} <b>subTopic : ${subTopic}</b>"	
+		// find the handler for the topic in the TopicParsers map
+		String handler = TopicParsers[subTopic]
+		if (handler) {
+			logTrace "Calling handler ${handler} for topic ${subTopic} with payload ${payload}"
+			this."${handler}"(subTopic, payload)
+		} else {
+			logDebug "<b> no handler</b> for Topic <b>${topic}</b>, ignoring message."
+		}
 	} else {
-		logDebug "<b> no handler</b> for Topic <b>${topic}</b>, ignoring message."
+		logWarn "Received HTTP message: ${description} (NO PARSER!)"
 	}
 	
 }// Parse JSON payload
@@ -183,7 +188,11 @@ static void updateTxStats(final Map state) {
 void parseStats(String topic, String payload) {
 	logTrace "parseStats: topic: ${topic}, payload:${payload}"
 	def jsonPayload = new groovy.json.JsonSlurper().parseText(payload)
+	processStats(jsonPayload)
 
+}
+
+void processStats(Map jsonPayload) {
 	logTrace "Battery: ${jsonPayload.bat}"
 	logTrace "Battery Raw: ${jsonPayload.bat_raw}"
 	logTrace "Type: ${jsonPayload.type}"
@@ -269,14 +278,18 @@ void updated() {
 }
 
 void initialize() {
-	logDebug "Initializing MQTT connection... mqttBroker : ${settings?.mqttBroker} mqttPort : ${settings?.mqttPort}"
-	try {
-		interfaces.mqtt.connect("tcp://${settings?.mqttBroker}:${settings?.mqttPort}", "hubitat_${device.deviceNetworkId}", settings?.mqttUsername, settings?.mqttPassword)
-		updateTxStats(state)
-		//interfaces.mqtt.subscribe("${settings?.mqttTopic}/#")
-		subscribeMultipleTopics(TopicsToSubscribe)
-	} catch (e) {
-		logError "MQTT Initialization Error: ${e.message}"
+	if (settings?.communicationMode == 'MQTT') {
+		logDebug "Initializing MQTT connection... mqttBroker : ${settings?.mqttBroker} mqttPort : ${settings?.mqttPort}"
+		try {
+			interfaces.mqtt.connect("tcp://${settings?.mqttBroker}:${settings?.mqttPort}", "hubitat_${device.deviceNetworkId}", settings?.mqttUsername, settings?.mqttPassword)
+			updateTxStats(state)
+			//interfaces.mqtt.subscribe("${settings?.mqttTopic}/#")
+			subscribeMultipleTopics(TopicsToSubscribe)
+		} catch (e) {
+			logError "MQTT Initialization Error: ${e.message}"
+		}
+	} else {
+		logWarn "initialize: HTTP not implemented (yet!)"
 	}
 }
 
@@ -351,6 +364,10 @@ void checkDriverVersion(final Map state) {
 
 // max 10 topics !
 void subscribeMultipleTopics(List<String> topics) {
+	if (settings?.communicationMode != 'MQTT') {
+		logWarn "subscribeMultipleTopics: HTTP not implemented (yet!)"
+		return
+	}
 	String subscribedTopics = ""
 	topics.each { topic ->
 		String fullTopic = "${settings?.mqttTopic}/${topic}"
@@ -362,12 +379,20 @@ void subscribeMultipleTopics(List<String> topics) {
 
 
 void disconnect() {
+	if (settings?.communicationMode != 'MQTT') {
+		logWarn "disconnect: HTTP not implemented (yet!)"
+		return
+	}
 	interfaces.mqtt.disconnect()
 	updateTxStats(state)
 	logDebug "disconnect: Disconnected from broker ${settings.mqttBroker} (${settings.mqttTopic})."
 }
 
 void subscribe(String topicParam) {
+	if (settings?.communicationMode != 'MQTT') {
+		logWarn "subscribe: HTTP not implemented (yet!)"
+		return
+	}
 	String topic = settings?.mqttTopic + '/' + topicParam
 	logDebug "Subscribing to topic ${topic}"
 	interfaces.mqtt.subscribe(topic)
@@ -375,6 +400,10 @@ void subscribe(String topicParam) {
 }
 
 void unsubscribe(String topicParam) {
+	if (settings?.communicationMode != 'MQTT') {
+		logWarn "unsubscribe: HTTP not implemented (yet!)"
+		return
+	}
 	String topic = settings?.mqttTopic + '/' + topicParam
 	logDebug "Unsubscribing from topic ${topic}"
 	interfaces.mqtt.unsubscribe(topic)
@@ -384,13 +413,21 @@ void unsubscribe(String topicParam) {
 
 
 def on() {
-	publish("power", "{'power': true}")
-	sendEvent(name: "switch", value: "on")
+	if (settings?.communicationMode == 'MQTT') {
+		publish("power", "{'power': true}")
+		sendEvent(name: "switch", value: "on")
+	} else {
+		logWarn "on: HTTP not implemented (yet!)"
+	}
 }
 
 def off() {
-	publish("power", "{'power': false}")
-	sendEvent(name: "switch", value: "off")
+	if (settings?.communicationMode == 'MQTT') {
+		publish("power", "{'power': false}")
+		sendEvent(name: "switch", value: "off")
+	} else {
+		logWarn "off: HTTP not implemented (yet!)"
+	}
 }
 
 void ping() {
@@ -398,9 +435,10 @@ void ping() {
     if (state.stats == null ) { state.stats = [:] } ; state.stats['pingTime'] = new Date().getTime()
     if (state.states == null ) { state.states = [:] } ; state.states['isPing'] = true
     scheduleCommandTimeoutCheck()
+	// try to ping the device, even if the communication mode is MQTT ? TODO
 	if (settings?.awtrixIP != null && settings?.awtrixIP != "") {
 		sendPing(settings?.awtrixIP)
-	} else {
+	} else if (settings?.mqttBroker != null && settings?.mqttBroker != "") {
 		sendPing(settings?.mqttBroker)
 	}
 }
@@ -430,6 +468,7 @@ boolean sendPing(ipAddress) {
 	}
 	// PingData(rttAvg: 0.413, rttMin: 0.336, rttMax: 0.568, packetsTransmitted: 3, packetsReceived: 3, packetLoss: 0)
 	// PingData(rttAvg: 0.0, rttMin: 0.0, rttMax: 0.0, packetsTransmitted: 3, packetsReceived: 0, packetLoss: 100)
+	unscheduleCommandTimeoutCheck(state)
     return pingData.packetsReceived > 0
 }
 
@@ -458,8 +497,40 @@ String getModel() {
 
 def refresh() {
     checkDriverVersion(state)
-	logDebug "Refreshing is not supported for this device."
+	if (settings?.communicationMode == 'MQTT') {
+		logWarn "Refreshing via MQTT protocol is not supported for this device."
+		return
+	}
+	// HTTP refresh - get the stats
+	fetchAndProcessStats()
 }
+
+def fetchAndProcessStats() {
+    //def url = "http://192.168.0.234/api/stats"
+	String url = "http://${settings?.awtrixIP}/api/stats"
+    try {
+        httpGet(url) { response ->
+            if (response.status == 200) {
+                log.trace "response.data: ${response.data}"
+                def stats
+                if (response.data instanceof Map) {
+                    // If response.data is already a map, use it directly
+                    stats = response.data
+                } else {
+                    // Otherwise, parse the response data as JSON
+                    JsonSlurper jsonSlurper = new JsonSlurper()
+                    stats = jsonSlurper.parseText(response.data.toString())
+                }
+                processStats(stats)
+            } else {
+                log.error "Failed to fetch stats. HTTP status: ${response.status}"
+            }
+        }
+    } catch (Exception e) {
+        log.error "Error fetching stats: ${e.message}"
+    }
+}
+
 
 // {text: "Hubitat", rainbow:true}
 // {"text": [{"t": "Hello, ", "c": "FF0000"}, {"t": "world!", "c": "00FF00"}], "repeat": 2}
@@ -533,10 +604,18 @@ void deviceNotification(String messageParam) {
 }
 
 void dismiss() {
-	publish("notify/dismiss", "")
+	if (settings?.communicationMode == 'MQTT') {
+		publish("notify/dismiss", "")
+	} else {
+		logWarn "dismiss: HTTP not implemented (yet!)"
+	}
 }
 
 void publish(String topicParam, String payload) {
+	if (settings?.communicationMode != 'MQTT') {
+		logWarn "publish: HTTP not implemented (yet!)"
+		return
+	}
 	String topic = settings?.mqttTopic + '/' + topicParam
 	logTrace "Publishing to topic ${topic} : ${payload}"
 	//interfaces.mqtt.publish(topic, payload)
@@ -544,6 +623,10 @@ void publish(String topicParam, String payload) {
 }
 
 void sendMqttMessage(topic, payload) {
+	if (settings?.communicationMode != 'MQTT') {
+		logWarn "sendMqttMessage: HTTP not implemented (yet!)"
+		return
+	}
 	try {
 		interfaces.mqtt.publish(topic, payload)
 		logDebug "Published MQTT message: ${topic} - ${payload}"
@@ -557,6 +640,10 @@ void sendMqttMessage(topic, payload) {
 // ---------------- credits to Andrew Davison (BirdsLikeWires) ----------------
 
 void mqttConnect() {
+	if (settings?.communicationMode != 'MQTT') {
+		logWarn "mqttConnect: HTTP not implemented (yet!)"
+		return
+	}
     logDebug "Connecting to the MQTT broker ${settings?.mqttBroker} (${settings?.mqttTopic})"
 	try {
 
@@ -591,6 +678,10 @@ void mqttConnect() {
 } 
 
 void mqttClientStatus(String status) {
+	if (settings?.communicationMode != 'MQTT') {
+		logWarn "mqttClientStatus: HTTP not implemented (yet!)"
+		return
+	}
     logDebug "mqttClientStatus : ${status}"
 	if (status.indexOf('Connection succeeded') >= 0) {
 		logDebug "mqttClientStatus : Connection to broker ${settings?.mqttBroker} (${settings?.mqttTopic}) is live."
