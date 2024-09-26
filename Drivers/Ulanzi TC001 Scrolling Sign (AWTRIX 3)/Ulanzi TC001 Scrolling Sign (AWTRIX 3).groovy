@@ -24,16 +24,16 @@
  *                                   TODO: replease buttonSelect, buttonLeft, buttonRight with HE standard button events (pushed, released)
 */
 
-// https://blueforcer.github.io/awtriix3/#/api
+// https://github.com/Blueforcer/awtrix3/blob/main/docs/api.md
 // https://github.com/Blueforcer/awtrix3/releases  (ulanzi_TC001_0.96.bin)	http://192.168.0.234/
 
 import groovy.transform.Field
 
 @Field static String version = "1.0.1"
-@Field static String timeStamp = "2024/09/26 10:11 PM"
+@Field static String timeStamp = "2024/09/26 11:59 PM"
 
 metadata {
-	definition(name: "Ulanzi TC001 Scrolling Sign (AWTRIX 3)", namespace: "kkossev", author: "Krassimir Kossev", importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/AWTRIX%203%20MQTT/AWTRIX%203%20MQTT.groovy' ) { 
+	definition(name: "Ulanzi TC001 Scrolling Sign (AWTRIX 3)", namespace: "kkossev", author: "Krassimir Kossev", importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Drivers/Ulanzi%20TC001%20Scrolling%20Sign%20(AWTRIX%203)/Ulanzi%20TC001%20Scrolling%20Sign%20(AWTRIX%203).groovy' ) { 
 		capability "Initialize"
 		capability "Refresh"
 		capability "Switch"
@@ -44,6 +44,7 @@ metadata {
 		//command "deviceNotification", ["string"]	// "Notification" capability is already included
         command 'configure', [[name:'normally it is not needed to configure anything', type: 'ENUM',   constraints: /*['--- select ---'] +*/ ConfigureOpts.keySet() as List<String>]]
 		command 'dismiss'
+		command 'sound', [[name: 'Play a sound', type: 'STRING', description: 'RTTTL in JSON format']]
 		if (_DEBUG) {
         	command "mqttConnect"
         	command "disconnect"
@@ -560,6 +561,7 @@ import groovy.json.JsonSlurper
 ]
 
 String ensureValidJsonString(String message) {
+	if (message == null || message == "") { return "{}" }
     // Add double quotes around keys, but exclude keys that are already quoted
     message = message.replaceAll(/(\w+):/, '"$1":')
     // Add double quotes around string values, but exclude values that are already quoted or are arrays/objects
@@ -613,6 +615,41 @@ void dismiss() {
 	}
 }
 
+void sound(String soundParam) {
+	String sound = soundParam
+	if (sound == null || sound == "" || sound == "{}") {
+		sound = "{Knock:d=32,o=4,b=100:e,4p,e,p,e,8p,e,4p,e,8p,e,4p}"
+	}
+	logDebug "sound: ${soundParam} -> ${sound}"
+	if (settings?.communicationMode == 'MQTT') {
+		publish("rtttl", "{'sound': '${sound}'}")
+	} else if (settings?.communicationMode == 'HTTP') {
+		try {
+			String payload = "${sound}"
+			Map params = [
+				uri: 'http://' + settings?.awtrixIP + '/api/rtttl',
+				contentType: 'application/json',
+				requestContentType: 'application/json',
+				body: [payload]
+			]
+			log.trace "sound: Sending HTTP POST request to ${params.uri} with payload: ${payload}"
+			asynchttpPost('handleHttpResponse', params)
+		} catch (Exception e) {
+			logError "sound: HTTP request failed: ${e.message}"
+		}
+	} else {
+		logWarn "sound: Unsupported communication mode: ${settings?.communicationMode}"
+	}
+}
+
+void handleHttpResponse(response, data) {
+	if (response.hasError()) {
+		logError "sound: HTTP request failed: ${response.getErrorMessage()}"
+	} else {
+		logDebug "sound: HTTP response code: ${response.status}"
+	}
+}
+
 void publish(String topicParam, String payload) {
 	if (settings?.communicationMode != 'MQTT') {
 		logWarn "publish: HTTP not implemented (yet!)"
@@ -621,7 +658,6 @@ void publish(String topicParam, String payload) {
 	String topic = settings?.mqttTopic + '/' + topicParam
 	logTrace "Publishing to topic ${topic} : ${payload}"
 	//interfaces.mqtt.publish(topic, payload)
-	sendMqttMessage(topic, payload)
 }
 
 void sendMqttMessage(topic, payload) {
