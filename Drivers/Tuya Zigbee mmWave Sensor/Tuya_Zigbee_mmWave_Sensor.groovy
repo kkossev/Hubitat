@@ -29,7 +29,7 @@
  * ver. 3.2.3  2024-06-21 kkossev  - added _TZE204_nbkshs6k and _TZE204_dapwryy7 @CheesyPotato 
  * ver. 3.2.4  2024-07-31 kkossev  - using motionLib.groovy; added batteryLib; added _TZE200_jkbljri7; TS0601 _TZE204_dapwryy7 all DPs defined; added Wenzhi TS0601 _TZE204_laokfqwu
  * ver. 3.3.0  2024-09-15 kkossev  - deviceProfileLib 3.3.3 ; added _TZE204_ex3rcdha; added almost all DPs of the most spammy ZY-M100 radars into spammyDPsToNotTrace filter; fixed powerSource for _TZE200_2aaelwxk (battery); added queryAllTuyaDP for refresh; 
- * ver. 3.3.1  2024-09-26 kkossev  - (dev.branch) - adding TS0601 _TZE204_ya4ft0w4 (Wenzhi); motionOrNot bug fix;
+ * ver. 3.3.1  2024-09-28 kkossev  - (dev.branch) - added TS0601 _TZE204_ya4ft0w4 (Wenzhi); motionOrNot bug fix; 'Disable Distance Reports' preference (for this device only!)
  *                                   
  *                                   TODO: update the top post in the forum with the new models mmWave radars
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
@@ -44,9 +44,9 @@
 */
 
 static String version() { "3.3.1" }
-static String timeStamp() {"2024/09/26 9:48 PM"}
+static String timeStamp() {"2024/09/28 7:09 PM"}
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = false 
 
@@ -642,16 +642,16 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             ],
             tuyaDPs:        [   
                 [dp:1,   name:'humanMotionState',   preProc:'motionOrNot', type:'enum',    rw: 'ro', map:[0:'none', 1:'present', 2:'moving', 3:'none'], description:'Presence state'],
-                [dp:2,   name:'radarSensitivity',   type:'number',  rw: 'rw', min:1,    max:10,   defVal:5, title:'<b>Motion sensitivity</b>', description:'<i>Radar motion sensitivity</i>'],
-                [dp:3,   name:'minimumDistance',    type:'decimal', rw: 'rw', min:0.0,  max:8.25, defVal:0.75, step:75, scale:100,  unit:'meters',   title:'<b>Minimum distance</b>',      description:'<i>Shield range of the radar</i>'],         // was shieldRange
-                [dp:4,   name:'maximumDistance',    type:'decimal', rw: 'rw', min:0.75, max:8.25, defVal:6.00, step:75, scale:100,  unit:'meters',   title:'<b>Maximum distance</b>',      description:'<i>Detection range of the radar</i>'],      // was detectionRange
+                [dp:2,   name:'radarSensitivity',   type:'number',  rw: 'rw', min:1,    max:10,   defVal:5, title:'<b>Motion sensitivity</b>', description:'Radar motion sensitivity'],
+                [dp:3,   name:'minimumDistance',    type:'decimal', rw: 'rw', min:0.0,  max:8.25, defVal:0.75, step:75, scale:100,  unit:'meters',   title:'<b>Minimum distance</b>',      description:'Shield range of the radar'],         // was shieldRange
+                [dp:4,   name:'maximumDistance',    type:'decimal', rw: 'rw', min:0.75, max:8.25, defVal:6.00, step:75, scale:100,  unit:'meters',   title:'<b>Maximum distance</b>',      description:'Detection range of the radar'],      // was detectionRange
                 [dp:9,   name:'distance',           type:'decimal', rw: 'ro', min:0.0,  max:10.0, scale:10, unit:'meters', description:'Target distance'],
-                [dp:101, name:'distanceReporting',  type:'enum',    rw: 'rw', min:0,    max:1,       defVal:'0',  map:[0:'disabled', 1:'enabled'], description:'Effectively disable the distance reporting!'],
-                [dp:102, name:'staticDetectionSensitivity',   type:'number',  rw: 'rw', min:0, max:10, defVal:5, title:'<b>Static detection sensitivity</b>', description:'<i>Presence sensitivity</i>'],
+                [dp:101, name:'distanceReporting',  type:'enum',    rw: 'rw', min:0,    max:1,       defVal:'0',  map:[0:'disabled', 1:'enabled'], title:'<b>Distance Reports</b>', description:'Effectively disable the spammy distance reporting!<br>The recommended default value is <b>disabled</b>'],
+                [dp:102, name:'staticDetectionSensitivity',   type:'number',  rw: 'rw', min:1, max:10, defVal:5, title:'<b>Static detection sensitivity</b>', description:'Presence sensitivity'],
                 [dp:103, name:'illuminance',        type:'number',  rw: 'ro', unit:'lx', description:'illuminance'],
-                [dp:104, name:'motion',             type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'<i>Presence state</i>'],
-                // DP:104 is still sent by the device.... and processed!
-                [dp:105, name:'fadingTime',         type:'decimal', rw: 'rw', min:5,    max:15000, unit:'seconds',   title:'<b<Delay time</b>', description:'<i>Delay (fading) time</i>'],
+                [dp:104, name:'motion',             type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'Presence state'],
+                // DP:104 is still sent by the device.... and is processed in this driver.
+                [dp:105, name:'fadingTime',         type:'decimal', rw: 'rw', min:5,    max:15000, , defVal:10, unit:'seconds', title:'<b>Delay time</b>', description:'Delay (fading) time'],
                 [dp:255, name:'unknownDp255',       type:'number',  rw: 'ro', description:'unknownDp255']
             ],
             refresh: ['queryAllTuyaDP'],
@@ -1054,9 +1054,9 @@ void customUpdated() {
         logDebug "forcedProfile is not set"
     }
 
-    // Itterates through all settings
-    cmds += updateAllPreferences()
-    sendZigbeeCommands(cmds)
+    // Itterates through all settings and calls setPar() for each setting
+    updateAllPreferences()
+
     if (getDeviceProfile() == 'SONOFF_SNZB-06P_RADAR') {
         setRefreshRequest() 
         runIn(2, customRefresh, [overwrite: true])

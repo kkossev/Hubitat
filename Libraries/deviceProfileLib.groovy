@@ -31,7 +31,7 @@ library(
  * ver. 3.3.1  2024-07-06 kkossev  - added powerSource event in the initEventsDeviceProfile
  * ver. 3.3.2  2024-08-18 kkossev  - release 3.3.2
  * ver. 3.3.3  2024-08-18 kkossev  - sendCommand and setPar commands commented out; must be declared in the main driver where really needed
- * ver. 3.3.4  2024-09-14 kkossev  - (dev.branch) fixed exceptions in resetPreferencesToDefaults() and initEventsDeviceProfile()
+ * ver. 3.3.4  2024-09-28 kkossev  - (dev.branch) fixed exceptions in resetPreferencesToDefaults() and initEventsDeviceProfile()
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
@@ -45,7 +45,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.3.4' }
-static String deviceProfileLibStamp() { '2024/09/15 10:22 AM' }
+static String deviceProfileLibStamp() { '2024/09/28 6:33 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -1253,7 +1253,7 @@ private boolean processFoundItem(final Map descMap, final Map foundItem, int val
             logTrace "processFoundItem: no preference or attribute for ${name} - just log the value, if not equal to the last one..."
             // TODO - scaledValue ????? TODO!
             descText  = "${name} is ${value} ${unitText}"
-            if (settings.logEnable) { logInfo "${descText }" }  // only when Debug is enabled!
+            if (settings.logEnable) { logInfo "${descText} (Debug logging is enabled)" }  // only when Debug is enabled!
         }
         return true         // no more processing is needed, as this clusterAttribute is NOT a preference and NOT an attribute
     }
