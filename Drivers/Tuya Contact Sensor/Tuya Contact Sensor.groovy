@@ -26,7 +26,8 @@
  * ver. 1.2.2  2024-06-14 kkossev  - added ThirdReality tilt sensor 3RDTS01056Z; new _TZE200_pay2byax fingerprint; added preference to disable illuminance @Big_Bruin
  * ver. 1.2.3  2024-07-10 kkossev  - fixed outOfSync and pollContactStatus bugs; notPresentCounter-1 correction in the debug logs;
  * ver. 1.2.4  2024-08-14 kkossev  - added TS0203 _TZ3000_rcuyhwe3
- * ver. 1.2.5  2024-08-20 kkossev  - (dev.branch) pollContactStatus only when the current message is not IAS !
+ * ver. 1.2.5  2024-08-20 kkossev  - pollContactStatus only when the current message is not IAS !
+ * ver. 1.2.6  2024-09-28 kkossev  - (dev.branch) added SNZB-04P
  *
  *                                   TODO: handle the case when 'lastBattery' is missing.
  *                                   TODO: filter duplicated open/close messages when 'Poll Contact Status' option is enabled
@@ -38,8 +39,8 @@
  *                                   TODO: refactor - use libraries !
  */
 
-static String version() { '1.2.4' }
-static String timeStamp() { '2024/08/14 1:05 PM' }
+static String version() { '1.2.6' }
+static String timeStamp() { '2024/09/28 9:01 AM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -102,8 +103,9 @@ metadata {
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0003,0500,0000', outClusters: '0003,0004,0005,0006,0008,1000,0019,000A', model: 'TS0203', manufacturer: '_TZ3000_rcuyhwe3', deviceJoinName: 'Tuya Contact Sensor'        // https://community.hubitat.com/t/release-tuya-zigbee-contact-sensor-w-healthstatus/112762/37?u=kkossev
 
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0003,0500,0001', outClusters: '0003', model: 'DS01', manufacturer: 'eWeLink', deviceJoinName: 'Sonoff Contact Sensor'
+        fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0003,0020,0500,FC57,FC11', outClusters: '0003,0006,0019', model: 'SNZB-04P', manufacturer: 'eWeLink', deviceJoinName: 'Sonoff SNZB-04P Contact Sensor'
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,FF01,FF00,0001,0500', outClusters: '0019', model: '3RDS17BZ', manufacturer: 'Third Reality, Inc', deviceJoinName: 'Third Reality Contact Sensor' 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,FFF1", outClusters:"0019", model:"3RDTS01056Z", manufacturer:"Third Reality, Inc", controllerType: "ZGB", deviceJoinName: 'Third Reality Tilt Sensor'         
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0500,FFF1", outClusters:"0019", model:"3RDTS01056Z", manufacturer:"Third Reality, Inc", controllerType: "ZGB", deviceJoinName: 'Third Reality Tilt Sensor'         
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0003,0020,0402,0500,0B05', outClusters: '0019', model: 'URC4460BC0-X-R', manufacturer: 'Universal Electronics Inc', deviceJoinName: 'Xfinity/Visonic MCT-350 Zigbee Contact Sensor'   
     }
     preferences {
@@ -209,6 +211,18 @@ metadata {
         deviceJoinName: 'Sonoff Contact Sensor',
         inClusters    : '0000,0003,0500,0001',
         outClusters   : '0003',
+        capabilities  : ['contactSensor': true, 'battery': true],
+        configuration : ['battery': true, 'minReportingTime': true],
+        attributes    : ['healthStatus'],
+        preferences   : ['minReportingTime': true],
+        batteries     : 'CR2032'
+    ],
+    'SONOFF_CONTACT_BATT_SNZB_04P' : [
+        model         : 'SNZB-04P',
+        manufacturers : ['eWeLink'],
+        deviceJoinName: 'Sonoff SNZB-04P Contact Sensor',
+        inClusters    : '0000,0001,0003,0020,0500,FC57,FC11',
+        outClusters   : '0003,0006,0019',
         capabilities  : ['contactSensor': true, 'battery': true],
         configuration : ['battery': true, 'minReportingTime': true],
         attributes    : ['healthStatus'],
