@@ -1,4 +1,4 @@
-/* groovylint-disable DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, InsecureRandom, LineLength, MethodCount, NoJavaUtilDate, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter, UnnecessarySetter, UnusedPrivateMethod */
+/* groovylint-disable DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, InsecureRandom, LineLength, MethodCount, NoDouble, NoJavaUtilDate, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter, UnnecessarySetter, UnusedPrivateMethod */
 /**
  *  Tuya Contact Sensor+ with healthStatus driver for Hubitat
  *
@@ -27,7 +27,7 @@
  * ver. 1.2.3  2024-07-10 kkossev  - fixed outOfSync and pollContactStatus bugs; notPresentCounter-1 correction in the debug logs;
  * ver. 1.2.4  2024-08-14 kkossev  - added TS0203 _TZ3000_rcuyhwe3
  * ver. 1.2.5  2024-08-20 kkossev  - pollContactStatus only when the current message is not IAS !
- * ver. 1.2.6  2024-09-28 kkossev  - (dev.branch) added SNZB-04P
+ * ver. 1.2.6  2024-10-02 kkossev  - (dev.branch) added SNZB-04P; added capability 'TamperAlert'; pollContactStatus bug fix;
  *
  *                                   TODO: handle the case when 'lastBattery' is missing.
  *                                   TODO: filter duplicated open/close messages when 'Poll Contact Status' option is enabled
@@ -40,7 +40,7 @@
  */
 
 static String version() { '1.2.6' }
-static String timeStamp() { '2024/09/28 9:01 AM' }
+static String timeStamp() { '2024/10/02 10:02 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -62,6 +62,7 @@ metadata {
         capability 'IlluminanceMeasurement'
         capability 'ContactSensor'
         capability 'Health Check'
+        capability 'TamperAlert'        //tamper - ENUM ["clear", "detected"]
 
         command 'initialize', [[name: 'Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****']]
         if (DEBUG == true) {
@@ -84,7 +85,7 @@ metadata {
 
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0004,0005,EF00', outClusters: '0019,000A', model: 'TS0601', manufacturer: '_TZE200_nvups4nh', deviceJoinName: 'Tuya Contact and T/H Sensor'
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0500,0000', outClusters: '0019,000A', model: 'TS0601', manufacturer: '_TZE200_pay2byax', deviceJoinName: 'Tuya Contact and Illuminance Sensor'
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0500,0000", outClusters: "0019,000A", model:"TS0601", manufacturer: "_TZE200_pay2byax", controllerType: "ZGB", deviceJoinName: 'Tuya Contact and Illuminance Sensor'     
+        fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0500,0000', outClusters: '0019,000A', model:'TS0601', manufacturer: '_TZE200_pay2byax', controllerType: 'ZGB', deviceJoinName: 'Tuya Contact and Illuminance Sensor'     
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0500,0000', outClusters: '0019,000A', model: 'TS0601', manufacturer: '_TZE200_n8dljorx', deviceJoinName: 'Tuya Contact and Illuminance Sensor'                           // Model ZG-102ZL
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0003,0500,0000', outClusters: '0003,0004,0005,0006,0008,1000,0019,000A', model: 'TS0203', manufacturer: '_TZ3000_26fmupbb', deviceJoinName: 'Tuya Contact Sensor'        // KK; https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/30?u=kkossev
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0003,0500,0000', outClusters: '0003,0004,0005,0006,0008,1000,0019,000A', model: 'TS0203', manufacturer: '_TZ3000_n2egfsli', deviceJoinName: 'Tuya Contact Sensor'        // https://community.hubitat.com/t/tuya-zigbee-door-contact/95698/5?u=kkossev
@@ -105,7 +106,7 @@ metadata {
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0003,0500,0001', outClusters: '0003', model: 'DS01', manufacturer: 'eWeLink', deviceJoinName: 'Sonoff Contact Sensor'
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0003,0020,0500,FC57,FC11', outClusters: '0003,0006,0019', model: 'SNZB-04P', manufacturer: 'eWeLink', deviceJoinName: 'Sonoff SNZB-04P Contact Sensor'
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,FF01,FF00,0001,0500', outClusters: '0019', model: '3RDS17BZ', manufacturer: 'Third Reality, Inc', deviceJoinName: 'Third Reality Contact Sensor' 
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0500,FFF1", outClusters:"0019", model:"3RDTS01056Z", manufacturer:"Third Reality, Inc", controllerType: "ZGB", deviceJoinName: 'Third Reality Tilt Sensor'         
+        fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0500,FFF1', outClusters:'0019', model:'3RDTS01056Z', manufacturer:'Third Reality, Inc', controllerType: 'ZGB', deviceJoinName: 'Third Reality Tilt Sensor'         
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0003,0020,0402,0500,0B05', outClusters: '0019', model: 'URC4460BC0-X-R', manufacturer: 'Universal Electronics Inc', deviceJoinName: 'Xfinity/Visonic MCT-350 Zigbee Contact Sensor'   
     }
     preferences {
@@ -223,7 +224,7 @@ metadata {
         deviceJoinName: 'Sonoff SNZB-04P Contact Sensor',
         inClusters    : '0000,0001,0003,0020,0500,FC57,FC11',
         outClusters   : '0003,0006,0019',
-        capabilities  : ['contactSensor': true, 'battery': true],
+        capabilities  : ['contactSensor': true, 'battery': true, 'tamperAlert': true],
         configuration : ['battery': true, 'minReportingTime': true],
         attributes    : ['healthStatus'],
         preferences   : ['minReportingTime': true],
@@ -264,8 +265,8 @@ metadata {
     ]
 ]
 
-String getModelGroup()         { return (state.deviceProfile as String) ?: 'UNKNOWN' }
-boolean isConfigurable(model)   { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
+String getModelGroup()          { return (state.deviceProfile as String) ?: 'UNKNOWN' }
+boolean isConfigurable(String model)   { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
 boolean isConfigurable()        { String model = getModelGroup(); return isConfigurable(model) }
 boolean isBatteryConfigurable() { deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true }
 boolean hasIlliminance()        { deviceProfiles[getModelGroup()]?.capabilities?.IlluminanceMeasurement?.value == true }
@@ -395,6 +396,10 @@ def parse(String description) {
             def raw = Integer.parseInt(descMap.value, 16)
             motionEvent(raw & 0x01)
         }
+        else if (descMap.cluster == 'FC11' && descMap.attrId == '2000') {   // Sonoff SNZB-04P
+            int raw = Integer.parseInt(descMap.value, 16)
+            tamperEvent(raw)
+        }
         else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster(descMap)
         }
@@ -431,7 +436,7 @@ def parse(String description) {
     if (isPendingConfig()) {
         ConfigurationStateMachine()
     }
-    if (settings?.pollContactStatus == true && descMap?.cluster != '0500') {          // added 10/19/2023, modified 08/20/2024 (poll only when the current message is not IAS !)
+    if (settings?.pollContactStatus == true && descMap?.cluster != null && descMap?.cluster != '0500') {          // added 10/19/2023, modified 08/20/2024 (poll only when the current message is not IAS !)
         Map lastTxMap = stringToJsonMap(state.lastTx)
         //try {logDebug "now() - lastTxMap?.contactPoll = ${(now() - lastTxMap?.contactPoll)}"} catch (e) {logDebug "exception catched when procesing now() - lastTxMap?.contactPoll"}
         if (lastTxMap?.contactPoll == null || (lastTxMap?.contactPoll != null && (now() - lastTxMap?.contactPoll) > 60000)) {   // last poll was more than 60 seconds ago
@@ -464,13 +469,13 @@ long formattedDate2unix(String formattedDate) {
 }
 
 
-def parseZHAcommand(Map descMap) {
+void parseZHAcommand(Map descMap) {
     Map lastRxMap = stringToJsonMap(state.lastRx)
     Map lastTxMap = stringToJsonMap(state.lastTx)
     switch (descMap.command) {
         case '01': //read attribute response. If there was no error, the successful attribute reading would be processed in the main parse() method.
-            def status = descMap.data[2]
-            def attrId = descMap.data[1] + descMap.data[0]
+            String status = descMap.data[2] ?: ''
+            String attrId = (descMap.data[1] ?: '') + (descMap.data[0] ?: '')
             if (status == '86') {
                 if (logEnable == true) { log.warn "${device.displayName} Read attribute response: unsupported Attributte ${attrId} cluster ${clusterId}" }
             }
@@ -847,6 +852,17 @@ void motionEvent(value) {
     sendEvent(map)
 }
 
+void tamperEvent(value) {
+    Map map = [:]
+    map.name = 'tamper'
+    map.value = value ? 'detected' : 'clear'
+    map.descriptionText = "${device.displayName} tamper is ${map.value}"
+    if (settings?.txtEnable) {
+        log.info "${map.descriptionText}"
+    }
+    sendEvent(map)
+}
+
 void illuminanceEventTuya(int illuminance, boolean isDigital = false) {
     //Integer lux = illuminance > 0 ? Math.round(Math.pow(10, (illuminance)) * 10000.0 + 1) : 0
     Integer lux = illuminance > 0 ? Math.round(Math.pow(10, (illuminance / 10000.0))) + 1 : 0
@@ -889,7 +905,7 @@ void updated() {
     }
     scheduleDeviceHealthCheck()
     if (settings?.disableIlluminance == true && device.currentValue('illuminance') != null) {
-        device.deleteCurrentState("illuminance")
+        device.deleteCurrentState('illuminance')
     }
 
     if (isBatteryConfigurable()) {
