@@ -17,7 +17,8 @@
  * ver. 3.3.1  2024-07-09 kkossev  - driver renamed to 'Tuya Zigbee TRVs and Thermostats'
  * ver. 3.3.2  2024-07-18 kkossev  - added AVATTO_TRV06_TRV16_ME167_ME168_TRV profile; added '_TZE200_bvrlmajk' as 'AVATTO TRV-07'; added 'IMMAX_Neo Lite TRV 07732L' profile; temperaturePollingInterval disabled for Tuya TRVs
  *                                   'Battery Voltage to Percentage' and 'Minimum time between reports' are hidden; 
- * ver. 3.3.3  2024-08-01 kkossev  - (dev.branch) added _TZE200_g9a3awaj 'AVATTO_ZWT07_BATTERY_THERMOSTAT'
+ * ver. 3.3.3  2024-08-01 kkossev  - added _TZE200_g9a3awaj 'AVATTO_ZWT07_BATTERY_THERMOSTAT'
+ * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
  *
  *                                   TODO: add TS0601 _TZE204_lzriup1  https://community.hubitat.com/t/release-tuya-wall-mount-thermostat-water-electric-floor-heating-zigbee-driver/87050/318?u=kkossev 
  *                                   TODO: AVATTO -  better descriptions for anti-freeze and limescaleProtect preferences
@@ -46,8 +47,8 @@
  *                                   TODO: UNKNOWN TRV - update the deviceProfile - separate 'Unknown Tuya' and 'Unknown ZCL'
  */
 
-static String version() { '3.3.3' }
-static String timeStamp() { '2024/08/01 9:50 PM' }
+static String version() { '3.4.0' }
+static String timeStamp() { '2024/10/05 6:51 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -384,48 +385,6 @@ metadata {
             [dp:114, name:'ecoMode',            type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Eco mode</b>',  description:'Eco mode'],
             // or Hysteresis  ?
             //{'comfort': tuya.enum(0), 'eco': tuya.enum(1)}
-
-/*
-  [49, 'running_state', tuya.valueConverterBasic.lookup({'heat': tuya.enum(1), 'idle': tuya.enum(0)})],
-                [2, 'preset', tuya.valueConverterBasic.lookup({'comfort': tuya.enum(3), 'auto': tuya.enum(0),
-                    'manual': tuya.enum(2), 'holiday': tuya.enum(1)})],
-                [4, 'current_heating_setpoint', tuya.valueConverter.divideBy10],
-                [5, 'local_temperature', tuya.valueConverter.divideBy10],
-                [6, 'battery', tuya.valueConverter.raw],
-                [7, 'child_lock', tuya.valueConverter.lockUnlock],
-                [9, 'max_temperature_limit', tuya.valueConverter.divideBy10],
-                [10, 'min_temperature_limit', tuya.valueConverter.divideBy10],
-                [14, 'window_detection', tuya.valueConverter.onOff],
-                [16, 'open_window_temperature', tuya.valueConverter.divideBy10],
-                [17, 'open_window_time', tuya.valueConverter.raw],
-                [18, 'backlight', tuya.valueConverter.raw],
-                [19, 'factory_reset', tuya.valueConverter.setLimit],
-                [21, 'holiday_temperature', tuya.valueConverter.raw],
-                [24, 'comfort_temperature', tuya.valueConverter.divideBy10],
-                [25, 'eco_temperature', tuya.valueConverter.divideBy10],
-                [28, 'schedule_monday', tuya.valueConverter.thermostatScheduleDayMultiDP],
-                [29, 'schedule_tuesday', tuya.valueConverter.thermostatScheduleDayMultiDP],
-                [30, 'schedule_wednesday', tuya.valueConverter.thermostatScheduleDayMultiDP],
-                [31, 'schedule_thursday', tuya.valueConverter.thermostatScheduleDayMultiDP],
-                [32, 'schedule_friday', tuya.valueConverter.thermostatScheduleDayMultiDP],
-                [33, 'schedule_saturday', tuya.valueConverter.thermostatScheduleDayMultiDP],
-                [34, 'schedule_sunday', tuya.valueConverter.thermostatScheduleDayMultiDP],
-                [35, 'error_status', tuya.valueConverter.raw],
-                [36, 'frost_protection', tuya.valueConverter.onOff],
-                [37, 'boost_heating', tuya.valueConverter.onOff],
-                [38, 'boost_time', tuya.valueConverter.countdown],
-                [39, 'Switch Scale', tuya.valueConverter.raw],
-                [47, 'local_temperature_calibration', tuya.valueConverter.localTempCalibration1],
-                [48, 'valve_testing', tuya.valueConverter.raw],
-                [49, 'valve', tuya.valueConverterBasic.lookup({'OPEN': 1, 'CLOSE': 0})],
-                [49, 'running_state', tuya.valueConverterBasic.lookup({'heat': tuya.enum(1), 'idle': tuya.enum(0)})],
-                [49, 'system_mode', tuya.valueConverterBasic.lookup({'heat': tuya.enum(1), 'off': tuya.enum(0)})],                
-
-            ],
-        },
-    },
-*/
-            
         ],
         supportedThermostatModes: ['off', 'heat', 'auto', 'emergency heat', 'eco'],
         refresh: ['pollTuya'],
@@ -478,10 +437,6 @@ metadata {
     ],
 
     // TODO - AVATTO (ZWT100) WT198/ZWT100-BH - https://github.com/Koenkk/zigbee-herdsman-converters/blob/34de76fe3d1ffb2aa6dbcd712ceb5178f38712f9/src/devices/tuya.ts#L4338C51-L4338C67    https://www.aliexpress.com/i/3256802774365245.html 
-
-
-    
-
     'TUYA/MOES_BHT-002_THERMOSTAT'   : [        // probably also BSEED ? TODO - check!
             description   : 'Tuya/Moes BHT-002-GCLZB Thermostat',
             device        : [models: ['TS0601'], type: 'Thermostat', powerSource: 'ac', isSleepy:false],    //  model: 'BHT-002-GCLZB' 
@@ -594,7 +549,6 @@ metadata {
 
 ]
 
-
 /*
  * -----------------------------------------------------------------------------
  * thermostat cluster 0x0201
@@ -701,8 +655,6 @@ void customInitEvents(final boolean fullInit=false) {
 
 
 // called from processFoundItem  (processTuyaDPfromDeviceProfile and ) processClusterAttributeFromDeviceProfile in deviceProfileLib when a Zigbee message was found defined in the device profile map
-//
-// TODO !
 //
 /* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
 void customProcessDeviceProfileEvent(final Map descMap, final String name, final valueScaled, final String unitText, final String descText) {

@@ -82,7 +82,7 @@ deviceType = 'Thermostat'
 metadata {
     definition(
         name: 'Zigbee TRVs and Thermostats (Misc)',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Zigbee%20TRV/Zigbee_TRV_lib_included.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Drivers/Zigbee%20TRV/Zigbee_TRVs_and_Thermostats_(Misc)_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
         // capbilities are defined in the thermostatLib
