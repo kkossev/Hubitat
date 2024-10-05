@@ -21,14 +21,15 @@
  * ver. 3.3.4  2024-06-29 kkossev  - added NAMRON_RADIATOR device profile and attributes;
  * ver. 3.3.5  2024-07-09 kkossev  - release 3.3.5
  * ver. 3.3.6  2024-08-28 kkossev  - added Sunricher thermostat model 'HK-LN-HEATER-A' fingerprint
- * ver. 3.3.7  2024-09-01 kkossev  - (dev. branch) New 'Sunricher Thermostat' device profile; fixed missing eco() method; rounded the floorTemperature to 0.1; heatingSetpoint is updated to the ecoSetpoint when eco mode is activated; added ecoSetPoint attribute;
- *                                   removed systemMode'; added command 'eco'; added state.lastHeatingSetpoint; fixed thermostatMode switching from 'eco' to 'off'; fixed emergencyHeating mode update; 
+ * ver. 3.3.7  2024-09-01 kkossev  - New 'Sunricher Thermostat' device profile; fixed missing eco() method; rounded the floorTemperature to 0.1; heatingSetpoint is updated to the ecoSetpoint when eco mode is activated; added ecoSetPoint attribute;
+ *                                   removed systemMode'; added command 'eco'; added state.lastHeatingSetpoint; fixed thermostatMode switching from 'eco' to 'off'; fixed emergencyHeating mode update;
+ * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
  *
  *                                   TODO:
 */
 
-static String version() { '3.3.7' }
-static String timeStamp() { '2024/09/01 5:08 PM' }
+static String version() { '3.4.0' }
+static String timeStamp() { '2024/10/05 7:14 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
@@ -432,19 +433,7 @@ List<String> customConfigure() {
 // called from initializeDevice in the commonLib code
 List<String> customInitializeDevice() {
     List<String> cmds = []
-    //int intMinTime = 300
-    //int intMaxTime = 600    // report temperature every 10 minutes !
     cmds += configureNamron()
-/*
-    if ( getDeviceProfile() == 'SONOFF_TRV') {
-        cmds += initializeSonoff()
-    }
-    else if (getDeviceProfile() == 'AQARA_E1_TRV' ) {
-        cmds += initializeAqara()
-    }
-    else { */
-        logDebug"customInitializeDevice: nothing to initialize for device group ${getDeviceProfile()}"
-    //}
     logDebug "initializeThermostat() : ${cmds}"
     return cmds
 }
