@@ -13,14 +13,14 @@
         "name":"Zigbee TRVs and Thermostats (Misc)",
         "namespace":"kkossev",
         "location":"https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Drivers/Zigbee%20TRV/Zigbee_TRVs_and_Thermostats_(Misc)_lib_included.groovy",
-        "required":true
+        "required":false
      },
      {
         "id":"31a9b955-b8ae-48ef-830c-02580c07a8c7",
         "name":"Tuya Zigbee TRVs and Thermostats",
         "namespace":"kkossev",
         "location":"https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Drivers/Zigbee%20TRV/Tuya_Zigbee_Thermostat_lib_included.groovy",
-        "required":true
+        "required":false
      },
      {
         "id":"067c9c23-cb0e-4dfb-8411-775d7efbfa90",
