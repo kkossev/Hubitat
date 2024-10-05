@@ -14,7 +14,8 @@
  *     for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.3.0  2024-06-08 kkossev  - searate new driver for TRVZB thermostat
- * ver. 3.3.1  2024-07-18 kkossev  - (dev.branch) TimeSync() magic;
+ * ver. 3.3.1  2024-07-18 kkossev  - TimeSync() magic;
+ * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
  *
  *                                   TODO: initializeDeviceThermostat() - configure in the device profile !
  *                                   TODO: verify if onoffLib is needed
@@ -39,8 +40,8 @@
  *                                   TODO: Sonoff - add 'emergency heat' simulation ?  ( +timer ?)
  */
 
-static String version() { '3.3.1' }
-static String timeStamp() { '2024/07/18 3:12 PM' }
+static String version() { '3.4.0' }
+static String timeStamp() { '2024/10/05 7:01 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -132,7 +133,7 @@ metadata {
     'SONOFF_TRV'   : [
             description   : 'Sonoff TRVZB',
             device        : [manufacturers: ['SONOFF'], type: 'TRV', powerSource: 'battery', isSleepy:false],
-            capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true, 'BatteryVoltage':true], 
+            capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true, 'BatteryVoltage':true],
 
             preferences   : ['childLock':'0xFC11:0x0000', 'windowOpenDetection':'0xFC11:0x6000', 'frostProtectionTemperature':'0xFC11:0x6002', 'minHeatingSetpoint':'0x0201:0x0015', 'maxHeatingSetpoint':'0x0201:0x0016', 'calibrationTemp':'0x0201:0x0010' ],
             fingerprints  : [
@@ -337,7 +338,7 @@ List<String> initializeSonoff()
         cmds += zigbee.readAttribute(0xFC11, 0x6007, [:], delay = 137)                                                 // Seq: 37 (Attribute: 0x6007) (third time)
         cmds += zigbee.readAttribute(0xFC11, 0x6007, [:], delay = 1138)                                                // Seq: 38 (Attribute: 0x6007) (fourth time)
         cmds += zigbee.readAttribute(0xFC11, 0x6002, [:], delay = 1139)                                                // Seq: 39 (Attribute: 0x6002)
-*/        
+*/
 
     /*
         configure: async (device, coordinatorEndpoint, logger) => {

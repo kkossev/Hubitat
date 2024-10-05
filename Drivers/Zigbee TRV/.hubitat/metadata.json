@@ -22,7 +22,7 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Zigbee TRV/Sonoff Zigbee TRV.groovy",
       "codeType": "driver",
       "id": 3050,
-      "version": 56
+      "version": 57
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Zigbee TRV/Zigbee TRVs and Thermostats (Misc).groovy",
