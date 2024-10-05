@@ -339,6 +339,19 @@
         "Water",
         "Zigbee"
        ]
+    },
+	{
+      "id":"99d87625-9f1d-4b0d-9c41-a0da7f450947",
+      "name":"Zigbee TRVs and Thermostats",
+      "category":"Control",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Drivers/Zigbee%20TRV/thermostatsManifest.json",
+      "description":"Zigbee Thermostats and TRVs - Aqara, Tuya, Sonoff, Sunricher, Namron, ....",
+      "tags":[
+        "Climate Control",
+        "Energy Monitoring",
+        "Temperature & Humidity",
+        "Zigbee"
+       ]
     }	
   ]
 }
