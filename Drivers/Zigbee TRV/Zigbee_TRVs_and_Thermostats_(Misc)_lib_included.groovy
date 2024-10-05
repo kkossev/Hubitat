@@ -13,23 +13,51 @@
  *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *     for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.3.0  2024-06-09 kkossev  - first Namron Zigbee Thermostat version
- * ver. 3.3.1  2024-06-15 kkossev  - calibrationTemp negative values bug fix; added hysteresis, floorCalibrationTemp, powerUpStatus, emergencyHeatTime, modeAfterDry, controlType, floorSensorType, childLock
- * ver. 3.3.2  2024-06-16 kkossev  - added windowOpenCheck preference (not working?); added 'auto' mode, added emergency heat' mode; modeAfterDry default changed to 'heat'; added 'advanced:true' to the attributes map
- *                                    added 'eco' (away) mode; added overHeatAlarm advanced attribute; displayAutoOff is disabled by default; added refreshAll command; added add factoryReset command; fixed energy reporting configuration
- * ver. 3.3.3  2024-06-25 kkossev  - release 3.3.3
- * ver. 3.3.4  2024-06-29 kkossev  - added NAMRON_RADIATOR device profile and attributes;
- * ver. 3.3.5  2024-07-09 kkossev  - release 3.3.5
- * ver. 3.3.6  2024-08-28 kkossev  - added Sunricher thermostat model 'HK-LN-HEATER-A' fingerprint
- * ver. 3.3.7  2024-09-01 kkossev  - New 'Sunricher Thermostat' device profile; fixed missing eco() method; rounded the floorTemperature to 0.1; heatingSetpoint is updated to the ecoSetpoint when eco mode is activated; added ecoSetPoint attribute;
- *                                   removed systemMode'; added command 'eco'; added state.lastHeatingSetpoint; fixed thermostatMode switching from 'eco' to 'off'; fixed emergencyHeating mode update;
- * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
+ * ver. 3.0.0  2023-11-16 kkossev  - Refactored version 2.x.x drivers and libraries; adding MOES BRT-100 support - setHeatingSettpoint OK; off OK; level OK; workingState OK
+ *                                   Emergency Heat OK;   setThermostatMode OK; Heat OK, Auto OK, Cool OK; setThermostatFanMode OK
+ * ver. 3.0.1  2023-12-02 kkossev  - added NAMRON thermostat profile; added Sonoff TRVZB 0x0201 (Thermostat Cluster) support; thermostatOperatingState ; childLock OK; windowOpenDetection OK; setPar OK for BRT-100 and Aqara;
+ *                                   minHeatingSetpoint & maxHeatingSetpoint OK; calibrationTemp negative values OK!; auto OK; heat OK; cool and emergency heat OK (unsupported); Sonoff off mode OK;
+ * ver. 3.0.2  2023-12-02 kkossev  - importUrl correction; BRT-100: auto OK, heat OK, eco OK, supportedThermostatModes is defined in the device profile; refresh OK; autPoll OK (both BRT-100 and Sonoff);
+ *                                   removed isBRT100TRV() ; removed isSonoffTRV(), removed 'off' mode for BRT-100; heatingSetPoint 12.3 bug fixed;
+ * ver. 3.0.3  2023-12-03 kkossev  - Aqara E1 thermostat refactoring : removed isAqaraTRV(); heatingSetpoint OK; off mode OK, auto OK heat OK; driverVersion state is updated on healthCheck and on preferences saving;
+ * ver. 3.0.4  2023-12-08 kkossev  - code cleanup; fingerpints not generated bug fix; initializeDeviceThermostat() bug fix; debug logs are enabled by default; added VIRTUAL thermostat : ping, auto, cool, emergency heat, heat, off, eco - OK!
+ *                                   setTemperature, setHeatingSetpoint, setCoolingSetpoint - OK setPar() OK  setCommand() OK; Google Home compatibility for virtual thermostat;  BRT-100: Google Home exceptions bug fix; setHeatingSetpoint to update also the thermostatSetpoint for Google Home compatibility; added 'off' mode for BRT-100;
+ * ver. 3.0.5  2023-12-09 kkossev  - BRT-100 - off mode (substitutues with eco mode); emergency heat mode ; BRT-100 - digital events for temperature, heatingSetpoint and level on autoPollThermostat() and Refresh(); BRT-100: workingState open/closed replaced with thermostatOperatingState
+ * ver. 3.0.6  2023-12-18 kkossev  - configure() changes (SONOFF still not initialized properly!); adding TUYA_SASWELL group; TUYA_SASWELL heatingSetpoint correction; Groovy linting;
+ * ver. 3.0.7  2024-03-04 kkossev  - commonLib 3.0.3 check; more Groovy lint;
+ * ver. 3.0.8  2024-04-01 kkossev  - commonLib 3.0.4 check; more Groovy lint; tested w/ Sonoff TRVZB;
+ * ver. 3.1.0  2024-04-19 kkossev  - commonLib 3.1.0 check; deviceProfilesV3; enum attributes bug fix
+ * ver. 3.2.0  2024-05-25 kkossev  - commonLib 3.2.0 allignment;
+ * ver. 3.2.1  2024-05-28 kkossev  - customProcessDeviceProfileEvent; Xiaomi cluster value exception bug fix
+ * ver. 3.2.2  2024-06-06 kkossev  - added AVATTO TS0601 _TZE200_ye5jkfsb
+ * ver. 3.2.3  2024-06-07 kkossev  - hide onOff and maxReportingTime advanced options; hysteresis fix; added "_TZE200_aoclfnxz in 'TUYA/MOES_BHT-002_THERMOSTAT'; added _TZE200_2ekuz3dz in TUYA/BEOK_THERMOSTAT
+ * ver. 3.3.0  2024-06-07 kkossev  - moved all Tuya, Aqara E1, NAMRON and TRVZB to separate drivers;
+ * ver. 3.3.5  2024-07-15 kkossev  - using the new thermostatLib; Stelpro thermostats;
+ * ver. 3.4.0  2024-10-05 kkossev  - driver renamed to Zigbee TRVs and Thermostats (Misc); code cleanup; added to HPM
  *
- *                                   TODO:
-*/
+ *                                   TODO: add Info dummy preference to the driver with a hyperlink
+ *                                   TODO: add state.thermostat for storing last attributes
+ *                                   TODO: Healthcheck to be every hour (not 4 hours) for mains powered thermostats
+ *                                   TODO: add 'force manual mode' preference (like in the wall thermostat driver)
+ *                                   TODO: option to disable the Auto mode ! (like in the wall thermostat driver)
+ *                                   TODO: initializeDeviceThermostat() - configure in the device profile !
+ *                                   TODO: partial match for the fingerprint (model if Tuya, manufacturer for the rest)
+ *                                   TODO: add [refresh] for battery heatingSetpoint thermostatOperatingState events and logs
+ *                                   TODO: autoPollThermostat: no polling for device profile UNKNOWN
+ *                                   TODO: configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
+ *                                   TODO: Ping the device on initialize
+ *                                   TODO: add factoryReset command Basic -0x0000 (Server); command 0x00
+ *                                   TODO: add option 'Simple TRV' (no additinal attributes)
+ *                                   TODO: HomeKit - min and max temperature limits?
+ *                                   TODO: add receiveCheck() methods for heatingSetpint and mode (option)
+ *                                   TODO: separate the autoPoll commands from the refresh commands (lite)
+ *                                   TODO: All TRVs - after emergency heat, restore the last mode and heatingSetpoint
+ *                                   TODO: VIRTUAL thermostat - option to simualate the thermostatOperatingState
+ *                                   TODO: UNKNOWN TRV - update the deviceProfile - separate 'Unknown Tuya' and 'Unknown ZCL'
+ */
 
 static String version() { '3.4.0' }
-static String timeStamp() { '2024/10/05 7:14 PM' }
+static String timeStamp() { '2024/10/05 6:13 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
@@ -53,8 +81,8 @@ deviceType = 'Thermostat'
 
 metadata {
     definition(
-        name: 'Namron Zigbee Thermostat',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Zigbee%20TRV/Namron_Zigbee_Thermostat_lib_included.groovy',
+        name: 'Zigbee TRVs and Thermostats (Misc)',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Zigbee%20TRV/Zigbee_TRV_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
         // capbilities are defined in the thermostatLib
@@ -69,7 +97,7 @@ metadata {
         attribute 'floorCalibrationTemp', 'number'                  // NAMRON
         attribute 'childLock', 'enum', ['off', 'on']                // BRT-100, Aqara E1, Sonoff, AVATTO, NAMRON
         attribute 'ecoMode', 'enum', ['off', 'on']                  // BRT-100, NAMRON
-        attribute 'ecoSetPoint', 'number'                           // NAMRON
+        attribute 'ecoTemp', 'number'                               // BRT-100
         attribute 'emergencyHeating', 'enum', ['off', 'on']         // BRT-100
         attribute 'emergencyHeatingTime', 'number'                  // BRT-100
         attribute 'floorTemperature', 'number'                      // AVATTO/MOES floor thermostats NAMRON
@@ -84,24 +112,17 @@ metadata {
         attribute 'modeAfterDry', 'enum', ['off', 'manual', 'auto', 'eco']      // NAMRON
         attribute 'overHeatAlarm', 'number'                         // NAMRON
         attribute 'powerUpStatus', 'enum', ['default', 'last']      // NAMRON
+        attribute 'systemMode', 'enum', ['off', 'heat', 'on']               // GENERIC
         attribute 'temperatureDisplayMode', 'enum', ['room Temp', 'floor temp']  // NAMRON
         attribute 'windowOpenCheck', 'number'                       // NAMRON
         attribute 'windowOpenCheckActivation', 'enum', ['enabled', 'disabled']  // NAMRON_RADIATOR
         attribute 'windowOpenState', 'enum', ['notOpened', 'opened']  // NAMRON_RADIATOR
         attribute 'overHeatMark', 'enum', ['no', 'temperature over 85ºC and lower than 90ºC', 'temperature over 90ºC']  // NAMRON_RADIATOR
 
-        command 'eco', [[name: 'eco', type: 'STRING', description: 'Set the thermostat to Eco mode', defaultValue : '']]
         command 'refreshAll', [[name: 'refreshAll', type: 'STRING', description: 'Refreshes all parameters', defaultValue : '']]
         command 'factoryResetThermostat', [[name: 'factoryResetThermostat', type: 'STRING', description: 'Factory reset the thermostat', defaultValue : '']]
         if (_DEBUG) { command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  }
-        command 'sendCommand', [
-            [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
-            [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
-        ]
-        command 'setPar', [
-                [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
-                [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
-        ]
+
         // itterate through all the figerprints and add them on the fly
         deviceProfilesV3.each { profileName, profileMap ->
             if (profileMap.fingerprints != null) {
@@ -120,163 +141,136 @@ metadata {
 }
 
 @Field static final Map deviceProfilesV3 = [
-    'NAMRON'   : [
-            description   : 'NAMRON Thermostat',
-            device        : [manufacturers: ['NAMRON AS'], type: 'TRV', powerSource: 'mains', isSleepy:false],
-            capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
-            preferences   : [calibrationTemp: '0x0201:0x0010', ecoSetPoint: '0x0201:0x0014', lcdBrightnesss:'0x0201:0x1000', keyVibration:'0x0201:0x1001', temperatureDisplayMode:'0x0201:0x1008', displayAutoOff:'0x0201:0x100B', childLock:'0x0204:0x0001',
-                             floorSensorType:'0x0201:0x1002', controlType:'0x0201:0x1003', powerUpStatus:'0x0201:0x1004', floorCalibrationTemp:'0x0201:0x1005', emergencyHeatTime:'0x0201:0x1006', modeAfterDry:'0x0201:0x1007', windowOpenCheck:'0x0201:0x1009', hysteresis:'0x0201:0x100A',
-                             overHeatAlarm:'0x0201:0x2001'/*, ecoMode:'0x0201:0x2002' */// remove ecoMode after testing!
-                             ],
-            fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0009,000A,0201,0204,0702,0B04", outClusters:"0003,0019", model:"4512737", manufacturer:"NAMRON AS", controllerType: "ZGB", deviceJoinName: 'NAMRON'] ,
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,0009,0408,0702,0B04,0B05,1000,FCCC', outClusters:'0019,1000', model:'4512749-N', manufacturer:'NAMRON AS', deviceJoinName: 'NAMRON']   // EP02: 0000,0004,0005,0201  // EPF2: 0021
-            ],
-            commands      : [tesT:'testT', resetStats:'resetStats', refresh:'refresh', initialize:'initialize', updateAllPreferences: 'updateAllPreferences', resetPreferencesToDefaults:'resetPreferencesToDefaults', validateAndFixPreferences:'validateAndFixPreferences',
-                              factoryResetThermostat:'factoryResetThermostat', sendSupportedThermostatModes: 'sendSupportedThermostatModes', refreshAll: 'refreshAll', configureNamron:'configureNamron'
-            ],
-            attributes    : [
-                [at:'0x0201:0x0000',  name:'temperature',              type:'decimal', dt:'0x29', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', description:'Measured room temperature'],                                                                      // ^^^ (int16S, read-only) reportable LocalTemperature : Attribute This is room temperature, the maximum resolution this format allows is 0.01 ºC.
-                [at:'0x0201:0x0001',  name:'floorTemperature',         type:'decimal', dt:'0x29', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C',  description:'Floor temperature'],                                                                             // ^^^ (int16S, read-only) reportable OutdoorTemperature : This is floor temperature, the maximum resolution this format allows is 0.01 ºC.
-                [at:'0x0201:0x0002',  name:'occupancy',                type:'enum',    dt:'0x30', rw: 'ro', min:0,    max:1,    step:1,  scale:1,    map:[0: 'away', 1: 'heat'], unit:'',  description:'Occupancy'],                                                          // ^^^ (bitmap8, read-only) Occupancy : When this flag is set as 1, it means occupied, OccupiedHeatingSetpoint will be used, otherwise UnoccupiedHeatingSetpoint will be used
-                [at:'0x0201:0x0010',  name:'calibrationTemp',          type:'decimal', dt:'0x28', rw: 'rw', min:-3.0, max:3.0,  defVal:0.0, step:0.1, scale:10,  unit:'°C', title: '<b>Local Temperature Calibration</b>', description:'Room temperature calibration'],         // ^^^ (Int8S, reportable) TODO: check dt!!!    LocalTemperatureCalibration : Room temperature calibration, range is -30-30, the maximum resolution this format allows 0.1°C. Default value: 0
-                [at:'0x0201:0x0011',  name:'coolingSetpoint',          type:'decimal', dt:'0x29', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Cooling Setpoint</b>',              description:'This system is not invalid'],                      // not used
-                [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt:'0x29', rw: 'rw', min:0.0,  max:40.0, defVal:30.0, step:0.01, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],          // ^^^(int16S, reportable)  OccupiedHeatingSetpoint : Range is 0-4000,the maximum resolution this format allows is 0.01 ºC. Default is 0xbb8(30.00ºC)
-                [at:'0x0201:0x0014',  name:'ecoSetPoint',              type:'decimal', dt:'0x29', rw: 'rw', min:0.0,  max:40.0, defVal:6.0,  step:0.01, scale:100,  unit:'°C', title: '<b>Eco (Away) Heating Setpoint</b>',    description:'Away (Eco, unoccupied) heating setpoint'],                // ^^^(int16S, reportable)  Un-OccupiedHeatingSetpoint : Range is 0-4000,the maximum resolution this format allows is 0.01 ºC. Default is 0x258(6.00ºC)
-                [at:'0x0201:0x001B',  name:'controlSequenceOfOperation', type:'enum',  dt:'0x30', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 2: 'heat'], unit:'',  description:'device supported operation type'],  // always 2 (heat)                   // ^^^(Map16, read-only, reportable) HVAC relay state/ termostatRunningState Indicates the relay on/off status, here only supports bit0( Heat State)
-                [at:'0x0201:0x001C',  name:'thermostatMode',           type:'enum',    dt:'0x30', rw: 'rw', map:[0: 'off', 1: 'auto', 4: 'heat', 8: 'emergency heat'], title: '<b>Thermostat Mode</b>', description:'Thermostat (System) Mode'],
-                [at:'0x0201:0x0029',  name:'thermostatOperatingState', type:'enum',    dt:'0x30', rw: 'ro', min:0,    max:1,    step:1,  scale:1,    map:[0: 'idle', 1: 'heating'], unit:'',  description:'Thermostat Operating State (relay on/off status)'],                  // ^^^(Map16, read-only, reportable) HVAC relay state/ termostatRunningState Indicates the relay on/off status, here only supports bit0( Heat State)
-                // Thermostat User Interface Configuration-0x0204(Server)
-                [at:'0x0204:0x0001',  name:'childLock',                type:'enum',    dt:'0x30', rw: 'rw', min:0,    max:1,    step:1,  scale:1,  defVal:'0',  map:[0: 'off', 1: 'on'], unit:'', title: '<b>Child Lock</b>', description:'Keyboard lockout'],
-                // Proprietary Attributes: Manufacturer code 0x1224
-                [at:'0x0201:0x1000',  name:'lcdBrightnesss',           type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:2, defVal:'1',   step:1,  scale:1,    map:[0: 'low Level', 1: 'mid Level', 2: 'high Level'], unit:'',  title: '<b>OLED brightness</b>', description:'OLED brightness'],                 // ^^^ (ENUM8,reportable) TODO: check dt!!!  OLED brightness when operate the buttons: Value=0 : Low Level Value=1 : Mid Level(default) Value=2 : High Level
-                [at:'0x0201:0x1001',  name:'keyVibration',             type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:2, defVal:'1',   step:1,  scale:1,    map:[0: 'off', 1: 'low level', 2: 'high Level'], unit:'',  title: '<b>Key Vibration</b>', description:'Key Vibration'],                 // ^^^ (ENUM8,reportable) TODO: check dt!!!  OLED brightness when operate the buttons: Value=0 : Low Level Value=1 : Mid Level(default) Value=2 : High Level
-                [at:'0x0201:0x1002',  name:'floorSensorType',          type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:1,    max:5, defVal:'1', advanced:true,         map:[1: 'NTC 10K/25', 2: 'NTC 15K/25', 3: 'NTC 12K/25', 4: 'NTC 100K/25', 5: 'NTC 50K/25'], unit:'',  title: '<b>Floor Sensor Type</b>', description:'Floor Sensor Type'],                // ^^^ (ENUM8,reportable) TODO: check dt!!!  TODO: check why there are 3 diferent enum groups???    FloorSenserType Value=5 : NTC 12K/25  Value=4 : NTC 100K/25 Value=3 : NTC 50K/25 Select external (Floor) sensor type: Value=1 : NTC 10K/25 (Default) Value=2 : NTC 15K/25 Value=5 : NTC 12K/25 Value=4 : NTC 100K/25 Value=3 : NTC 50K/25 Select external (Floor) sensor type: Value=1 : NTC 10K/25 (Default) Value=2 : NTC 15K/25
-                [at:'0x0201:0x1003',  name:'controlType',              type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:2, defVal:'0', advanced:true,         map:[0: 'room sensor', 1: 'floor sensor', 2: 'room+floor sensor'], unit:'',  title: '<b>Control Type</b>', description:'Control Type'],              // ^^^ (ENUM8,reportable) TODO: check dt!!!  ControlType The referring sensor for heat control: Value=0 : Room sensor(Default) Value=1 : floor sensor Value=2 : Room+floor sensor
-                [at:'0x0201:0x1004',  name:'powerUpStatus',            type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'1',   step:1,  scale:1,    map:[0: 'default', 1: 'last'], title: '<b>Power Up Status</b>',description:'Power Up Status'],                                                   // ^^^ (ENUM8,reportable) TODO: check dt!!! PowerUpStatus Value=0 : default mode The mode after reset power of the device: Value=1 : last status before power off (Default)
-                [at:'0x0201:0x1005',  name:'floorCalibrationTemp',     type:'decimal', dt:'0x28',  mfgCode:'0x1224', rw: 'rw', min:-3.0,  max:3.0, defVal:0.0, step:0.1, scale:10,  unit:'°C', title: '<b>Floor Sensor Calibration</b>', description:'Floor Sensor Calibration/i>'],                                                // ^^^ (Int8S, reportable) TODO: check dt!!!    FloorSenserCalibration The temp compensation for the external (floor) sensor, range is -30-30, unit is 0.1°C. default value 0
-                [at:'0x0201:0x1006',  name:'emergencyHeatTime',        type:'number',  dt:'0x20',  mfgCode:'0x1224', rw: 'rw', min:5,  max:100, defVal:5, step:1, scale:1,  unit:'minutes', title: '<b>Emergency Heat Time</b>', description:'The duration of Emergency Heat time (dry time)>'],                                    // ^^^ (Int8S, reportable) TODO: check dt!!!    DryTime The duration of Dry Mode, range is 5-100, unit is min. Default value is 5.
-                [at:'0x0201:0x1007',  name:'modeAfterDry',             type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:3, defVal:'1', advanced:true,         map:[0: 'off', 1: 'manual', 2: 'auto', 3: 'eco'], unit:'',  title: '<b>Mode After Emergency Heat (Dry) mode</b>', description:'The mode the thermostat will switch automatically after the Emergency Heat (Dry) Mode'],   // ^^^ (ENUM8,reportable) TODO: check dt!!! ModeAfterDry The mode after Dry Mode: Value=0 : OFF Value=1 : Manual mode Value=2 : Auto mode –schedule (default) Value=3 : Away mode
-                [at:'0x0201:0x1008',  name:'temperatureDisplayMode',   type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'1',   step:1,  scale:1,    map:[0: 'room Temp', 1: 'floor temp'], unit:'',  title: '<b>Temperature Display</b>',description:'Temperature Display'],                         // ^^^ (ENUM8,reportable) TODO: check dt!!! TemperatureDisplay Value=0 : Room Temp (Default) Value=1 : Floor Temp
-                [at:'0x0201:0x1009',  name:'windowOpenCheck',          type:'decimal', dt:'0x20',  mfgCode:'0x1224', rw: 'rw', min:0.0, max:8.0, defVal:0.0, step:0.5, scale:10,  unit:'°C', title: '<b>Window Open Check</b>', description:'The threshold to detect open window, 0 means disabled'],                               // ^^^ (INT8U,reportable) TODO: check dt!!!    WindowOpenCheck The threshold to detect open window, range is 0.3-8, unit is 0.5ºC, 0 means disabled, default is 0
-                [at:'0x0201:0x100A',  name:'hysteresis',               type:'decimal', dt:'0x20',  mfgCode:'0x1224', rw: 'rw', min:0.5, max:2.0, defVal:0.5, step:0.1, scale:10,  unit:'°C', title: '<b>Hysteresis</b>', description:'Hysteresis'],                                                                                 // ^^^ (INT8U,reportable) TODO: check dt!!!  TODO - check the scailing !!!  Hysteresis setting, range is 5-20, unit is 0.1ºC, default value is 5
-                [at:'0x0201:0x100B',  name:'displayAutoOff',           type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'0',   step:1,  scale:1,    map:[0: 'disabled', 1: 'enabled'], unit:'',  title: '<b>Display Auto Off</b>',description:'Display Auto Off disable/enable'],                    // ^^^ (ENUM8,reportable) TODO: check dt!!!  DisplayAutoOffEnable 0, disable Display Auto Off function 1, enable Display Auto Off function
-                [at:'0x0201:0x2001',  name:'overHeatAlarm',            type:'decimal', dt:'0x21',  mfgCode:'0x1224', rw: 'rw', min:0.0, max:6.0, defVal:4.5, step:0.1, scale:10, advanced:true, unit:'°C', title: '<b>Over Heat Alarm</b>', description:'Room temp alarm threshold, 0 means disabled,'],                                  // ^^^ (INT8U,reportable) TODO: check dt!!!  TODO - check the scailing !!!  AlarmAirTempOverValue Room temp alarm threshold, range is 0.20-60, unit is 1ºC,0 means disabled, default is 45
-                [at:'0x0201:0x2002',  name:'ecoMode',                  type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'0',   step:1,  scale:1,    map:[0: 'off', 1: 'on'], unit:'',  title: '<b>Eco (Away) Mode</b>', description:'Eco (Away) Mode'],                                            // ^^^ (ENUM8,reportable) TODO: check dt!!!  Away Mode Set: Value=1: away Value=0: not away (default)
-                // Command supported  !!!!!!!!!! TODO !!!!!!!!!!!! not attribute, but a command !!!!!!!!!!!!!!!!
-                [cmd:'0x0201:0x0000',  name:'setpointRaiseLower',       type:'decimal', dt:'0x21', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:10,  unit:'°C', description:'Setpoint Raise/Lower']                // ^^^ Setpoint Raise/Lower Increase or decrease the set temperature according to current mode, unit is 0.1ºC
-            ],
-            supportedThermostatModes : ['off', 'heat', 'auto', 'emergency heat', 'eco'],
-            supportedThermostatFanModes : ['off'],
-            refresh: ['pollThermostatCluster'], // definded in the thermostatLib
-            deviceJoinName: 'NAMRON Thermostat',
-            configuration : [:]
+    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f83254ca55f890514744a5902edbebf8d998307d/src/devices/stelpro.ts#L46
+    // Stelpro ST : https://github.com/stelpro/Ki-ZigBee-Thermostat/blob/master/devicetypes/stelpro/stelpro-ki-zigbee-thermostat.src/stelpro-ki-zigbee-thermostat.groovy#L481
+    // Stelpro MaestroStat - SMT402                             // https://github.com/jrfarrar/hubitat/blob/master/devicehandlers/Stelpro%20Maestro%20ZigBee/StelproMaestroZigBee.groovy
+    // https://community.hubitat.com/t/release-introducing-driver-for-zigbee-thermostat-stelpro-allia/107011
+    // https://raw.githubusercontent.com/Philippe-Charette/Hubitat-Stelpro-Maestro-Thermostat/master/stelpro-maestro-thermostat.groovy
+
+    'STELPRO_MAESTRO_SMT402' : [   // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f83254ca55f890514744a5902edbebf8d998307d/src/devices/stelpro.ts#L33
+        description   : 'Stelpro HT402 Hilo thermostat',
+        device        : [type: 'Thermostat', powerSource: 'ac', isSleepy:false],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true, 'Power':true, 'Energy':true],
+        //  tz.thermostat_local_temperature, tz.thermostat_occupancy,  tz.thermostat_occupied_heating_setpoint, tz.thermostat_temperature_display_mode, tz.thermostat_keypad_lockout, tz.thermostat_system_mode, tz.thermostat_running_state, tz.stelpro_thermostat_outdoor_temperature,
+            preferences   : [:],
+        fingerprints  : [
+            [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0009,000A,0201,0204,0702,0B04", outClusters:"0003,0019", model:"SMT402", manufacturer:"Stelpro", deviceJoinName: 'Stelpro MaestroStat SMT402 Thermostat'] ,
+            // fingerprint profileId: "0104", endpointId: "19", inClusters: " 0000,0003,0201,0204,0405", outClusters: "0402"
+        ],
+        commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'
+        ],
+        attributes    : [
+            [at:'0x0201:0x0000',  name:'temperature',              type:'decimal', dt: '0x21', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Temperature</b>',                   description:'Measured temperature'],
+            [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt: '0x21', rw: 'rw', min:5.0,  max:30.0, step:0.5, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
+            [at:'0x0201:0x001C',  name:'systemMode',               type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b> Mode</b>',                   description:'System Mode ?'],
+            [at:'0x0201:0x001E',  name:'thermostatRunMode',        type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatRunMode</b>',                   description:'thermostatRunMode'],
+            [at:'0x0201:0x0029',  name:'thermostatOperatingState', type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatOperatingState</b>',                   description:'thermostatOperatingState'],
+            // Thermostat User Interface Configuration-0x0204(Server)
+            [at:'0x0204:0x0000',  name:'temperatureDisplayMode',   type:'enum',    dt:'0x30', rw: 'ro', map:[0: 'Temperature in °C'], description:'Temperature display mode'],
+            [at:'0x0204:0x0001',  name:'childLock',                type:'enum',    dt:'0x30', rw: 'rw', min:0,    max:1,    step:1,  scale:1,  defVal:'0',  map:[0: 'off', 1: 'on'], unit:'', title: '<b>Child Lock</b>', description:'Keyboard lockout'],
+        ],
+        supportedThermostatModes : ['heat'],
+        refresh: ['pollThermostatCluster'], // in thermostatLib
+        deviceJoinName: 'Stelpro HT402 Hilo thermostat',
+        configuration : [:]
     ],
 
-    'NAMRON_RADIATOR'   : [
-            description   : 'NAMRON Radiator',
-            device        : [manufacturers: ['NAMRON AS'], type: 'TRV', powerSource: 'mains', isSleepy:false],
+    'STELPRO_THERMOSTAT_ST218' : [    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f83254ca55f890514744a5902edbebf8d998307d/src/devices/stelpro.ts#L76
+        // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/2307
+        description   : 'Stelpro ST218 - Built-In Electronic Thermostat',   // no humidity
+        device        : [type: 'Thermostat', powerSource: 'ac', isSleepy:false],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
+        preferences   : [:],
+        fingerprints  : [
+            [profileId:'0104', endpointId:'19', inClusters:'0000,0003,0201,0204,0405', outClusters:'0402', model:'ST218', manufacturer:'Stelpro', deviceJoinName: 'Stelpro ST218 - Built-In Electronic Thermostat']
+        ],
+        commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize'],
+        attributes    : [
+            [at:'0x0201:0x0000',  name:'temperature',              type:'decimal', dt: '0x21', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Temperature</b>',                   description:'Measured temperature'],
+            [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt: '0x21', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
+            [at:'0x0201:0x001C',  name:'systemMode',               type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b> Mode</b>',                   description:'System Mode ?'],
+            [at:'0x0201:0x001E',  name:'thermostatRunMode',        type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatRunMode</b>',                   description:'thermostatRunMode'],
+            [at:'0x0201:0x0029',  name:'thermostatOperatingState', type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatOperatingState</b>',                   description:'thermostatOperatingState'],
+        ],
+        supportedThermostatModes : ['off', 'heat', 'auto'],
+        refresh: ['pollThermostatCluster'], // in thermostatLib
+        deviceJoinName: 'Stelpro ST218 - Built-In Electronic Thermostat',
+        configuration : [:]
+    ],
+
+    // @alex1
+    // Stelpro Alia ??? https://community.hubitat.com/t/help-with-new-zigbee-driver/106856?u=kkossev
+    'STELPRO_MAESTRO_STZB402' : [    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f83254ca55f890514744a5902edbebf8d998307d/src/devices/stelpro.ts#L124
+        description   : 'Stelpro STZB402 Ki line-voltage thermostat',
+        device        : [type: 'Thermostat', powerSource: 'ac', isSleepy:false],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true, 'HumidityMeasurement':true],
+        preferences   : [:],
+        fingerprints  : [
+            [profileId:'0104', endpointId:'19', inClusters:'0000,0003,0201,0204,0405', outClusters:'0402', model:'STZB402', manufacturer:'Stelpro', deviceJoinName: 'Stelpro STZB402 Ki line-voltage thermostat'],
+            [profileId:'0104', endpointId:'19', inClusters:'0000,0003,0201,0204,0405', outClusters:'0402', model:'STZB402+', manufacturer:'Stelpro', deviceJoinName: 'Stelpro STZB402 Ki line-voltage thermostat'],
+            [profileId:'0104', endpointId:'19', inClusters:'0000,0003,0004,0201,0204', outClusters:'0003,000A,0402', model:'HT402', manufacturer:'Stello', deviceJoinName: '(Stelpro Allia) HT402 thhermostat']
+            // https://github.com/Philippe-Charette/Hubitat-Stelpro-Maestro-Thermostat/blob/master/stelpro-maestro-thermostat.groovy#L36
+        ],
+        commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'
+        ],
+        attributes    : [
+            [at:'0x0201:0x0000',  name:'temperature',              type:'decimal', dt: '0x21', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Temperature</b>',                   description:'Measured temperature'],
+            [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt: '0x21', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
+            [at:'0x0201:0x001C',  name:'systemMode',               type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b> Mode</b>',                   description:'System Mode ?'],
+            [at:'0x0201:0x001E',  name:'thermostatRunMode',        type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatRunMode</b>',                   description:'thermostatRunMode'],
+            [at:'0x0201:0x0029',  name:'thermostatOperatingState', type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatOperatingState</b>',                   description:'thermostatOperatingState'],
+        ],
+        supportedThermostatModes : ['off', 'heat', 'auto'],
+        refresh: ['pollThermostatCluster'], // in thermostatLib
+        deviceJoinName: 'Stelpro STZB402 Ki line-voltage thermostat',
+        configuration : [:]
+    ],
+
+    'STELPRO_MAESTRO_SMT402' : [   // https://community.hubitat.com/t/release-device-driver-for-stelpro-maestro-thermostat-zigbee/34840/30?u=kkossev
+        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f83254ca55f890514744a5902edbebf8d998307d/src/devices/stelpro.ts#L277
+        description   : 'Stelpro SMT402 MaestroStat  Thermostat',    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f83254ca55f890514744a5902edbebf8d998307d/src/devices/stelpro.ts#L174
+        device        : [type: 'Thermostat', powerSource: 'ac', isSleepy:false],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true, 'RelativeHumidityMeasurement':true],
+        preferences   : [:],
+        fingerprints  : [
+            [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0201", outClusters:"0003,0019", model:"SMT402", manufacturer:"Stelpro", deviceJoinName: 'Stelpro MaestroStat SMT402 Thermostat'] ,
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,0201', outClusters:'0019,1000', model:'SMT402AD', manufacturer:'Stelpro', deviceJoinName: 'Stelpro MaestroStat SMT402AD Thermostat']
+            // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f83254ca55f890514744a5902edbebf8d998307d/src/devices/stelpro.ts#L277
+        ],
+        commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'
+        ],
+        attributes    : [
+            [at:'0x0201:0x0000',  name:'temperature',              type:'decimal', dt: '0x21', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Temperature</b>',                   description:'Measured temperature'],
+            [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt: '0x21', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
+            [at:'0x0201:0x001C',  name:'systemMode',                     type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b> Mode</b>',                   description:'System Mode ?'],
+            [at:'0x0201:0x001E',  name:'thermostatRunMode',        type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatRunMode</b>',                   description:'thermostatRunMode'],
+            [at:'0x0201:0x0029',  name:'thermostatOperatingState', type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatOperatingState</b>',                   description:'thermostatOperatingState'],
+        ],
+        refresh: ['pollThermostatCluster'], // in thermostatLib
+        deviceJoinName: 'Stelpro SMT402 MaestroStat Thermostat',
+        configuration : [:]
+    ],
+    // Stelpro will return -325.65 when set to off, value is not realistic anyway
+
+    'STELPRO_ORLÉANS_SORB' : [    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f83254ca55f890514744a5902edbebf8d998307d/src/devices/stelpro.ts#L231C24-L231C28
+            description   : 'Stelpro SORB ORLÉANS fan heater',   // no humidity
+            device        : [type: 'Thermostat', powerSource: 'ac', isSleepy:false],
             capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
-            preferences   : [calibrationTemp: '0x0201:0x0010', lcdBrightnesss:'0x0201:0x1000', displayAutoOffActivation:'0x0201:0x1001', temperatureDisplayMode:'0x0201:0x1008', displayAutoOffActivation:'0x0201:0x1001', childLock:'0x0204:0x0001',
-                             powerUpStatus:'0x0201:0x1004', windowOpenCheckActivation:'0x0201:0x1009', hysteresis:'0x0201:0x100A',
-                             overHeatAlarm:'0x0201:0x2001'/*, ecoMode:'0x0201:0x2002' */// remove ecoMode after testing!
-                             ],
+            preferences   : [:],
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0009,000A,0201,0204,0702,0B04", outClusters:"0001,0003,0019", model:"5401392", manufacturer:"NAMRON AS", controllerType: "ZGB", deviceJoinName: 'NAMRON'] ,
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0009,000A,0201,0204,0702,0B04", outClusters:"0001,0003,0019", model:"5401396", manufacturer:"NAMRON AS", controllerType: "ZGB", deviceJoinName: 'NAMRON'] ,
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0009,000A,0201,0204,0702,0B04", outClusters:"0001,0003,0019", model:"5401393", manufacturer:"NAMRON AS", controllerType: "ZGB", deviceJoinName: 'NAMRON'] ,
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0009,000A,0201,0204,0702,0B04", outClusters:"0001,0003,0019", model:"5401397", manufacturer:"NAMRON AS", controllerType: "ZGB", deviceJoinName: 'NAMRON'] ,  // @tomas
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0009,000A,0201,0204,0702,0B04", outClusters:"0001,0003,0019", model:"5401394", manufacturer:"NAMRON AS", controllerType: "ZGB", deviceJoinName: 'NAMRON'] ,
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0009,000A,0201,0204,0702,0B04", outClusters:"0001,0003,0019", model:"5401398", manufacturer:"NAMRON AS", controllerType: "ZGB", deviceJoinName: 'NAMRON'] ,  // @tomas
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0009,000A,0201,0204,0702,0B04", outClusters:"0001,0003,0019", model:"5401395", manufacturer:"NAMRON AS", controllerType: "ZGB", deviceJoinName: 'NAMRON'] ,
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0009,000A,0201,0204,0702,0B04", outClusters:"0001,0003,0019", model:"5401399", manufacturer:"NAMRON AS", controllerType: "ZGB", deviceJoinName: 'NAMRON'] ,
+                [profileId:'0104', endpointId:'19', inClusters:'0000,0003,0201,0204,0405', outClusters:'0402', model:'ST218', manufacturer:'Stelpro', deviceJoinName: 'Stelpro SORB ORLÉANS fan heater']
             ],
-            commands      : [resetStats:'resetStats', refresh:'refresh', initialize:'initialize', updateAllPreferences: 'updateAllPreferences', resetPreferencesToDefaults:'resetPreferencesToDefaults', validateAndFixPreferences:'validateAndFixPreferences',
-                              factoryResetThermostat:'factoryResetThermostat', sendSupportedThermostatModes: 'sendSupportedThermostatModes', refreshAll: 'refreshAll', configureNamron:'configureNamron'
-            ],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize'],
             attributes    : [
-                [at:'0x0201:0x0000',  name:'temperature',              type:'decimal', dt:'0x29', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', description:'Measured room temperature'],
-                [at:'0x0201:0x0010',  name:'calibrationTemp',          type:'decimal', dt:'0x28', rw: 'rw', min:-3.0, max:3.0,  defVal:0.0, step:0.1, scale:10,  unit:'°C', title: '<b>Local Temperature Calibration</b>', description:'Room temperature calibration'],
-                [at:'0x0201:0x0011',  name:'coolingSetpoint',          type:'decimal', dt:'0x29', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Cooling Setpoint</b>',              description:'This system is not invalid'],                      // not used
-                [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt:'0x29', rw: 'rw', min:5.0,  max:35.0, defVal:30.0, step:0.01, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
-                [at:'0x0201:0x001B',  name:'controlSequenceOfOperation', type:'enum',  dt:'0x30', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 2: 'heat'], unit:'',  description:'device supported operation type'],
-                [at:'0x0201:0x001C',  name:'thermostatMode',           type:'enum',    dt:'0x30', rw: 'rw', map:[0: 'off', 1: 'auto', 4: 'heat', 8: 'emergency heat'], title: '<b>Thermostat Mode</b>', description:'Thermostat (System) Mode'],
-                [at:'0x0201:0x0020',  name:'startOfWeek',              type:'enum',    dt:'0x30', rw: 'rw', map:[0: 'Sun', 1: 'Mon'], title: '<b>Start Of Week</b>', description:'Start of week'],
-                [at:'0x0201:0x0021',  name:'numberOfWeeklyTransitions',type:'enum',    dt:'0x30', rw: 'ro', map:[0: '7 transitions'], title: '<b>Number of Weekly Transitions</b>', description:'Number of weekly transitions'],
-                [at:'0x0201:0x0022',  name:'numberOfDailyTransitions', type:'enum',    dt:'0x30', rw: 'ro', map:[0: '4 time periods'], title: '<b>Number of Daily Transitions</b>', description:'Number of daily transitions'],
-                [at:'0x0201:0x0029',  name:'thermostatOperatingState', type:'enum',    dt:'0x30', rw: 'ro', min:0,    max:1,    step:1,  scale:1,    map:[0: 'idle', 1: 'heating'], unit:'',  description:'Thermostat Operating State (relay on/off status)'],
-                // Thermostat User Interface Configuration-0x0204(Server)
-                [at:'0x0204:0x0000',  name:'temperatureDisplayMode',   type:'enum',    dt:'0x30', rw: 'ro', map:[0: 'Temperature in °C'], description:'Temperature display mode'],
-                [at:'0x0204:0x0001',  name:'childLock',                type:'enum',    dt:'0x30', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'on'], unit:'', title: '<b>Child Lock</b>', description:'Keyboard lockout'],
-                // Proprietary Attributes: Manufacturer code 0x1224
-                [at:'0x0201:0x1000',  name:'lcdBrightnesss',           type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:1,    max:7, defVal:'1', map:[1: 'Level 1', 2: 'Level 2', 3: 'Level 3', 4: 'Level 4', 5: 'Level 5', 6: 'Level 6', 7: 'Level 7'], unit:'',  title: '<b>OLED brightness</b>', description:'OLED brightness'],
-                [at:'0x0201:0x1001',  name:'displayAutoOffActivation', type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'0', map:[0: 'deactivated', 1: 'activated'], title: '<b>Display Auto Off Activation</b>', description:'Display auto off activation'],
-                [at:'0x0201:0x1004',  name:'powerUpStatus',            type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'1',   step:1,  scale:1,    map:[0: 'default', 1: 'last'], title: '<b>Power Up Status</b>',description:'Power Up Status'],
-                [at:'0x0201:0x1009',  name:'windowOpenCheckActivation', type:'enum',   dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'1',   step:1,  scale:1,    map:[0: 'enabled', 1: 'disabled'], title: '<b>Window Open Check Activation</b>',description:'Window open check activation'],
-                [at:'0x0201:0x100A',  name:'hysteresis',               type:'decimal', dt:'0x20',  mfgCode:'0x1224', rw: 'rw', min:0.5, max:5.0, defVal:0.5, step:0.1, scale:10,  unit:'°C', title: '<b>Hysteresis</b>', description:'Hysteresis'],
-                [at:'0x0201:0x100B',  name:'windowOpenState',          type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'ro', min:0,    max:1, defVal:'0', map:[0: 'notOpened', 1: 'opened'], title: '<b>Window Open State/b>',description:'Window open state'],
-                [at:'0x0201:0x2002',  name:'overHeatMark',             type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'ro', min:0,    max:2, defVal:'0', map:[0: 'no', 1: 'temperature over 85ºC and lower than 90ºC', 2: 'temperature over 90ºC'], description:'OoverHeatMark'],
-                // commands supported
-                [cmd:'0x0201:0x0000',  name:'setpointRaiseLower',      type:'decimal', dt:'0x21', rw: 'ow', min:5.0,  max:35.0, step:0.5, scale:10,  unit:'°C', description:'Setpoint Raise/Lower'],
-                [cmd:'0x0201:0x0001',  name:'setWeeklySchedule',       type:'decimal', dt:'0x21', rw: 'ow', description:'Set Weekly Schedule'],
-                [cmd:'0x0201:0x0002',  name:'gettWeeklySchedule',      type:'decimal', dt:'0x21', rw: 'ro', description:'Get Weekly Schedule']
+                [at:'0x0201:0x0000',  name:'temperature',              type:'decimal', dt: '0x21', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Temperature</b>',                   description:'Measured temperature'],
+                [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt: '0x21', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
+                [at:'0x0201:0x001C',  name:'systemMode',               type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b> Mode</b>',                   description:'System Mode ?'],
+                [at:'0x0201:0x001E',  name:'thermostatRunMode',        type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatRunMode</b>',                   description:'thermostatRunMode'],
+                [at:'0x0201:0x0029',  name:'thermostatOperatingState', type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatOperatingState</b>',                   description:'thermostatOperatingState'],
             ],
             supportedThermostatModes : ['off', 'heat', 'auto'],
-            supportedThermostatFanModes : ['off'],
-            refresh: ['pollThermostatCluster'],
-            deviceJoinName: 'NAMRON Radiator',
-            configuration : [:]
-    ],
-
-    // Sunricher HK-LN-HEATER-A' Zigbee Heating Thermostat SR-ZG9092A
-    'SUNRICHER'   : [       // https://www.sunricher.com/zigbee-heating-thermostat-sr-zg9092a.html#product_tabs_description_tabbed
-            description   : 'Sunricher Thermostat', // https://www.sunricher.com/media/resources/manual/SR-ZG9092A%20instruction.pdf
-            device        : [manufacturers: ['Sunricher'], type: 'TRV', powerSource: 'mains', isSleepy:false],
-            capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
-            preferences   : [calibrationTemp: '0x0201:0x0010', ecoSetPoint: '0x0201:0x0014', lcdBrightnesss:'0x0201:0x1000', keyVibration:'0x0201:0x1001', temperatureDisplayMode:'0x0201:0x1008', displayAutoOff:'0x0201:0x100B', childLock:'0x0204:0x0001',
-                             floorSensorType:'0x0201:0x1002', controlType:'0x0201:0x1003', powerUpStatus:'0x0201:0x1004', floorCalibrationTemp:'0x0201:0x1005', emergencyHeatTime:'0x0201:0x1006', modeAfterDry:'0x0201:0x1007', windowOpenCheck:'0x0201:0x1009', hysteresis:'0x0201:0x100A',
-                             overHeatAlarm:'0x0201:0x2001'/*, ecoMode:'0x0201:0x2002' */// remove ecoMode after testing!
-                             ],
-            fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0009,000A,0201,0204,0702,0B04", outClusters:"0003,0019", model:"HK-LN-HEATER-A", manufacturer:"Sunricher", controllerType: "ZGB", deviceJoinName: 'Sunricher HK-LN-HEATER-A'] , //Sunricher Thermostat
-            ],
-            commands      : [tesT:'testT', resetStats:'resetStats', refresh:'refresh', initialize:'initialize', updateAllPreferences: 'updateAllPreferences', resetPreferencesToDefaults:'resetPreferencesToDefaults', validateAndFixPreferences:'validateAndFixPreferences',
-                              factoryResetThermostat:'factoryResetThermostat', sendSupportedThermostatModes: 'sendSupportedThermostatModes', refreshAll: 'refreshAll', configureNamron:'configureNamron'
-            ],
-            attributes    : [
-                [at:'0x0201:0x0000',  name:'temperature',              type:'decimal', dt:'0x29', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', description:'Measured room temperature'],
-                [at:'0x0201:0x0001',  name:'floorTemperature',         type:'decimal', dt:'0x29', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C',  description:'Floor temperature'],
-                [at:'0x0201:0x0002',  name:'occupancy',                type:'enum',    dt:'0x30', rw: 'ro', min:0,    max:1,    step:1,  scale:1,    map:[0: 'away', 1: 'heat'], unit:'',  description:'Occupancy'],    // When this flag is set as 1, it means occupied, OccupiedHeatingSetpoint will be used, otherwise UnoccupiedHeatingSetpoint will be used.                                                          // ^^^ (bitmap8, read-only) Occupancy : When this flag is set as 1, it means occupied, OccupiedHeatingSetpoint will be used, otherwise UnoccupiedHeatingSetpoint will be used
-                [at:'0x0201:0x0010',  name:'calibrationTemp',          type:'decimal', dt:'0x28', rw: 'rw', min:-3.0, max:3.0,  defVal:0.0, step:0.1, scale:10,  unit:'°C', title: '<b>Local Temperature Calibration</b>', description:'Room temperature calibration'],
-                [at:'0x0201:0x0011',  name:'coolingSetpoint',          type:'decimal', dt:'0x29', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Cooling Setpoint</b>',              description:'This system is not invalid'],
-                [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt:'0x29', rw: 'rw', min:0.0,  max:40.0, defVal:30.0, step:0.01, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
-                [at:'0x0201:0x0014',  name:'ecoSetPoint',             type:'decimal', dt:'0x29', rw: 'rw', min:0.0,  max:40.0, defVal:6.0,  step:0.01, scale:100,  unit:'°C', title: '<b>Eco (Away) Heating Setpoint</b>',    description:'Away (Eco, unoccupied) heating setpoint'],
-                [at:'0x0201:0x001B',  name:'controlSequenceOfOperation', type:'enum',  dt:'0x30', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 2: 'heat'], unit:'',  description:'device supported operation type'],  // always 2 (heat)
-                [at:'0x0201:0x001C',  name:'thermostatMode',           type:'enum',    dt:'0x30', rw: 'rw', map:[0: 'off', 1: 'auto', 4: 'heat', 8: 'emergency heat'], title: '<b>Thermostat Mode</b>', description:'Thermostat (System) Mode'],
-                [at:'0x0201:0x0029',  name:'thermostatOperatingState', type:'enum',    dt:'0x30', rw: 'ro', min:0,    max:1,    step:1,  scale:1,    map:[0: 'idle', 1: 'heating'], unit:'',  description:'Thermostat Operating State (relay on/off status)'],
-                // Thermostat User Interface Configuration-0x0204(Server)
-                [at:'0x0204:0x0000',  name:'temperatureDisplayMode2',   type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'0',   step:1,  scale:1,    map:[0: 'room Temp', 1: 'floor temp'], unit:'',  title: '<b>Temperature Display</b>',description:'Temperature Display'],
-                [at:'0x0204:0x0001',  name:'childLock',                type:'enum',    dt:'0x30', rw: 'rw', min:0,    max:1,    step:1,  scale:1,  defVal:'0',  map:[0: 'off', 1: 'on'], unit:'', title: '<b>Child Lock</b>', description:'Keyboard lockout'],
-                // Proprietary Attributes: Manufacturer code 0x1224
-                [at:'0x0201:0x1000',  name:'lcdBrightnesss',           type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:2, defVal:'1',   step:1,  scale:1,    map:[0: 'low Level', 1: 'mid Level', 2: 'high Level'], unit:'',  title: '<b>OLED brightness</b>', description:'OLED brightness when operating the buttons'],
-                [at:'0x0201:0x1001',  name:'keyVibration',             type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:2, defVal:'1',   step:1,  scale:1,    map:[0: 'off', 1: 'low level', 2: 'high Level'], unit:'',  title: '<b>Key Vibration</b>', description:'Key beep volume & vibration level'],
-                [at:'0x0201:0x1002',  name:'floorSensorType',          type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:1,    max:5, defVal:'1', advanced:true,         map:[1: 'NTC 10K/25', 2: 'NTC 15K/25', 3: 'NTC 12K/25', 4: 'NTC 100K/25', 5: 'NTC 50K/25'], unit:'',  title: '<b>Floor Sensor Type</b>', description:'External (Floor) sensor type'],
-                [at:'0x0201:0x1003',  name:'controlType',              type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:2, defVal:'0', advanced:true,         map:[0: 'room sensor', 1: 'floor sensor', 2: 'room+floor sensor'], unit:'',  title: '<b>Control Type</b>', description:'The referring sensor for heat control'],
-                [at:'0x0201:0x1004',  name:'powerUpStatus',            type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'1',   step:1,  scale:1,    map:[0: 'default', 1: 'last'], title: '<b>Power Up Status</b>',description:'The mode after reset power of the device'],
-                [at:'0x0201:0x1005',  name:'floorCalibrationTemp',     type:'decimal', dt:'0x28',  mfgCode:'0x1224', rw: 'rw', min:-3.0,  max:3.0, defVal:0.0, step:0.1, scale:10,  unit:'°C', title: '<b>Floor Sensor Calibration</b>', description:'The temp compensation for the external (floor) sensor'],                                                // ^^^ (Int8S, reportable) TODO: check dt!!!    FloorSenserCalibration The temp compensation for the external (floor) sensor, range is -30-30, unit is 0.1°C. default value 0
-                [at:'0x0201:0x1006',  name:'emergencyHeatTime',        type:'number',  dt:'0x20',  mfgCode:'0x1224', rw: 'rw', min:5,  max:100, defVal:5, step:1, scale:1,  unit:'minutes', title: '<b>Emergency Heat Time</b>', description:'The duration of Emergency Heat time (Dry) time)>'],                                    // ^^^ (Int8S, reportable) TODO: check dt!!!    DryTime The duration of Dry Mode, range is 5-100, unit is min. Default value is 5.
-                [at:'0x0201:0x1007',  name:'modeAfterDry',             type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:3, defVal:'1', advanced:true,         map:[0: 'off', 1: 'manual', 2: 'auto', 3: 'eco'], unit:'',  title: '<b>Mode After Emergency Heat (Dry) mode</b>', description:'The mode the thermostat will switch automatically after the Emergency Heat (Dry) Mode'],   // ^^^ (ENUM8,reportable) TODO: check dt!!! ModeAfterDry The mode after Dry Mode: Value=0 : OFF Value=1 : Manual mode Value=2 : Auto mode –schedule (default) Value=3 : Away mode
-                [at:'0x0201:0x1008',  name:'temperatureDisplayMode',   type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'0',   step:1,  scale:1,    map:[0: 'room Temp', 1: 'floor temp'], unit:'',  title: '<b>Temperature Display</b>',description:'Temperature Display, default is room temp'],                         // ^^^ (ENUM8,reportable) TODO: check dt!!! TemperatureDisplay Value=0 : Room Temp (Default) Value=1 : Floor Temp
-                [at:'0x0201:0x1009',  name:'windowOpenCheck',          type:'decimal', dt:'0x20',  mfgCode:'0x1224', rw: 'rw', min:0.0, max:8.0, defVal:0.0, step:0.5, scale:10,  unit:'°C', title: '<b>Window Open Check</b>', description:'The threshold to detect open window, 0 means disabled'],                               // ^^^ (INT8U,reportable) TODO: check dt!!!    WindowOpenCheck The threshold to detect open window, range is 0.3-8, unit is 0.5ºC, 0 means disabled, default is 0
-                [at:'0x0201:0x100A',  name:'hysteresis',               type:'decimal', dt:'0x20',  mfgCode:'0x1224', rw: 'rw', min:0.5, max:2.0, defVal:0.5, step:0.1, scale:10,  unit:'°C', title: '<b>Hysteresis</b>', description:'Hysteresis setting'],                                                                                 // ^^^ (INT8U,reportable) TODO: check dt!!!  TODO - check the scailing !!!  Hysteresis setting, range is 5-20, unit is 0.1ºC, default value is 5
-                [at:'0x0201:0x100B',  name:'displayAutoOff',           type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'0',   step:1,  scale:1,    map:[0: 'disabled', 1: 'enabled'], unit:'',  title: '<b>Display Auto Off</b>',description:'Display Auto Off disable/enable'],                    // ^^^ (ENUM8,reportable) TODO: check dt!!!  DisplayAutoOffEnable 0, disable Display Auto Off function 1, enable Display Auto Off function
-                [at:'0x0201:0x2001',  name:'overHeatAlarm',            type:'decimal', dt:'0x21',  mfgCode:'0x1224', rw: 'rw', min:0.0, max:35.0, defVal:27.0, step:1, scale:1, advanced:true, unit:'°C', title: '<b>Over Heat Alarm</b>', description:'Floor temperature over heating threshold, 0 means disabled,'],                                  // ^^^ (INT8U,reportable) TODO: check dt!!!  TODO - check the scailing !!!  AlarmAirTempOverValue Room temp alarm threshold, range is 0.20-60, unit is 1ºC,0 means disabled, default is 45
-                [at:'0x0201:0x2002',  name:'ecoMode',                  type:'enum',    dt:'0x30',  mfgCode:'0x1224', rw: 'rw', min:0,    max:1, defVal:'0',   step:1,  scale:1,    map:[0: 'off', 1: 'on'], unit:'',  title: '<b>Eco (Away) Mode</b>', description:'Eco (Away) Mode'],                                            // ^^^ (ENUM8,reportable) TODO: check dt!!!  Away Mode Set: Value=1: away Value=0: not away (default)
-            ],
-            supportedThermostatModes : ['off', 'heat', 'auto', 'emergency heat', 'eco'],
-            supportedThermostatFanModes : ['off'],
-            refresh: ['pollThermostatCluster'/*, 'pollOccupancy'*/],
-            deviceJoinName: 'Sunricher Thermostat',
+            refresh: ['pollThermostatCluster'], // in thermostatLib
+            deviceJoinName: 'Stelpro SORB ORLÉANS fan heater',
             configuration : [:]
     ],
 
@@ -284,10 +278,34 @@ metadata {
             description   : '--------------------------------------',
     ],
 
+    'VIRTUAL'   : [        // https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/virtualThermostat.groovy
+            description   : 'Virtual thermostat',
+            device        : [type: 'TRV', powerSource: 'unknown', isSleepy:false],
+            capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
+            preferences   : ['hysteresis':'hysteresis', 'minHeatingSetpoint':'minHeatingSetpoint', 'maxHeatingSetpoint':'maxHeatingSetpoint', 'simulateThermostatOperatingState':'simulateThermostatOperatingState'],
+            commands      : ['printFingerprints':'printFingerprints', 'sendSupportedThermostatModes':'sendSupportedThermostatModes', 'autoPollThermostat':'autoPollThermostat', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            attributes    : [
+                [at:'hysteresis',          name:'hysteresis',       type:'enum',    dt:'virtual', rw:'rw',  min:0,   max:4,    defaultValue:'3',  step:1,  scale:1,  map:[0:'0.1', 1:'0.25', 2:'0.5', 3:'1', 4:'2'],   unit:'', title:'<b>Hysteresis</b>',  description:'<i>hysteresis</i>'],
+                [at:'minHeatingSetpoint',  name:'minHeatingSetpoint',    type:'decimal', dt:'virtual', rw:'rw', min:4.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Min Heating Setpoint</b>', description:'<i>Min Heating Setpoint Limit</i>'],
+                [at:'maxHeatingSetpoint',  name:'maxHeatingSetpoint',    type:'decimal', dt:'virtual', rw:'rw', min:4.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Max Heating Setpoint</b>', description:'<i>Max Heating Setpoint Limit</i>'],
+                [at:'thermostatMode',      name:'thermostatMode',   type:'enum',    dt:'virtual', rw:'rw',  min:0,    max:5,    defaultValue:'0',  step:1,  scale:1,  map:[0: 'heat', 1: 'auto', 2: 'eco', 3:'emergency heat', 4:'off', 5:'cool'],            unit:'', title: '<b>Thermostat Mode</b>',           description:'<i>Thermostat Mode</i>'],
+                [at:'heatingSetpoint',     name:'heatingSetpoint',  type:'decimal', dt:'virtual', rw: 'rw', min:5.0, max:45.0, defaultValue:20.0, step:0.5, scale:1,  unit:'°C',  title: '<b>Current Heating Setpoint</b>',      description:'<i>Current heating setpoint</i>'],
+                [at:'coolingSetpoint',     name:'coolingSetpoint',  type:'decimal', dt:'virtual', rw: 'rw', min:5.0, max:45.0, defaultValue:20.0, step:0.5, scale:1,  unit:'°C',  title: '<b>Current Cooling Setpoint</b>',      description:'<i>Current cooling setpoint</i>'],
+                [at:'thermostatOperatingState',  name:'thermostatOperatingState', type:'enum', dt:'virtual', rw:'ro', min:0,    max:1,    step:1,  scale:1,    map:[0: 'idle', 1: 'heating'], unit:'',  description:'<i>termostatRunningState (relay on/off status)</i>'],   // read only!
+                [at:'simulateThermostatOperatingState',  name:'simulateThermostatOperatingState', type:'enum',    dt: 'virtual', rw: 'rw', min:0,    max:1,   defaultValue:'0',  step:1,  scale:1,    map:[0: 'off', 1: 'on'], unit:'',         title: '<b>Simulate Thermostat Operating State</b>',      \
+                             description:'<i>Simulate the thermostat operating state<br>* idle - when the temperature is less than the heatingSetpoint<br>* heat - when the temperature is above tha heatingSetpoint</i>'],
+
+            ],
+            //refresh: ['pollTuya', 'pollTuya'],
+            supportedThermostatModes: ['auto', 'heat', 'emergency heat', 'eco', 'off', 'cool'],
+            deviceJoinName: 'Virtual thermostat',
+            configuration : [:]
+    ],
+
     // TODO = check constants! https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/constants.ts#L17
     'GENERIC_ZIGBEE_THERMOSTAT' : [
             description   : 'Generic Zigbee Thermostat',
-            device        : [type: 'TRV', powerSource: 'battery', isSleepy:false],
+            device        : [type: 'Thermostat', powerSource: 'battery', isSleepy:false],
             capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
             preferences   : [:],
             fingerprints  : [],
@@ -298,13 +316,13 @@ metadata {
                 [at:'0x0201:0x0000',  name:'temperature',              type:'decimal', dt: '0x21', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Temperature</b>',                   description:'Measured temperature'],
                 [at:'0x0201:0x0011',  name:'coolingSetpoint',          type:'decimal', dt: '0x21', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Cooling Setpoint</b>',              description:'cooling setpoint'],
                 [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt: '0x21', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
-                [at:'0x0201:0x001C',  name:'thermostatMode',           type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'auto', 2:'unknown_2', 4:'heat', 8:'emergency heat'], unit:'', title: '<b>thermostatMode</b>', description:'System Mode ?'],
+                [at:'0x0201:0x001C',  name:'systemMode',                     type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b> Mode</b>',                   description:'System Mode ?'],
                 [at:'0x0201:0x001E',  name:'thermostatRunMode',        type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatRunMode</b>',                   description:'thermostatRunMode'],
                 [at:'0x0201:0x0020',  name:'battery2',                 type:'number',  dt: '0x21', rw: 'ro', min:0,    max:100,  step:1,  scale:1,    unit:'%',  description:'Battery percentage remaining'],
                 [at:'0x0201:0x0023',  name:'thermostatHoldMode',       type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatHoldMode</b>',                   description:'thermostatHoldMode'],
                 [at:'0x0201:0x0029',  name:'thermostatOperatingState', type:'enum',    dt: '0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatOperatingState</b>',                   description:'thermostatOperatingState'],
             ],
-            refresh: ['pollThermostatCluster'],
+            refresh: ['pollThermostatCluster'], // in thermostatLib
             deviceJoinName: 'Generic Zigbee Thermostat',
             configuration : [:]
     ]
@@ -466,69 +484,86 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
         case 'temperature' :
             handleTemperatureEvent(valueScaled as Float)
             break
-        case 'floorTemperature' :
-            eventMap.value = Math.round(valueScaled * 10) / 10
-            eventMap.unit = '°C'
-            sendThermostatEvent(eventMap)
-            break
         case 'humidity' :
             handleHumidityEvent(valueScaled)
             break
         case 'heatingSetpoint' :
             sendHeatingSetpointEvent(valueScaled)
-            state.lastHeatingSetpoint = valueScaled
             break
-        case 'thermostatMode' :  // changed 09/01/2024 (0x0201:0x001c)
-            if (device.currentValue('ecoMode') == 'on' && valueScaled != 'off') {
-                logWarn "customProcessDeviceProfileEvent: ignoring the thermostatMode <b>${valueScaled}</b> event, because the ecoMode is on!"
+        case 'systemMode' : // Aqara E1 and AVATTO thermostat (off/on)
+            sendEvent(eventMap)
+            logInfo "${descText}"
+            if (valueScaled == 'on') {  // should be initialized with 'unknown' value
+                String lastThermostatMode = state.lastThermostatMode
+                sendEvent(name: 'thermostatMode', value: lastThermostatMode, isStateChange: true, description: 'TRV systemMode is on', type: 'digital')
             }
             else {
-                sendThermostatEvent(eventMap)
+                sendEvent(name: 'thermostatMode', value: 'off', isStateChange: true, description: 'TRV systemMode is off', type: 'digital')
+            }
+            break
+        case 'thermostatMode' :  // AVATTO send the thermostat mode a second after being switched off - ignore it !
+            if (device.currentValue('systemMode') == 'off' ) {
+                logWarn "customProcessDeviceProfileEvent: ignoring the thermostatMode <b>${valueScaled}</b> event, because the systemMode is off"
+            }
+            else {
+                sendEvent(eventMap)
+                logInfo "${descText}"
                 state.lastThermostatMode = valueScaled
             }
             break
-        case 'ecoMode' :    // changed 09/01/2024
-            logTrace "ecoMode = ${valueScaled}"
-            sendThermostatEvent(eventMap)
+        case 'ecoMode' :    // BRT-100 - simulate OFF mode ?? or keep the ecoMode on ?
+            sendEvent(eventMap)
+            logInfo "${descText}"
             if (valueScaled == 'on') {  // ecoMode is on
-                sendThermostatEvent([name: 'thermostatMode', value: 'eco', isStateChange: true, descriptionText: 'thermostatMode is eco (eco on)', type: 'digital'])
+                sendEvent(name: 'thermostatMode', value: 'eco', isStateChange: true, description: 'BRT-100 ecoMode is on', type: 'digital')
+                sendEvent(name: 'thermostatOperatingState', value: 'idle', isStateChange: true, description: 'BRT-100 ecoMode is on', type: 'digital')
                 state.lastThermostatMode = 'eco'
-                // added 09/01/2024
-                Float ecoSetpoint = device.currentValue('ecoSetPoint') as Float ?: 6.0
-                sendThermostatEvent([name: 'heatingSetpoint',    value: ecoSetpoint, isStateChange: true, descriptionText: 'heatingSetpoint is ecoSetpoint', type: 'digital'])
-                sendThermostatEvent([name: 'thermostatSetpoint', value: ecoSetpoint, isStateChange: true, descriptionText: 'thermostatSetpoint is ecoSetpoint', type: 'digital'])
             }
             else {
-                sendThermostatEvent([name: 'thermostatMode', value: 'heat', isStateChange: true, descriptionText: 'thermostatMode is heat (eco off)', type: 'digital'])
+                sendEvent(name: 'thermostatMode', value: 'heat', isStateChange: true, description: 'BRT-100 ecoMode is off')
                 state.lastThermostatMode = 'heat'
-                // added 09/01/2024
-                Float lastHeatingSetpoint = state.lastHeatingSetpoint as Float ?: 20.0
-                sendThermostatEvent([name: 'heatingSetpoint',    value: state.lastHeatingSetpoint, isStateChange: true, descriptionText: 'heatingSetpoint is lastHeatingSetpoint', type: 'digital'])
-                sendThermostatEvent([name: 'thermostatSetpoint', value: state.lastHeatingSetpoint, isStateChange: true, descriptionText: 'thermostatSetpoint is lastHeatingSetpoint', type: 'digital'])
             }
             break
-        case 'ecoSetPoint' :
-            sendThermostatEvent(eventMap)
-            if (device.currentValue('ecoMode') == 'on') {
-                sendThermostatEvent([name: 'heatingSetpoint', value: valueScaled, isStateChange: true, descriptionText: 'heatingSetpoint is ecoSetpoint', type: 'digital'])
-                sendThermostatEvent([name: 'thermostatSetpoint', value: valueScaled, isStateChange: true, descriptionText: 'thermostatSetpoint is ecoSetpoint', type: 'digital'])
-            }
-            break
-        case 'emergencyHeating' :
+
+        case 'emergencyHeating' :   // BRT-100
             sendEvent(eventMap)
             logInfo "${descText}"
             if (valueScaled == 'on') {  // the valve shoud be completely open, however the level and the working states are NOT updated! :(
-                sendEvent(name: 'thermostatMode', value: 'emergency heat', isStateChange: true, descriptionText: 'emergencyHeating is on')
-                sendEvent(name: 'thermostatOperatingState', value: 'heating', isStateChange: true, descriptionText: 'emergencyHeating is on')
+                sendEvent(name: 'thermostatMode', value: 'emergency heat', isStateChange: true, description: 'BRT-100 emergencyHeating is on')
+                sendEvent(name: 'thermostatOperatingState', value: 'heating', isStateChange: true, description: 'BRT-100 emergencyHeating is on')
             }
             else {
-                sendEvent(name: 'thermostatMode', value: 'heat', isStateChange: true, descriptionText: 'emergencyHeating is off')
+                sendEvent(name: 'thermostatMode', value: 'heat', isStateChange: true, description: 'BRT-100 emergencyHeating is off')
             }
             break
+        case 'level' :      // BRT-100
+            sendEvent(eventMap)
+            logInfo "${descText}"
+            if (valueScaled == 0) {  // the valve is closed
+                sendEvent(name: 'thermostatOperatingState', value: 'idle', isStateChange: true, description: 'BRT-100 valve is closed')
+            }
+            else {
+                sendEvent(name: 'thermostatOperatingState', value: 'heating', isStateChange: true, description: 'BRT-100 valve is open %{valueScaled} %')
+            }
+            break
+            /*
+        case "workingState" :      // BRT-100   replaced with thermostatOperatingState
+            sendEvent(eventMap)
+            logInfo "${descText}"
+            if (valueScaled == "closed") {  // the valve is closed
+                sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: "BRT-100 workingState is closed")
+            }
+            else {
+                sendEvent(name: "thermostatOperatingState", value: "heating", isStateChange: true, description: "BRT-100 workingState is open")
+            }
+            break
+            */
         default :
             sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
+                //if (!doNotTrace) {
             logDebug "event ${name} sent w/ value ${valueScaled}"
             logInfo "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy DPs ?
+            //}
             break
     }
 }
@@ -536,17 +571,15 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.LocalDateTime
-
 void testT(String par) {
-
+    logWarn "testT(${par}) called"
     List<String> cmds = []
-
     cmds =   ["he raw 0x${device.deviceNetworkId} 1 1 0x000a {40 01 01 00 00 00 e2 78 83 1f 2e       07 00  00    23      a8 ad 1f 2e}", "delay 200",]
-
     sendZigbeeCommands(cmds)
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
+
 
 // ~~~~~ start include (144) kkossev.commonLib ~~~~~
 /* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, InsecureRandom, LineLength, MethodCount, MethodReturnTypeRequired, MethodSize, NglParseError, NoDouble, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnnecessaryPackageReference, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport, UnusedPrivateMethod, VariableName */ // library marker kkossev.commonLib, line 1
@@ -2152,6 +2185,196 @@ static String timeToHMS(final int time) { // library marker kkossev.commonLib, l
 } // library marker kkossev.commonLib, line 1601
 
 // ~~~~~ end include (144) kkossev.commonLib ~~~~~
+
+// ~~~~~ start include (171) kkossev.batteryLib ~~~~~
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoJavaUtilDate, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */ // library marker kkossev.batteryLib, line 1
+library( // library marker kkossev.batteryLib, line 2
+    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Battery Library', name: 'batteryLib', namespace: 'kkossev', // library marker kkossev.batteryLib, line 3
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/batteryLib.groovy', documentationLink: '', // library marker kkossev.batteryLib, line 4
+    version: '3.2.2' // library marker kkossev.batteryLib, line 5
+) // library marker kkossev.batteryLib, line 6
+/* // library marker kkossev.batteryLib, line 7
+ *  Zigbee Level Library // library marker kkossev.batteryLib, line 8
+ * // library marker kkossev.batteryLib, line 9
+ *  Licensed Virtual the Apache License, Version 2.0 // library marker kkossev.batteryLib, line 10
+ * // library marker kkossev.batteryLib, line 11
+ * ver. 3.0.0  2024-04-06 kkossev  - added batteryLib.groovy // library marker kkossev.batteryLib, line 12
+ * ver. 3.0.1  2024-04-06 kkossev  - customParsePowerCluster bug fix // library marker kkossev.batteryLib, line 13
+ * ver. 3.0.2  2024-04-14 kkossev  - batteryPercentage bug fix (was x2); added bVoltCtr; added battertRefresh // library marker kkossev.batteryLib, line 14
+ * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment; added lastBattery; added handleTuyaBatteryLevel // library marker kkossev.batteryLib, line 15
+ * ver. 3.2.1  2024-07-06 kkossev  - added tuyaToBatteryLevel and handleTuyaBatteryLevel; added batteryInitializeVars // library marker kkossev.batteryLib, line 16
+ * ver. 3.2.2  2024-07-18 kkossev  - added BatteryVoltage and BatteryDelay device capability checks // library marker kkossev.batteryLib, line 17
+ * // library marker kkossev.batteryLib, line 18
+ *                                   TODO:  // library marker kkossev.batteryLib, line 19
+ *                                   TODO: battery voltage low/high limits configuration // library marker kkossev.batteryLib, line 20
+*/ // library marker kkossev.batteryLib, line 21
+
+static String batteryLibVersion()   { '3.2.2' } // library marker kkossev.batteryLib, line 23
+static String batteryLibStamp() { '2024/07/18 2:34 PM' } // library marker kkossev.batteryLib, line 24
+
+metadata { // library marker kkossev.batteryLib, line 26
+    capability 'Battery' // library marker kkossev.batteryLib, line 27
+    attribute  'batteryVoltage', 'number' // library marker kkossev.batteryLib, line 28
+    attribute  'lastBattery', 'date'         // last battery event time - added in 3.2.0 05/21/2024 // library marker kkossev.batteryLib, line 29
+    // no commands // library marker kkossev.batteryLib, line 30
+    preferences { // library marker kkossev.batteryLib, line 31
+        if (device && advancedOptions == true) { // library marker kkossev.batteryLib, line 32
+            if ('BatteryVoltage' in DEVICE?.capabilities) { // library marker kkossev.batteryLib, line 33
+                input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: 'Convert battery voltage to battery Percentage remaining.' // library marker kkossev.batteryLib, line 34
+            } // library marker kkossev.batteryLib, line 35
+            if ('BatteryDelay' in DEVICE?.capabilities) { // library marker kkossev.batteryLib, line 36
+                input(name: 'batteryDelay', type: 'enum', title: '<b>Battery Events Delay</b>', description:'Select the Battery Events Delay<br>(default is <b>no delay</b>)', options: DelayBatteryOpts.options, defaultValue: DelayBatteryOpts.defaultValue) // library marker kkossev.batteryLib, line 37
+            } // library marker kkossev.batteryLib, line 38
+        } // library marker kkossev.batteryLib, line 39
+    } // library marker kkossev.batteryLib, line 40
+} // library marker kkossev.batteryLib, line 41
+
+@Field static final Map DelayBatteryOpts = [ defaultValue: 0, options: [0: 'No delay', 30: '30 seconds', 3600: '1 hour', 14400: '4 hours', 28800: '8 hours', 43200: '12 hours']] // library marker kkossev.batteryLib, line 43
+
+public void standardParsePowerCluster(final Map descMap) { // library marker kkossev.batteryLib, line 45
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.batteryLib, line 46
+    final int rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.batteryLib, line 47
+    if (descMap.attrId == '0020') { // battery voltage // library marker kkossev.batteryLib, line 48
+        state.lastRx['batteryTime'] = new Date().getTime() // library marker kkossev.batteryLib, line 49
+        state.stats['bVoltCtr'] = (state.stats['bVoltCtr'] ?: 0) + 1 // library marker kkossev.batteryLib, line 50
+        sendBatteryVoltageEvent(rawValue) // library marker kkossev.batteryLib, line 51
+        if ((settings.voltageToPercent ?: false) == true) { // library marker kkossev.batteryLib, line 52
+            sendBatteryVoltageEvent(rawValue, convertToPercent = true) // library marker kkossev.batteryLib, line 53
+        } // library marker kkossev.batteryLib, line 54
+    } // library marker kkossev.batteryLib, line 55
+    else if (descMap.attrId == '0021') { // battery percentage // library marker kkossev.batteryLib, line 56
+        state.lastRx['batteryTime'] = new Date().getTime() // library marker kkossev.batteryLib, line 57
+        state.stats['battCtr'] = (state.stats['battCtr'] ?: 0) + 1 // library marker kkossev.batteryLib, line 58
+        if (isTuya()) { // library marker kkossev.batteryLib, line 59
+            sendBatteryPercentageEvent(rawValue) // library marker kkossev.batteryLib, line 60
+        } // library marker kkossev.batteryLib, line 61
+        else { // library marker kkossev.batteryLib, line 62
+            sendBatteryPercentageEvent((rawValue / 2) as int) // library marker kkossev.batteryLib, line 63
+        } // library marker kkossev.batteryLib, line 64
+    } // library marker kkossev.batteryLib, line 65
+    else { // library marker kkossev.batteryLib, line 66
+        logWarn "customParsePowerCluster: zigbee received unknown Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.batteryLib, line 67
+    } // library marker kkossev.batteryLib, line 68
+} // library marker kkossev.batteryLib, line 69
+
+public void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false) { // library marker kkossev.batteryLib, line 71
+    logDebug "batteryVoltage = ${(double)rawValue / 10.0} V" // library marker kkossev.batteryLib, line 72
+    final Date lastBattery = new Date() // library marker kkossev.batteryLib, line 73
+    Map result = [:] // library marker kkossev.batteryLib, line 74
+    BigDecimal volts = safeToBigDecimal(rawValue) / 10G // library marker kkossev.batteryLib, line 75
+    if (rawValue != 0 && rawValue != 255) { // library marker kkossev.batteryLib, line 76
+        BigDecimal minVolts = 2.2 // library marker kkossev.batteryLib, line 77
+        BigDecimal maxVolts = 3.2 // library marker kkossev.batteryLib, line 78
+        BigDecimal pct = (volts - minVolts) / (maxVolts - minVolts) // library marker kkossev.batteryLib, line 79
+        int roundedPct = Math.round(pct * 100) // library marker kkossev.batteryLib, line 80
+        if (roundedPct <= 0) { roundedPct = 1 } // library marker kkossev.batteryLib, line 81
+        if (roundedPct > 100) { roundedPct = 100 } // library marker kkossev.batteryLib, line 82
+        if (convertToPercent == true) { // library marker kkossev.batteryLib, line 83
+            result.value = Math.min(100, roundedPct) // library marker kkossev.batteryLib, line 84
+            result.name = 'battery' // library marker kkossev.batteryLib, line 85
+            result.unit  = '%' // library marker kkossev.batteryLib, line 86
+            result.descriptionText = "battery is ${roundedPct} %" // library marker kkossev.batteryLib, line 87
+        } // library marker kkossev.batteryLib, line 88
+        else { // library marker kkossev.batteryLib, line 89
+            result.value = volts // library marker kkossev.batteryLib, line 90
+            result.name = 'batteryVoltage' // library marker kkossev.batteryLib, line 91
+            result.unit  = 'V' // library marker kkossev.batteryLib, line 92
+            result.descriptionText = "battery is ${volts} Volts" // library marker kkossev.batteryLib, line 93
+        } // library marker kkossev.batteryLib, line 94
+        result.type = 'physical' // library marker kkossev.batteryLib, line 95
+        result.isStateChange = true // library marker kkossev.batteryLib, line 96
+        logInfo "${result.descriptionText}" // library marker kkossev.batteryLib, line 97
+        sendEvent(result) // library marker kkossev.batteryLib, line 98
+        sendEvent(name: 'lastBattery', value: lastBattery) // library marker kkossev.batteryLib, line 99
+    } // library marker kkossev.batteryLib, line 100
+    else { // library marker kkossev.batteryLib, line 101
+        logWarn "ignoring BatteryResult(${rawValue})" // library marker kkossev.batteryLib, line 102
+    } // library marker kkossev.batteryLib, line 103
+} // library marker kkossev.batteryLib, line 104
+
+public void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=false) { // library marker kkossev.batteryLib, line 106
+    if ((batteryPercent as int) == 255) { // library marker kkossev.batteryLib, line 107
+        logWarn "ignoring battery report raw=${batteryPercent}" // library marker kkossev.batteryLib, line 108
+        return // library marker kkossev.batteryLib, line 109
+    } // library marker kkossev.batteryLib, line 110
+    final Date lastBattery = new Date() // library marker kkossev.batteryLib, line 111
+    Map map = [:] // library marker kkossev.batteryLib, line 112
+    map.name = 'battery' // library marker kkossev.batteryLib, line 113
+    map.timeStamp = now() // library marker kkossev.batteryLib, line 114
+    map.value = batteryPercent < 0 ? 0 : batteryPercent > 100 ? 100 : (batteryPercent as int) // library marker kkossev.batteryLib, line 115
+    map.unit  = '%' // library marker kkossev.batteryLib, line 116
+    map.type = isDigital ? 'digital' : 'physical' // library marker kkossev.batteryLib, line 117
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}" // library marker kkossev.batteryLib, line 118
+    map.isStateChange = true // library marker kkossev.batteryLib, line 119
+    // // library marker kkossev.batteryLib, line 120
+    Object latestBatteryEvent = device.currentState('battery') // library marker kkossev.batteryLib, line 121
+    Long latestBatteryEventTime = latestBatteryEvent != null ? latestBatteryEvent.getDate().getTime() : now() // library marker kkossev.batteryLib, line 122
+    //log.debug "battery latest state timeStamp is ${latestBatteryTime} now is ${now()}" // library marker kkossev.batteryLib, line 123
+    int timeDiff = ((now() - latestBatteryEventTime) / 1000) as int // library marker kkossev.batteryLib, line 124
+    if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) { // library marker kkossev.batteryLib, line 125
+        // send it now! // library marker kkossev.batteryLib, line 126
+        sendDelayedBatteryPercentageEvent(map) // library marker kkossev.batteryLib, line 127
+        sendEvent(name: 'lastBattery', value: lastBattery) // library marker kkossev.batteryLib, line 128
+    } // library marker kkossev.batteryLib, line 129
+    else { // library marker kkossev.batteryLib, line 130
+        int delayedTime = (settings?.batteryDelay as int) - timeDiff // library marker kkossev.batteryLib, line 131
+        map.delayed = delayedTime // library marker kkossev.batteryLib, line 132
+        map.descriptionText += " [delayed ${map.delayed} seconds]" // library marker kkossev.batteryLib, line 133
+        map.lastBattery = lastBattery // library marker kkossev.batteryLib, line 134
+        logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds" // library marker kkossev.batteryLib, line 135
+        runIn(delayedTime, 'sendDelayedBatteryEvent', [overwrite: true, data: map]) // library marker kkossev.batteryLib, line 136
+    } // library marker kkossev.batteryLib, line 137
+} // library marker kkossev.batteryLib, line 138
+
+private void sendDelayedBatteryPercentageEvent(Map map) { // library marker kkossev.batteryLib, line 140
+    logInfo "${map.descriptionText}" // library marker kkossev.batteryLib, line 141
+    //map.each {log.trace "$it"} // library marker kkossev.batteryLib, line 142
+    sendEvent(map) // library marker kkossev.batteryLib, line 143
+    sendEvent(name: 'lastBattery', value: map.lastBattery) // library marker kkossev.batteryLib, line 144
+} // library marker kkossev.batteryLib, line 145
+
+/* groovylint-disable-next-line UnusedPrivateMethod */ // library marker kkossev.batteryLib, line 147
+private void sendDelayedBatteryVoltageEvent(Map map) { // library marker kkossev.batteryLib, line 148
+    logInfo "${map.descriptionText}" // library marker kkossev.batteryLib, line 149
+    //map.each {log.trace "$it"} // library marker kkossev.batteryLib, line 150
+    sendEvent(map) // library marker kkossev.batteryLib, line 151
+    sendEvent(name: 'lastBattery', value: map.lastBattery) // library marker kkossev.batteryLib, line 152
+} // library marker kkossev.batteryLib, line 153
+
+public int tuyaToBatteryLevel(int fncmd) { // library marker kkossev.batteryLib, line 155
+    int rawValue = fncmd // library marker kkossev.batteryLib, line 156
+    switch (fncmd) { // library marker kkossev.batteryLib, line 157
+        case 0: rawValue = 100; break // Battery Full // library marker kkossev.batteryLib, line 158
+        case 1: rawValue = 75;  break // Battery High // library marker kkossev.batteryLib, line 159
+        case 2: rawValue = 50;  break // Battery Medium // library marker kkossev.batteryLib, line 160
+        case 3: rawValue = 25;  break // Battery Low // library marker kkossev.batteryLib, line 161
+        case 4: rawValue = 100; break // Tuya 3 in 1 -> USB powered // library marker kkossev.batteryLib, line 162
+        // for all other values >4 we will use the raw value, expected to be the real battery level 4..100% // library marker kkossev.batteryLib, line 163
+    } // library marker kkossev.batteryLib, line 164
+    return rawValue // library marker kkossev.batteryLib, line 165
+} // library marker kkossev.batteryLib, line 166
+
+public void handleTuyaBatteryLevel(int fncmd) { // library marker kkossev.batteryLib, line 168
+    int rawValue = tuyaToBatteryLevel(fncmd) // library marker kkossev.batteryLib, line 169
+    sendBatteryPercentageEvent(rawValue) // library marker kkossev.batteryLib, line 170
+} // library marker kkossev.batteryLib, line 171
+
+public void batteryInitializeVars( boolean fullInit = false ) { // library marker kkossev.batteryLib, line 173
+    logDebug "batteryInitializeVars()... fullInit = ${fullInit}" // library marker kkossev.batteryLib, line 174
+    if (device.hasCapability('Battery')) { // library marker kkossev.batteryLib, line 175
+        if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) } // library marker kkossev.batteryLib, line 176
+        if (fullInit || settings?.batteryDelay == null) { device.updateSetting('batteryDelay', [value: DelayBatteryOpts.defaultValue.toString(), type: 'enum']) } // library marker kkossev.batteryLib, line 177
+    } // library marker kkossev.batteryLib, line 178
+} // library marker kkossev.batteryLib, line 179
+
+public List<String> batteryRefresh() { // library marker kkossev.batteryLib, line 181
+    List<String> cmds = [] // library marker kkossev.batteryLib, line 182
+    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 100)         // battery voltage // library marker kkossev.batteryLib, line 183
+    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 100)         // battery percentage // library marker kkossev.batteryLib, line 184
+    return cmds // library marker kkossev.batteryLib, line 185
+} // library marker kkossev.batteryLib, line 186
+
+// ~~~~~ end include (171) kkossev.batteryLib ~~~~~
 
 // ~~~~~ start include (172) kkossev.temperatureLib ~~~~~
 /* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */ // library marker kkossev.temperatureLib, line 1
@@ -4217,248 +4440,3 @@ public List<String> pollOccupancy() { // library marker kkossev.thermostatLib, l
 } // library marker kkossev.thermostatLib, line 507
 
 // ~~~~~ end include (179) kkossev.thermostatLib ~~~~~
-
-// ~~~~~ start include (166) kkossev.energyLib ~~~~~
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */ // library marker kkossev.energyLib, line 1
-library( // library marker kkossev.energyLib, line 2
-    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Energy Library', name: 'energyLib', namespace: 'kkossev', // library marker kkossev.energyLib, line 3
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/energyLib.groovy', documentationLink: '', // library marker kkossev.energyLib, line 4
-    version: '3.3.0' // library marker kkossev.energyLib, line 5
-
-) // library marker kkossev.energyLib, line 7
-/* // library marker kkossev.energyLib, line 8
- *  Zigbee Energy Library // library marker kkossev.energyLib, line 9
- * // library marker kkossev.energyLib, line 10
- *  Licensed Virtual the Apache License, Version 2.0 (the "License"); you may not use this file except // library marker kkossev.energyLib, line 11
- *  in compliance with the License. You may obtain a copy of the License at: // library marker kkossev.energyLib, line 12
- * // library marker kkossev.energyLib, line 13
- *      http://www.apache.org/licenses/LICENSE-2.0 // library marker kkossev.energyLib, line 14
- * // library marker kkossev.energyLib, line 15
- *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed // library marker kkossev.energyLib, line 16
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License // library marker kkossev.energyLib, line 17
- *  for the specific language governing permissions and limitations under the License. // library marker kkossev.energyLib, line 18
- * // library marker kkossev.energyLib, line 19
- * ver. 3.0.0  2024-04-06 kkossev  - added energyLib.groovy // library marker kkossev.energyLib, line 20
- * ver. 3.2.0  2024-05-24 kkossev  - CommonLib 3.2.0 allignment // library marker kkossev.energyLib, line 21
- * ver. 3.3.0  2024-06-09 kkossev  - added energy, power, voltage, current events parsing // library marker kkossev.energyLib, line 22
- * // library marker kkossev.energyLib, line 23
- *                                   TODO: add energyRefresh() // library marker kkossev.energyLib, line 24
-*/ // library marker kkossev.energyLib, line 25
-
-static String energyLibVersion()   { '3.3.0' } // library marker kkossev.energyLib, line 27
-static String energyLibStamp() { '2024/06/09 6:53 PM' } // library marker kkossev.energyLib, line 28
-
-metadata { // library marker kkossev.energyLib, line 30
-    capability 'PowerMeter' // library marker kkossev.energyLib, line 31
-    capability 'EnergyMeter' // library marker kkossev.energyLib, line 32
-    capability 'VoltageMeasurement' // library marker kkossev.energyLib, line 33
-    capability 'CurrentMeter' // library marker kkossev.energyLib, line 34
-    // no attributes // library marker kkossev.energyLib, line 35
-    // no commands // library marker kkossev.energyLib, line 36
-    preferences { // library marker kkossev.energyLib, line 37
-        // no prefrences // library marker kkossev.energyLib, line 38
-    } // library marker kkossev.energyLib, line 39
-} // library marker kkossev.energyLib, line 40
-
-@Field static final int AC_CURRENT_DIVISOR_ID = 0x0603 // library marker kkossev.energyLib, line 42
-@Field static final int AC_CURRENT_MULTIPLIER_ID = 0x0602 // library marker kkossev.energyLib, line 43
-@Field static final int AC_FREQUENCY_ID = 0x0300 // library marker kkossev.energyLib, line 44
-@Field static final int AC_POWER_DIVISOR_ID = 0x0605 // library marker kkossev.energyLib, line 45
-@Field static final int AC_POWER_MULTIPLIER_ID = 0x0604 // library marker kkossev.energyLib, line 46
-@Field static final int AC_VOLTAGE_DIVISOR_ID = 0x0601 // library marker kkossev.energyLib, line 47
-@Field static final int AC_VOLTAGE_MULTIPLIER_ID = 0x0600 // library marker kkossev.energyLib, line 48
-@Field static final int ACTIVE_POWER_ID = 0x050B // library marker kkossev.energyLib, line 49
-@Field static final int POWER_ON_OFF_ID = 0x0000 // library marker kkossev.energyLib, line 50
-@Field static final int POWER_RESTORE_ID = 0x4003 // library marker kkossev.energyLib, line 51
-@Field static final int RMS_CURRENT_ID = 0x0508 // library marker kkossev.energyLib, line 52
-@Field static final int RMS_VOLTAGE_ID = 0x0505 // library marker kkossev.energyLib, line 53
-@Field static final int CURRENT_SUMMATION_DELIVERED = 0x0000 // Energy // library marker kkossev.energyLib, line 54
-
-@Field static  int    DEFAULT_REPORTING_TIME = 30 // library marker kkossev.energyLib, line 56
-@Field static  int    DEFAULT_PRECISION = 3           // 3 decimal places // library marker kkossev.energyLib, line 57
-@Field static  BigDecimal DEFAULT_DELTA = 0.001 // library marker kkossev.energyLib, line 58
-@Field static  int    MAX_POWER_LIMIT = 999 // library marker kkossev.energyLib, line 59
-
-void sendVoltageEvent(BigDecimal voltage, boolean isDigital=false) { // library marker kkossev.energyLib, line 61
-    Map map = [:] // library marker kkossev.energyLib, line 62
-    map.name = 'voltage' // library marker kkossev.energyLib, line 63
-    map.value = voltage.setScale((settings?.defaultPrecision ?: DEFAULT_PRECISION) as int, BigDecimal.ROUND_HALF_UP) // library marker kkossev.energyLib, line 64
-    map.unit = 'V' // library marker kkossev.energyLib, line 65
-    map.type = isDigital == true ? 'digital' : 'physical' // library marker kkossev.energyLib, line 66
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}" // library marker kkossev.energyLib, line 67
-    if (state.states.isRefresh == true) { map.descriptionText += ' (refresh)' } // library marker kkossev.energyLib, line 68
-    final BigDecimal lastVoltage = device.currentValue('voltage') ?: 0.0 // library marker kkossev.energyLib, line 69
-    final BigDecimal  voltageThreshold = DEFAULT_DELTA // library marker kkossev.energyLib, line 70
-    if (Math.abs(voltage - lastVoltage) >= voltageThreshold || state.states.isRefresh == true) { // library marker kkossev.energyLib, line 71
-        logInfo "${map.descriptionText}" // library marker kkossev.energyLib, line 72
-        sendEvent(map) // library marker kkossev.energyLib, line 73
-    } // library marker kkossev.energyLib, line 74
-    else { // library marker kkossev.energyLib, line 75
-        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastVoltage} is less than ${voltageThreshold} V)" // library marker kkossev.energyLib, line 76
-    } // library marker kkossev.energyLib, line 77
-} // library marker kkossev.energyLib, line 78
-
-void sendAmperageEvent(BigDecimal amperage, boolean isDigital=false) { // library marker kkossev.energyLib, line 80
-    Map map = [:] // library marker kkossev.energyLib, line 81
-    map.name = 'amperage' // library marker kkossev.energyLib, line 82
-    map.value = amperage.setScale((settings?.defaultPrecision ?: DEFAULT_PRECISION) as int, BigDecimal.ROUND_HALF_UP) // library marker kkossev.energyLib, line 83
-    map.unit = 'A' // library marker kkossev.energyLib, line 84
-    map.type = isDigital == true ? 'digital' : 'physical' // library marker kkossev.energyLib, line 85
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}" // library marker kkossev.energyLib, line 86
-    if (state.states.isRefresh  == true) { map.descriptionText += ' (refresh)' } // library marker kkossev.energyLib, line 87
-    final BigDecimal lastAmperage = device.currentValue('amperage') ?: 0.00000001 // library marker kkossev.energyLib, line 88
-    final BigDecimal amperageThreshold = DEFAULT_DELTA // library marker kkossev.energyLib, line 89
-    if (Math.abs(amperage - lastAmperage ) >= amperageThreshold || state.states.isRefresh  == true) { // library marker kkossev.energyLib, line 90
-        logInfo "${map.descriptionText}" // library marker kkossev.energyLib, line 91
-        sendEvent(map) // library marker kkossev.energyLib, line 92
-    } // library marker kkossev.energyLib, line 93
-    else { // library marker kkossev.energyLib, line 94
-        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastAmperage} is less than ${amperageThreshold} mA)" // library marker kkossev.energyLib, line 95
-    } // library marker kkossev.energyLib, line 96
-} // library marker kkossev.energyLib, line 97
-
-void sendPowerEvent(BigDecimal power, boolean isDigital=false) { // library marker kkossev.energyLib, line 99
-    Map map = [:] // library marker kkossev.energyLib, line 100
-    map.name = 'power' // library marker kkossev.energyLib, line 101
-    map.value = power.setScale((settings?.defaultPrecision ?: DEFAULT_PRECISION) as int, BigDecimal.ROUND_HALF_UP) // library marker kkossev.energyLib, line 102
-    map.unit = 'W' // library marker kkossev.energyLib, line 103
-    map.type = isDigital == true ? 'digital' : 'physical' // library marker kkossev.energyLib, line 104
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}" // library marker kkossev.energyLib, line 105
-    if (state.states.isRefresh == true) { map.descriptionText += ' (refresh)' } // library marker kkossev.energyLib, line 106
-    final BigDecimal lastPower = device.currentValue('power') ?: 0.00000001 // library marker kkossev.energyLib, line 107
-    final BigDecimal powerThreshold = DEFAULT_DELTA // library marker kkossev.energyLib, line 108
-    if (power  > MAX_POWER_LIMIT) { // library marker kkossev.energyLib, line 109
-        logDebug "ignored ${map.name} ${map.value} ${map.unit} (exceeds maximum power cap ${MAX_POWER_LIMIT} W)" // library marker kkossev.energyLib, line 110
-        return // library marker kkossev.energyLib, line 111
-    } // library marker kkossev.energyLib, line 112
-    if (Math.abs(power - lastPower ) >= powerThreshold || state.states.isRefresh == true) { // library marker kkossev.energyLib, line 113
-        logInfo "${map.descriptionText}" // library marker kkossev.energyLib, line 114
-        sendEvent(map) // library marker kkossev.energyLib, line 115
-    } // library marker kkossev.energyLib, line 116
-    else { // library marker kkossev.energyLib, line 117
-        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastPower} is less than ${powerThreshold} W)" // library marker kkossev.energyLib, line 118
-    } // library marker kkossev.energyLib, line 119
-} // library marker kkossev.energyLib, line 120
-
-void sendFrequencyEvent(BigDecimal frequency, boolean isDigital=false) { // library marker kkossev.energyLib, line 122
-    Map map = [:] // library marker kkossev.energyLib, line 123
-    map.name = 'frequency' // library marker kkossev.energyLib, line 124
-    map.value = frequency.setScale(1, BigDecimal.ROUND_HALF_UP) // library marker kkossev.energyLib, line 125
-    map.unit = 'Hz' // library marker kkossev.energyLib, line 126
-    map.type = isDigital == true ? 'digital' : 'physical' // library marker kkossev.energyLib, line 127
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}" // library marker kkossev.energyLib, line 128
-    if (state.states.isRefresh == true) { map.descriptionText += ' (refresh)' } // library marker kkossev.energyLib, line 129
-    final BigDecimal lastFrequency = device.currentValue('frequency') ?: 0.00000001 // library marker kkossev.energyLib, line 130
-    final BigDecimal frequencyThreshold = 0.1 // library marker kkossev.energyLib, line 131
-    if (Math.abs(frequency - lastFrequency) >= frequencyThreshold || state.states.isRefresh == true) { // library marker kkossev.energyLib, line 132
-        logInfo "${map.descriptionText}" // library marker kkossev.energyLib, line 133
-        sendEvent(map) // library marker kkossev.energyLib, line 134
-    } // library marker kkossev.energyLib, line 135
-    else { // library marker kkossev.energyLib, line 136
-        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastFrequency} is less than ${frequencyThreshold} Hz)" // library marker kkossev.energyLib, line 137
-    } // library marker kkossev.energyLib, line 138
-} // library marker kkossev.energyLib, line 139
-
-void sendPowerFactorEvent(BigDecimal pf, boolean isDigital=false) { // library marker kkossev.energyLib, line 141
-    Map map = [:] // library marker kkossev.energyLib, line 142
-    map.name = 'powerFactor' // library marker kkossev.energyLib, line 143
-    map.value = pf.setScale(2, BigDecimal.ROUND_HALF_UP) // library marker kkossev.energyLib, line 144
-    map.unit = '%' // library marker kkossev.energyLib, line 145
-    map.type = isDigital == true ? 'digital' : 'physical' // library marker kkossev.energyLib, line 146
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}" // library marker kkossev.energyLib, line 147
-    if (state.states.isRefresh == true) { map.descriptionText += ' (refresh)' } // library marker kkossev.energyLib, line 148
-    final BigDecimal lastPF = device.currentValue('powerFactor') ?: 0.00000001 // library marker kkossev.energyLib, line 149
-    final BigDecimal powerFactorThreshold = 0.01 // library marker kkossev.energyLib, line 150
-    if (Math.abs(pf - lastPF) >= powerFactorThreshold || state.states.isRefresh == true) { // library marker kkossev.energyLib, line 151
-        logInfo "${map.descriptionText}" // library marker kkossev.energyLib, line 152
-        sendEvent(map) // library marker kkossev.energyLib, line 153
-    } // library marker kkossev.energyLib, line 154
-    else { // library marker kkossev.energyLib, line 155
-        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastFrequency} is less than ${powerFactorThreshold} %)" // library marker kkossev.energyLib, line 156
-    } // library marker kkossev.energyLib, line 157
-} // library marker kkossev.energyLib, line 158
-
-void sendEnergyEvent(BigDecimal energy_total, boolean isDigital=false) { // library marker kkossev.energyLib, line 160
-    BigDecimal energy = energy_total // library marker kkossev.energyLib, line 161
-    Map map = [:] // library marker kkossev.energyLib, line 162
-    logDebug "energy_total=${energy_total}" // library marker kkossev.energyLib, line 163
-    map.name = 'energy' // library marker kkossev.energyLib, line 164
-    map.value = energy // library marker kkossev.energyLib, line 165
-    map.unit = 'kWh' // library marker kkossev.energyLib, line 166
-    map.type = isDigital == true ? 'digital' : 'physical' // library marker kkossev.energyLib, line 167
-    if (isDigital == true) { map.isStateChange = true  } // library marker kkossev.energyLib, line 168
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}" // library marker kkossev.energyLib, line 169
-    if (state.states.isRefreshRequest == true) { map.descriptionText += ' (refresh)' } // library marker kkossev.energyLib, line 170
-    BigDecimal lastEnergy = device.currentValue('energy') ?: 0.00000001 // library marker kkossev.energyLib, line 171
-    if (lastEnergy  != energy || state.states.isRefreshRequest == true || isDigital == true) { // library marker kkossev.energyLib, line 172
-        sendEvent(map) // library marker kkossev.energyLib, line 173
-        logInfo "${map.descriptionText}" // library marker kkossev.energyLib, line 174
-    } // library marker kkossev.energyLib, line 175
-    else { // library marker kkossev.energyLib, line 176
-        logDebug "${device.displayName} ${map.name} is ${map.value} ${map.unit} (no change)" // library marker kkossev.energyLib, line 177
-    } // library marker kkossev.energyLib, line 178
-} // library marker kkossev.energyLib, line 179
-
-// parse the electrical measurement cluster 0x0B04 // library marker kkossev.energyLib, line 181
-boolean standardParseElectricalMeasureCluster(Map descMap) { // library marker kkossev.energyLib, line 182
-    if (descMap.value == null || descMap.value == 'FFFF') { return true } // invalid or unknown value // library marker kkossev.energyLib, line 183
-    int value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.energyLib, line 184
-    int attributeInt = hexStrToUnsignedInt(descMap.attrId) // library marker kkossev.energyLib, line 185
-    logTrace "standardParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}" // library marker kkossev.energyLib, line 186
-    switch (attributeInt) { // library marker kkossev.energyLib, line 187
-        case ACTIVE_POWER_ID:   // 0x050B // library marker kkossev.energyLib, line 188
-            BigDecimal power = new BigDecimal(value).divide(new BigDecimal(1/*0*/)) // library marker kkossev.energyLib, line 189
-            sendPowerEvent(power) // library marker kkossev.energyLib, line 190
-            break // library marker kkossev.energyLib, line 191
-        case RMS_CURRENT_ID:    // 0x0508 // library marker kkossev.energyLib, line 192
-            BigDecimal current = new BigDecimal(value).divide(new BigDecimal(1000)) // library marker kkossev.energyLib, line 193
-            sendAmperageEvent(current) // library marker kkossev.energyLib, line 194
-            break // library marker kkossev.energyLib, line 195
-        case RMS_VOLTAGE_ID:    // 0x0505 // library marker kkossev.energyLib, line 196
-            BigDecimal voltage = new BigDecimal(value).divide(new BigDecimal(10)) // library marker kkossev.energyLib, line 197
-            sendVoltageEvent(voltage) // library marker kkossev.energyLib, line 198
-            break // library marker kkossev.energyLib, line 199
-        case AC_FREQUENCY_ID:   // 0x0300 // library marker kkossev.energyLib, line 200
-            BigDecimal frequency = new BigDecimal(value).divide(new BigDecimal(10)) // library marker kkossev.energyLib, line 201
-            sendFrequencyEvent(frequency) // library marker kkossev.energyLib, line 202
-            break // library marker kkossev.energyLib, line 203
-        case 0x0800:    // AC Alarms Mask // library marker kkossev.energyLib, line 204
-            logDebug "standardParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} AC Alarms Mask value=${value}" // library marker kkossev.energyLib, line 205
-            break // library marker kkossev.energyLib, line 206
-        case 0x0802:    // AC Current Overload // library marker kkossev.energyLib, line 207
-            logDebug "standardParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} AC Current Overload value=${value / 1000} (raw: ${value})" // library marker kkossev.energyLib, line 208
-            break // library marker kkossev.energyLib, line 209
-        case [AC_VOLTAGE_MULTIPLIER_ID, AC_VOLTAGE_DIVISOR_ID, AC_CURRENT_MULTIPLIER_ID, AC_CURRENT_DIVISOR_ID, AC_POWER_MULTIPLIER_ID, AC_POWER_DIVISOR_ID].contains(descMap.attrId): // library marker kkossev.energyLib, line 210
-            logDebug "standardParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}" // library marker kkossev.energyLib, line 211
-            break // library marker kkossev.energyLib, line 212
-        default: // library marker kkossev.energyLib, line 213
-            logDebug "standardParseElectricalMeasureCluster: (0x0B04) <b>not parsed</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}" // library marker kkossev.energyLib, line 214
-            return false    // not parsed // library marker kkossev.energyLib, line 215
-    } // library marker kkossev.energyLib, line 216
-    return true // parsed and processed // library marker kkossev.energyLib, line 217
-} // library marker kkossev.energyLib, line 218
-
-// parse the metering cluster 0x0702 // library marker kkossev.energyLib, line 220
-boolean standardParseMeteringCluster(Map descMap) { // library marker kkossev.energyLib, line 221
-    if (descMap.value == null || descMap.value == 'FFFF') { return true } // invalid or unknown value // library marker kkossev.energyLib, line 222
-    int value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.energyLib, line 223
-    int attributeInt = hexStrToUnsignedInt(descMap.attrId) // library marker kkossev.energyLib, line 224
-    logTrace "standardParseMeteringCluster: (0x0702)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}" // library marker kkossev.energyLib, line 225
-    switch (attributeInt) { // library marker kkossev.energyLib, line 226
-        case CURRENT_SUMMATION_DELIVERED:   // 0x0000 // library marker kkossev.energyLib, line 227
-            BigDecimal energyScaled = new BigDecimal(value).divide(new BigDecimal(10/*00*/)) // library marker kkossev.energyLib, line 228
-            sendEnergyEvent(energyScaled) // library marker kkossev.energyLib, line 229
-            break // library marker kkossev.energyLib, line 230
-        default: // library marker kkossev.energyLib, line 231
-            logWarn "standardParseMeteringCluster: (0x0702) <b>not parsed</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}" // library marker kkossev.energyLib, line 232
-            return false    // not parsed // library marker kkossev.energyLib, line 233
-    } // library marker kkossev.energyLib, line 234
-    return true // parsed and processed // library marker kkossev.energyLib, line 235
-} // library marker kkossev.energyLib, line 236
-
-void energyInitializeVars( boolean fullInit = false ) { // library marker kkossev.energyLib, line 238
-    logDebug "energyInitializeVars()... fullInit = ${fullInit}" // library marker kkossev.energyLib, line 239
-    if (fullInit || settings?.defaultPrecision == null) { device.updateSetting('defaultPrecision', [value: DEFAULT_PRECISION, type: 'number']) } // library marker kkossev.energyLib, line 240
-} // library marker kkossev.energyLib, line 241
-
-// ~~~~~ end include (166) kkossev.energyLib ~~~~~
