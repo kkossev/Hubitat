@@ -16,8 +16,10 @@
  *
  * ver. 1.0.0  2024-09-14 kkossev  - Initial dummy version
  * ver. 1.0.1  2024-09-26 kkossev  - added ping, awtrixIP, healthStatus, parse deviceNotification JSON payload; added commonly used text preferences; dismiss; HTTP interface - HTTP stats
- * ver. 1.1.0  2024-09-26 kkossev  - (dev. branch) renamed driver to 'Ulanzi TC001 Scrolling Sign (AWTRIX 3)'
+ * ver. 1.1.0  2024-09-26 kkossev  - renamed driver to 'Ulanzi TC001 Scrolling Sign (AWTRIX 3)'
+ * ver. 1.1.1  2024-10-01 kkossev  - (dev. branch)
  *                                   
+ *                                   TODO: 2.3.9.188 - nothing is working?
  *                                   TODO: try the HTTP interface - HTTP stats
  *                                   TODO: sound!
  *                                   TODO: implement HTTP /api/effects /api/transitions /api/loop
@@ -29,8 +31,8 @@
 
 import groovy.transform.Field
 
-@Field static String version = "1.0.1"
-@Field static String timeStamp = "2024/09/26 11:59 PM"
+@Field static String version = "1.1.1"
+@Field static String timeStamp = "2024/10/01 7:27 AM"
 
 metadata {
 	definition(name: "Ulanzi TC001 Scrolling Sign (AWTRIX 3)", namespace: "kkossev", author: "Krassimir Kossev", importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Drivers/Ulanzi%20TC001%20Scrolling%20Sign%20(AWTRIX%203)/Ulanzi%20TC001%20Scrolling%20Sign%20(AWTRIX%203).groovy' ) { 
@@ -116,7 +118,7 @@ metadata {
 
 
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for production
 
@@ -354,7 +356,7 @@ void initializeVars( boolean fullInit = false ) {
 private String driverVersionAndTimeStamp() { version + ' ' + timeStamp + ((_DEBUG) ? ' (debug version!) ' : ' ') + "(${getModel()} ${location.hub.firmwareVersionString})" }
 
 void checkDriverVersion(final Map state) {
-	logDebug "checkDriverVersion: driverVersion = ${state.driverVersion} driverVersionAndTimeStamp = ${driverVersionAndTimeStamp()}"
+	logTrace "checkDriverVersion: driverVersion = ${state.driverVersion} driverVersionAndTimeStamp = ${driverVersionAndTimeStamp()}"
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         logDebug "checkDriverVersion: updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()}")
@@ -417,6 +419,7 @@ void unsubscribe(String topicParam) {
 
 def on() {
 	if (settings?.communicationMode == 'MQTT') {
+		logDebug "on: publishing power on"
 		publish("power", "{'power': true}")
 		sendEvent(name: "switch", value: "on")
 	} else {
@@ -426,6 +429,7 @@ def on() {
 
 def off() {
 	if (settings?.communicationMode == 'MQTT') {
+		logDebug "off: publishing power off"
 		publish("power", "{'power': false}")
 		sendEvent(name: "switch", value: "off")
 	} else {
@@ -588,7 +592,7 @@ void deviceNotification(String messageParam) {
 		logDebug "deviceNotification: validJson: ${parsedMessageMap}"
 	}
 	else {
-		parsedMessageMap.text = message
+		parsedMessageMap.text = message /*
 		parsedMessageMap.rainbow = settings?.rainbowEffect
 		parsedMessageMap.duration = settings?.duration
 		parsedMessageMap.repeat = settings?.repeat
@@ -596,7 +600,7 @@ void deviceNotification(String messageParam) {
 		parsedMessageMap.stack = settings?.stack
 		parsedMessageMap.wakeup = settings?.wakeup
 		parsedMessageMap.noScroll = settings?.noScroll
-		parsedMessageMap.color = COLORS[settings?.color]?.hex
+		parsedMessageMap.color = COLORS[settings?.color]?.hex */
 
 		logDebug "deviceNotification: parsedMessageMap: ${parsedMessageMap}"
 		message = JsonOutput.toJson(parsedMessageMap)
