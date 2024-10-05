@@ -15,7 +15,8 @@
  *
  * ver. 2.0.2  2023-05-29 kkossev  - Aqara E1 thermostat driver initial version
  * ver. 2.1.6  2023-11-06 kkossev  - Aqara E1 thermostat improvements;
- * ver. 3.3.0  2024-06-08 kkossev  - (dev. branch) new driver for Aqara E1 thermostat using thermostatLib
+ * ver. 3.3.0  2024-06-08 kkossev  - new driver for Aqara E1 thermostat using thermostatLib
+ * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
  *
  *                                   TODO: add powerSource capability
  *                                   TODO: add Info dummy preference to the driver with a hyperlink
@@ -43,8 +44,8 @@
  *                                   TODO: Aqara E1 external sensor
  */
 
-static String version() { '3.3.0' }
-static String timeStamp() { '2024/06/08 2:26 PM' }
+static String version() { '3.4.0' }
+static String timeStamp() { '2024/10/05 7:23 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -55,7 +56,6 @@ import hubitat.zigbee.zcl.DataType
 import java.util.concurrent.ConcurrentHashMap
 import groovy.json.JsonOutput
 import java.math.RoundingMode
-
 
 #include kkossev.commonLib
 #include kkossev.onOffLib
@@ -125,7 +125,6 @@ metadata {
     }
 }
 
-
 @Field static final Map deviceProfilesV3 = [
     // https://github.com/Koenkk/zigbee-herdsman-converters/blob/6339b6034de34f8a633e4f753dc6e506ac9b001c/src/devices/xiaomi.ts#L3197
     // https://github.com/Smanar/deconz-rest-plugin/blob/6efd103c1a43eb300a19bf3bf3745742239e9fee/devices/xiaomi/xiaomi_lumi.airrtc.agl001.json
@@ -157,7 +156,7 @@ metadata {
                 [at:'0xFCC0:0x027B',  name:'calibrated',            type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'false', 1: 'true'], unit:'',         title: '<b>Calibrated</b>',       description:'Calibrated'],             // result['calibrated'] = {1: true, 0: false}[value]; - read only
                 [at:'0xFCC0:0x027C',  name:'unknown4',              type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'false', 1: 'true'], unit:'',         title: '<b>Unknown 4</b>',        description:'Unknown 4'],
                 [at:'0xFCC0:0x027D',  name:'schedule',              type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'off', 1: 'on'], unit:'',             title: '<b>Schedule</b>',        description:'Schedule'],
-                [at:'0xFCC0:0x027E',  name:'sensor',                type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'internal', 1: 'external'], unit:'',  title: '<b>Sensor</b>',           description:'Sensor'],                 // result['sensor'] = {1: 'EXTERNAL', 0: 'INTERNAL'}[value]; - read only    
+                [at:'0xFCC0:0x027E',  name:'sensor',                type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'internal', 1: 'external'], unit:'',  title: '<b>Sensor</b>',           description:'Sensor'],                 // result['sensor'] = {1: 'EXTERNAL', 0: 'INTERNAL'}[value]; - read only
                 //   0xFCC0:0x027F ... 0xFCC0:0x0284 - unknown
                 [at:'0x0201:0x0000',  name:'temperature',           type:'decimal', dt:'0x29', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Temperature</b>',                   description:'Measured temperature'],
                 [at:'0x0201:0x0011',  name:'coolingSetpoint',       type:'decimal', dt:'0x29', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Cooling Setpoint</b>',              description:'cooling setpoint'],
@@ -183,7 +182,6 @@ metadata {
             configuration : [:]
     ]
 ]
-
 
 // called from parseXiaomiClusterLib in xiaomiLib.groovy (xiaomi cluster 0xFCC0 )
 //
@@ -284,7 +282,6 @@ void customParseThermostatCluster(final Map descMap) {
     }
 }
 
-
 // TODO - configure in the deviceProfile
 List pollAqara() {
     return  zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x001B, 0x001C], [:], delay = 3500)      // 0x0000 = local temperature, 0x0012 = heating setpoint, 0x001B = controlledSequenceOfOperation, 0x001C = system mode (enum8 )
@@ -332,7 +329,6 @@ List<String> refreshAqaraE1() {
     cmds += zigbee.readAttribute(0xFCC0, 0x040a, [mfgCode: 0x115F], delay = 500)
     return cmds
 }
-
 
 List<String> customRefresh() {
     List<String> cmds = refreshFromDeviceProfileList()
@@ -400,7 +396,6 @@ List<String> customAqaraBlackMagic() {
     }
     return cmds
 }
-
 
 // called from processFoundItem  (processTuyaDPfromDeviceProfile and ) processClusterAttributeFromDeviceProfile in deviceProfileLib when a Zigbee message was found defined in the device profile map
 //
@@ -507,6 +502,4 @@ void testT(String par) {
     }
 }
 
-
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
-
