@@ -1,7 +1,7 @@
 /**
  *  Tuya Smart Siren Zigbee driver for Hubitat
  *
- *  https://community.hubitat.com/t/tuya-smart-siren-zigbee-driver-doesnt-work/73624/19
+ *  https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772
  *
  *	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *	in compliance with the License. You may obtain a copy of the License at:
@@ -20,6 +20,7 @@
  * ver. 1.2.0 2023-01-22 kkossev  - _TZE200_d0yu2xgi (NEO) experimental support including temperature and humidity; added separate preferences for alarm and Melody, Volume and Duration
  * ver. 1.2.1 2023-05-26 kkossev  - added _TZE204_t1blo2bj in Neo group; installed() bug fix;
  * ver. 1.2.2 2023-07-19 kkossev  - fix: moved _TZE204_t1blo2bj in Tuya group;
+ * ver. 1.3.0 2024-10-07 kkossev  - (dev. branch) setVolume bug fix; adding Tuya Solar Alarm '_TZE200_nlrfgpny', '_TZE204_nlrfgpny'
  *
  *                                  TODO: add TS0216  _TYZB01_0wcfvptl https://github.com/zigpy/zha-device-handlers/issues/1824#issuecomment-1302637169 (https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/74?u=kkossev)
  *                                  TODO: _TZE204_t1blo2bj control @abraham : https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/67?u=kkossev
@@ -28,8 +29,8 @@
  *
 */
 
-def version() { "1.2.2" }
-def timeStamp() {"2023/07/19 9:30 PM"}
+def version() { "1.3.0" }
+def timeStamp() {"2024/10/07 9:00 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -38,7 +39,7 @@ import hubitat.device.HubAction
 import hubitat.device.Protocol
 import hubitat.helper.HexUtils
 
-@Field static final Boolean debug = false
+@Field static final Boolean _DEBUG = true
  
 metadata {
     definition (name: "Tuya Smart Siren Zigbee", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Smart%20Siren%20Zigbee/Tuya%20Smart%20Siren%20Zigbee.groovy", singleThreaded: true ) {

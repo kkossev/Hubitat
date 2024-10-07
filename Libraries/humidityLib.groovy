@@ -13,7 +13,7 @@ library(
  * ver. 3.2.0  2024-05-29 kkossev  - commonLib 3.2.0 allignment; added humidityRefresh()
  * ver. 3.2.2  2024-07-02 kkossev  - fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
  *
- *                                   TODO:
+ *                                   TODO: add humidityOffset
 */
 
 static String humidityLibVersion()   { '3.2.2' }
