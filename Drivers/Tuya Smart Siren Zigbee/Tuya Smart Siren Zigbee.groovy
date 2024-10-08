@@ -916,6 +916,10 @@ void setDuration( alarmType, alarmLength) {
 }
 
 void setVolume( volumeType, volumeName) {
+    if (isSolarAlarm()) {
+        sendInfoEvent "Volume commands are not available for this device!"
+        return
+    }
     if (!(volumeType in VolumeTypeOptions)) {
         logWarn "setVolume not supported type ${volumeType}, must be one of ${VolumeTypeOptions}"
         return
