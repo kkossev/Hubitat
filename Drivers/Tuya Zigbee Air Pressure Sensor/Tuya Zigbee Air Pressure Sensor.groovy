@@ -18,9 +18,9 @@
  */
 
 static String version() { "3.3.0" }
-static String timeStamp() { "2024/10/09 5:50 PM" }
+static String timeStamp() { "2024/10/09 6:35 PM" }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true   // disable it for production
 
@@ -34,7 +34,7 @@ deviceType = "AirPressureMultiSensor"
 metadata {
     definition (
         name: 'Tuya Zigbee Air Pressure Sensor',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Chlorine%20Meter/Tuya_Zigbee_Chlorine_Meter_lib_included.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Drivers/Tuya%20Zigbee%20Air%20Pressure%20Sensor/Tuya_Zigbee_Air_Pressure_Sensor_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         capability "PressureMeasurement"                          // pressure - NUMBER, unit: Pa || psi
@@ -101,7 +101,7 @@ metadata {
                 [dp:101, name:'pressure',             type:'decimal', rw: 'ro',  scale:10,   unit:'Pa', description:'Pressure'],
                 [dp:102, name:'unknown_102',          type:'number',  rw: 'ro',  scale:1,    unit:'',   description:'Unknown Tuya DP 102 (0x66)'],
             ],
-            refresh:        ['refreshQueryAllTuyaDP'],
+            refresh: ['queryAllTuyaDP'],
             configuration : ['battery': false],
             deviceJoinName: 'Tuya Zigbee Air Pressure Sensor'
     ]
