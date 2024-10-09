@@ -23,8 +23,10 @@
  * ver. 1.2.2 2023-07-19 kkossev  - fix: moved _TZE204_t1blo2bj in Tuya group;
  * ver. 1.3.0 2024-10-07 kkossev  - setVolume bug fix; adding Tuya Solar Alarm '_TZE200_nlrfgpny', '_TZE204_nlrfgpny'
  * ver. 1.3.1 2024-10-08 kkossev  - restored the overwritten code changes in the previous version;
- * ver. 1.3.2 2024-10-08 kkossev  - (dev.branch)  debug enabled;  added Refresh() command 
+ * ver. 1.3.2 2024-10-09 kkossev  - (dev.branch)  debug enabled;  added Refresh() command; setMelody(); setDuration(); stop(); both(); siren(); strobe();
  *
+ *                                  TODO: send duration on Update() for the solar alarm
+ *                                  TODO: add ping() and healthStatus
  *                                  TODO: add TS0216  _TYZB01_0wcfvptl https://github.com/zigpy/zha-device-handlers/issues/1824#issuecomment-1302637169 (https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/74?u=kkossev)
  *                                  TODO: _TZE204_t1blo2bj control @abraham : https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/67?u=kkossev
  *                                  TODO: add on/off preference selection like Zoos S2 Multisiren https://community.hubitat.com/t/hsm-custom-rule-bugs/117061/6?u=kkossev 
@@ -32,8 +34,8 @@
  *
 */
 
-def version() { "1.3.1" }
-def timeStamp() {"2024/10/08 10:52 PM"}
+def version() { "1.3.2" }
+def timeStamp() {"2024/10/09 1:21 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -122,8 +124,10 @@ metadata {
         }
         input (name: "advancedOptions", type: "bool", title: "<b>Advanced options</b>", description: "<i>These are automatically set up in an optimal way</i>", defaultValue: false)
         if (advancedOptions == true) {
-            input (name: "restoreAlarmSettings", type: "bool", title: "<b>Restore Default Alarm Settings</b>", description: "<i>After playing Beep or Chime sounds, the default Alarm settings will be restored after 7 seconds </i>", defaultValue: false)
-            input (name: "presetBeepAndChimeSettings", type: "enum", title: "<b>Preset Beep and Chime Settings</b>", description: "<i>Before playing Beep or Chime sounds, the preset Beep/Chime settings will be restored first</i>", defaultValue: "fast", options:["fast", /*"slow",*/ "none"])
+            if (!isSolarAlarm()) {
+                input (name: "restoreAlarmSettings", type: "bool", title: "<b>Restore Default Alarm Settings</b>", description: "<i>After playing Beep or Chime sounds, the default Alarm settings will be restored after 7 seconds </i>", defaultValue: false)
+                input (name: "presetBeepAndChimeSettings", type: "enum", title: "<b>Preset Beep and Chime Settings</b>", description: "<i>Before playing Beep or Chime sounds, the preset Beep/Chime settings will be restored first</i>", defaultValue: "fast", options:["fast", /*"slow",*/ "none"])
+            }
         } 
     }
 }
@@ -574,31 +578,62 @@ String integerToHexString(Integer value, Integer minBytes, boolean reverse=false
     
 }
 
-def off() {
+void off() {
     sendTuyaAlarm("off")
 }
 
-def on() {
+void on() {
     sendTuyaAlarm("on")
 }
 
-def both() {
+void both() {
     sendTuyaAlarm("both")
 }
 
-def strobe() {
+void strobe() {
     sendTuyaAlarm("strobe")
 }
 
-def siren() {
+void siren() {
     sendTuyaAlarm( "siren")
 }
 
-def sendTuyaAlarm( commandName ) {
-    logDebug "swithing alarm ${commandName} (presetBeepAndChimeSettings = ${settings?.presetBeepAndChimeSettings})"
+void sendTuyaAlarm(String commandName) {
     String cmds = ""
     state.lastCommand = commandName
+    if (isSolarAlarm()) {
+        logDebug "swithing solar alarm ${commandName}"
+        int alarmMode = settings?.alarmMode ?: 0
+        switch (commandName) {
+            case "off" :
+                sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x0D, 2), DP_TYPE_BOOL, "00"))    
+                break
+            case "on" : // use the default alarm settings - TODO
+                sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x66, 2), DP_TYPE_ENUM, zigbee.convertToHexString(alarmMode as int, 2)))    
+                sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x0D, 2), DP_TYPE_BOOL, "01"))    
+                break
+            case "both" :
+                sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x66, 2), DP_TYPE_ENUM, '02'))    
+                sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x0D, 2), DP_TYPE_BOOL, "01"))    
+                break
+            case "strobe" :
+                sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x66, 2), DP_TYPE_ENUM, '01'))    
+                sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x0D, 2), DP_TYPE_BOOL, "01"))    
+                break
+            case "siren" :
+                sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x66, 2), DP_TYPE_ENUM, '00'))    
+                sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x0D, 2), DP_TYPE_BOOL, "01"))    
+                break
+            default :
+                logWarn "NOT IMPLEMENTED! commandName = ${commandName}"
+                break
+        }
+        unschedule(restoreDefaultSettings)
+        return
+    }
+    // continue for the rest of alarm types..
     def mode = settings?.presetBeepAndChimeSettings ?: "fast"
+    logDebug "swithing alarm ${commandName} (presetBeepAndChimeSettings = ${settings?.presetBeepAndChimeSettings})"
     switch (mode) {
         case "none" :
             if (commandName != "off") {
@@ -877,41 +912,61 @@ def sendHumidityEvent( humidity, isDigital=false ) {
 
 void setMelody( alarmType, melodyNumber ) {
     int index = safeToInt( melodyNumber )
+    int maxMelodies = isSolarAlarm() ? 3 : TUYA_MAX_MELODIES
+    if (isSolarAlarm() && index > 3) {
+        sendInfoEvent "The maximum Melody number for this device is 3!"
+        return
+    }
     if (index < 1 || index> TUYA_MAX_MELODIES) {
-        logWarn "melody number must be between 1 and ${TUYA_MAX_MELODIES}"
+        sendInfoEvent "melody number must be between 1 and ${maxMelodies}"
         return
     }
     index = index - 1
-    if (alarmType == 'alarm') {
-        device.updateSetting("alarmMelody", [value:MelodiesOptions[index], type:"enum"])
-        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(index, 2)))
-    }
-    else if (alarmType == 'chime') {
-        device.updateSetting("playSoundMelody", [value:MelodiesOptions[index], type:"enum"])
-        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(index, 2)))
+    if (isSolarAlarm()) {
+        device.updateSetting("alarmMelody", [value:SolarAlarmMelodiesOptions[index], type:"enum"])
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x15, 2), DP_TYPE_ENUM, zigbee.convertToHexString(index, 2)))
+        logDebug "setMelody ${SolarAlarmMelodiesOptions[index]} (${index})"
     }
     else {
-        logWarn "alarmType must be one of ${SoundTypeOptions}"
-        return
-    }    
-    logDebug "setMelody ${alarmType} ${MelodiesOptions[index]} (${index})"
+        if (alarmType == 'alarm') {
+            device.updateSetting("alarmMelody", [value:MelodiesOptions[index], type:"enum"])
+            sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(index, 2)))
+        }
+        else if (alarmType == 'chime') {
+            device.updateSetting("playSoundMelody", [value:MelodiesOptions[index], type:"enum"])
+            sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(index, 2)))
+        }
+        else {
+            logWarn "alarmType must be one of ${SoundTypeOptions}"
+            return
+        }    
+        logDebug "setMelody ${alarmType} ${MelodiesOptions[index]} (${index})"
+    }
 }
 
 void setDuration( alarmType, alarmLength) {
     int duration = safeToInt( alarmLength )
-    if (duration > TUYA_MAX_DURATION) duration = TUYA_MAX_DURATION
-    if (duration < 1 ) duration = 1
+    if (duration > TUYA_MAX_DURATION) { duration = TUYA_MAX_DURATION }
+    if (duration < 1 ) { duration = 1 }
+    if (isSolarAlarm() && duration > 60) { duration = 60 }
     logDebug "setAlarmDuration ${duration}"
-    if (alarmType == 'alarm') {
+    if (isSolarAlarm()) {
         device.updateSetting("alarmSoundDuration", [value:duration, type:"number"])
-        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8)))
-    }
-    else if (alarmType == 'chime') {
-        device.updateSetting("playSoundDuration", [value:duration, type:"number"])
-        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8)))
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x07, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8)))
+        logDebug "Solar Alarm duration : ${duration} minutes"
     }
     else {
-        logWarn "alarmType must be one of ${SoundTypeOptions}"
+        if (alarmType == 'alarm') {
+            device.updateSetting("alarmSoundDuration", [value:duration, type:"number"])
+            sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8)))
+        }
+        else if (alarmType == 'chime') {
+            device.updateSetting("playSoundDuration", [value:duration, type:"number"])
+            sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8)))
+        }
+        else {
+            logWarn "alarmType must be one of ${SoundTypeOptions}"
+        }
     }
 }
 
@@ -969,6 +1024,20 @@ def updated() {
     }
     else {
         unschedule(logsOff)
+    }
+    if (isSolarAlarm()) {
+        int alarmMode = settings?.alarmMode ?: 0
+        int tamperAlarmSwitch = settings?.tamperAlarmSwitch ?: 0
+        int alarmMelody = safeToInt(settings?.alarmMelody)
+        int alarmSoundDuration = settings?.alarmSoundDuration ?: 1
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x66, 2), DP_TYPE_ENUM, zigbee.convertToHexString(alarmMode as int, 2)))    
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x66, 2), DP_TYPE_BOOL, zigbee.convertToHexString(tamperAlarmSwitch as int, 2)))    
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x15, 2), DP_TYPE_ENUM, zigbee.convertToHexString(alarmMelody as int, 2)))
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(0x07, 2), DP_TYPE_VALUE, zigbee.convertToHexString(alarmSoundDuration as int, 8)))
+        logDebug "Solar Alarm settings updated: alarmMode=${alarmMode}, tamperAlarmSwitch=${tamperAlarmSwitch}, alarmMelody=${alarmMelody}, alarmSoundDuration=${alarmSoundDuration}"
+    }
+    else {
+        wakeUpTuya()
     }
 }
 
@@ -1073,25 +1142,25 @@ def initialize() {
     runIn( 3, logInitializeRezults)
 }
 
-private sendTuyaCommand(dp, dp_type, fncmd, delay=200) {
+ArrayList<String> sendTuyaCommand(dp, dp_type, fncmd, delay=200) {
     ArrayList<String> cmds = []
     cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
-    logDebug "sendTuyaCommand = ${cmds}"
+    //logDebug "sendTuyaCommand = ${cmds}"
     state.txCounter = state.txCounter ?: 0 + 1
     return cmds
 }
 
-private wakeUpTuya() {
+void wakeUpTuya() {
     logDebug "wakeUpTuya()"
     sendZigbeeCommands(zigbee.readAttribute(0x0000, 0x0005, [:], delay=50) )
 }
 
-private combinedTuyaCommands(String cmds) {
+List<String> combinedTuyaCommands(String cmds) {
     state.txCounter = state.txCounter ?: 0 + 1
     return zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay=200, PACKET_ID + cmds ) 
 }
 
-private appendTuyaCommand(Integer dp, String dp_type, Integer fncmd) {
+String appendTuyaCommand(Integer dp, String dp_type, Integer fncmd) {
     Integer fncmdLen =  dp_type== DP_TYPE_VALUE? 8 : 2
     String cmds = zigbee.convertToHexString(dp, 2) + dp_type + zigbee.convertToHexString((int)(fncmdLen/2), 4) + zigbee.convertToHexString(fncmd, fncmdLen) 
     //logDebug "appendTuyaCommand = ${cmds}"
