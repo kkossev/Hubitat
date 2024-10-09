@@ -25,7 +25,6 @@
  * ver. 1.3.1 2024-10-08 kkossev  - restored the overwritten code changes in the previous version;
  * ver. 1.3.2 2024-10-09 kkossev  - (dev.branch)  debug enabled;  added Refresh() command; setMelody(); setDuration(); stop(); both(); siren(); strobe();
  *
- *                                  TODO: send duration on Update() for the solar alarm
  *                                  TODO: add ping() and healthStatus
  *                                  TODO: add TS0216  _TYZB01_0wcfvptl https://github.com/zigpy/zha-device-handlers/issues/1824#issuecomment-1302637169 (https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/74?u=kkossev)
  *                                  TODO: _TZE204_t1blo2bj control @abraham : https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/67?u=kkossev
@@ -35,7 +34,7 @@
 */
 
 def version() { "1.3.2" }
-def timeStamp() {"2024/10/09 1:21 PM"}
+def timeStamp() {"2024/10/09 7:59 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -44,7 +43,7 @@ import hubitat.device.HubAction
 import hubitat.device.Protocol
 import hubitat.helper.HexUtils
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
  
 metadata {
     definition (name: "Tuya Smart Siren Zigbee", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Smart%20Siren%20Zigbee/Tuya%20Smart%20Siren%20Zigbee.groovy", singleThreaded: true ) {
