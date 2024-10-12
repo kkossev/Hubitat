@@ -11,14 +11,14 @@
 *  for the specific language governing permissions and limitations under the License.
 *
 * 
-*  ver. 1.0.0 2022-04-22 kkossev - inital version - removed Battery; 
+*  ver. 1.0.0 2022-04-22 kkossev - inital version - removed Battery; removed TemperatureMeasurement; added IlluminanceMeasurement; added mode attribute; added movement attribute;
 * 
-*                        TODO: add IlluminanceMeasurement
-*                        TODO: remove TemperatureMeasurement, remove Battery
+*                        TODO: add zoneState attribute;
+*                        TODO: 
 */
 @SuppressWarnings('unused')
 public static String version()   {return "1.0.0"}
-public static String timeStamp() {return "10/12/2024 11:55 PM"}
+public static String timeStamp() {return "10/13/2024 01:10 AM"}
 
 metadata 
 {
@@ -28,17 +28,33 @@ metadata
         capability "Configuration"
         capability "MotionSensor"                // ST: "movementSensor"
         // TODO                                  // ST: "multipleZonePresence"
-        // TODO                                  // ST: "presenceSensor"
         capability "Refresh"                     // ST: "refresh"
-        //capability "TemperatureMeasurement"
-        capability "IlluminanceMeasurement"     // ST: "illuminanceMeasurement"
+        capability "IlluminanceMeasurement"      // ST: "illuminanceMeasurement"
 
         attribute "healthStatus", "enum", ["offline", "online"]
+        attribute "mode", "string"
+        attribute "movement", "string"
+        attribute "zoneState", "string"
+        /*
+        "enum",  [
+										"inactive",
+										"approaching",
+										"movingAway",
+										"entering",
+										"leaving",
+										"enteringLeft",
+										"enteringRight",
+										"leavingLeft",
+										"leavingRight"
+									]
+        */
 
         command "inactive"
         command "active"
-        //command "setTemperature", [[name: "temperature*", type: "NUMBER", description: "Set Temperature in local scale °C or °F"]]
         command "setIlluminance", [[name: "illuminance*", type: "NUMBER", description: "Set Illuminance in lux"]]
+        command "setModeValue", [[name: "mode*", type: "STRING", description: "Set Mode"]]
+        command "setMovementValue", [[name: "mode*", type: "STRING", description: "Set Movement State"]]
+        command "setZoneStateValue", [[name: "zone*", type: "STRING", description: "Set Zone State"]]
     }
     preferences {
         input(name:"deviceInfoDisable", type: "bool", title: "Disable Info logging:", defaultValue: false)
@@ -68,10 +84,13 @@ def configure() {
 
 // Methods documented here will show up in the Replica Command Configuration. These should be mostly setter in nature. 
 Map getReplicaCommands() {
-    return ([ "setMotionValue":[[name:"motion*",type:"ENUM"]], "setMotionActive":[], "setMotionInactive":[],             
-              "setIlluminanceValue":[[name:"illuminance*",type:"NUMBER"]], 
-              "setHealthStatusValue":[[name:"healthStatus*",type:"ENUM"]]
-            ])
+    return ([   "setMotionValue":[[name:"motion*",type:"ENUM"]], "setMotionActive":[], "setMotionInactive":[],             
+                "setIlluminanceValue":[[name:"illuminance*",type:"NUMBER"]], 
+                "setHealthStatusValue":[[name:"healthStatus*",type:"ENUM"]],
+                "setModeValue":[[name:"mode*",type:"ENUM"]],
+                "setMovementValue":[[name:"movement*",type:"STRING"]],
+                "setZoneStateValue":[[name:"zoneState*",type:"STRING"]]
+    ])
 }
 
 def setIlluminanceValue(value) {
@@ -83,6 +102,24 @@ def setIlluminanceValue(value) {
 def setMotionValue(value) {
     String descriptionText = "${device.displayName} motion is $value"
     sendEvent(name: "motion", value: value, descriptionText: descriptionText)
+    logInfo descriptionText
+}
+
+def setModeValue(value) {
+    String descriptionText = "${device.displayName} mode is $value"
+    sendEvent(name: "mode", value: value, descriptionText: descriptionText)
+    logInfo descriptionText
+}
+
+def setMovementValue(value) {
+    String descriptionText = "${device.displayName} movement is $value"
+    sendEvent(name: "movement", value: value, descriptionText: descriptionText)
+    logInfo descriptionText
+}  
+
+def setZoneStateValue(value) {
+    String descriptionText = "${device.displayName} zoneState is $value"
+    sendEvent(name: "zoneState", value: value, descriptionText: descriptionText)
     logInfo descriptionText
 }
 
@@ -127,7 +164,7 @@ void refresh() {
 }
 
 String getReplicaRules() {
-    return """{"components":[{"command":{"label":"command: setHealthStatusValue(healthStatus*)","name":"setHealthStatusValue","parameters":[{"name":"healthStatus*","type":"ENUM"}],"type":"command"},"mute":true,"trigger":{"additionalProperties":false,"attribute":"healthStatus","capability":"healthCheck","label":"attribute: healthStatus.*","properties":{"value":{"title":"HealthState","type":"string"}},"required":["value"],"type":"attribute"},"type":"smartTrigger"},{"command":{"capability":"refresh","label":"command: refresh()","name":"refresh","type":"command"},"trigger":{"label":"command: refresh()","name":"refresh","type":"command"},"type":"hubitatTrigger"},{"command":{"label":"command: setIlluminanceValue(illuminance*)","name":"setIlluminanceValue","parameters":[{"name":"illuminance*","type":"NUMBER"}],"type":"command"},"trigger":{"additionalProperties":false,"attribute":"illuminance","capability":"illuminanceMeasurement","label":"attribute: illuminance.*","properties":{"unit":{"default":"lux","enum":["lux"],"type":"string"},"value":{"maximum":100000,"minimum":0,"type":"number"}},"required":["value"],"type":"attribute"},"type":"smartTrigger"},{"command":{"label":"command: setMotionActive()","name":"setMotionActive","type":"command"},"trigger":{"additionalProperties":false,"attribute":"presence","capability":"presenceSensor","dataType":"ENUM","label":"attribute: presence.present","properties":{"value":{"title":"PresenceState","type":"string"}},"required":["value"],"type":"attribute","value":"present"},"type":"smartTrigger"},{"command":{"label":"command: setMotionInactive()","name":"setMotionInactive","type":"command"},"trigger":{"additionalProperties":false,"attribute":"presence","capability":"presenceSensor","dataType":"ENUM","label":"attribute: presence.not present","properties":{"value":{"title":"PresenceState","type":"string"}},"required":["value"],"type":"attribute","value":"not present"},"type":"smartTrigger"}],"version":1}
+    return """{"components":[{"command":{"label":"command: setHealthStatusValue(healthStatus*)","name":"setHealthStatusValue","parameters":[{"name":"healthStatus*","type":"ENUM"}],"type":"command"},"mute":true,"trigger":{"additionalProperties":false,"attribute":"healthStatus","capability":"healthCheck","label":"attribute: healthStatus.*","properties":{"value":{"title":"HealthState","type":"string"}},"required":["value"],"type":"attribute"},"type":"smartTrigger"},{"command":{"capability":"refresh","label":"command: refresh()","name":"refresh","type":"command"},"trigger":{"label":"command: refresh()","name":"refresh","type":"command"},"type":"hubitatTrigger"},{"command":{"label":"command: setIlluminanceValue(illuminance*)","name":"setIlluminanceValue","parameters":[{"name":"illuminance*","type":"NUMBER"}],"type":"command"},"trigger":{"additionalProperties":false,"attribute":"illuminance","capability":"illuminanceMeasurement","label":"attribute: illuminance.*","properties":{"unit":{"default":"lux","enum":["lux"],"type":"string"},"value":{"maximum":100000,"minimum":0,"type":"number"}},"required":["value"],"type":"attribute"},"type":"smartTrigger"},{"command":{"label":"command: setMotionActive()","name":"setMotionActive","type":"command"},"trigger":{"additionalProperties":false,"attribute":"presence","capability":"presenceSensor","dataType":"ENUM","label":"attribute: presence.present","properties":{"value":{"title":"PresenceState","type":"string"}},"required":["value"],"type":"attribute","value":"present"},"type":"smartTrigger"},{"command":{"label":"command: setMotionInactive()","name":"setMotionInactive","type":"command"},"trigger":{"additionalProperties":false,"attribute":"presence","capability":"presenceSensor","dataType":"ENUM","label":"attribute: presence.not present","properties":{"value":{"title":"PresenceState","type":"string"}},"required":["value"],"type":"attribute","value":"not present"},"type":"smartTrigger"},{"command":{"label":"command: setModeValue(mode*)","name":"setModeValue","parameters":[{"name":"mode*","type":"ENUM"}],"type":"command"},"trigger":{"additionalProperties":false,"attribute":"mode","capability":"stse.deviceMode","label":"attribute: mode.*","properties":{"value":{"type":"string"}},"required":["value"],"type":"attribute"},"type":"smartTrigger"},{"command":{"label":"command: setMovementValue(movement*)","name":"setMovementValue","parameters":[{"name":"movement*","type":"STRING"}],"type":"command"},"trigger":{"additionalProperties":false,"attribute":"movement","capability":"movementSensor","label":"attribute: movement.*","properties":{"value":{"title":"MovementType","type":"string"}},"required":["value"],"type":"attribute"},"type":"smartTrigger"},{"command":{"label":"command: setZoneStateValue(zoneState*)","name":"setZoneStateValue","parameters":[{"name":"zoneState*","type":"STRING"}],"type":"command"},"trigger":{"additionalProperties":false,"attribute":"zoneState","capability":"multipleZonePresence","label":"attribute: zoneState.*","properties":{"value":{"items":{"additionalProperties":false,"properties":{"id":{"maxLength":255,"title":"String","type":"string"},"name":{"maxLength":255,"title":"String","type":"string"},"state":{"enum":["present","not present"],"title":"PresenceState","type":"string"}},"required":["id","name","state"],"title":"zoneState","type":"object"},"type":"array"}},"required":["value"],"type":"attribute"},"type":"smartTrigger"}],"version":1}
 }"""
 }
 
