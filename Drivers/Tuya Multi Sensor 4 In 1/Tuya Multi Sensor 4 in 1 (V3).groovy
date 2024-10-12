@@ -19,7 +19,7 @@
  * ver. 3.2.1  2024-05-31 kkossev  - commonLib ver 3.2.1 allignment; tested 2In1 _TZE200_3towulqd ; new device profile group 'RH3040_TUYATEC'; SiHAS; 
  * ver. 3.2.2  2024-07-05 kkossev  - created motionLib; restored 'all' attribute
  * ver. 3.2.3  2024-07-27 kkossev  - added Sonoff SNZB-03P
- * ver. 3.3.0  2024-08-30 kkossev  - (dev.branch)
+ * ver. 3.3.0  2024-08-30 kkossev  - main branch release.
  *                                   
  *                                   TODO: Sensor 3in1 _warning: couldn't find map for preference motionReset
  *                                   TODO: Sensor 3in1 _TZE200_7hfcudw5 - fix battery percentage (shows 4)

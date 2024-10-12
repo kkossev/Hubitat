@@ -128,11 +128,8 @@ public List<String> refreshAllMotion() {
 public void motionInitializeVars( boolean fullInit = false ) {
     logDebug "motionInitializeVars()... fullInit = ${fullInit}"
     if (device.hasCapability('MotionSensor')) {
-        if (fullInit == true || settings.motionReset == null) device.updateSetting('motionReset', false)
-        if (fullInit == true || settings.invertMotion == null) device.updateSetting('invertMotion', false)
-        if (fullInit == true || settings.motionResetTimer == null) device.updateSetting('motionResetTimer', 60)
+        if (fullInit == true || settings.motionReset == null) { device.updateSetting('motionReset', false) }
+        if (fullInit == true || settings.invertMotion == null) { device.updateSetting('invertMotion', false) }
+        if (fullInit == true || settings.motionResetTimer == null) { device.updateSetting('motionResetTimer', 60) }
     }
 }
-
-
-
