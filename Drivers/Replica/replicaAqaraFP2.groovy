@@ -11,14 +11,15 @@
 *  for the specific language governing permissions and limitations under the License.
 *
 * 
-*  ver. 1.0.0 2022-04-22 kkossev - inital version - removed Battery; removed TemperatureMeasurement; added IlluminanceMeasurement; added mode attribute; added movement attribute;
+*  ver. 1.0.0 2022-10-12 kkossev - inital version
+*  ver. 1.0.1 2022-04-22 kkossev - (dev. branch)
 * 
-*                        TODO: add zoneState attribute;
-*                        TODO: 
+*                        TODO: parse zoneState attribute; create child devices for each zone
+*                        TODO: change mode movement zoneState to ENUM
 */
 @SuppressWarnings('unused')
 public static String version()   {return "1.0.0"}
-public static String timeStamp() {return "10/13/2024 01:10 AM"}
+public static String timeStamp() {return "10/13/2024 8:37 AM"}
 
 metadata 
 {
@@ -26,28 +27,14 @@ metadata
     {
         capability "Actuator"
         capability "Configuration"
-        capability "MotionSensor"                // ST: "movementSensor"
-        // TODO                                  // ST: "multipleZonePresence"
-        capability "Refresh"                     // ST: "refresh"
-        capability "IlluminanceMeasurement"      // ST: "illuminanceMeasurement"
+        capability "MotionSensor"
+        capability "Refresh"
+        capability "IlluminanceMeasurement"
 
         attribute "healthStatus", "enum", ["offline", "online"]
         attribute "mode", "string"
         attribute "movement", "string"
-        attribute "zoneState", "string"
-        /*
-        "enum",  [
-										"inactive",
-										"approaching",
-										"movingAway",
-										"entering",
-										"leaving",
-										"enteringLeft",
-										"enteringRight",
-										"leavingLeft",
-										"leavingRight"
-									]
-        */
+        attribute "zoneState", "string"         // ST: "multipleZonePresence" "zoneState" "enum",  ["inactive", "approaching",	"movingAway", "entering", "leaving", "enteringLeft", "enteringRight", "leavingLeft", "leavingRight" ]
 
         command "inactive"
         command "active"

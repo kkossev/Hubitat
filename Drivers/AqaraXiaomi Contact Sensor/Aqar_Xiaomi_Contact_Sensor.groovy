@@ -1,3 +1,4 @@
+/* groovylint-disable DuplicateNumberLiteral, DuplicateStringLiteral, LineLength */
 /**
  *  MIT License
  *  Copyright 2023 Jonathan Bradshaw (jb@nrgup.net)
@@ -39,15 +40,16 @@ import hubitat.zigbee.zcl.DataType
  *    flashes 3 times, the Aqara Motion Sensor should be reconnected and will resume reporting as normal
  */
 
-metadata {
-    definition(name: 'Aqara/Xiaomi Contact Sensor',
-        importUrl: 'https://raw.githubusercontent.com/bradsjm/hubitat-public/main/Aqara/AqaraContactSensorE1.groovy',
+ metadata {
+    definition(name: 'Aqara/Xiaomi Contact Sensor',       importUrl: 'https://raw.githubusercontent.com/bradsjm/hubitat-public/main/Aqara/AqaraContactSensorE1.groovy',
         namespace: 'aqara', author: 'Jonathan Bradshaw') {
         capability 'Contact Sensor'
         capability 'Battery'
         capability 'Sensor'
         capability 'Signal Strength'
         capability 'Voltage Measurement'
+
+        command    'initializeMCCGQ14LM'
 
         attribute 'healthStatus', 'enum', [ 'unknown', 'offline', 'online' ]
 
@@ -58,19 +60,26 @@ metadata {
         // fingerprint for Xiaomi Aqara Door/Window Sensor
         fingerprint endpointId: '01', profileId: '0104', deviceId: '5F01', inClusters: '0000,0003,FFFF,0006',
             outClusters: '0000,0004,FFFF', manufacturer: 'LUMI', model: 'lumi.sensor_magnet.aq2'
+
+        // kkossev Aqara MCCGQ14LM - NOT WORKING! 
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500,FCC0', outClusters:'0003,0019', model:'lumi.magnet.acn001', manufacturer:'LUMI', controllerType: 'ZGB'
     }
 
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description:\
             '<i>Enables event description logging.</i>'
 
-        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: false, description:\
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description:\
             '<i>Enables debug logging for 30 minutes.</i>'
     }
 }
 
 @Field static final String VERSION = '2023-03-28'
 @Field static final int HEALTHCHECK_INTERVAL_SEC = 3300 // hardcoded in device firmware
+
+Boolean isMCCGQ14LM() {
+    return device?.getDataValue('model') == 'lumi.magnet.acn001'
+}
 
 /**
  *  Scheduled update of health status attribute to offline.
@@ -87,6 +96,22 @@ void installed() {
     // populate some default values for attributes
     sendEvent(name: 'healthStatus', value: 'unknown')
     sendEvent(name: 'contact', value: 'unknown')
+    if (isMCCGQ14LM()) {
+        initializeMCCGQ14LM()
+    }
+}
+
+void initializeMCCGQ14LM() {
+    log.info 'initializing MCCGQ14LM...'
+    ArrayList<String> cmds = []
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", 'delay 200',]
+        //cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0500 {${device.zigbeeId}} {}"
+        //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 200)    // TODO: check - battery voltage
+        //cmds += zigbee.enrollResponse(100) + zigbee.readAttribute(0x0500, 0x0000)
+        //cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
+        cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 3600, 7200, 1  /*0*/, [:], 101)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
+    log.debug "initializeMCCGQ14LM: ${cmds}"
+    sendZigbeeCommands(cmds)
 }
 
 /**
@@ -116,6 +141,7 @@ void updated() {
  *  Handles the Basic and On/Off clusters by invoking the appropriate cluster parsing method.
  */
 void parse(final String description) {
+    if (settings.logEnable) { log.debug "zigbee parse description: ${description}" }
     // Fix for 0xFF01 should be Octet String (0x41) but is sent as a Character String (0x42)
     final Map descMap = zigbee.parseDescriptionAsMap(description.replace('01FF42', '01FF41'))
     updateAttribute('healthStatus', 'online')
@@ -159,9 +185,13 @@ void parseBasicCluster(final Map descMap) {
             updateDataValue('model', model)
             break
         case VERSION_ID:
-            final String swBuild = "0.0.0_${(descMap.value & 0xFF).toString().padLeft(4, '0')}"
-            if (settings.logEnable) { log.debug "xiaomi tag: swBuild (value ${swBuild})" }
-            device.updateDataValue('softwareBuild', swBuild)
+            try {
+                final String version = descMap.value ?: 'unknown'
+                log.info "device version is ${version}"
+                updateDataValue('firmwareVersion', version)
+            } catch (Exception e) {
+                log.warn "zigbee failed to parse firmware version: ${descMap.value}"
+            }
             break
         case XIAOMI_SPECIAL_REPORT_ID:
             final Map<Integer, Object> tags = decodeXiaomiTags(descMap.value as String)
@@ -293,6 +323,18 @@ private void updateAttribute(final String attribute, final Object value, final S
     }
     sendEvent(name: attribute, value: value, unit: unit, type: type, descriptionText: descriptionText)
 }
+
+void sendZigbeeCommands(List<String> cmd) {
+    if (settings?.logEnable) {
+        log.trace "${device.displayName} sendZigbeeCommands(cmd=$cmd)"
+    }
+    hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
+    cmd.each {
+        allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
+    }
+    sendHubCommand(allActions)
+}
+
 
 // Zigbee Attribute IDs
 @Field static final int MODEL_ID = 0x0005
