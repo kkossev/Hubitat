@@ -41,7 +41,7 @@ import hubitat.zigbee.zcl.DataType
  */
 
  metadata {
-    definition(name: 'Aqara/Xiaomi Contact Sensor',       importUrl: 'https://raw.githubusercontent.com/bradsjm/hubitat-public/main/Aqara/AqaraContactSensorE1.groovy',
+    definition(name: 'Aqara/Xiaomi Contact Sensor',       importUrl: 'https://github.com/kkossev/Hubitat/blob/development/Drivers/AqaraXiaomi%20Contact%20Sensor/Aqar_Xiaomi_Contact_Sensor.groovy',
         namespace: 'aqara', author: 'Jonathan Bradshaw') {
         capability 'Contact Sensor'
         capability 'Battery'
