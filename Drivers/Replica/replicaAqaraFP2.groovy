@@ -12,14 +12,14 @@
 *
 * 
 *  ver. 1.0.0 2022-10-12 kkossev - inital version
-*  ver. 1.0.1 2022-10-13 kkossev - (dev. branch) create child devices for each zone
+*  ver. 1.0.1 2022-10-13 kkossev - (dev. branch) motion child devices are created for each zone; singleThreaded: true
 * 
 *                        TODO: change mode movement zoneState to ENUM
 *                        TODO: add illuminance threshold (default 5 lux)
 */
 @SuppressWarnings('unused')
 public static String version()   {return "1.0.1"}
-public static String timeStamp() {return "10/13/2024 10:31 PM"}
+public static String timeStamp() {return "10/13/2024 10:52 PM"}
 
 import groovy.transform.Field
 import com.hubitat.app.DeviceWrapper
@@ -29,7 +29,7 @@ import com.hubitat.app.ChildDeviceWrapper
 
 metadata 
 {
-    definition(name: "Replica Aqara FP2", namespace: "replica", author: "kkossev", importUrl:"https://raw.githubusercontent.com/bloodtick/Hubitat/main/hubiThingsReplica/devices/replicaMotionSensor.groovy", singleThreaded: true)
+    definition(name: "Replica Aqara FP2", namespace: "replica", author: "kkossev", importUrl:"https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Drivers/Replica/replicaAqaraFP2.groovy", singleThreaded: true)
     {
         capability "Actuator"
         capability "Configuration"
