@@ -12,18 +12,24 @@
 *
 * 
 *  ver. 1.0.0 2022-10-12 kkossev - inital version
-*  ver. 1.0.1 2022-04-22 kkossev - (dev. branch)
+*  ver. 1.0.1 2022-10-13 kkossev - (dev. branch) create child devices for each zone
 * 
-*                        TODO: parse zoneState attribute; create child devices for each zone
 *                        TODO: change mode movement zoneState to ENUM
+*                        TODO: add illuminance threshold (default 5 lux)
 */
 @SuppressWarnings('unused')
-public static String version()   {return "1.0.0"}
-public static String timeStamp() {return "10/13/2024 8:37 AM"}
+public static String version()   {return "1.0.1"}
+public static String timeStamp() {return "10/13/2024 10:31 PM"}
+
+import groovy.transform.Field
+import com.hubitat.app.DeviceWrapper
+import com.hubitat.app.ChildDeviceWrapper
+
+@Field static Boolean _DEBUG = false
 
 metadata 
 {
-    definition(name: "Replica Aqara FP2", namespace: "replica", author: "kkossev", importUrl:"https://raw.githubusercontent.com/bloodtick/Hubitat/main/hubiThingsReplica/devices/replicaMotionSensor.groovy")
+    definition(name: "Replica Aqara FP2", namespace: "replica", author: "kkossev", importUrl:"https://raw.githubusercontent.com/bloodtick/Hubitat/main/hubiThingsReplica/devices/replicaMotionSensor.groovy", singleThreaded: true)
     {
         capability "Actuator"
         capability "Configuration"
@@ -42,9 +48,14 @@ metadata
         command "setModeValue", [[name: "mode*", type: "STRING", description: "Set Mode"]]
         command "setMovementValue", [[name: "mode*", type: "STRING", description: "Set Movement State"]]
         command "setZoneStateValue", [[name: "zone*", type: "STRING", description: "Set Zone State"]]
+
+        if (_DEBUG) {
+            command "deleteAllChildren"
+        }
     }
     preferences {
         input(name:"deviceInfoDisable", type: "bool", title: "Disable Info logging:", defaultValue: false)
+        input(name:"deviceDebugEnable", type: "bool", title: "Enable Debug logging:", defaultValue: false)
     }
 }
 
@@ -105,9 +116,65 @@ def setMovementValue(value) {
 }  
 
 def setZoneStateValue(value) {
-    String descriptionText = "${device.displayName} zoneState is $value"
-    sendEvent(name: "zoneState", value: value, descriptionText: descriptionText)
-    logInfo descriptionText
+    //String descriptionText = "${device.displayName} zoneState is $value"
+    //logDebug descriptionText
+    parseZoneString(value)  // ArrayList
+}
+
+def parseZoneString(ArrayList value) {
+    logDebug "parseZoneString: ${value}"
+    value.each { zone ->
+        // Zone: [id:5, name:Microwave Zone, state:not present]
+        ChildDeviceWrapper dw = getDw(zone.id as int)
+        if (!dw) {
+            logWarn "creating child device for zone ${zone.id} ${zone.name}"
+            createChildDevice(zone.id as int, zone.name)
+            dw = getDw(zone.id as int)
+        }
+        if (dw == null) { log.error "No child device was created for zone ${zone.id}" ; return }
+        String currentValue = dw.currentValue("motion") ?: 'unknown'
+        Map event = [:]
+        event.name = "motion"
+        event.value = zone.state == "present" ? "active" : "inactive"
+        event.descriptionText = "${device.displayName} zone ${zone.id} state is ${zone.state}"
+        if (currentValue == event.value) {
+            logDebug "ignoring child device ${dw.device.displayName} zone ${zone.id} <i>duplicated state</i> ${event.value}"
+            return // Skip to the next iteration
+        }
+        logDebug "Sending event ${event}"
+        dw.parse([event])
+    }
+}
+
+String getChildDeviceId(int zoneId) {
+    return "${device.id}-${String.format('%02d', zoneId)}"
+}
+
+ChildDeviceWrapper getDw(int zoneId) {
+    String id = getChildDeviceId(zoneId)
+    return getChildDevice(id)
+}
+
+
+void createChildDevice(int zoneId, String zoneName) {
+    if (zoneId == 0 || zoneId >20) { return }
+    if (zoneName == null || zoneName == "") { zoneName = "Zone ${zoneId}" }
+    String childId = getChildDeviceId(zoneId)
+    DeviceWrapper existingChild = getChildDevices()?.find { it.deviceNetworkId == childId }
+    if (existingChild) {
+        logWarn "${device.displayName} Child device ${childId} already exists (${existingChild})"
+        return
+    } 
+    log.info "${device.displayName} Creating device ${childId} zoneName ${zoneName}"
+    addChildDevice('hubitat', 'Generic Component Motion Sensor', childId, [isComponent: false, name: "${device.displayName} zone ${zoneId}", label: zoneName])
+}
+
+void deleteAllChildren() {
+    logDebug 'Parent deleteChildren'
+    getChildDevices().each { child ->
+            log.info "${device.displayName} Deleting ${child.deviceNetworkId}"
+            deleteChildDevice(child.deviceNetworkId)
+    }
 }
 
 def setMotionActive() {
