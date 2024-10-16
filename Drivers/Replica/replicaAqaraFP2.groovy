@@ -12,20 +12,22 @@
 *
 * 
 *  ver. 1.0.0 2022-10-12 kkossev - inital version
-*  ver. 1.0.1 2022-10-13 kkossev - (dev. branch) motion child devices are created for each zone; singleThreaded: true
+*  ver. 1.0.1 2022-10-13 kkossev - motion child devices are created for each zone; singleThreaded: true
+*  ver. 1.0.2 2022-10-16 kkossev - (dev. branch) added illuminance threshold (default 5 lux); zone child devices logs use the device name
 * 
+*                        TODO: debug logs auto off
 *                        TODO: change mode movement zoneState to ENUM
-*                        TODO: add illuminance threshold (default 5 lux)
 */
 @SuppressWarnings('unused')
-public static String version()   {return "1.0.1"}
-public static String timeStamp() {return "10/13/2024 10:52 PM"}
+public static String version()   {return "1.0.2"}
+public static String timeStamp() {return "10/16/2024 10:29 PM"}
 
 import groovy.transform.Field
 import com.hubitat.app.DeviceWrapper
 import com.hubitat.app.ChildDeviceWrapper
 
 @Field static Boolean _DEBUG = false
+@Field static Integer DEFAULT_ILLUMINANCE_THRESHOLD = 5
 
 metadata 
 {
@@ -56,6 +58,7 @@ metadata
     preferences {
         input(name:"deviceInfoDisable", type: "bool", title: "Disable Info logging:", defaultValue: false)
         input(name:"deviceDebugEnable", type: "bool", title: "Enable Debug logging:", defaultValue: false)
+        input('illuminanceThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: DEFAULT_ILLUMINANCE_THRESHOLD)
     }
 }
 
@@ -92,6 +95,13 @@ Map getReplicaCommands() {
 }
 
 def setIlluminanceValue(value) {
+    Integer lastIllum = device.currentValue('illuminance') ?: 0
+    Integer delta = Math.abs(lastIllum - (value as Integer))
+    Integer threshold = (settings?.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD) as int
+    if (delta < threshold) {
+        logDebug "<b>skipped</b> illuminance ${value}, less than delta ${threshold} (lastIllum=${lastIllum})"
+        return
+    }
     String descriptionText = "${device.displayName} illuminance is $value lux"
     sendEvent(name: "illuminance", value: value, unit: "lx", descriptionText: descriptionText)
     logInfo descriptionText
@@ -133,10 +143,11 @@ def parseZoneString(ArrayList value) {
         }
         if (dw == null) { log.error "No child device was created for zone ${zone.id}" ; return }
         String currentValue = dw.currentValue("motion") ?: 'unknown'
+        String childDeviceName = dw.device.displayName ?: zone.name
         Map event = [:]
         event.name = "motion"
         event.value = zone.state == "present" ? "active" : "inactive"
-        event.descriptionText = "${device.displayName} zone ${zone.id} state is ${zone.state}"
+        event.descriptionText = "${childDeviceName} zone ${zone.id} state is ${zone.state}"
         if (currentValue == event.value) {
             logDebug "ignoring child device ${dw.device.displayName} zone ${zone.id} <i>duplicated state</i> ${event.value}"
             return // Skip to the next iteration
