@@ -97,7 +97,7 @@
       "name": "Aqara P1 Motion Sensor",
       "category": "Control",
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Aqara%20P1%20Motion%20Sensor/packageManifest.json",
-      "description": "Works with Aqara P1 Motion Sensor RTCGQ14LM, Aqara High Precision Motion Sensor RTCGQ13LM, Aqara FP1 Human Presence Detector RTCZCGQ11LM, Aqara FP1E Human Presence Detector RTCZCGQ13LM, Aqara T1 light intensity sensor GZCGQ11LM, Mi Light Detection Sensor GZCGQ01LM, Xiaomi/Mijia Motion Sensor RTCGQ01LM, Aqara Motion Sensor RTCGQ11LM, Aqara E1 Motion Sensor RTCGQ15LM, Aqara T1 Motion Sensor RTCGQ12LM",
+      "description": "Works with Aqara P1 Motion Sensor RTCGQ14LM, Aqara FP1 Human Presence Detector RTCZCGQ11LM, Aqara FP1E Human Presence Detector RTCZCGQ13LM, RTCGQ13LM, GZCGQ11LM, GZCGQ01LM, RTCGQ01LM, RTCGQ11LM, RTCGQ15LM",
       "tags": [
         "Zigbee"
       ]
