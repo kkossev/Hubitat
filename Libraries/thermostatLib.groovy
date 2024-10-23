@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Thermostat Library', name: 'thermostatLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy', documentationLink: '',
-    version: '3.3.3')
+    version: '3.3.4')
 /*
  *  Zigbee Thermostat Library
  *
@@ -18,14 +18,14 @@ library(
  * ver. 3.3.0  2024-06-09 kkossev  - added thermostatLib.groovy
  * ver. 3.3.1  2024-06-16 kkossev  - added factoryResetThermostat() command
  * ver. 3.3.2  2024-07-09 kkossev  - release 3.3.2
- * ver. 3.3.3  2024-09-01 kkossev  - (dev.branch)
+ * ver. 3.3.4  2024-10-23 kkossev  - fixed exception in sendDigitalEventIfNeeded when the attribute is not found (level)
  *
  *                                   TODO: add eco() method
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
-public static String thermostatLibVersion()   { '3.3.3' }
-public static String thermostatLibStamp() { '2024/09/01 10:44 AM' }
+public static String thermostatLibVersion()   { '3.3.4' }
+public static String thermostatLibStamp() { '2024/10/23 10:40 PM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib
@@ -414,6 +414,10 @@ private int getElapsedTimeFromEventInSeconds(final String eventName) {
 // called from pollTuya()
 public void sendDigitalEventIfNeeded(final String eventName) {
     final Object lastEventState = device.currentState(eventName)
+    if (lastEventState == null) {
+        logDebug "sendDigitalEventIfNeeded: lastEventState ${eventName} is null, skipping"
+        return
+    }
     final int diff = getElapsedTimeFromEventInSeconds(eventName)
     final String diffStr = timeToHMS(diff)
     if (diff >= (settings.temperaturePollingInterval as int)) {
