@@ -19,8 +19,8 @@
  *                                   'Battery Voltage to Percentage' and 'Minimum time between reports' are hidden; 
  * ver. 3.3.3  2024-08-01 kkossev  - added _TZE200_g9a3awaj 'AVATTO_ZWT07_BATTERY_THERMOSTAT'
  * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
- * ver. 3.4.1  2024-10-05 kkossev  - (dev.branch) fixed exception in sendDigitalEventIfNeeded when the attribute is not found (level); added faultAlarm attribute;
- *                                   added TRV602 profile for  TS0601 _TZE204_ltwbm23f (also _TZE200_rtrmfadk )-->    https://github.com/Koenkk/zigbee-herdsman-converters/blob/f7cb1f160f07fcca7a354429cad9d63c7272ea85/src/devices/tuya.ts#L3285-L3348 
+ * ver. 3.4.1  2024-10-26 kkossev  - (dev.branch) fixed exception in sendDigitalEventIfNeeded when the attribute is not found (level); added faultAlarm attribute; added TRV602 profile (TS0601  _TZE200_rtrmfadk)
+ *                                   added TRV602Z profile (TS0601 _TZE204_ltwbm23f); queryAllTuyaDP() when refreshing TRV602 and TRV602Z;
  *
  *                                   TODO: add TS0601 _TZE204_lzriup1  https://community.hubitat.com/t/release-tuya-wall-mount-thermostat-water-electric-floor-heating-zigbee-driver/87050/318?u=kkossev 
  *                                   TODO: AVATTO -  better descriptions for anti-freeze and limescaleProtect preferences
@@ -50,7 +50,7 @@
  */
 
 static String version() { '3.4.1' }
-static String timeStamp() { '2024/10/23 11:52 PM' }
+static String timeStamp() { '2024/10/26 10:45 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -81,14 +81,16 @@ metadata {
     {
 
         // TODO - add all other models attributes possible values
-        attribute 'antiFreeze', 'enum', ['off', 'on']               // Tuya Saswell, AVATTO
+        attribute 'antiFreeze', 'enum', ['off', 'on']               // TUYA_SASWELL_TRV, AVATTO_TRV06_TRV16_ME167_ME168_TRV, 
         attribute 'batteryVoltage', 'number'
         attribute 'boostTime', 'number'                             // BRT-100
         attribute 'calibrated', 'enum', ['false', 'true']           // Aqara E1
         attribute 'calibrationTemp', 'number'                       // BRT-100, Sonoff
         attribute 'childLock', 'enum', ['off', 'on']                // BRT-100, Aqara E1, Sonoff, AVATTO
+        attribute 'comfortTemp', 'number'                           // TRV602Z, IMMAX_Neo Lite TRV 07732L
+        attribute 'controlMode', 'enum', ['PID', 'OnOff']           // TRV602Z
         attribute 'ecoMode', 'enum', ['off', 'on']                  // BRT-100
-        attribute 'ecoTemp', 'number'                               // BRT-100
+        attribute 'ecoTemp', 'number'                               // BRT-100, TRV602Z
         attribute 'emergencyHeating', 'enum', ['off', 'on']         // BRT-100
         attribute 'emergencyHeatingTime', 'number'                  // BRT-100
         attribute 'floorTemperature', 'number'                      // AVATTO/MOES floor thermostats
@@ -107,6 +109,7 @@ metadata {
         attribute 'batteryLowAlarm', 'enum', ['batteryOK', 'batteryLow']        // TUYA_SASWELL
         //attribute 'workingState', "enum", ["open", "closed"]        // BRT-100
         attribute 'faultAlarm', 'enum', ['clear', 'faultSensor', 'faultMotor', 'faultLowBatt', 'faultUgLowBatt', 'error']        // TUYA
+        attribute 'motorThrust', 'enum', ['strong', 'middle', 'weak']   // TRV602Z
 
         // Aqaura E1 attributes     TODO - consolidate a common set of attributes
         attribute 'preset', 'enum', ['manual', 'auto', 'away']      // TODO - remove?
@@ -299,13 +302,12 @@ metadata {
     ],
 
     'Tuya_TRV602'   : [        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f7cb1f160f07fcca7a354429cad9d63c7272ea85/src/devices/tuya.ts#L3285-L3348
-        description   : 'Tuya TRV602',
+        description   : 'Tuya TRV602 TRV',
         device        : [models: ['TS0601'], type: 'TRV', powerSource: 'battery', isSleepy:false],
         capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
         preferences   : ['windowOpenDetection':'8', 'childLock':'12', /*'calibrationTemp':'101',*/ 'minHeatingSetpoint':'15', 'maxHeatingSetpoint':'16', 'brightness':'111', 'orientation':'113', 'ecoMode':'114'],
         fingerprints  : [
             [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_rtrmfadk', deviceJoinName: 'Tuya TRV602'],
-            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_ltwbm23f', deviceJoinName: 'Tuya TRV602']      // https://s.click.aliexpress.com/e/_DDZf6Md
         ],
         commands      : ['sendSupportedThermostatModes':'sendSupportedThermostatModes', 'setHeatingSetpoint':'setHeatingSetpoint', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
         tuyaDPs       : [
@@ -335,8 +337,58 @@ metadata {
             [dp:114, name:'ecoMode',            type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Eco mode</b>',  description:'Eco mode'],       // {'comfort': tuya.enum(0), 'eco': tuya.enum(1)}
         ],
         supportedThermostatModes: ['off', 'heat', 'auto', 'emergency heat', 'eco'],
-        refresh: ['pollTuya'],
-        deviceJoinName: 'Tuya TRV602',
+        refresh: ['queryAllTuyaDP'],
+        deviceJoinName: 'Tuya TRV602 TRV',
+        configuration : [:]
+    ],
+
+    'Tuya_TRV602Z'   : [        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/af278d3a520a3fb37e7417f41e613cc39c485ea9/src/devices/tuya.ts#L5117C62-L5241
+        description   : 'Tuya TRV602Z TRV',
+        device        : [models: ['TS0601'], type: 'TRV', powerSource: 'battery', isSleepy:false],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
+        preferences   : ['controlMode':'127', 'childLock':'7', 'minHeatingSetpoint':'10', 'maxHeatingSetpoint':'9', 'windowOpenDetection':'14',  'calibrationTemp':'47', 'brightness':'111','orientation':'113', 'comfortTemp':'119', 'ecoTemp':'120'],
+        fingerprints  : [
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_ltwbm23f', deviceJoinName: 'Tuya TRV602Z TRV']      // https://s.click.aliexpress.com/e/_DDZf6Md
+        ],
+        commands      : ["pollTuya":"pollTuya","autoPollThermostat":"autoPollThermostat", 'sendSupportedThermostatModes':'sendSupportedThermostatModes', 'setHeatingSetpoint':'setHeatingSetpoint', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+        tuyaDPs       : [
+            [dp:2,   name:'thermostatMode',     type:'enum',            rw: 'rw', min:0,     max:5,    defVal:'3',  step:1,   scale:1,  map:[
+                    0: 'off',       // standby: tuya.enum(0),
+                    1: 'antifrost', // antifrost: tuya.enum(1),
+                    2: 'eco',       // eco: tuya.enum(2),
+                    3: 'heat',      // comfort: tuya.enum(3),
+                    4: 'auto',      // auto: tuya.enum(4),
+                    5: 'emergency heat',        // on: tuya.enum(5),
+                ] , title:'<b>Thermostat Mode</b>',  description:'Thermostat mode'],     // 'system_mode'   [0: 'auto', 1: 'heat', 2: 'off', 3: 'emergency heat'] 
+            //[dp:3,   name:'thermostatOperatingState',  type:'enum',     rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'heating', 1:'idle'] ,  unit:'', description:'Thermostat Operating State(working state)'],           // running_state
+            [dp:4,   name:'heatingSetpoint',    type:'decimal',         rw: 'rw', min:5.0,   max:35.0, defVal:20.0, step:0.5, scale:10, unit:'°C',  title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
+            [dp:5,   name:'temperature',        type:'decimal',         rw: 'ro', min:0.0,   max:50.0, defVal:20.0, step:0.5, scale:10, unit:'°C',  description:'Temperature'],     // current_heating_setpoint
+            [dp:6,   name:'battery',            type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:1,   scale:1,  unit:'%',   description:'Battery level'],
+            [dp:7,   name:'childLock',          type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'], title:'<b>Child Lock</b>',  description:'Child lock'],
+            [dp:9,   name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0,  max:45.0, defVal:35.0, step:1.0, scale:10, unit:'°C',  title: '<b>Maximum Temperature</b>',      description:'Maximum temperature'],
+            [dp:10,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,   max:15.0, defVal:10.0, step:1.0, scale:10, unit:'°C',  title: '<b>Minimum Temperature</b>',      description:'Minimum temperature'],
+            [dp:14,  name:'windowOpenDetection', type:'enum', dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Window Detection</b>',  description:'Window detection'],
+            [dp:15,  name:'windowsState',       type:'enum',            rw: 'ro', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'closed', 1:'open'],  title:'<bWindow State</b>',  description:'Window state'],
+            [dp:47,  name:'calibrationTemp',    type:'decimal',         rw: 'rw', min:-3.0,  max:3.0,  defVal:0.0,  step:1,   scale:1,  unit:'°C',  title:'<b>Calibration Temperature</b>', description:'Calibration Temperature'],                  // local_temperature_calibration
+            // ^^ check! ^^^ tuya.valueConverter.localTempCalibration1
+            [dp:102, name:'scheduleMonday',     type:'number',          rw: 'ro',  description:'Schedule Monday'],
+            [dp:103, name:'scheduleTuesday',    type:'number',          rw: 'ro',  description:'Schedule Tueasday'],
+            [dp:104, name:'scheduleWednesday',  type:'number',          rw: 'ro',  description:'Schedule Wednesday'],
+            [dp:105, name:'scheduleThursday',   type:'number',          rw: 'ro',  description:'Schedule Thursday'],
+            [dp:106, name:'scheduleFriday',     type:'number',          rw: 'ro',  description:'Schedule Friday'],
+            [dp:107, name:'scheduleSaturday',   type:'number',          rw: 'ro',  description:'Schedule Saturday'],
+            [dp:108, name:'scheduleSunday',     type:'number',          rw: 'ro',  description:'Schedule Sunday'],
+            [dp:110, name:'motorThrust',        type:'enum',            rw: 'ro', defVal:'1', map:[0:'strong', 1:'middle', 2:'weak'], description:'Motor thrust'],
+            [dp:111, name:'brightness',         type:'enum',            rw: 'rw', defVal:'1', map:[0:'high', 1:'medium', 2:'low'], title:'<b>Display Brightness</b>',  description:'Display brightness'],
+            [dp:113, name:'orientation',        type:'enum',            rw: 'rw', defVal:'1', map:[0:'up', 1:'right', 2:'down', 3:'left'], title:'<b>Screen Orientation</b>',  description:'Screen orientation'],
+            [dp:114, name:'level',              type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:10,   scale:10,  unit:'%', description:'Valve level'],      // valve open degree (position)
+            [dp:119, name:'comfortTemp',        type:'decimal',         rw: 'rw', min:5.0,   max:30.0, defVal:20.0, step:1.0, scale:10,  unit:'°C', title: '<b>Comfort Temperature</b>',      description:'Comfort temperature'],
+            [dp:120, name:'ecoTemp',            type:'decimal',         rw: 'rw', min:5.0,   max:30.0, defVal:7.0,  step:1.0, scale:10,  unit:'°C',  title: '<b>Eco Temperature</b>',      description:'Eco temperature'],
+            [dp:127, name:'controlMode',        type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'PID', 1:'onOff'] ,   unit:'', title:'<b>Control Mode</b>',  description:'PID - valve smooth control from 0% to 100%<br>onOff - 0.5 degrees above or below, valve either 0% or 100%'],   // 'system_mode', { comfort: 0, eco:(1) }
+        ],
+        supportedThermostatModes: ['off', 'heat', 'auto', 'emergency heat', 'eco'],
+        refresh: ['queryAllTuyaDP'],
+        deviceJoinName: 'Tuya TRV602Z TRV',
         configuration : [:]
     ],
 
@@ -377,12 +429,9 @@ metadata {
         ],
         supportedThermostatModes: ['off', 'heat', 'auto', 'emergency heat', 'eco'],
         refresh: ['pollTuya'],
-        deviceJoinName: 'MOES BRT-100 TRV',
+        deviceJoinName: 'IMMAX_Neo Lite TRV 07732L',
         configuration : [:]
     ],
-
-
-
 
 
     'TUYA_HY367_HY368_HY369_TRV'   : [        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/a615c8077123197a6d30aac334160e5dd4cf1058/src/devices/tuya.ts#L3018

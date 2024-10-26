@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Thermostat Library', name: 'thermostatLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy', documentationLink: '',
-    version: '3.3.4')
+    version: '3.4.0')
 /*
  *  Zigbee Thermostat Library
  *
@@ -19,13 +19,14 @@ library(
  * ver. 3.3.1  2024-06-16 kkossev  - added factoryResetThermostat() command
  * ver. 3.3.2  2024-07-09 kkossev  - release 3.3.2
  * ver. 3.3.4  2024-10-23 kkossev  - fixed exception in sendDigitalEventIfNeeded when the attribute is not found (level)
+ * ver. 3.4.0  2024-10-26 kkossev  - (dev. branch) 
  *
  *                                   TODO: add eco() method
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
-public static String thermostatLibVersion()   { '3.3.4' }
-public static String thermostatLibStamp() { '2024/10/23 10:40 PM' }
+public static String thermostatLibVersion()   { '3.4.0' }
+public static String thermostatLibStamp() { '2024/10/26 10:45 AM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib
@@ -268,6 +269,10 @@ public void setThermostatMode(final String requestedMode) {
             }
             break
         case 'eco':
+            if ('eco' in nativelySupportedModesList) {  
+                logDebug 'setThermostatMode: pre-processing: switching to natively supported eco mode'
+                break
+            }
             if (device.hasAttribute('ecoMode')) {   // changed 06/16/2024 : was : (device.currentValue('ecoMode') != null)  {
                 logDebug 'setThermostatMode: pre-processing: switching the eco mode on'
                 sendAttribute('ecoMode', 1)
