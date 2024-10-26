@@ -1,8 +1,9 @@
-/* groovylint-disable NglParseError, ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnusedImport, VariableName *//**
- *  Tuya Zigbee Button Dimmer - driver for Hubitat Elevation
+/* groovylint-disable NglParseError, ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnusedImport, VariableName */
+/**
  *  Tuya Multi Sensor 4 In 1 driver for Hubitat
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
+ *  https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441
  *
  * 	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * 	in compliance with the License. You may obtain a copy of the License at:
@@ -21,7 +22,10 @@
  * ver. 3.2.2  2024-07-05 kkossev  - created motionLib; restored 'all' attribute
  * ver. 3.2.3  2024-07-27 kkossev  - added Sonoff SNZB-03P
  * ver. 3.3.0  2024-08-30 kkossev  - main branch release.
+ * ver. 3.3.1  2024-10-26 kkossev  - added TS0601 _TZE200_f1pvdgoh into a new device profile group 'TS0601_2IN1_MYQ_ZMS03'
  *                                   
+ *                                   TODO: add TS0601 _TZE200_agumlajc https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1077?u=kkossev
+ *                                   TODO: 
  *                                   TODO: Sensor 3in1 _warning: couldn't find map for preference motionReset
  *                                   TODO: Sensor 3in1 _TZE200_7hfcudw5 - fix battery percentage (shows 4)
  *                                   TODO: test TUYATEC-53o41joc IAS - add refresh commands (battery not reported when paired!);
@@ -47,12 +51,12 @@
  *                                   TODO: check temperatureOffset and humidityOffset
 */
 
-static String version() { "3.3.0" }
-static String timeStamp() {"2024/08/30 9:12 AM"}
+static String version() { "3.3.1" }
+static String timeStamp() {"2024/10/26 12:47 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
-@Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for production
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for the production release !
 
 
 import groovy.transform.Field
@@ -77,7 +81,12 @@ deviceType = "MultiSensor4in1"
 @Field static final String DEVICE_TYPE = "MultiSensor4in1"
 
 metadata {
-    definition(name: 'Tuya Multi Sensor 4 In 1', namespace: 'kkossev', author: 'Krassimir Kossev', importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy', singleThreaded: true ) {
+    definition (
+        name: 'Tuya Multi Sensor 4 In 1',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy',
+        namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
+    {
+
         capability 'MotionSensor'
         //capability 'TamperAlert'
 
@@ -246,6 +255,26 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             configuration : ['battery': false]
     ],
 
+    // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1080?u=kkossev
+    'TS0601_2IN1_MYQ_ZMS03'  : [      //https://github.com/protyposis/zigbee-herdsman-converters/blob/c9b8f3172cb11ea0ca36440f8956eda582182df7/src/devices/tuya.ts#L4750
+            description   : 'Tuya 2in1 (Motion and Illuminance) MYQ_ZMS03 sensor',
+            models         : ['TS0601'],
+            device        : [type: 'PIR', isIAS:false, powerSource: 'dc', isSleepy:false],
+            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'Battery': true],
+            preferences   : ['motionReset':true, 'invertMotion':false],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_f1pvdgoh', deviceJoinName: 'Tuya MYQ_ZMS03 Multi Sensor 2 In 1'],          // https://s.click.aliexpress.com/e/_DdNVVZx 
+            ],
+            tuyaDPs:        [
+                [dp:1,   name:'motion',                   type:'enum',   rw: 'ro', min:0, max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'Motion'],
+                [dp:4,   name:'battery',                  type:'number', rw: 'ro', min:0, max:100,  defVal:100,  scale:1,  unit:'%',        title:'<b>Battery level</b>',              description:'Battery level'],
+                [dp:101, name:'illuminance',              type:'number', rw: 'ro', min:0, max:1000, defVal:0,    scale:1,  unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance'],
+            ],
+            refresh:        ['queryAllTuyaDP'],
+            deviceJoinName: 'Tuya MYQ_ZMS03 Multi Sensor 2 In 1'
+    ],
+
     'RH3040_TUYATEC'   : [ // testing TUYATEC-53o41joc   // non-configurable
             description   : 'TuyaTec RH3040 Motion sensor (IAS)',
             models        : ['RH3040'],
@@ -348,14 +377,14 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
     ],
 
     'TS0601_PIR_PRESENCE'   : [ // isBlackPIRsensor()       // https://github.com/zigpy/zha-device-handlers/issues/1618
-            description   : 'Tuya PIR Human Motion Presence Sensor (Black)',
+            description   : 'Tuya PIR Human Motion Sensor (Black)',
             models        : ['TS0601'],
             device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true, 'Battery': true],
             preferences   : ['fadingTime':'102', 'distance':'105'],
             commands      : ['resetStats':'resetStats', 'resetPreferencesToDefaults':'resetPreferencesToDefaults'],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_9qayzqa8', deviceJoinName: 'Smart PIR Human Motion Presence Sensor (Black)']    // https://www.aliexpress.com/item/1005004296422003.html
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_9qayzqa8', deviceJoinName: 'Smart PIR Human Motion Sensor (Black)']    // https://www.aliexpress.com/item/1005004296422003.html
             ],
             tuyaDPs:        [                                           // TODO - defaults !!
                 [dp:102, name:'fadingTime',          type:'number',  rw: 'rw', min:24,  max:300 ,  defVal:24,        scale:1,    unit:'seconds',      title:'<b>Fading time</b>',   description:'Fading(Induction) time'],
@@ -363,19 +392,19 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:119, name:'motion',              type:'enum',    rw: 'ro', min:0,   max:1 ,    defVal:'0',       scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
                 [dp:141, name:'humanMotionState',    type:'enum',    rw: 'ro', min:0,   max:4 ,    defVal:'0',       scale:1,    map:[0:'none', 1:'presence', 2:'peaceful', 3:'small_move', 4:'large_move'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
             ],
-            deviceJoinName: 'Tuya PIR Human Motion Presence Sensor LQ-CG01-RDR',
+            deviceJoinName: 'Tuya PIR Human Motion Sensor LQ-CG01-RDR',
             configuration : ['battery': false]
     ],
 
     'TS0601_PIR_AIR'      : [    // isHumanPresenceSensorAIR()  - Human presence sensor AIR (PIR sensor!) - o_sensitivity, v_sensitivity, led_status, vacancy_delay, light_on_luminance_prefer, light_off_luminance_prefer, mode, luminance_level, reference_luminance, vacant_confirm_time
-            description   : 'Tuya PIR Human Motion Presence Sensor AIR',
+            description   : 'Tuya PIR Human Motion Sensor AIR',
             models        : ['TS0601'],
             device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'Battery': true],                // TODO - check if battery powered?
             preferences   : ['vacancyDelay':'103', 'ledStatusAIR':'110', 'detectionMode':'104', 'vSensitivity':'101', 'oSensitivity':'102', 'lightOnLuminance':'107', 'lightOffLuminance':'108' ],
             commands      : ['resetStats':'resetStats'],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_auin8mzr', deviceJoinName: 'Tuya PIR Human Motion Presence Sensor AIR']        // Tuya LY-TAD-K616S-ZB
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_auin8mzr', deviceJoinName: 'Tuya PIR Human Motion Sensor AIR']        // Tuya LY-TAD-K616S-ZB
             ],
             tuyaDPs:        [                                           // TODO - defaults !!
                 [dp:101, name:'vSensitivity',        type:'enum',    rw: 'rw', min:0,   max:1,     defVal:'0', scale:1,    map:[0:'Speed Priority', 1:'Standard', 2:'Accuracy Priority'] ,   unit:'-',     title:'<b>vSensitivity options</b>', description:'V-Sensitivity mode'],
@@ -389,7 +418,7 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:109, name:'luminanceLevel',      type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>luminanceLevel</b>',                description:'luminanceLevel'],            // Ligter, Medium, ... ?
                 [dp:110, name:'ledStatusAIR',        type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0', scale:1,    map:[0: 'Switch On', 1:'Switch Off', 2: 'Default'] ,   unit:'',     title:'<b>LED status</b>', description:'Led status switch'],
             ],
-            deviceJoinName: 'Tuya PIR Human Motion Presence Sensor AIR',
+            deviceJoinName: 'Tuya PIR Human Motion Sensor AIR',
             configuration : ['battery': false]
     ],
 
@@ -810,14 +839,6 @@ List<String> refreshFantem() {
 List<String> customRefresh() {
     logDebug "customRefresh()"
     List<String> cmds = []
-    /*
-    if (is4in1()) {
-        IAS_ATTRIBUTES.each { key, value ->
-            cmds += zigbee.readAttribute(0x0500, key, [:], delay = 199)
-        }        
-        cmds += zigbee.command(0xEF00, 0x07, '00')    // Fantem Tuya Magic
-    }
-    */
     List<String> devProfCmds = refreshFromDeviceProfileList()
     if (devProfCmds != null && !devProfCmds.isEmpty()) {
         cmds += devProfCmds
