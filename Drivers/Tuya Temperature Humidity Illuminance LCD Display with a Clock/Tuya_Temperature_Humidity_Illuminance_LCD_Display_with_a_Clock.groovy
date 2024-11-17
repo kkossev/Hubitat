@@ -51,7 +51,7 @@
  * ver. 1.6.4  2024-07-23 kkossev - added Tuya Smart Soil Tester _TZE284_aao3yzhs into 'TS0601_Soil_II'
  * ver. 1.6.5  2024-08-09 kkossev - bugfix: TS0201 _TZ3000_dowj6gyi moved back to TS0201 group;
  * ver. 1.6.6  2024-08-14 kkossev - added TS0601 _TZE204_myd45weu; added TS0601 _TZE204_qyflbnbj
- * ver. 1.6.7  2024-10-23 kkossev - (dev.branch) added TS0222 _TZ3000_kky16aay in a new 'TS0222_Soil' group
+ * ver. 1.6.7  2024-10-23 kkossev - added TS0222 _TZ3000_kky16aay in a new 'TS0222_Soil' group
  *
  *                                  TODO: queryOnDeviceAnnounce for TS0601_Tuya_2 group
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
