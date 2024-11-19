@@ -40,8 +40,9 @@
  *  ver. 1.3.4 2024-08-02 dstutz  - added Giex _TZE204_7ytb3h8u 
  *  ver. 1.3.5 2024-09-22 kkossev - removed tuyaVersion for non-Tuya devices; combined on() + timedOff() command for opening the Sonoff valve;
  *  ver. 1.3.6 2024-09-23 kkossev - Sonoff valve: irrigationDuration 0 will disable the valve auto-off; default auto-off timer changed to 0 (was 60 seconds); invalid 'digital' type of autoClose fixed; added workState attribute; logging improvements;
+ *  ver. 1.4.0 2024-11-19 kkossev - (dev. branch) supressed 'Sonoff SWV sendIrrigationDuration is not avaiable!' warning; added NovaDigital TS0601 _TZE200_fphxkxue @Rafael as TS0601_SASWELL_VALVE
  *
- *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages;
+ *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
  *                                  TODO: set the device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
  *                                  TODO: clear the old states on update; add rejoinCtr;
  */
@@ -49,8 +50,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-static String version() { '1.3.6' }
-static String timeStamp() { '2024/09/23 12:55 PM' }
+static String version() { '1.4.0' }
+static String timeStamp() { '2024/11/19 7:25 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -324,7 +325,8 @@ boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,0702,EF00', outClusters:'0019',      model:'TS0601', manufacturer:'_TZE200_akjefhj5'],     // SASWELL SAS980SWT-7-Z01 (RTX ZVG1 ) (_TZE200_akjefhj5, TS0601) https://github.com/zigpy/zha-device-handlers/discussions/1660
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00',                outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_81isopgh'],     // "SAS980SWT-7-Z01(EU)" // https://community.hubitat.com/t/release-tuya-zigbee-valve-driver-w-healthstatus/92788/184?u=kkossev
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,0702,EF00', outClusters:'0019',      model:'TS0601', manufacturer:'_TZE200_2wg5qrjy']      // not tested //
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,0702,EF00', outClusters:'0019',      model:'TS0601', manufacturer:'_TZE200_2wg5qrjy'],     // not tested //
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00',                outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_fphxkxue']      // NovaDigital
             ],
             deviceJoinName: 'Saswell Zigbee Irrigation Valve',
             instructions  : 'https://fccid.io/2AOIFSAS980SWT/User-Manual/User-Manual-5361734.pdf',
@@ -428,6 +430,8 @@ boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
 
 void parse(String description) {
     checkDriverVersion()
+    if (state.stats == null) { state.stats = [:] }
+    if (state.lastRx == null) { state.lastRx = [:] }
     state.stats['RxCtr'] = (state.stats['RxCtr'] ?: 0) + 1
     state.lastRx['parseTime'] = new Date().getTime()
     setHealthStatusOnline()
@@ -1831,6 +1835,11 @@ void sendIrrigationDuration() {
     }
     else if (isFankEver()) {
         cmds = sendTuyaCommand('09', DP_TYPE_VALUE, dpValHex)
+    }
+    else if (isSonoff()) {
+        logDebug "Sonoff irrigation timer is ${settings?.autoOffTimer ?: DEFAULT_AUTOOFF_TIMER}"
+        // nothing to send for Sonoff
+        return
     }
     else {
         logWarn 'sendIrrigationDuration is not avaiable!'
