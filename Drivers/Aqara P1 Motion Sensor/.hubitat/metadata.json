@@ -2,9 +2,9 @@
   "files": [
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Aqara P1 Motion Sensor/Aqara_P1_Motion_Sensor.groovy",
-      "id": 3016,
+      "id": 2211,
       "codeType": "driver",
-      "version": 18
+      "version": 1182
     }
   ]
 }

@@ -42,8 +42,8 @@
  * ver. 1.6.0 2024-06-29 kkossev  - added state.health 'parentNWK' and 'nwkCtr'; added attribute parentNWK;
  * ver. 1.6.1 2024-07-22 kkossev  - bugfix: illuminanceThreshold and illuminanceMinReportingTime not working for lumi.sen_ill.mgl01 (GZCGQ01LM)
  * ver. 1.7.0 2024-08-15 kkossev  - added lumi.sensor_occupy.agl1 - Aqara FP1E; capability 'Refresh'; added spammy reports filtering for FP1E
+ * ver. 1.7.1 2024-11-19 kkossev  - (dev.branch) added motionSensitivity for FP1E; added targetDistance for FP1E; added detectionRange for FP1E
  * 
- *                                 TODO: add detectionRange for FP1E
  *                                 TODO: powerSource 'unknown' fix; No signature of method: user_driver_kkossev_Aqara_P1_Motion_Sensor_3016.resetState() is applicable for argument types: () values: [] on line 1130 (method deviceCommandTimeout)
  *                                 TODO: WARN log, when the device model is not registered during the pairing !!!!!!!!
  *                                 TODO: automatic logsOff() is not working sometimes!
@@ -56,8 +56,8 @@
  *
  */
 
-static String version() { "1.7.0" }
-static String timeStamp() {"2024/08/15 8:26 AM"}
+static String version() { "1.7.1" }
+static String timeStamp() {"2024/11/19 11:59 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -103,9 +103,15 @@ metadata {
             "enter (left)",
             "leave (right)",
             "towards",
-            "away"
+            "away",
+            "idle", // FP1E
+            "large movement", // FP1E
+            "small movement" // FP1E
         ]
-        
+        attribute "targetDistance", "number"    // FP1E
+        attribute "detectionRange", "decimal"   // FP1E
+        attribute "motionSensitivity", "enum", ["low", "medium", "high"]   // FP1E
+       
         if (_REGIONS) {
             attribute "region_last_enter", "number"
             attribute "region_last_leave", "number"
@@ -147,7 +153,7 @@ metadata {
             if (isRTCGQ13LM() || isP1() || isT1()) {
                 input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "<i>Motion Retrigger Interval, seconds (2..200)</i>", range: "2..202", defaultValue: 30)
             }
-            if (isRTCGQ13LM() || isP1() || isFP1() /*|| isFP1E()*/) {
+            if (isRTCGQ13LM() || isP1() || isFP1() || isFP1E()) {
                 input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "<i>Sensor motion sensitivity</i>", defaultValue: 0, options: getSensitivityOptions())
             }
             if (isP1()) {
@@ -158,8 +164,8 @@ metadata {
                 input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "<i>monitoring mode</i>", defaultValue: 0, options: monitoringModeOptions)
             }
             if (isFP1E()) {
-                input (name: "filterSpam", type: "bool", title: "<b>Filter Spammy Reports</b>", description: "<i>Filter the unused spammy reports from the FP1E sensor. Recommended value is <b>true</b></i>", defaultValue: true)
-                //input (name: 'detectionRange', type: 'decimal', title: '<b>Detection Range</b>', description: '<i>Maximum detection distance, range (0.10..6.00)</i>', range: '0.5..6.0', defaultValue: 6.00)
+                input (name: "filterSpam", type: "bool", title: "<b>Filter FP1E Distance Reports</b>", description: "<i>Filter the FP1E distance reports, if not really used in automations. Recommended value is <b>true</b></i>", defaultValue: true)
+                input (name: 'detectionRange', type: 'decimal', title: '<b>Detection Range</b>', description: '<i>Maximum detection distance, range (0.10..6.00)</i>', range: '0.5..6.0', defaultValue: 6.00)
             }
             if (isLightSensor()) {
                 input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "<i>illuminance minimum reporting interval, seconds (4..300)</i>", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
@@ -194,6 +200,7 @@ metadata {
         motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],    // TODO - check!
     ],
     'RTCZCGQ13LM': [    // FP1E https://github.com/niceboygithub/AqaraGateway/blob/dedad6e56d02b6f5d1dac364d9d9a20ec12c5ff8/custom_components/aqara_gateway/core/utils.py#L491
+        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/5fbee666c8edbf198aa91a37f8008f51b4f1b467/src/devices/lumi.ts#L1895
         model: "lumi.sensor_occupy.agl1", manufacturer: "aqara", deviceJoinName: "Aqara FP1E Human Presence Detector RTCZCGQ13LM",
         capabilities: ["motionSensor":true, "temperatureMeasurement":true, "battery":true, "powerSource":true, "signalStrength":true],
         attributes: ["roomState", "roomActivity"],
@@ -343,7 +350,7 @@ void parse(String description) {
     }
 }
 
-// Aqara FP1E spammy / unused reports filter
+// Aqara FP1E spammy distance reports filter
 boolean isSpammyReport(Map descMap) {
     if (settings?.filterSpam != true) { return false }
     if (descMap.cluster == "FCC0" && descMap.attrId in ['015F']) {
@@ -414,13 +421,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             break
         case "0106" : // PIR sensitivity RTCGQ13LM RTCGQ14LM RTCZCGQ11LM
         case "010C" : // (268) PIR sensitivity RTCGQ13LM RTCGQ14LM (P1) RTCZCGQ11LM; TODO: check if applicable for FP1 ? // FP1E 010C_SensorSensitivity (115F): 3 [UNSIGNED_8_BIT_INTEGER]
-            if (isFP1E()) {
-                logDebug "(0x${it.attrId}) received FP1E unknown report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
-            }
-            else {
-                device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
-                logDebug "(0x010C) <b>received PIR sensitivity report: ${sensitivityOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
-            }
+            device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
+            sendEvent(name: "motionSensitivity", value: sensitivityOptions[value.toString()], type: "physical")
+            logDebug "(0x010C) <b>received motion sensitivity report: ${sensitivityOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0112" : // Aqara P1 PIR motion Illuminance
             if (!isRTCGQ13LM()) { // filter for High Preceision sensor - no illuminance sensor!
@@ -472,6 +475,16 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "0157" : // (343) FP1 reset presence event // FP1E 0157_SensorResetMotion (115F): [UNSIGNED_8_BIT_INTEGER]
             logWarn "(0x0157) <b>received reset presence/motion report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
+        case "015B" :   // 015B_Custom: 600 [UNSIGNED_32_BIT_INTEGER] detection range
+            value = Integer.parseInt(it.value, 16)
+            logDebug "(0x015B) received detection range report: ${value} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            detectionRangeEvent( value )
+            break
+        case "015F" :   // 015F_Custom: 15 [UNSIGNED_32_BIT_INTEGER] FP1E 'target_distance'
+            value = Integer.parseInt(it.value, 16)
+            logDebug "(0x015F) received FP1E target_distance report: ${value} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            targetDistanceEvent( value )
+            break
         case '0160' :   // FP1E frequently sent report ?? presence_event [ "0":"0 - unknown", "1":"1 - unknown" , "2":"idle" , "3":"large movement" , "4":"small movement" , "5":"5 - unknown" ]
             logDebug "(0x0160) received report: ${fp1ERoomActivityEventTypeOptions[value.toString()]} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             presenceTypeEvent( fp1ERoomActivityEventTypeOptions[value.toString()] )
@@ -488,11 +501,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case '0134' :   // 0134_Unknown (115F): [OCTET_STRING]
         case '0159' :   // 0159_Unknown (115F): 1 [UNSIGNED_8_BIT_INTEGER]
         case "015A" :   // FP1E RTCZCGQ13LM unknown   015A_Custom: 600 [UNSIGNED_32_BIT_INTEGER]
-        case "015B" :   // 015B_Custom: 600 [UNSIGNED_32_BIT_INTEGER]
         case "015C" :   // 015C_Custom: 1 [UNSIGNED_8_BIT_INTEGER]
         case "015D" :   // 015D_Custom: 1 [UNSIGNED_8_BIT_INTEGER]
         case "015E" :   // 015E_Custom: 1 [UNSIGNED_8_BIT_INTEGER]
-        case "015F" :   // 015F_Custom: 15 [UNSIGNED_32_BIT_INTEGER]
         case '0705' :   // 0705_Unknown (115F): 0 [UNSIGNED_8_BIT_INTEGER]
         case 'FFF2' :   // FFF2_Unknown (115F): 0006_AqaraCommand [FCC0_ManufacturerSpecific: mc=115F, null -> null, TID=--, Input, const1=62207, length1=134, const2=null, seq=null, integrity=null, action=null, const3=null, length2=null, raw=null] [AQARA_FFF2]
         case 'FFFD' :   // FFFD_Unknown (115F): 1 [UNSIGNED_16_BIT_INTEGER]
@@ -1014,6 +1025,26 @@ def presenceTypeEvent( String presenceTypeEvent, isDigital=false ) {
     }
 }
 
+import java.math.RoundingMode
+
+def targetDistanceEvent( Integer distance ) {
+    if (distance != null) {
+        BigDecimal distanceConverted = distance / 100 as BigDecimal 
+        distanceConverted = distanceConverted.setScale(2, RoundingMode.HALF_UP)
+        sendEvent("name": "targetDistance", "value": distanceConverted, "type": "physical")
+        if (settings?.txtEnable) log.info "${device.displayName} target distance is ${distanceConverted} m"
+    }
+}
+
+def detectionRangeEvent( Integer range ) {
+    if (range != null) {
+        BigDecimal rangeConverted = range / 100 as BigDecimal
+        rangeConverted = rangeConverted.setScale(2, RoundingMode.HALF_UP)
+        sendEvent("name": "detectionRange", "value": rangeConverted, "type": "physical")
+        if (settings?.txtEnable) log.info "${device.displayName} detection range is ${rangeConverted} m"
+    }
+}
+
 private handleMotion( Boolean motionActive, isDigital=false ) {    
     if (motionActive) {
         def timeout = settings?.motionResetTimer == null ? 30 : motionResetTimer
@@ -1182,8 +1213,7 @@ void setWatchdogTimer() {
 void refresh() {
     logInfo 'refresh...'
     if (isFP1E()) {
-        sendZigbeeCommands(zigbee.readAttribute(0xFCC0, 0x015B, [mfgCode: 0x115F], 0))
-        sendZigbeeCommands(zigbee.readAttribute(0xFCC0, 0x015B, [:], 0))
+        sendZigbeeCommands(zigbee.readAttribute(0xFCC0, 0x015B, [mfgCode: 0x115F], 0))  // detection range
     }
     else {
         logDebug 'no refresh required'
@@ -1231,7 +1261,12 @@ void updated() {
     if (settings?.internalTemperature == false) {
         device.deleteCurrentState("temperature")
     }
-    
+    if (settings?.filterSpam == true) {
+        if (device.currentValue('targetDistance') != null) {    
+            device.deleteCurrentState("targetDistance")
+        }
+    }
+
     // restart the healthCheck timer
     runIn( DEFAULT_POLLING_INTERVAL, "deviceHealthCheck", [overwrite: true, misfire: "ignore"])
 
@@ -1254,12 +1289,20 @@ void updated() {
             cmds += zigbee.writeAttribute(0xFCC0, 0x0152, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
     }
-    if (isRTCGQ13LM() || isP1() || isFP1()) {
+    if (isRTCGQ13LM() || isP1() || isFP1() || isFP1E()) {
         if (settings?.motionSensitivity != null && settings?.motionSensitivity != 0) {
             value = safeToInt( motionSensitivity )
             if (settings?.logEnable) log.debug "${device.displayName} setting motionSensitivity to ${sensitivityOptions[value.toString()]} (${value})"
             cmds += zigbee.writeAttribute(0xFCC0, 0x010C, 0x20, value, [mfgCode: 0x115F], delay=200)
             cmds += zigbee.readAttribute(0xFCC0, 0x010C, [mfgCode: 0x115F], delay=200)    // read it back
+            if (isFP1E()) {
+                log.trace "detectionRange = ${settings?.detectionRange}"
+                value = (settings?.detectionRange * 100 as Integer) ?: 600
+                log.trace "value = ${value}"
+                if (settings?.logEnable) log.debug "${device.displayName} setting detectionRange to ${value}"
+                cmds += zigbee.writeAttribute(0xFCC0, 0x015B, 0x23, value, [mfgCode: 0x115F], delay=201)    // detection range
+                cmds += zigbee.readAttribute(0xFCC0, 0x015B, [mfgCode: 0x115F], delay=201)    // read it back
+            }
         }
     }
     if (isRTCGQ13LM() || isP1() || isT1()) {
@@ -1518,7 +1561,7 @@ void aqaraBlackMagic() {
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
         cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // TODO: check - battery voltage
-        cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay=200)
+        cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay=200)    // motion sensitivity, including FP1E
     }
     //cmds += activeEndpoints()
     sendZigbeeCommands( cmds )
