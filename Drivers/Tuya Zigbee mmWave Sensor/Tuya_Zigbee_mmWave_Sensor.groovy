@@ -33,6 +33,7 @@
  * ver. 3.3.2  2024-10-07 kkossev  - TS0225 _TZE200_hl0ss9oa new fingerprint; added switch to disable the spammy distanceReporting for _TZE204_iaeejhvf _TZE200_dtzziy1e _TZE204_dtzziy1e _TZE200_clrdrnya _TZE204_clrdrnya (LeapMMW/Wenzhi)
  * ver. 3.3.3  2024-10-19 kkossev  - humanMotionState 'small_move' and 'large_move' replaced by 'small' and 'large'; the soft 'ignoreDistance' preference is shown only for these old devices that don't have the true distance reporting disabling switch.
  * ver. 3.3.4  2024-11-17 kkossev  - TS0225 _TZE200_2aaelwxk power source changed to 'dc'; bug fixed for 'humanMotionState' attribite - 'presence' is now changed to 'present'.
+ * ver. 3.3.5  2024-11-17 kkossev  - (dev. branch) adding TS0601 _TZ6210_duv6fhwt (Heiman presence sesnor)
  *                                   
  *                                   TODO: 
  *                                   TODO: add https://www.leapmmw.com/ mmWave radars : https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/mtd085_convertor_240628.js https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/mtd085_z2m1.4.0.js 
@@ -48,8 +49,8 @@
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
 */
 
-static String version() { "3.3.4" }
-static String timeStamp() {"2024/11/17 7:42 PM"}
+static String version() { "3.3.5" }
+static String timeStamp() {"2024/11/21 11:23 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -923,7 +924,26 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             refresh: ['queryAllTuyaDP'],
             spammyDPsToNotTrace : [12],    
             deviceJoinName: 'Tuya mmWave Radar ZHPS01'
-    ]        
+    ],
+
+    'TS0601_HEIMAN_RADAR'   : [     // https://community.hubitat.com/t/release-tuya-zigbee-mmwave-sensors-code-moved-from-the-tuya-4-in-1-driver/137410/254?u=kkossev
+            description   : 'Heiman mmWave Presence Sensor HS8OS',
+            models        : ['TS0601'],
+            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            capabilities  : ['MotionSensor': true, 'DistanceMeasurement':true, 'IlluminanceMeasurement': true],
+            preferences   : ['fadingTime':'103', 'radarSensitivity':'116', 'minimumDistance':'108', 'maximumDistance':'107', 'ledIndicator':'104', staticDetectionDistance:'109', staticDetectionMinDistance:'110', smallMotionDetectionDistance:'114', smallMotionDetectionMinDistance:'115', smallMotionDetectionSensitivity:'117', staticDetectionSensitivity:'118'],
+            commands      : ['resetStats':'resetStats'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0B05,EF00', outClusters:'0003,0019,EF00', model:'TS0601', manufacturer:'_TZ6210_duv6fhwt', deviceJoinName: 'Heiman mmWave Presence Sensor HS8OS']
+            ],
+            tuyaDPs:        [
+                [dp:1,   name:'motion',            type:'enum',    rw: 'ro', min:0, max:1,    defVal: '0', map:[0:'active', 1:'inactive'],     description:'Presence'],
+            ], 
+            refresh: ['queryAllTuyaDP'],
+            spammyDPsToIgnore : [],           
+            spammyDPsToNotTrace : [],
+            deviceJoinName: 'Heiman mmWave Presence Sensor HS8OS'
+    ]
 ]
 
 // called from processFoundItem() for Linptech radar
