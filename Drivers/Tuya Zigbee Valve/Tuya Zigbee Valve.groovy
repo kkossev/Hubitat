@@ -40,7 +40,7 @@
  *  ver. 1.3.4 2024-08-02 dstutz  - added Giex _TZE204_7ytb3h8u 
  *  ver. 1.3.5 2024-09-22 kkossev - removed tuyaVersion for non-Tuya devices; combined on() + timedOff() command for opening the Sonoff valve;
  *  ver. 1.3.6 2024-09-23 kkossev - Sonoff valve: irrigationDuration 0 will disable the valve auto-off; default auto-off timer changed to 0 (was 60 seconds); invalid 'digital' type of autoClose fixed; added workState attribute; logging improvements;
- *  ver. 1.4.0 2024-11-21 kkossev - (dev. branch) supressed 'Sonoff SWV sendIrrigationDuration is not avaiable!' warning; added NovaDigital TS0601 _TZE200_fphxkxue @Rafael as TS0601_SASWELL_VALVE; added queryAllTuyaDP for Tuya devices;
+ *  ver. 1.4.0 2024-11-22 kkossev - (dev. branch) supressed 'Sonoff SWV sendIrrigationDuration is not avaiable!' warning; added NovaDigital TS0601 _TZE200_fphxkxue @Rafael as TS0601_SASWELL_VALVE; added queryAllTuyaDP for TS0601 devices;
  *
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
  *                                  TODO: set the device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
@@ -51,7 +51,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 static String version() { '1.4.0' }
-static String timeStamp() { '2024/11/21 3:36 PM' }
+static String timeStamp() { '2024/11/22 10:38 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -1354,7 +1354,10 @@ void refresh() {
     List<String> cmds = []
     if (state.states == null) { state.states = [:] }
     state.states['isRefresh'] = true
-    if (device.getDataValue('model') != 'TS0601') {
+    if (device.getDataValue('model') == 'TS0601') {
+        cmds += zigbee.command(0xEF00, 0x03)    // queryAllTuyaDP - added 11/21/2024
+    }
+    else  {
         cmds = zigbee.onOffRefresh()
     }
     if (deviceProfilesV2[getModelGroup()]?.capabilities?.battery?.value == true) {
@@ -1362,9 +1365,6 @@ void refresh() {
         //cmds += zigbee.readAttribute(0x001, 0x0021, [:], delay = 200)
     }
     //
-    if (isTuya()) {
-        cmds += zigbee.command(0xEF00, 0x03)    // queryAllTuyaDP - added 11/21/2024
-    }
     if (isSASWELL() || isGIEX()) {
         cmds += zigbee.command(0xEF00, 0x0, '00020100')
     }

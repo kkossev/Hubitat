@@ -64,7 +64,7 @@
  *  ver. 1.9.4 2024-04-14 kkossev - added for tests: TS0601 _TZE204_ves1ycwx _TZE200_ves1ycwx _TZE200_v9hkz2yn Zemismart Real-time Smart Energy Monitors - ONE CHANNEL ONLY!
  *  ver. 1.9.5 2024-05-16 kkossev - added ThirdReality 3RSPE01044BZ Smart Plug E2 (European socket!)
  *  ver. 1.9.6 2024-06-04 kkossev - added setEnergy() command
- *  ver. 1.9.7 2024-07-05 kkossev - (dev.branch) W.I.P. - added SPM01 TS0601 _TZE200_qhlxve78 and _TZE200_bcusnqt8
+ *  ver. 1.9.7 2024-07-05 kkossev - added SPM01 TS0601 _TZE200_qhlxve78 and _TZE200_bcusnqt8
  *
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
  *                                 TODO: add rtt measurement in ping()
