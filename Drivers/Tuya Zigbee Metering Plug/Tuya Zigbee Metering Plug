@@ -65,6 +65,7 @@
  *  ver. 1.9.5 2024-05-16 kkossev - added ThirdReality 3RSPE01044BZ Smart Plug E2 (European socket!)
  *  ver. 1.9.6 2024-06-04 kkossev - added setEnergy() command
  *  ver. 1.9.7 2024-07-05 kkossev - added SPM01 TS0601 _TZE200_qhlxve78 and _TZE200_bcusnqt8
+ *  ver. 1.9.8 2024-11-22 kkossev - (dev. branch) added TS011F _TZ3000_xzhnra8x _TZ3000_rdfh8cfs _TZ3000_fgwhjm9j _TZ3000_waho4jtj
  *
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
  *                                 TODO: add rtt measurement in ping()
@@ -87,8 +88,8 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
-static String version() { '1.9.7' }
-static String timeStamp() { '2024/07/05 7:56 AM' }
+static String version() { '1.9.8' }
+static String timeStamp() { '2024/11/22 10:52 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -148,6 +149,11 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,0702,0B04,E000,E001', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_1h2x4akh',  deviceJoinName: 'Ajax/Zignito Plug Wall Socket'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_w0qqde0g', deviceJoinName: 'Neo NAS-WR01 Outlet TS011F'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_gjnozsaz', deviceJoinName: 'NEO ZigBee On Off Power Metering Plug'  // https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_xzhnra8x', deviceJoinName: 'NEO ZigBee On Off Power Metering Plug'  // https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_rdfh8cfs', deviceJoinName: 'NEO ZigBee On Off Power Metering Plug'  // https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_fgwhjm9j', deviceJoinName: 'NEO ZigBee On Off Power Metering Plug'  // https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_waho4jtj', deviceJoinName: 'NEO ZigBee On Off Power Metering Plug'  // https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81
+
         /* moved to "Zemismart Zemismart ZigBee Wall Switch Multi-Gang" driver (no power monitoring)
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_v1pdxuqq", deviceJoinName: "XH-002P Outlet TS011F No Power Monitoring"  // - no power monitoring !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_hyfvrar3", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
@@ -1162,7 +1168,7 @@ void parseZHAcommand(Map descMap) {
                                     //  current: (value[4] / 1000), voltage: (value[1]), power: value[7] ???
                                     // data:[38, C6, 06, 00, 00,     08,        09, 10,   00, 00,   00, 00,   00, 00]]
                                     //                               data len
-                                    //                                          0x910 = 2320 (dec)                          
+                                    //                                          0x910 = 2320 (dec)
                                     logDebug "RTX (06) Phase A combined reporting data: ${descMap.data}"
                                     // voltage: ((value[1] | value[0] << 8) / 10),   => 7, 6
                                     int voltageRaw = zigbee.convertHexToInt(descMap.data[7]) + zigbee.convertHexToInt(descMap.data[6]) * 256
@@ -1199,7 +1205,7 @@ void parseZHAcommand(Map descMap) {
                                     powerEvent(activePowerRaw / getPowerDiv())
                                 }
                                 else if (isSPM01()) {
-                                    //                                 0   1   2   3   4   5     6   7       8   9  10    11  12  13 
+                                    //                                 0   1   2   3   4   5     6   7       8   9  10    11  12  13
                                     // SPM01 combined reporting data: [00, 0A, 06, 00, 00, 08,   04, C8,    00, 00, 00,   00, 00, 00]
                                     // ZHA :                                                     Vhi Vlo    AHH Ahi Alo   PPH PHi PLo
                                     logDebug "SPM01 combined reporting data: ${descMap.data}"
@@ -1247,9 +1253,9 @@ void parseZHAcommand(Map descMap) {
                             case '11' : // (17) Energy
                                 if (isDinRail() || isRTXCircuitBreaker()) {     // (17) Alarm Set _TZE200_eaac7dkw // { 0: 'not set', 1: 'Over current threshold', 3: 'Over voltage threshold' }
                                     logInfo "(17) AlarmSet1 : ${value}"
-                                } 
+                                }
                                 else if (isSPM01()) {
-                                    logDebug "skipped dp=17 for SPM01 data = ${descMap.data}"                                
+                                    logDebug "skipped dp=17 for SPM01 data = ${descMap.data}"
                                 }
                                 else {
                                     energyEvent(value / getEnergyDiv())
@@ -1281,7 +1287,7 @@ void parseZHAcommand(Map descMap) {
                                     if (settings.logEnable) { logInfo "${thName} is ${thValue} enabled:${thState}" }
                                 }
                                 else if (isSPM01()) {
-                                    logDebug "skipped dp=18 for SPM01 data = ${descMap.data}"                                
+                                    logDebug "skipped dp=18 for SPM01 data = ${descMap.data}"
                                 }
                                 else {      // including _TZE204_cjbofhxw
                                     amperageEvent(value / getCurrentDiv())
