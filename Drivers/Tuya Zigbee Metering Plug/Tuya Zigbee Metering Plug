@@ -61,8 +61,11 @@
  *  ver. 1.9.1 2024-03-02 kkossev - currentEvent bug fix; reduced debug logging; debug logs raw value bug fixes;
  *  ver. 1.9.2 2024-03-30 kkossev - more Groovy Linting; added TS0001 _TZ3000_mkhkxx1p _TZ3000_tgddllx4 _TZ3000_x3ewpzyr _TZ3000_qnejhcsu _TZ3000_xkap8wtb Tuya switch modules w/ power monitoring;
  *  ver. 1.9.3 2024-04-07 kkossev - setEnergyPrice() bug fix;
+ *  ver. 1.9.4 2024-04-14 kkossev - added for tests: TS0601 _TZE204_ves1ycwx _TZE200_ves1ycwx _TZE200_v9hkz2yn Zemismart Real-time Smart Energy Monitors - ONE CHANNEL ONLY!
+ *  ver. 1.9.5 2024-05-16 kkossev - added ThirdReality 3RSPE01044BZ Smart Plug E2 (European socket!)
+ *  ver. 1.9.6 2024-06-04 kkossev - added setEnergy() command
+ *  ver. 1.9.7 2024-07-05 kkossev - added SPM01 TS0601 _TZE200_qhlxve78 and _TZE200_bcusnqt8
  *
- *                                 TODO: add TS0601 _TZE200_qhlxve78 (no info on this device yet)
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
  *                                 TODO: add rtt measurement in ping()
  *                                 TODO: add toggle() command
@@ -84,8 +87,8 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
-static String version() { '1.9.3' }
-static String timeStamp() { '2024/04/07 8:37 AM' }
+static String version() { '1.9.7' }
+static String timeStamp() { '2024/07/05 7:56 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -118,8 +121,9 @@ metadata {
         command 'ledMode', [[name:'LED mode', type: 'ENUM', description: 'Select LED mode', constraints: ['--- Select ---', 'Disabled', 'Lit when On', 'Lit when Off', 'Freeze', 'Always Green', 'Red when On; Green when Off', 'Green when On; Red when Off', 'Always Red' ]]]
         command 'setPowerOnState', [[name:"Select 'Power On State' and click on the button", type: 'ENUM', description: 'Select Power On State', constraints: ['--- Select ---', 'off', 'on', 'Last state']]]
         command 'setSwitchType',   [[name:"Select 'Switch Type' and click on the button", type: 'ENUM', description: "Select 'Switch Type", constraints: ['--- Select ---'] + switchTypeOptions.values() as List<String>]]
-        command 'setEnergyPrice', [[name:'setEnergyPrice', type: 'STRING', description: 'Set the energy cost (rate) for 1 KWh. The value is shown in the Preferences section', constraints: ['STRING'], defaultValue : '0.12']]
+        command 'setEnergyPrice', [[name:'setEnergyPrice', type: 'STRING', description: 'Set the energy cost (rate) for 1 kWh. The value is shown in the Preferences section', constraints: ['STRING'], defaultValue : '0.12']]
         command 'resetEnergy', [[name: 'Reset the accumulated Energy value' ]]
+        command 'setEnergy', [[name: 'Set the Energy value, kWh', type: 'NUMBER', description: 'Set the Energy value']]
 
         if (_DEBUG == true) {
             command 'activeEndpoints'
@@ -161,7 +165,10 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,0006', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_lnggrqqi', deviceJoinName: 'Tuya RC-MCB Circuit Breaker 2P'            // vendor: 'Mumubiz', model: 'ZJSB9-80Z' https://www.aliexpress.com/item/1005002605097816.html not tested  (no power monitoring)
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_cjbofhxw', deviceJoinName: 'MatSee Smart Meter with CT'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_abatw3kj', deviceJoinName: 'RTX Circuit Breaker 4x25A ZCB25-4P'        // https://community.hubitat.com/t/3phase-switch-recomendations/118293/12?u=kkossev
-        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bcusnqt8', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bcusnqt8', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // SPM01
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_ves1ycwx', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // SPM02
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ves1ycwx', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // SPM02
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_v9hkz2yn', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // https://community.hubitat.com/t/release-tuya-zigbee-metering-plug-w-healthstatus/86465/520?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_81yrt3lo', deviceJoinName: 'Bidirectional energy meter with 80A current clamp'       // https://github.com/Koenkk/zigbee-herdsman-converters/blob/8162314dbfd6e3803aeaf1d35fffd83c7e6ff5c6/src/devices/tuya.ts#L5185
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,FF66"', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_rks0sgb7', deviceJoinName: 'Bidirectional energy meter with 80A current clamp'  //https://community.hubitat.com/t/driver-for-zigbee-tuya-power-monitoring/123257/14?u=kkossev
 
@@ -205,7 +212,6 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B05,FC01,FC08", outClusters:"0003,0019", model:"PLUG", manufacturer:"LEDVANCE", deviceJoinName: "Sylvania Outlet"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,1000,FC7C", outClusters:"0005,0019,0020,1000", model:"TRADFRI control outlet", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Power Outlet"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,FC7C", outClusters:"0005,0019,0020", model:"TRADFRI control outlet", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Power Outlet"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0B04", outClusters:"0019", model:"3RSP02028BZ", manufacturer:"Third Reality, Inc", deviceJoinName: "Third Reality smart plug"                 // https://community.hubitat.com/t/request-to-add-support-for-new-device/110003/3?u=kkossev
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"0000,0019,000A,0003,0406", model:"SMRZB-143", manufacturer:"Develco Products A/S", deviceJoinName: "Frient/Develco Smart Cable"
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-131", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-131"   // frient smart plug mini
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-132", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-132"   // frient smart plug mini
@@ -247,71 +253,74 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,FC57,FCA0', outClusters:'0019', model:'Z111PL0H-1JX', manufacturer:'SONOFF', deviceJoinName: 'SONOFF smart plug' // https://community.hubitat.com/t/help-getting-started-with-a-smart-plug-driver/109480/5?u=kkossev           // https://community.hubitat.com/t/frient-energy-monitor-driver/89327/28?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,FC57,FCA0', outClusters:'0019', model:'Z111PL0H-1JX', manufacturer:'Woolley', deviceJoinName: 'Woolley smart plug' // not tested
         fingerprint profileId:'C05E', endpointId:'0D', inClusters:'1000', outClusters:'1000', model:'unknown', manufacturer:'unknown', deviceJoinName: 'SONOFF smart plug'                                   // SONOFF Z111PL0H-1JX
+        //
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,1000,0B04', outClusters:'0019', model:'3RSP02028BZ', manufacturer:'Third Reality, Inc', deviceJoinName: 'Third Reality Smart Plug US'                 // https://community.hubitat.com/t/request-to-add-support-for-new-device/110003/3?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,FF03,0003,0004,0005,0006,0B04,0702', outClusters:'0019', model:'3RSPE01044BZ', manufacturer:'Third Reality, Inc', deviceJoinName: 'Third Reality Smart Plug US'           // https://community.hubitat.com/t/thirdreality-products-available-in-eu-uk-and-au/137539/1
     }
 
     preferences {
-        input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: '<i>Debug information, useful for troubleshooting. Recommended setting is <b>off</b></i>', defaultValue: false)
-        input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: '<i>Display measured values in HE log page. Recommended setting is <b>on</b></i>', defaultValue: true)
-        input(name: 'autoReportingEnabled', type: 'bool', title: '<b>Automatic reporting configuration</b>', description: '<i>Enable the configuration of outlet automatic reporting, if supported by the device. Default setting is <b>off</b></i>', defaultValue: false)
-        input(name: 'autoPollingEnabled', type: 'bool', title: '<b>Automatic polling</b>', description: '<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended setting is <b>on</b></i>', defaultValue: true)
+        input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: 'Display measured values in HE log page. Recommended setting is <b>on</b>', defaultValue: true)
+        input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: 'Debug information, useful for troubleshooting. Recommended setting is <b>off</b>', defaultValue: false)
+        input(name: 'autoReportingEnabled', type: 'bool', title: '<b>Automatic reporting configuration</b>', description: 'Enable the configuration of outlet automatic reporting, if supported by the device. Default setting is <b>off</b>', defaultValue: false)
+        input(name: 'autoPollingEnabled', type: 'bool', title: '<b>Automatic polling</b>', description: 'Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended setting is <b>on</b>', defaultValue: true)
         if (autoPollingEnabled?.value == true) {
-            input(name: 'pollingInterval', type: 'number', title: '<b>Polling interval</b>, seconds', description: '<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended setting is <b>60 seconds</b></i>',
+            input(name: 'pollingInterval', type: 'number', title: '<b>Polling interval</b>, seconds', description: 'The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended setting is <b>60 seconds</b>',
                    range: '10..99999', defaultValue: defaultPollingInterval)
         }
-        input(name: 'alwaysOn', type: 'bool', title: '<b>Always On</b>', description: '<i>Disable switching OFF for plugs that must be always On</i>', defaultValue: false)
-        input(name: 'optimizations', type: 'bool', title: '<b>Optimize polling and logging</b>', description: '<i>Additional optimizations to reduce the hub load</i>. Recommended value is <b>on</b>', defaultValue: true)
+        input(name: 'alwaysOn', type: 'bool', title: '<b>Always On</b>', description: 'Disable switching OFF for plugs that must be always On', defaultValue: false)
+        input(name: 'optimizations', type: 'bool', title: '<b>Optimize polling and logging</b>', description: 'Additional optimizations to reduce the hub load. Recommended value is <b>on</b>', defaultValue: true)
         if (optimizations?.value == true || autoReportingEnabled?.value == true) {
-            input(name: 'energyMinReportingTime', type: 'number', title: '<b>Shortest reporting interval</b>, seconds', description: '<i>The minimum allowed time between two automatic reports. Recommended setting is <b>30 seconds</b></i>',
+            input(name: 'energyMinReportingTime', type: 'number', title: '<b>Shortest reporting interval</b>, seconds', description: 'The minimum allowed time between two automatic reports. Recommended setting is <b>30 seconds</b>',
                 range: '1..86399', defaultValue: 30)
-            input(name: 'energyMaxReportingTime', type: 'number', title: '<b>Longest reporting interval</b>, seconds', description: '<i>The maximum time without automatic reports. Recommended setting is <b>900 seconds</b></i>',
+            input(name: 'energyMaxReportingTime', type: 'number', title: '<b>Longest reporting interval</b>, seconds', description: 'The maximum time without automatic reports. Recommended setting is <b>900 seconds</b>',
                 range: '10..86400', defaultValue: 900)
             // 09/23/2022
-            input(name: 'energyMode', type: 'enum', title: '<b>Energy Reporting</b>', description:'<i>Select Energy Reporting Mode</i>', defaultValue: 'POLLED', options: energyModeOptions)
+            input(name: 'energyMode', type: 'enum', title: '<b>Energy Reporting</b>', description:'Select Energy Reporting Mode', defaultValue: 'POLLED', options: energyModeOptions)
             if (isEnergyEnabled()) {    // if (energyMode?.value == true)
                 if (energyMode == 'FIXED') {     // "4":"Fixed Power Load"
-                    input(name: 'fixedPower', type: 'number', title: '<b>Fixed Power</b>, W', description: '<i>The fixed power consumption when the plug is switched on</i>', range: '1..9000', defaultValue: 100)
+                    input(name: 'fixedPower', type: 'number', title: '<b>Fixed Power</b>, W', description: 'The fixed power consumption when the plug is switched on', range: '1..9000', defaultValue: 100)
                 }
-                input(name: 'energyPrice', type: 'text', title: "<b>Energy price for 1 KWh</b>, \$", description: '<i>Energy price for KWh used in the Energy Cost calculations.</i>', defaultValue: '0.21326')
-                input(name: 'energyThreshold', type: 'number', title: '<b>Energy minimum change to be reported</b>, Wh', description: '<i>The minimum Energy change that will trigger reporting.</i>', range: '1..10000', defaultValue: 1)
+                input(name: 'energyPrice', type: 'text', title: "<b>Energy price for 1 KWh</b>, \$", description: 'Energy price for KWh used in the Energy Cost calculations.', defaultValue: '0.21326')
+                input(name: 'energyThreshold', type: 'number', title: '<b>Energy minimum change to be reported</b>, Wh', description: 'The minimum Energy change that will trigger reporting.', range: '1..10000', defaultValue: 1)
             }
 
-            input(name: 'reportPower', type:    'bool', title: '<b>Power Reporting Off or On</b>',  description:   '<i>(Disable reporting (Off) when not desired)</i>', defaultValue: true)
+            input(name: 'reportPower', type:    'bool', title: '<b>Power Reporting Off or On</b>',  description:   '(Disable reporting (Off) when not desired)', defaultValue: true)
             if (reportPower?.value == true) {
-                input(name: 'powerThreshold', type: 'number', title: '<b>Power minimum change to be reported</b>, W', description: '<i>The minimum Power change that will trigger reporting.</i>', range: '1..10000', defaultValue: 1)
+                input(name: 'powerThreshold', type: 'number', title: '<b>Power minimum change to be reported</b>, W', description: 'The minimum Power change that will trigger reporting.', range: '1..10000', defaultValue: 1)
             }
             if (!isFrientEnergyMonitor()) {
-                input(name: 'reportAmperage', type: 'bool', title: '<b>Amperage Reporting Off or On</b>', description: '<i>(Disable reporting (Off) when not desired)</i>', defaultValue: true)
+                input(name: 'reportAmperage', type: 'bool', title: '<b>Amperage Reporting Off or On</b>', description: '(Disable reporting (Off) when not desired)', defaultValue: true)
                 if (reportAmperage?.value == true) {
-                    input(name: 'amperageThreshold', type: 'number', title: '<b>Amperage minimum change to be reported</b>, mA', description: '<i>The minimum Amperage change that will trigger reporting.</i>', range: '1..10000', defaultValue: 25)
+                    input(name: 'amperageThreshold', type: 'number', title: '<b>Amperage minimum change to be reported</b>, mA', description: 'The minimum Amperage change that will trigger reporting.', range: '1..10000', defaultValue: 25)
                 }
-                input(name: 'reportVoltage', type:  'bool', title: '<b>Voltage Reporting Off or On</b>',  description: '<i>(Disable reporting (Off) when not desired)</i>', defaultValue: true)
+                input(name: 'reportVoltage', type:  'bool', title: '<b>Voltage Reporting Off or On</b>',  description: '(Disable reporting (Off) when not desired)', defaultValue: true)
                 if (reportVoltage?.value == true) {
-                    input(name: 'voltageThreshold', type: 'number', title: '<b>Voltage minimum change to be reported</b>, V', description: '<i>The minimum Voltage change that will trigger reporting.</i>', range: '1..10000', defaultValue: 1)
+                    input(name: 'voltageThreshold', type: 'number', title: '<b>Voltage minimum change to be reported</b>, V', description: 'The minimum Voltage change that will trigger reporting.', range: '1..10000', defaultValue: 1)
                 }
-                input(name: 'reportFrequency', type:  'bool', title: '<b>Frequency Reporting Off or On</b>',  description: '<i>(Disable reporting (Off) when not desired)</i>', defaultValue: false)
-                input(name: 'reportPowerFactor', type:  'bool', title: '<b>Power Factor Reporting Off or On</b>',  description: '<i>(Disable reporting (Off) when not desired)</i>', defaultValue: false)
-                input(name: 'reportTemperature', type:  'bool', title: '<b>Temperature Reporting Off or On</b>',  description: '<i>(Disable reporting (Off) when not desired)</i>', defaultValue: false)
+                input(name: 'reportFrequency', type:  'bool', title: '<b>Frequency Reporting Off or On</b>',  description: '(Disable reporting (Off) when not desired)', defaultValue: false)
+                input(name: 'reportPowerFactor', type:  'bool', title: '<b>Power Factor Reporting Off or On</b>',  description: '(Disable reporting (Off) when not desired)', defaultValue: false)
+                input(name: 'reportTemperature', type:  'bool', title: '<b>Temperature Reporting Off or On</b>',  description: '(Disable reporting (Off) when not desired)', defaultValue: false)
                 if (isTongouSY2()) {
-                    input(name: 'overTemperatureBreaker', type:  'bool', title: '<b>Over Temperature Protection</b>',  description: '<i>Disable or enable the Over Temperature Protection</i>', defaultValue: false)
-                    input(name: 'overTemperatureBreakerThreshold', type: 'number', title: '<b>Temperature Protection Threshold, &degC</b>', description: '<i>The Temperature Protection Threshold, &degC</i>', range: '0..100', defaultValue: 90)
-                    input(name: 'overPowerBreaker', type:  'bool', title: '<b>Over Power Protection</b>',  description: '<i>Disable or enable the Over Power Protection</i>', defaultValue: false)
-                    input(name: 'overPowerBreakerThreshold', type: 'number', title: '<b>Power Protection Threshold, kW</b>', description: '<i>The Power Protection Threshold, (1..13) kW</i>', range: '1..13', defaultValue: 12)
-                    input(name: 'overCurrentBreaker', type:  'bool', title: '<b>Over Current Protection</b>',  description: '<i>Disable or enable the Over Current Protection</i>', defaultValue: false)
-                    input(name: 'overCurrentBreakerThreshold', type: 'number', title: '<b>Over Current Protection Threshold, A</b>', description: '<i>The Over Current Protection Threshold, (1..64) A</i>', range: '1..64', defaultValue: 64)
-                    input(name: 'overVoltageBreaker', type:  'bool', title: '<b>Over Voltage Protection</b>',  description: '<i>Disable or enable the Over Voltage Protection</i>', defaultValue: false)
-                    input(name: 'overVoltageBreakerThreshold', type: 'number', title: '<b>Over Voltage Protection Threshold, V</b>', description: '<i>The Over Voltage Protection Threshold, (100..255) V</i>', range: '100..255', defaultValue: 250)
-                    input(name: 'underVoltageBreaker', type:  'bool', title: '<b>Under Voltage Protection</b>',  description: '<i>Disable or enable the Under Voltage Protection</i>', defaultValue: false)
-                    input(name: 'underVoltageBreakerThreshold', type: 'number', title: '<b>Under Voltage Protection Threshold, V</b>', description: '<i>The Under Voltage Protection Threshold, (50..240) V</i>', range: '50..240', defaultValue: 64)
+                    input(name: 'overTemperatureBreaker', type:  'bool', title: '<b>Over Temperature Protection</b>',  description: 'Disable or enable the Over Temperature Protection', defaultValue: false)
+                    input(name: 'overTemperatureBreakerThreshold', type: 'number', title: '<b>Temperature Protection Threshold, &degC</b>', description: 'The Temperature Protection Threshold, &degC', range: '0..100', defaultValue: 90)
+                    input(name: 'overPowerBreaker', type:  'bool', title: '<b>Over Power Protection</b>',  description: 'Disable or enable the Over Power Protection', defaultValue: false)
+                    input(name: 'overPowerBreakerThreshold', type: 'number', title: '<b>Power Protection Threshold, kW</b>', description: 'The Power Protection Threshold, (1..13) kW', range: '1..13', defaultValue: 12)
+                    input(name: 'overCurrentBreaker', type:  'bool', title: '<b>Over Current Protection</b>',  description: 'Disable or enable the Over Current Protection', defaultValue: false)
+                    input(name: 'overCurrentBreakerThreshold', type: 'number', title: '<b>Over Current Protection Threshold, A</b>', description: 'The Over Current Protection Threshold, (1..64) A', range: '1..64', defaultValue: 64)
+                    input(name: 'overVoltageBreaker', type:  'bool', title: '<b>Over Voltage Protection</b>',  description: 'Disable or enable the Over Voltage Protection', defaultValue: false)
+                    input(name: 'overVoltageBreakerThreshold', type: 'number', title: '<b>Over Voltage Protection Threshold, V</b>', description: 'The Over Voltage Protection Threshold, (100..255) V', range: '100..255', defaultValue: 250)
+                    input(name: 'underVoltageBreaker', type:  'bool', title: '<b>Under Voltage Protection</b>',  description: 'Disable or enable the Under Voltage Protection', defaultValue: false)
+                    input(name: 'underVoltageBreakerThreshold', type: 'number', title: '<b>Under Voltage Protection Threshold, V</b>', description: 'The Under Voltage Protection Threshold, (50..240) V', range: '50..240', defaultValue: 64)
                 }
             }
         }
         if (isFrientEnergyMonitor() == true) {
             command 'pulseConfiguration', [[name: 'PulseConfiguration', type: 'NUMBER', description: 'test', defaultValue : 1000]]
-            input(name: 'pulseConfiguration', type: 'number', title: '<b>Frient Energy Monitor Pulse Configuration</b>', description: '<i>Frient Energy Monitor Pulse Configuration</i>', range: '10..100000', defaultValue: 1000)
-            input(name: 'frientEnergyMeterMode', type: 'enum', title: '<b>Energy Reporting Mode</b>', description:'<i>Select Frient Energy Reporting Mode</i>', defaultValue: '0', options: develcoInterfaceMode)
+            input(name: 'pulseConfiguration', type: 'number', title: '<b>Frient Energy Monitor Pulse Configuration</b>', description: 'Frient Energy Monitor Pulse Configuration', range: '10..100000', defaultValue: 1000)
+            input(name: 'frientEnergyMeterMode', type: 'enum', title: '<b>Energy Reporting Mode</b>', description:'Select Frient Energy Reporting Mode', defaultValue: '0', options: develcoInterfaceMode)
         }
-        input(name: 'attribEnable', type:  'bool', title: '<b>Enable HTML Attribute Creation?</b>',  description: '<i>html attribute for use in HE dashboards</i>', defaultValue: false)
-        input(name: 'allEnable', type:  'bool', title: "<b>Enable 'all' Attribute Creation?</b>",  description: '<i>text attribute for use in HE device and rooms view</i>', defaultValue: false)
+        input(name: 'attribEnable', type:  'bool', title: '<b>Enable HTML Attribute Creation?</b>',  description: 'html attribute for use in HE dashboards', defaultValue: false)
+        input(name: 'allEnable', type:  'bool', title: "<b>Enable 'all' Attribute Creation?</b>",  description: 'text attribute for use in HE device and rooms view', defaultValue: false)
     }
 }
 
@@ -364,13 +373,14 @@ static int getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
 
 private boolean isTuyaSpecificCluster() { device.getDataValue('model') in ['TS0601'] }
 private boolean isCircuitBreaker()      { device.getDataValue('manufacturer') in ['_TZ3000_ky0fq4ho'] }
-private boolean isRTXCircuitBreaker()   { device.getDataValue('manufacturer') in ['_TZE200_abatw3kj', '_TZE200_bcusnqt8'] }    // TODO - _TZE200_bcusnqt8 matches only partially !
+private boolean isRTXCircuitBreaker()   { device.getDataValue('manufacturer') in ['_TZE200_abatw3kj', '_TZE204_ves1ycwx', '_TZE200_ves1ycwx', '_TZE200_v9hkz2yn'] }
 private boolean isDinRail()             { device.getDataValue('manufacturer') in ['_TZE200_eaac7dkw', '_TZE200_bkkmqmyo', '_TZE200_lsanae15'] }
 private boolean isHEProblematic()       { device.getDataValue('manufacturer') in ['_TZ3000_okaz9tjs', '_TZ3000_r6buo8ba', '_TZ3000_cfnprab5', 'SONOFF', 'Woolley', 'unknown'] }
 private boolean isHoch()                { device.getDataValue('manufacturer') in ['_TZE200_hkdl5fmv'] }
 private boolean isTongouSY1()           { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3000_qeuvnohg', '_TZ3000_8bxrzyxz'] }    // TS011F
 private boolean isTongouSY2()           { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3000_cayepv1a', '_TZ3000_lepzuhto', '_TZ3000_qystbcjg'] }    // Din rail switch with power monitoring and threshold settings
 private boolean isPJ1203A()             { device.getDataValue('manufacturer') in ['_TZE204_81yrt3lo', '_TZE200_rks0sgb7'] }     // Bidirectional energy meter with 80A current clamp
+private boolean isSPM01()               { device.getDataValue('manufacturer') in ['_TZE200_bcusnqt8', '_TZE200_qhlxve78'] }     // Zemismart Single phase energy meter
 
 private boolean isSmartThingsOutlet() { (device.getDataValue('manufacturer') in ['SmartThings']) || (device.getDataValue('model') in ['outletv4']) }
 private boolean isSengledOutlet() { device.getDataValue('model') == 'E1C-NB7' }
@@ -383,18 +393,19 @@ private boolean isHeiman() { device.getDataValue('manufacturer') == 'HEIMAN' }
 private boolean isDevelco() { device.getDataValue('model') == 'EMIZB-132' }
 private boolean isOsramPlug01() { (device.getDataValue('model') == 'Plug 01' && device.getDataValue('manufacturer') == 'OSRAM') }
 private boolean isSiHAS() { device.getDataValue('manufacturer') == 'ShinaSystem' }
-private boolean isThirdReality() { device.getDataValue('manufacturer') == 'Third Reality, Inc' }
-private boolean isReportingConfigurable() { isSmartThingsOutlet() || isSengledOutlet() || isJascoProductsOutlet() || isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSercomm() || isDevelco() || isSiHAS() || isThirdReality() }
+private boolean isThirdRealityUS() { device.getDataValue('model') == '3RSP02028BZ' }
+private boolean isThirdRealityEU() { device.getDataValue('model') == '3RSPE01044BZ' }
+private boolean isReportingConfigurable() { isSmartThingsOutlet() || isSengledOutlet() || isJascoProductsOutlet() || isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSercomm() || isDevelco() || isSiHAS() || isThirdRealityUS() || isThirdRealityEU() }
 
 // Tuya : default powerDiv = 1
-private int getPowerDiv() { (isThirdReality() || isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() || isPJ1203A() && !(isDinRail() || isRTXCircuitBreaker()))) ? 10 : 1 }
-// Tuya :  energyDiv = 100
-private int getEnergyDiv() { (isSengledOutlet() || isJascoProductsOutlet()) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isThirdReality() ? 1000 : 100 }
-// Tuya :  currentDiv = 1000
+private int getPowerDiv() { (isThirdRealityUS() || isThirdRealityEU() || isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() || isPJ1203A() && !(isDinRail() || isRTXCircuitBreaker() || isSPM01()))) ? 10 : 1 }
+// Tuya :  energyDiv = 100 ThirdReality: 3600000
+private int getEnergyDiv() { isThirdRealityEU() ? 3600000 : (isSengledOutlet() || isJascoProductsOutlet()) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isThirdRealityUS() ? 1000 : 100 }
+// Tuya :  currentDiv = 1000 ThirdReality: 1000
 private int getCurrentDiv() { (isHeiman() || isDevelco() || isSiHAS() || device.getDataValue('model') in ['3200-Sgb']) ? 100 : 1000 }
 // Tuya EF00 cluster voltage divider is 10 !
-private int getVoltageDiv() { (isFrientOutlet() || isHeiman()) ? 100 : isSercomm() ? 125 : (isTuyaSpecificCluster() || isSmartThingsOutlet() || isSiHAS()) || isThirdReality() || isPJ1203A() ? 10 : 1 }
-private int getFrequencyDiv() { isFrientOutlet() ? 1000F : isTuyaSpecificCluster() ? 100F : isThirdReality() ? 1F : 10F }
+private int getVoltageDiv() { (isFrientOutlet() || isHeiman()) ? 100 : isSercomm() ? 125 : (isTuyaSpecificCluster() || isSmartThingsOutlet() || isSiHAS()) || isThirdRealityUS() || isThirdRealityEU() || isPJ1203A() || isSPM01() ? 10 : 1 }
+private int getFrequencyDiv() { isFrientOutlet() ? 1000F : isTuyaSpecificCluster() ? 100F : isThirdRealityUS() || isThirdRealityEU() ? 1F : 10F }
 private int getPowerFactorDiv() { (isDinRail() || isRTXCircuitBreaker()) ? 1000 : 100 }
 
 static int getCLUSTER_TUYA()       { 0xEF00 }
@@ -1111,13 +1122,21 @@ void parseZHAcommand(Map descMap) {
                         String cmd = descMap.data[2]
                         switch (cmd) { // code : descMap.data[2]    ; attrId = descMap.data[1] + descMap.data[0]
                             case '01' : // switch state on/of for all models except the DinRail and RTX
-                                if (isDinRail() || isRTXCircuitBreaker()) {
-                                    logInfo "(01) Forward/Real Energy : ${value} raw"
+                                if (isDinRail() || isRTXCircuitBreaker() || isSPM01()) {
+                                    logDebug "(01) Forward/Real Energy : ${value} raw"
                                     energyEvent(value / getEnergyDiv())    // should be 100
                                 }
                                 else {
                                     logDebug "Tuya switch event cmd=(01) value=${value}"
                                     switchEvent(value == 0 ? 'off' : 'on')
+                                }
+                                break
+                            case '02' :
+                                if (isSPM01()) {
+                                    logDebug "(02) Reverse Energy : ${value} raw"
+                                }
+                                else {
+                                    logDebug "dp=${cmd} value=${value}"
                                 }
                                 break
                             case '03' :    //  _TZE200_eaac7dkw
@@ -1143,19 +1162,19 @@ void parseZHAcommand(Map descMap) {
                                     //  current: (value[4] / 1000), voltage: (value[1]), power: value[7] ???
                                     // data:[38, C6, 06, 00, 00,     08,        09, 10,   00, 00,   00, 00,   00, 00]]
                                     //                               data len
-                                    //                                          0x910 = 2320 (dec)
+                                    //                                          0x910 = 2320 (dec)                          
                                     logDebug "RTX (06) Phase A combined reporting data: ${descMap.data}"
                                     // voltage: ((value[1] | value[0] << 8) / 10),   => 7, 6
                                     int voltageRaw = zigbee.convertHexToInt(descMap.data[7]) + zigbee.convertHexToInt(descMap.data[6]) * 256
-                                    logInfo "RTX (06) Phase A Voltage : ${voltageRaw / getVoltageDiv()} V (raw ${voltageRaw})"
+                                    logDebug "RTX (06) Phase A Voltage : ${voltageRaw / getVoltageDiv()} V (raw ${voltageRaw})"
                                     voltageEvent(voltageRaw / getVoltageDiv())
                                     // current: ((value[4] | value[3] << 8) / 1000), => 10, 9
                                     int currentRaw = zigbee.convertHexToInt(descMap.data[10]) + zigbee.convertHexToInt(descMap.data[9]) * 256
-                                    logInfo "RTX (06) Phase A Current : ${currentRaw / getCurrentDiv()} V (raw ${currentRaw})"
+                                    logDebug "RTX (06) Phase A Current : ${currentRaw / getCurrentDiv()} A (raw ${currentRaw})"
                                     amperageEvent(currentRaw / getCurrentDiv())
                                     // power: ((value[7] | value[6] << 8)),          => 13, 12
                                     int activePowerRaw = zigbee.convertHexToInt(descMap.data[13]) + zigbee.convertHexToInt(descMap.data[12]) * 256
-                                    logInfo "DinRail(06) Active. Power : ${activePowerRaw / getPowerDiv()} W  (raw ${activePowerRaw})"
+                                    logDebug "DinRail(06) Active. Power : ${activePowerRaw / getPowerDiv()} W  (raw ${activePowerRaw})"
                                     powerEvent(activePowerRaw / getPowerDiv())
                                 }
                                 else if (isDinRail()) { // _TZE200_eaac7dkw // https://user-images.githubusercontent.com/26296347/198841477-b80f0bda-2f3e-4f5e-96ba-4fcc87a094ec.png  - combined power, voltage, amperage, etc... event
@@ -1165,25 +1184,39 @@ void parseZHAcommand(Map descMap) {
                                     //                               |active power | |react. power |  PF    |00| current|Voltage
                                     logDebug "DinRail(06) combined reporting data: ${descMap.data}"
                                     int voltageRaw = zigbee.convertHexToInt(descMap.data[20]) + zigbee.convertHexToInt(descMap.data[19]) * 256
-                                    logInfo "DinRail(06) Voltage : ${voltageRaw / getVoltageDiv()} V (raw ${voltageRaw})"
+                                    logDebug "DinRail(06) Voltage : ${voltageRaw / getVoltageDiv()} V (raw ${voltageRaw})"
                                     voltageEvent(voltageRaw / getVoltageDiv())
                                     int currentRaw = zigbee.convertHexToInt(descMap.data[18]) + zigbee.convertHexToInt(descMap.data[17]) * 256
-                                    logInfo "DinRail(06) Current : ${currentRaw / getCurrentDiv()} V (raw ${currentRaw})"
+                                    logDebug "DinRail(06) Current : ${currentRaw / getCurrentDiv()} A (raw ${currentRaw})"
                                     amperageEvent(currentRaw / getCurrentDiv())
                                     int pfRaw = zigbee.convertHexToInt(descMap.data[15]) + zigbee.convertHexToInt(descMap.data[14]) * 256
-                                    logInfo "DinRail(06) PF : ${pfRaw / getPowerFactorDiv()}  (raw ${pfRaw})"
+                                    logDebug "DinRail(06) PF : ${pfRaw / getPowerFactorDiv()}  (raw ${pfRaw})"
                                     powerFactorEvent(pfRaw / getPowerFactorDiv())
                                     int reactivePowerRaw = zigbee.convertHexToInt(descMap.data[13]) + zigbee.convertHexToInt(descMap.data[12]) * 256
-                                    logInfo "DinRail(06) React. Power : ${reactivePowerRaw / getPowerDiv()} W"
+                                    logDebug "DinRail(06) React. Power : ${reactivePowerRaw / getPowerDiv()} W"
                                     int activePowerRaw = zigbee.convertHexToInt(descMap.data[9]) + zigbee.convertHexToInt(descMap.data[8]) * 256
-                                    logInfo "DinRail(06) Active. Power : ${activePowerRaw / getPowerDiv()} W"
+                                    logDebug "DinRail(06) Active. Power : ${activePowerRaw / getPowerDiv()} W"
+                                    powerEvent(activePowerRaw / getPowerDiv())
+                                }
+                                else if (isSPM01()) {
+                                    //                                 0   1   2   3   4   5     6   7       8   9  10    11  12  13 
+                                    // SPM01 combined reporting data: [00, 0A, 06, 00, 00, 08,   04, C8,    00, 00, 00,   00, 00, 00]
+                                    // ZHA :                                                     Vhi Vlo    AHH Ahi Alo   PPH PHi PLo
+                                    logDebug "SPM01 combined reporting data: ${descMap.data}"
+                                    int voltageRaw = zigbee.convertHexToInt(descMap.data[6]) * 256 + zigbee.convertHexToInt(descMap.data[7])
+                                    logDebug "SPM01 Voltage : ${voltageRaw / getVoltageDiv()} V (raw ${voltageRaw})"
+                                    voltageEvent(voltageRaw / getVoltageDiv())
+                                    int currentRaw = (zigbee.convertHexToInt(descMap.data[8]) * 256 * 256) + (zigbee.convertHexToInt(descMap.data[9]) * 256) + zigbee.convertHexToInt(descMap.data[10])
+                                    logDebug "SPM01 Current : ${currentRaw / getCurrentDiv()} A (raw ${currentRaw})"
+                                    int activePowerRaw = (zigbee.convertHexToInt(descMap.data[11]) * 256 * 256) + (zigbee.convertHexToInt(descMap.data[12]) * 256) + zigbee.convertHexToInt(descMap.data[13])
+                                    logDebug "SPM01 Active. Power : ${activePowerRaw / getPowerDiv()} W  (raw ${activePowerRaw})"
                                     powerEvent(activePowerRaw / getPowerDiv())
                                 }
                                 else if (isHoch()) {
-                                    logWarn "skipped dp=6 for Hoch() value = ${value}"
+                                    logDebug "skipped dp=6 for Hoch() data = ${descMap.data}"
                                 }
                                 else {
-                                    logInfo "(06) Phase A : ${value}"
+                                    logDebug "(06) unknown : ${value}"
                                 }
                                 break
                             case '09' : // (09)     // also hochCountdownTimer: 9
@@ -1203,14 +1236,22 @@ void parseZHAcommand(Map descMap) {
                             case '0B' : // (11) Frozen set _TZE200_eaac7dkw
                                 logInfo "Frozen set : ${value}"
                                 break
-                            case '10' : // (16) switch _TZE200_eaac7dkw
+                            case '0F' : // (15) // SPM01
+                                logDebug "(110) SPM01 power_factor : ${value / getPowerFactorDiv()} raw ($value)"
+                                powerFactorEvent(value / getPowerFactorDiv())
+                                break
+                            case '10' : // (16) switch _TZE200_eaac7dkw SPM01
                                 logDebug "(16) switch : ${value}"
                                 switchEvent(value == 0 ? 'off' : 'on')
                                 break
                             case '11' : // (17) Energy
                                 if (isDinRail() || isRTXCircuitBreaker()) {     // (17) Alarm Set _TZE200_eaac7dkw // { 0: 'not set', 1: 'Over current threshold', 3: 'Over voltage threshold' }
                                     logInfo "(17) AlarmSet1 : ${value}"
-                                } else {
+                                } 
+                                else if (isSPM01()) {
+                                    logDebug "skipped dp=17 for SPM01 data = ${descMap.data}"                                
+                                }
+                                else {
                                     energyEvent(value / getEnergyDiv())
                                 }
                                 break
@@ -1238,6 +1279,9 @@ void parseZHAcommand(Map descMap) {
                                     thState = descMap.data[15] == '01' ? 'ON' : 'OFF'
                                     thValue = zigbee.convertHexToInt(descMap.data[17]) + zigbee.convertHexToInt(descMap.data[16]) * 256
                                     if (settings.logEnable) { logInfo "${thName} is ${thValue} enabled:${thState}" }
+                                }
+                                else if (isSPM01()) {
+                                    logDebug "skipped dp=18 for SPM01 data = ${descMap.data}"                                
                                 }
                                 else {      // including _TZE204_cjbofhxw
                                     amperageEvent(value / getCurrentDiv())
@@ -1281,6 +1325,10 @@ void parseZHAcommand(Map descMap) {
                                     logInfo "(101) PJ1203A power_a : ${value / getPowerDiv()} raw ($value)"
                                     powerEvent(value / getPowerDiv())
                                 }
+                                else if (isSPM01()) {
+                                    logDebug "(101) SPM01 frequency : ${value} raw (${value / getFrequencyDiv()}) Hz"
+                                    frequencyEvent(value / getFrequencyDiv())
+                                }
                                 else {
                                     logDebug "unknown Tuya cmd = ${cmd}  value = ${value}"
                                 }
@@ -1294,18 +1342,32 @@ void parseZHAcommand(Map descMap) {
                                 else if (isPJ1203A()) {   // {'consuming': 0, 'producing': 1}
                                     logInfo "(102) PJ1203A energy_flow_a : raw ($value)"
                                 }
+                                else if (isSPM01()) {
+                                    logDebug "(102) SPM01 voltage : ${value / getVoltageDiv()} raw ($value)"
+                                    voltageEvent(value / getVoltageDiv())
+                                }
                                 else {
                                     logInfo "(102) Produced Energy : ${value} kWh  (raw ${value} )"
                                 }
                                 break
                             case '67' : // (103) hochActivePower: 103 Real Active Power [W]
-                                value = (zigbee.convertHexToInt(descMap.data[8]) + zigbee.convertHexToInt(descMap.data[7]) * 256)
-                                logInfo "(103) Real Active Power : ${value / 10.0} W (raw ${value})"
-                                powerEvent(value / 10.0F)
+                                if (isSPM01()) {
+                                    logDebug "(103) Amperage HOCH : ${(value / 1000.0F)} A (raw ${value})"
+                                    amperageEvent((value as Float) / 1000.0F)
+                                }
+                                else {
+                                    value = (zigbee.convertHexToInt(descMap.data[8]) + zigbee.convertHexToInt(descMap.data[7]) * 256)
+                                    logInfo "(103) Real Active Power : ${value / 10.0} W (raw ${value})"
+                                    powerEvent(value / 10.0F)
+                                }
                                 break
                             case '68' : // (104) hochLeakageCurrent: 104
                                 if (isPJ1203A()) {   // {'consuming': 0, 'producing': 1}
                                     logDebug "(102) PJ1203A energy_flow_b : raw ($value)"
+                                }
+                                else if (isSPM01()) {
+                                    logDebug "(104) SPM01 power : ${value / getPowerDiv()} raw ($value)"
+                                    powerEvent(value / getPowerDiv())
                                 }
                                 else {
                                     logInfo "(104) Hoch Leakage Current is : ${value / getCurrentDiv()} raw (${value}) A"
@@ -2400,7 +2462,7 @@ void setPowerOnState(String mode) {
         if (settings?.logEnable) { log.warn "${device.displayName} Power On State not implemented for TS0601: ${mode}" }
     // continue anyway ..
     }
-    else if (isSengledOutlet() || isJascoProductsOutlet() || (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isSmartThingsOutlet() || isThirdReality()) {
+    else if (isSengledOutlet() || isJascoProductsOutlet() || (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isSmartThingsOutlet() || isThirdRealityUS()) {
         value = mode == 'off' ? '00' : mode == 'on' ? '01' : mode == 'Last state' ? '02' : null
         attribute = 0x4003
     }
@@ -2591,6 +2653,23 @@ void setEnergyPrice(/*String*/ price) {
 void setEnergyPriceDelayed(Map map) {
     device.updateSetting('energyPrice', [value:map.priceDouble, type:'decimal'])
     if (settings?.txtEnable) { log.info "${device.displayName} energy price was set to ${map.priceDouble} on ${FormattedDateTimeFromUnix(now())}" }
+}
+
+void setEnergy(Number energy) {
+    logDebug "setEnergy() : state.lastEnergyRaw = ${state.lastEnergyRaw}"
+    state.lastResetDate = FormattedDateTimeFromUnix(now())
+    state.lastEnergyCost = 0.0
+    state.lastResetEnergy = state.lastEnergyRaw - energy
+    state.lastHourlyEnergy = state.lastEnergyRaw - energy
+    //
+    energyCostEvent(0, isDigital = true)
+    energyDurationEvent(0, isDigital = true)
+    /*
+    energyEvent(energy, isDigital = true)
+    hourlyEnergyEvent(0, isDigital = true)
+    */
+    logInfo "Energy (total:${state.lastEnergyRaw} kWh) was set to ${energy}KWh on ${state.lastResetDate}"
+    refresh()
 }
 
 void resetEnergy() {
