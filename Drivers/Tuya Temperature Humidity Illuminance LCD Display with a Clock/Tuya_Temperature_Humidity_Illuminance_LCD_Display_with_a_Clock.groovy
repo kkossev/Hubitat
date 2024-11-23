@@ -53,6 +53,7 @@
  * ver. 1.6.6  2024-08-14 kkossev - added TS0601 _TZE204_myd45weu; added TS0601 _TZE204_qyflbnbj
  * ver. 1.6.7  2024-10-23 kkossev - added TS0222 _TZ3000_kky16aay in a new 'TS0222_Soil' group
  * ver. 1.6.8  2024-11-19 kkossev - added TS0601 _TZE284_sgabhwa6 and _TZE284_nhgdf6qr into 'TS0601_Soil_II'; added _TZE200_qrztc3ev _TZE200_snloy4rw _TZE200_eanjj2pa _TZE200_ydrdfkim into 'TS0601_Tuya' group
+ * ver. 1.7.0  2024-11-23 kkossev - (dev. branch) temperatureOffset and humidityOffset moved outside of the configParams; added queryAllTuyaDPs() on Refresh
  *
  *                                  TODO: queryOnDeviceAnnounce for TS0601_Tuya_2 group
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
@@ -62,8 +63,8 @@
  *                                  TODO: add Batteryreporting time configuration (like in the TS004F driver)
 */
 
-@Field static final String VERSION = '1.6.8'
-@Field static final String TIME_STAMP = '2024/11/19 9:20 PM'
+@Field static final String VERSION = '1.7.0'
+@Field static final String TIME_STAMP = '2024/11/23 11:16 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -185,6 +186,8 @@ metadata {
     preferences {
         input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: 'Display measured values in HE log page. <br>The recommended setting is <b>enabled</b>.', defaultValue: true)
         input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: 'Debug information, useful for troubleshooting. <br>The recommended value is <b>disabled</b>.', defaultValue: true)
+        input(name: 'temperatureOffset', type: 'decimal', title: '<b>Temperature offset</b>', description: 'Select how many degrees to adjust the temperature.', defaultValue: 0.0, range: '-100.0..100.0')
+        input(name: 'humidityOffset', type: 'decimal', title: '<b>Humidity offset</b>', description: 'Enter a percentage to adjust the humidity.', defaultValue: 0.0, range: '-100.0..100.0')
         input(name: 'modelGroupPreference', type: 'enum', title: '<b>Model Group</b>', description:'The recommended setting is <b>Auto detect</b>.', defaultValue: 0, options:
                ['Auto detect':'Auto detect', 'TS0601_Tuya':'TS0601_Tuya', 'TS0601_Tuya_2':'TS0601_Tuya_2', 'TS0601_Haozee':'TS0601_Haozee', 'TS0601_AUBESS':'TS0601_AUBESS', 'TS0201':'TS0201', 'TS0222':'TS0222', 'TS0201_LCZ030': 'TS0201_LCZ030',
                 'TS0222_2':'TS0222_2', 'TS0222_Soil':'TS0222_Soil', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', , 'TS0601_Soil_II':'TS0601_Soil_II', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
@@ -203,13 +206,7 @@ metadata {
 }
 
 @Field static Map configParams = [
-
-        0: [input: [name: 'temperatureOffset', type: 'decimal', title: '<b>Temperature offset</b>', description: 'Select how many degrees to adjust the temperature.', defaultValue: 0.0, range: '-100.0..100.0',
-                   limit:['ALL']]],
-
-        1: [input: [name: 'humidityOffset', type: 'decimal', title: '<b>Humidity offset</b>', description: 'Enter a percentage to adjust the humidity.', defaultValue: 0.0, range: '-100.0..100.0',
-                   limit:['ALL']]],
-
+        // temperatureOffset and humidityOffset moved outside of the configParams 11/23/2024
         2: [input: [name: 'temperatureSensitivity', type: 'decimal', title: '<b>Temperature Sensitivity</b>', description: 'Temperature change for reporting, ' + '\u00B0' + 'C', defaultValue: 0.5, range: '0.1..5.0',
                    limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2']]],
 
@@ -265,6 +262,7 @@ metadata {
     '_TZE200_snloy4rw'  : 'TS0601_Tuya',         // NOUS
     '_TZE200_eanjj2pa'  : 'TS0601_Tuya',         // NOUS
     '_TZE200_ydrdfkim'  : 'TS0601_Tuya',         // NOUS
+
     '_TZE200_cirvgep4'  : 'TS0601_Tuya_2',       // https://www.aliexpress.com/item/1005005198387789.html
     '_TZE200_yjjdcqsq'  : 'TS0601_Tuya_2',       // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/446?u=kkossev
     '_TZE204_yjjdcqsq'  : 'TS0601_Tuya_2',       // https://community.hubitat.com/t/newbie-help-with-owon-ths317-et-multi-sensor/122671/18?u=kkossev
@@ -274,8 +272,10 @@ metadata {
     '_TZE204_upagmta9'  : 'TS0601_Tuya_2',       // not tested  // https://github.com/zigpy/zha-device-handlers/issues/2694
     '_TZE200_vvmbj46n'  : 'TS0601_Tuya_2',       // https://community.hubitat.com/t/looking-for-a-zigbee-temperature-humidity-illumination-sensor-with-display/130896/14?u=kkossev
     '_TZE204_vvmbj46n'  : 'TS0601_Tuya_2',       //
+
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       //
+    
     '_TZE200_pisltm67'  : 'TS0601_AUBESS',       // illuminance only sensor
     '_TZ2000_a476raq2'  : 'TS0201',              // KK
     '_TZ3000_lfa05ajd'  : 'TS0201',              // Zemismart ZXZTH
@@ -1245,18 +1245,16 @@ def refresh() {
     checkDriverVersion()
     if (getModelGroup() == 'TS0222') {
         pollTS0222()
+        return
     }
-    /* groovylint-disable-next-line ConstantIfExpression */
-    else if (true /*getModelGroup() in ['TS0201_TH']*/) {
-        List<String> cmds = []
-        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 200)
-        cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200)
-        cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay = 200)
-        sendZigbeeCommands( cmds )
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 200)
+    cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200)
+    cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay = 200)
+    if (device.getDataValue('model') == 'TS0601') { // queryAllTuyaDP added 11/23/2024
+        cmds += zigbee.command(0xEF00, 0x03)
     }
-    else {
-        logInfo 'refresh() is not implemented for this sleepy Zigbee device'
-    }
+    sendZigbeeCommands( cmds )
 }
 
 def ping() {
