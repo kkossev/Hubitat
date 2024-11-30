@@ -40,8 +40,9 @@
  *  ver. 1.3.4 2024-08-02 dstutz  - added Giex _TZE204_7ytb3h8u 
  *  ver. 1.3.5 2024-09-22 kkossev - removed tuyaVersion for non-Tuya devices; combined on() + timedOff() command for opening the Sonoff valve;
  *  ver. 1.3.6 2024-09-23 kkossev - Sonoff valve: irrigationDuration 0 will disable the valve auto-off; default auto-off timer changed to 0 (was 60 seconds); invalid 'digital' type of autoClose fixed; added workState attribute; logging improvements;
- *  ver. 1.4.0 2024-11-22 kkossev - (dev. branch) supressed 'Sonoff SWV sendIrrigationDuration is not avaiable!' warning; added NovaDigital TS0601 _TZE200_fphxkxue @Rafael as TS0601_SASWELL_VALVE; added queryAllTuyaDP for TS0601 devices;
+ *  ver. 1.4.0 2024-11-22 kkossev - supressed 'Sonoff SWV sendIrrigationDuration is not avaiable!' warning; added NovaDigital TS0601 _TZE200_fphxkxue @Rafael as TS0601_SASWELL_VALVE (working partially!); added queryAllTuyaDP for TS0601 devices;
  *
+ *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
  *                                  TODO: set the device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
  *                                  TODO: clear the old states on update; add rejoinCtr;

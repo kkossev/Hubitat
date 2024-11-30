@@ -42,7 +42,8 @@
  * ver. 1.6.0 2024-06-29 kkossev  - added state.health 'parentNWK' and 'nwkCtr'; added attribute parentNWK;
  * ver. 1.6.1 2024-07-22 kkossev  - bugfix: illuminanceThreshold and illuminanceMinReportingTime not working for lumi.sen_ill.mgl01 (GZCGQ01LM)
  * ver. 1.7.0 2024-08-15 kkossev  - added lumi.sensor_occupy.agl1 - Aqara FP1E; capability 'Refresh'; added spammy reports filtering for FP1E
- * ver. 1.7.1 2024-11-19 kkossev  - (dev.branch) added motionSensitivity for FP1E; added targetDistance for FP1E; added detectionRange for FP1E
+ * ver. 1.7.1 2024-11-19 kkossev  - added motionSensitivity for FP1E; added targetDistance for FP1E; added detectionRange for FP1E
+ * ver. 1.7.2 2024-11-28 kkossev  - (dev.branch) HE platfrom 2.4.0.x compatibility fixes;
  * 
  *                                 TODO: powerSource 'unknown' fix; No signature of method: user_driver_kkossev_Aqara_P1_Motion_Sensor_3016.resetState() is applicable for argument types: () values: [] on line 1130 (method deviceCommandTimeout)
  *                                 TODO: WARN log, when the device model is not registered during the pairing !!!!!!!!
@@ -56,8 +57,8 @@
  *
  */
 
-static String version() { "1.7.1" }
-static String timeStamp() {"2024/11/19 11:59 PM"}
+static String version() { "1.7.2" }
+static String timeStamp() {"2024/11/28 7:22 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -66,7 +67,7 @@ import hubitat.zigbee.zcl.DataType
 import hubitat.helper.HexUtils
 import java.util.concurrent.ConcurrentHashMap
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 @Field static final Boolean deviceSimulation = false
 @Field static final Boolean _REGIONS = false
 @Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, FP1E, Aqara/Xiaomi/Mija other motion and illuminance sensors'
@@ -119,12 +120,13 @@ metadata {
             attribute "region_last_unoccupied", "number"
         }
         
-        command "configure", [[name: "Initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
-        command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
+        command "configure", [[name: "Initialize the device after switching drivers. Will load device default values!" ]]
+        command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["active", "inactive"], description: "Use for tests"]]
+        command "ping",      [[name: "Check device online status and measure the Round-Trip Time (ms)"]]
 
         if (_DEBUG) {
-            command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "0001"]]
-            command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
+            command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "FCC0"]]
+            command "initialize", [[name: "Manually initialize the device after switching drivers. ***** Will load device default values! *****" ]]
             command "aqaraReadAttributes"
             command "activeEndpoints"
         }
@@ -145,7 +147,9 @@ metadata {
     preferences {
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Show motion activity in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
-        input (title: "<b>Information on Pairing and Configuration:</b>", description: "<i>Pair the P1 and FP1/FP1E devices <b>two times (without deleting), very close to the HE hub</b>. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences</i>", type: "paragraph", element: "paragraph")        
+        //input (title: "<b>Information on Pairing and Configuration:</b>", description: "<i>Pair the P1 and FP1/FP1E devices <b>two times (without deleting), very close to the HE hub</b>. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences</i>", type: "paragraph", element: "paragraph")        
+        //input (name: 'helpInfo',  type: 'bool', title: "Information on Pairing and Configuration", description: "<i>Pair the P1 and FP1/FP1E devices <b>two times (without deleting), very close to the HE hub</b>. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences</i>")
+        input (name: 'helpInfo',  type: 'hidden', title: "Information on Pairing and Configuration", description: "Pair the P1 and FP1/FP1E devices two times (without deleting), very close to the HE hub. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences")
         if (device) {
             if (!(isFP1() || isFP1E()) && !isLightSensor()) {
                 input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "<i>After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 30 seconds</i>", range: "0..7200", defaultValue: 30)
