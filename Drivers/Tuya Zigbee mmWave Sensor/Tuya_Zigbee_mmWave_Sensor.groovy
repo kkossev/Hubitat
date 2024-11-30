@@ -51,7 +51,7 @@
 */
 
 static String version() { "3.3.5" }
-static String timeStamp() {"2024/11/30 3:33 PM"}
+static String timeStamp() {"2024/11/30 5:53 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -126,12 +126,8 @@ metadata {
         ]
         if (_DEBUG) {
             command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]] 
-            command 'parseTest', [[name: "parseTest", type: "STRING", description: "parseTest", defaultValue : ""]]
-            command "tuyaTest", [
-                [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
-                [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
-                [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"]
-            ]
+            // testParse is defined in the common library
+            // tuyaTest is defined in the common library
         }
         // itterate through all the figerprints and add them on the fly
         deviceProfilesV3.each { profileName, profileMap ->
@@ -549,7 +545,9 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_uxllnywp', deviceJoinName: 'Tuya 24GHz UXLLNYWP Radar'], 
             ],
             tuyaDPs:        [
-                [dp:1,   name:'motion',                          type:'enum',    rw: 'ro', min:0,    max:1,     defVal:'0',   scale:1,   map:[0:'inactive', 1:'active'], description:'<i>Presence state</i>'],
+                //[dp:1,   name:'motion',                          type:'enum',    rw: 'ro', min:0,    max:1,     defVal:'0',   scale:1,   map:[0:'inactive', 1:'active'], description:'<i>Presence state</i>'],
+                // humanMotionState : ['none', 'moving', 'small', 'stationary', 'static', 'present', 'peaceful', 'large']
+                [dp:1,   name:'humanMotionState',   preProc:'motionOrNotUXLLNYWP', type:'enum',    rw: 'ro', map:[0:'none', 1:'static', 2:'small', 3:'large', 4:'moving'], description:'Presence state'],
                 [dp:101, name:'distance',                        type:'decimal', rw: 'ro', min:0.0,  max:10.0,  defVal:0.0, scale:100, unit:'meters',  description:'Distance'],
                 [dp:102, name:'illuminance',                     type:'number',  rw: 'ro', scale:10, unit:'lx', description:'Illuminance'],  // "Light intensity"
                 [dp:103, name:'fadingTime',                      type:'number',  rw: 'rw', min:1,    max:59,    defVal:30,  scale:1,   unit:'seconds', title:'<b>Presence keep time</b>', description:'<i>Presence keep time</i>'],         // "Hold delay"
@@ -674,7 +672,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_ya4ft0w4', deviceJoinName: 'Tuya Human Presence Detector YA4FT0W4 ZY-M100-24GV372']
             ],
             tuyaDPs:        [   
-                [dp:1,   name:'humanMotionState',   preProc:'motionOrNot', type:'enum',    rw: 'ro', map:[0:'none', 1:'present', 2:'moving', 3:'none'], description:'Presence state'],
+                [dp:1,   name:'humanMotionState',   preProc:'motionOrNotYA4FT0W4', type:'enum',    rw: 'ro', map:[0:'none', 1:'present', 2:'moving', 3:'none'], description:'Presence state'],
                 [dp:2,   name:'radarSensitivity',   type:'number',  rw: 'rw', min:1,    max:10,   defVal:5, title:'<b>Motion sensitivity</b>', description:'Radar motion sensitivity'],
                 [dp:3,   name:'minimumDistance',    type:'decimal', rw: 'rw', min:0.0,  max:82.5, defVal:0.75, step:75, scale:100,  unit:'meters',   title:'<b>Minimum distance</b>',      description:'Shield range of the radar'],         // was shieldRange
                 [dp:4,   name:'maximumDistance',    type:'decimal', rw: 'rw', min:0.75, max:82.5, defVal:6.00, step:75, scale:100,  unit:'meters',   title:'<b>Maximum distance</b>',      description:'Detection range of the radar'],      // was detectionRange
@@ -988,12 +986,23 @@ Integer skipIfDisabled(int val) {
 }
 
 // called from processFoundItem() for TS0601_YA4FT0W4_RADAR radar
-Integer motionOrNot(int val) {
-    // [dp:1,   name:'humanMotionState',   preProc:'motionOrNot', type:'enum',    rw: 'ro', min:0,    max:3,       defVal:'0',  map:[0:'none', 1:'present', 2:'moving', 3:'none'], description:'Presence state'],
+Integer motionOrNotYA4FT0W4(int val) {
+    // [dp:1,   name:'humanMotionState',   preProc:'motionOrNotYA4FT0W4', type:'enum',    rw: 'ro', min:0,    max:3,       defVal:'0',  map:[0:'none', 1:'present', 2:'moving', 3:'none'], description:'Presence state'],
     if (val in [1, 2]) {
         handleMotion(true)
     }
     else {
+        handleMotion(false)
+    }
+    return val
+}
+
+Integer motionOrNotUXLLNYWP(int val) {
+    // [dp:1,   name:'humanMotionState',   preProc:'motionOrNotUXLLNYWP', type:'enum',    rw: 'ro', min:0,    max:3,       defVal:'0',  map:[0:'none', 1:'static', 2:'small', 3:'large', 4:'moving'], description:'Presence state'],
+    if (val in [4]) {
+        handleMotion(true)
+    }
+    else if (val in [0]) {
         handleMotion(false)
     }
     return val
