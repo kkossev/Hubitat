@@ -65,10 +65,10 @@
  *  ver. 1.9.5 2024-05-16 kkossev - added ThirdReality 3RSPE01044BZ Smart Plug E2 (European socket!)
  *  ver. 1.9.6 2024-06-04 kkossev - added setEnergy() command
  *  ver. 1.9.7 2024-07-05 kkossev - added SPM01 TS0601 _TZE200_qhlxve78 and _TZE200_bcusnqt8
- *  ver. 1.9.8 2024-11-22 kkossev - (dev. branch) added TS011F _TZ3000_xzhnra8x _TZ3000_rdfh8cfs _TZ3000_fgwhjm9j _TZ3000_waho4jtj
+ *  ver. 1.9.8 2024-11-22 kkossev - added TS011F _TZ3000_xzhnra8x _TZ3000_rdfh8cfs _TZ3000_fgwhjm9j _TZ3000_waho4jtj
+ *  ver. 2.0.0 2024-11-30 kkossev - (dev. branch) HE platform ver 2.4.0.x improved compatibility; added rtt measurement in ping(); added TS011F _TZ3000_ww6drja5; ThirdReality 3RSP02028BZ Energy divisor set to 3600000
  *
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
- *                                 TODO: add rtt measurement in ping()
  *                                 TODO: add toggle() command
  *                                 TODO: configure the temperature reproting (be able to switch if off!)
  *                                 TODO: if a plug is offline, do not refreh all parameters but ping() instead
@@ -79,7 +79,7 @@
  *                                 TODO: RCBO: send temperature event only when changed; raname Hoch to RCBO; revise configure/initialize sequence;
  *                                 TODO: energyDuration events have 'Days' in the value field!event type should be digital!
  *                                 TODO: Frient plug initialization doesn't work? replace Initialize() w/ Configure() command; implement ping();
- *                                 TODO: add  match descriptor request counter (ZDO cluster 6)
+ *                                 TODO: add match descriptor request counter (ZDO cluster 6)
  *                                 TODO: add powerSource attribute
  *                                 TODO: add resetStats command
  */
@@ -88,8 +88,8 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
-static String version() { '1.9.8' }
-static String timeStamp() { '2024/11/22 10:52 AM' }
+static String version() { '2.0.0' }
+static String timeStamp() { '2024/11/30 7:50 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -107,6 +107,7 @@ metadata {
         capability 'Sensor'
         capability 'Health Check'
 
+        attribute 'rtt', 'number'
         attribute 'powerFactor', 'NUMBER'
         attribute 'energyCost', 'NUMBER'
         attribute 'energyDuration', 'string'
@@ -118,10 +119,10 @@ metadata {
         attribute 'temperature', 'NUMBER'    // Tongou SY2
 
         command 'initialize', [[name: 'Manually initialize the plug after switching drivers.\n\r ***** Will load device default values! *****' ]]
-        command 'childLock', [[name:'Child Lock', type: 'ENUM', description: 'Select Child Lock mode', constraints: ['--- Select ---', 'off', 'on']]]
-        command 'ledMode', [[name:'LED mode', type: 'ENUM', description: 'Select LED mode', constraints: ['--- Select ---', 'Disabled', 'Lit when On', 'Lit when Off', 'Freeze', 'Always Green', 'Red when On; Green when Off', 'Green when On; Red when Off', 'Always Red' ]]]
-        command 'setPowerOnState', [[name:"Select 'Power On State' and click on the button", type: 'ENUM', description: 'Select Power On State', constraints: ['--- Select ---', 'off', 'on', 'Last state']]]
-        command 'setSwitchType',   [[name:"Select 'Switch Type' and click on the button", type: 'ENUM', description: "Select 'Switch Type", constraints: ['--- Select ---'] + switchTypeOptions.values() as List<String>]]
+        command 'childLock', [[name:'Child Lock', type: 'ENUM', description: 'Select Child Lock mode', constraints: ['off', 'on']]]
+        command 'ledMode', [[name:'LED mode', type: 'ENUM', description: 'Select LED mode', constraints: ['Disabled', 'Lit when On', 'Lit when Off', 'Freeze', 'Always Green', 'Red when On; Green when Off', 'Green when On; Red when Off', 'Always Red' ]]]
+        command 'setPowerOnState', [[name:"Select 'Power On State' and click on the button", type: 'ENUM', description: 'Select Power On State', constraints: ['off', 'on', 'Last state']]]
+        command 'setSwitchType',   [[name:"Select 'Switch Type' and click on the button", type: 'ENUM', description: "Select 'Switch Type", constraints: switchTypeOptions.values() as List<String>]]
         command 'setEnergyPrice', [[name:'setEnergyPrice', type: 'STRING', description: 'Set the energy cost (rate) for 1 kWh. The value is shown in the Preferences section', constraints: ['STRING'], defaultValue : '0.12']]
         command 'resetEnergy', [[name: 'Reset the accumulated Energy value' ]]
         command 'setEnergy', [[name: 'Set the Energy value, kWh', type: 'NUMBER', description: 'Set the Energy value']]
@@ -130,8 +131,8 @@ metadata {
             command 'activeEndpoints'
             command 'identify', [[name: 'Identify the plug for 30 seconds']]    // works for my OSRAM plug only? :(
             command 'configureReporting', [
-                [name: 'operation*',   type: 'ENUM', constraints: ['--- Select ---', 'Read', 'Write', 'Disable']],
-                [name: 'measurement*', type: 'ENUM', constraints: ['--- Select ---', ONOFF, ENERGY, POWER, INST_POWER, VOLTAGE, AMPERAGE, FREQUENCY, POWER_FACTOR], description: 'Select measurement to configure'],
+                [name: 'operation*',   type: 'ENUM', constraints: ['Read', 'Write', 'Disable']],
+                [name: 'measurement*', type: 'ENUM', constraints: [ ONOFF, ENERGY, POWER, INST_POWER, VOLTAGE, AMPERAGE, FREQUENCY, POWER_FACTOR], description: 'Select measurement to configure'],
                 [name: 'Minimum Reporting Interval (seconds)', type: 'STRING', defaultValue : '30', description: 'Select Minimum reporting time (in seconds)'],
                 [name: 'Maximum Reporting Interval (seconds)', type: 'STRING', defaultValue : '900', description: 'Select Maximum reporting time (in seconds)'],
                 [name: 'Minimum measurement change',           type: 'STRING', defaultValue : '1', description: 'Select Minimum measurement change to be reported']
@@ -153,6 +154,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_rdfh8cfs', deviceJoinName: 'NEO ZigBee On Off Power Metering Plug'  // https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_fgwhjm9j', deviceJoinName: 'NEO ZigBee On Off Power Metering Plug'  // https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_waho4jtj', deviceJoinName: 'NEO ZigBee On Off Power Metering Plug'  // https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,000A,E000,0702,0B04,1000,1888', outClusters:'0019', model:'TS011F', manufacturer:'_TZ3000_ww6drja5', deviceJoinName: 'TNCE TUYA Smart Plug'              // https://vi.aliexpress.com/item/1005005725291219.html
 
         /* moved to "Zemismart Zemismart ZigBee Wall Switch Multi-Gang" driver (no power monitoring)
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_v1pdxuqq", deviceJoinName: "XH-002P Outlet TS011F No Power Monitoring"  // - no power monitoring !
@@ -336,7 +338,9 @@ metadata {
 @Field static final Integer debouncingTimer = 300
 @Field static final Integer digitalTimer = 1000
 @Field static final Integer refreshTimer = 3000
-@Field static final Integer MAX_POWER = 15000    // power cap 15 kW
+@Field static final Integer MAX_POWER = 15000               // power cap 15 kW
+@Field static final Integer COMMAND_TIMEOUT = 6
+@Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
 @Field static final String UNKNOWN = 'UNKNOWN'
 @Field static final String ONOFF = 'Switch'
 @Field static final String POWER = 'Power'
@@ -406,7 +410,7 @@ private boolean isReportingConfigurable() { isSmartThingsOutlet() || isSengledOu
 // Tuya : default powerDiv = 1
 private int getPowerDiv() { (isThirdRealityUS() || isThirdRealityEU() || isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() || isPJ1203A() && !(isDinRail() || isRTXCircuitBreaker() || isSPM01()))) ? 10 : 1 }
 // Tuya :  energyDiv = 100 ThirdReality: 3600000
-private int getEnergyDiv() { isThirdRealityEU() ? 3600000 : (isSengledOutlet() || isJascoProductsOutlet()) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isThirdRealityUS() ? 1000 : 100 }
+private int getEnergyDiv() { (isThirdRealityEU() || isThirdRealityUS()) ? 3600000 : (isSengledOutlet() || isJascoProductsOutlet()) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) /*|| isThirdRealityUS()*/ ? 1000 : 100 }
 // Tuya :  currentDiv = 1000 ThirdReality: 1000
 private int getCurrentDiv() { (isHeiman() || isDevelco() || isSiHAS() || device.getDataValue('model') in ['3200-Sgb']) ? 100 : 1000 }
 // Tuya EF00 cluster voltage divider is 10 !
@@ -438,6 +442,7 @@ void parse(String description) {
     checkDriverVersion()
     if (state.rxCounter != null) { state.rxCounter = state.rxCounter + 1 }
     setPresent()
+    unschedule('deviceCommandTimeout')
     if (isTuyaE00xCluster(description) == true || otherTuyaOddities(description) == true) {
         return null
     }
@@ -508,7 +513,18 @@ void parse(String description) {
                     return null
                 }
                 else if (it.cluster == '0000' && (descMap.attrId in ['0000', '0001', '0004', '0005', '0007'])) {
-                    logDebug "attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+                    if (it.attrId == '0001') {
+                        if (logEnable) { log.debug "${device.displayName} Tuya check-in message (attribute ${it.attrId} reported: ${it.value})" }
+                        Long now = new Date().getTime()
+                        if (state.lastTx == null) { state.lastTx = [:] }
+                        int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: '0').toInteger()
+                        if (timeRunning < MAX_PING_MILISECONDS) {
+                            sendRttEvent()
+                        }
+                    }
+                    else {
+                        logDebug "attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+                    }
                 }
                 else if (it.cluster == '0000' && (descMap.attrId in ['FFE2', 'FFE4', 'FFDE', 'FFFE'])) {
                     logDebug "attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
@@ -1725,6 +1741,7 @@ List<String> off() {
         }
         runInMillis(digitalTimer, clearIsDigital, [overwrite: true])
         if (state.txCounter != null) { state.txCounter = state.txCounter + 1 }
+        scheduleCommandTimeoutCheck()
         logDebug "off() sending ${cmds}"
         return cmds
     }
@@ -1754,6 +1771,7 @@ List<String> on() {
     }
     runInMillis(digitalTimer, clearIsDigital, [overwrite: true])
     if (state.txCounter != null) { state.txCounter = state.txCounter + 1 }
+    scheduleCommandTimeoutCheck()
     logDebug "on() sending ${cmds}"
     return cmds
 }
@@ -1845,11 +1863,41 @@ void refresh() {
     logInfo 'refresh()...'
     state.isRefreshRequest = true
     poll(refreshAll = true)
+    scheduleCommandTimeoutCheck()
     runInMillis(refreshTimer, clearFefreshRequest, [overwrite: true])           // 3 seconds
 }
 
 void ping() {
-    logInfo 'ping() is not implemented'
+    logInfo 'ping...'
+    scheduleCommandTimeoutCheck()
+    if (state.lastTx == null) { state.lastTx = [:] }
+    state.lastTx['pingTime'] = new Date().getTime()
+    sendZigbeeCommands(zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0))
+}
+
+void sendRttEvent(String value=null) {
+    Long now = new Date().getTime()
+    if (state.lastTx == null) { state.lastTx = [:] }
+    int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: now).toInteger()
+    String descriptionText = "Round-trip time is ${timeRunning} ms"
+    if (value == null) {
+        logInfo "${descriptionText}"
+        sendEvent(name: 'rtt', value: timeRunning, descriptionText: descriptionText, unit: 'ms', isDigital: true)
+    }
+    else {
+        descriptionText = "Round-trip time : ${value}"
+        logInfo "${descriptionText}"
+        sendEvent(name: 'rtt', value: value, descriptionText: descriptionText, isDigital: true)
+    }
+}
+
+void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
+    runIn(delay, 'deviceCommandTimeout')
+}
+
+void deviceCommandTimeout() {
+    logWarn 'no response received (sleepy device or offline?)'
+    sendRttEvent('timeout')
 }
 
 void autoPoll() {
@@ -2075,6 +2123,8 @@ void initializeVars(boolean fullInit = false) {
 
     state.rxCounter = 0
     state.txCounter = 0
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (state.lastTx == null) { state.lastTx = [:] }
     if (state.lastEnergyRaw == null) { state.lastEnergyRaw = 0.0 }
     if (state.lastEnergyCost == null) { state.lastEnergyCost = 0.0 }
     if (state.lastSwitchState == null) { state.lastSwitchState = 'unknown' }
@@ -2670,10 +2720,6 @@ void setEnergy(Number energy) {
     //
     energyCostEvent(0, isDigital = true)
     energyDurationEvent(0, isDigital = true)
-    /*
-    energyEvent(energy, isDigital = true)
-    hourlyEnergyEvent(0, isDigital = true)
-    */
     logInfo "Energy (total:${state.lastEnergyRaw} kWh) was set to ${energy}KWh on ${state.lastResetDate}"
     refresh()
 }
