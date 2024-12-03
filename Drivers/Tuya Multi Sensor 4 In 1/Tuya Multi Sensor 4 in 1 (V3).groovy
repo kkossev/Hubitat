@@ -22,7 +22,8 @@
  * ver. 3.2.2  2024-07-05 kkossev  - created motionLib; restored 'all' attribute
  * ver. 3.2.3  2024-07-27 kkossev  - added Sonoff SNZB-03P
  * ver. 3.3.0  2024-08-30 kkossev  - main branch release.
- * ver. 3.3.1  2024-10-26 kkossev  - (dev. branch) added TS0601 _TZE200_f1pvdgoh into a new device profile group 'TS0601_2IN1_MYQ_ZMS03'
+ * ver. 3.3.1  2024-10-26 kkossev  - added TS0601 _TZE200_f1pvdgoh into a new device profile group 'TS0601_2IN1_MYQ_ZMS03'
+ * ver. 3.3.2  2024-11-30 kkossev  - (dev. branch) added Azoula Zigbee 4 in 1 Multi Sensor model:'HK-SENSOR-4IN1-A', manufacturer:'Sunricher' into SIHAS group
  *                                   
  *                                   TODO: add TS0601 _TZE200_agumlajc https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1077?u=kkossev
  *                                   TODO: 
@@ -51,8 +52,8 @@
  *                                   TODO: check temperatureOffset and humidityOffset
 */
 
-static String version() { "3.3.1" }
-static String timeStamp() {"2024/10/26 12:47 PM"}
+static String version() { "3.3.2" }
+static String timeStamp() {"2024/11/30 9:11 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -441,7 +442,7 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             ]  // battery percentage, min 3600, max 7200, UINT8, delta 2
     ],
 
-    // isSiHAS()
+    // isSiHAS() and Sunricher
     'SIHAS_USM-300Z_4_IN_1' : [
             description   : 'SiHAS USM-300Z 4-in-1',
             models        : ['ShinaSystem'],
@@ -449,7 +450,8 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'IlluminanceMeasurement': true, 'Battery': true],
             preferences   : [:],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0400,0003,0406,0402,0001,0405,0500', outClusters:'0004,0003,0019', model:'USM-300Z', manufacturer:'ShinaSystem', deviceJoinName: 'SiHAS MultiPurpose Sensor']
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0400,0003,0406,0402,0001,0405,0500', outClusters:'0004,0003,0019', model:'USM-300Z', manufacturer:'ShinaSystem', deviceJoinName: 'SiHAS MultiPurpose Sensor'],
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0009,0400,0402,0405,0406,0500', outClusters:'0019', model:'HK-SENSOR-4IN1-A', manufacturer:'Sunricher', deviceJoinName: 'Azoula Zigbee 4 in 1 Multi Sensor']     // https://community.hubitat.com/t/what-driver-for-this-4-1/145847?u=kkossev
             ],
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             //tuyaDPs       : [:],
