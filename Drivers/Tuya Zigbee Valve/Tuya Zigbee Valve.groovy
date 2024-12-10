@@ -53,7 +53,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 static String version() { '1.5.0' }
-static String timeStamp() { '2024/12/10 10:34 PM' }
+static String timeStamp() { '2024/12/10 11:43 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true                // disable it for the production release !
@@ -2020,7 +2020,7 @@ void setValve2(String mode) {
             logWarn "incorrect setValve2 ${ mode }, must be 'open' or 'closed'"
             return
     }
-    cmds = sendTuyaCommand('02', DP_TYPE_ENUM, dpValHex)
+    cmds = sendTuyaCommand('02', DP_TYPE_BOOL, dpValHex)
     logDebug "setValve2= ${mode} : ${cmds}"
     sendZigbeeCommands( cmds )
 }
