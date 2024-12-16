@@ -41,7 +41,7 @@
  *  ver. 1.3.5 2024-09-22 kkossev - removed tuyaVersion for non-Tuya devices; combined on() + timedOff() command for opening the Sonoff valve;
  *  ver. 1.3.6 2024-09-23 kkossev - Sonoff valve: irrigationDuration 0 will disable the valve auto-off; default auto-off timer changed to 0 (was 60 seconds); invalid 'digital' type of autoClose fixed; added workState attribute; logging improvements;
  *  ver. 1.4.0 2024-11-22 kkossev - supressed 'Sonoff SWV sendIrrigationDuration is not avaiable!' warning; added NovaDigital TS0601 _TZE200_fphxkxue @Rafael as TS0601_SASWELL_VALVE (working partially!); added queryAllTuyaDP for TS0601 devices;
- *  ver. 1.5.0 2024-12-10 kkossev - (dev.branch) adding TS0601 _TZE284_8zizsafo _TZE284_eaet5qt5 in 'TS0601_TZE284_VALVE' group 
+ *  ver. 1.5.0 2024-12-16 kkossev - (dev.branch) adding TS0601 _TZE284_8zizsafo _TZE284_eaet5qt5 in 'TS0601_TZE284_VALVE' group 
  *
  *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
@@ -53,7 +53,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 static String version() { '1.5.0' }
-static String timeStamp() { '2024/12/10 11:43 PM' }
+static String timeStamp() { '2024/12/16 7:41 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true                // disable it for the production release !
@@ -434,7 +434,7 @@ boolean isTZE284()               { return getModelGroup().contains('TZE284') || 
 
     'TS0601_TZE284_VALVE'   : [              // https://de.aliexpress.com/item/1005007836145637.html
             model         : 'TS0601',        // https://github.com/zigpy/zha-device-handlers/blob/a1f6378fba3a727b5f9432d711ef3d5320e45827/zhaquirks/tuya/ts0601_valve.py#L489 
-            manufacturers : ['_TZE284_8zizsafo'],
+            manufacturers : ['_TZE284_8zizsafo', '_TZE284_eaet5qt5'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,0000,ED00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_8zizsafo'],    // GX-03ZG
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,0000,ED00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_eaet5qt5'],    // Insoma SGW08W https://www.aliexpress.us/item/3256807355418184.html
@@ -1912,7 +1912,7 @@ void setIrrigationTimer(BigDecimal timer) {
         logWarn "timer must be withing 0 and ${MAX_AUTOOFF_TIMER} seconds"
         return
     }
-    logInfo "setting the irrigation timer to ${timerSec} seconds"
+    logInfo "setting the irrigation timer to ${timerSec} ${isTZE284() ? 'minutes' : 'seconds'}"
     device.updateSetting('autoOffTimer', [value: timerSec, type: 'number'])
     String timerText = timerSec == 0 ? 'disabled' : timerSec.toString()
     sendEvent(name: 'irrigationDuration', value: timerText, type: 'digital')
@@ -1935,7 +1935,7 @@ void sendIrrigationDuration() {
         cmds = sendTuyaCommand('09', DP_TYPE_VALUE, dpValHex)
     }
     else if (isTZE284()) {
-        cmds = sendTuyaCommand('19', DP_TYPE_VALUE, dpValHex) + sendTuyaCommand('1A', DP_TYPE_VALUE, dpValHex)
+        cmds = sendTuyaCommand('0D', DP_TYPE_VALUE, dpValHex) + sendTuyaCommand('0E', DP_TYPE_VALUE, dpValHex)      // was 19 / 1A
     }
     else if (isSonoff()) {
         logDebug "Sonoff irrigation timer is ${settings?.autoOffTimer ?: DEFAULT_AUTOOFF_TIMER}"
