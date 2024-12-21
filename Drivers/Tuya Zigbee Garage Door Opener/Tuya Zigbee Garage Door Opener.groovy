@@ -19,12 +19,12 @@
  * ver. 1.0.4 2022-07-06 kkossev  - on() command opens the door if it was closed, off() command closes the door if it was open; 'contact is open/closed' info and warning logs are shown only on contact state change;
  * ver. 1.0.5 2023-10-09 kkossev  - added _TZE204_nklqjk62 fingerprint
  * ver. 1.1.0 2024-07-15 kkossev  - added commands setContact() and setDoor()
- * ver. 1.2.0 2024-12-21 kkossev  - (dev. branch) HE Platform 2.4.x adjustments; adding contact sensor inverse preference;
+ * ver. 1.2.0 2024-12-21 kkossev  - HE Platform 2.4.x adjustments; added TS0603 _TZE608_c75zqghm @kuzenkohome; adding contact sensor inverse preference;
  *
 */
 
 def version() { "1.2.0" }
-def timeStamp() {"2024/12/21 1:40 PM"}
+def timeStamp() {"2024/12/21 2:15 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -54,7 +54,7 @@ metadata {
         fingerprint profileId:"0104", model:"TS0601", manufacturer:"_TZE200_wfxuhoea", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", application:"42", deviceJoinName: "LoraTap Garage Door Opener"        // LoraTap GDC311ZBQ1
         fingerprint profileId:"0104", model:"TS0601", manufacturer:"_TZE200_nklqjk62", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", application:"42", deviceJoinName: "MatSee Garage Door Opener"         // MatSee PJ-ZGD01
         fingerprint profileId:"0104", model:"TS0601", manufacturer:"_TZE204_nklqjk62", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", application:"4A", deviceJoinName: "MatSee Garage Door Opener"         // MatSee PJ-ZGD01
-        
+        fingerprint profileId:"0104", model:"TS0603", manufacturer:"_TZE608_c75zqghm", endpointId:"01", inClusters:"0000,0003,0004,0005,EF00", outClusters:"000A,0019", application:"40", deviceJoinName: "Gate Opener"                  // QS-Zigbee-C03        https://www.aliexpress.us/item/3256806896361744.html https://github.com/zigpy/zha-device-handlers/issues/3263 
     }
 
     preferences {
@@ -105,8 +105,8 @@ def parse(String description) {
                     case 0x02 : // unknown, received as a confirmation of the relay on/off commands? Payload is always 0
                         if (logEnable) log.debug "${device.displayName} received confirmation report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                         break
-                    case 0x03 : // Contact
-                    case 0x07 : // debug/testing only!
+                    case 0x03 : // Contact (also TS0603)
+                    case 0x07 : // debug/testing only! TODO - comment out in production?
                         def contactState = gectContactState(fncmd)
                         def doorState = device?.currentState('door')?.value
                         def previousContactState = device?.currentState('contact')?.value
