@@ -18,12 +18,13 @@
  * ver. 1.0.3 2022-06-26 kkossev  - fixed new device exceptions bug; warnings in Debug logs only; Debug logs are off by default.
  * ver. 1.0.4 2022-07-06 kkossev  - on() command opens the door if it was closed, off() command closes the door if it was open; 'contact is open/closed' info and warning logs are shown only on contact state change;
  * ver. 1.0.5 2023-10-09 kkossev  - added _TZE204_nklqjk62 fingerprint
- * ver. 1.1.0 2024-07-15 kkossev  - (dev.branch) added commands setContact() and setDoor()
+ * ver. 1.1.0 2024-07-15 kkossev  - added commands setContact() and setDoor()
+ * ver. 1.2.0 2024-12-21 kkossev  - (dev. branch) HE Platform 2.4.x adjustments; adding contact sensor inverse preference;
  *
 */
 
-def version() { "1.1.0" }
-def timeStamp() {"2024/07/15 7:56 AM"}
+def version() { "1.2.0" }
+def timeStamp() {"2024/12/21 1:40 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -45,10 +46,10 @@ metadata {
         capability "PowerSource"
 
         if (_DEBUG) {
-            command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
+            command "initialize", [[name: "Manually initialize the device after switching drivers. WILL LOAD THE DEFAULT VALUES!" ]]
         }
-        command "setContact", [[name:"Set Contact", type: "ENUM", description: "Select Contact State", constraints: ["--- Select ---", "open", "closed" ]]]
-        command "setDoor",    [[name:"Set Door",    type: "ENUM", description: "Select Door State", constraints: ["--- Select ---", "open", "closed" ]]]
+        command "setContact", [[name:"Set Contact", type: "ENUM", description: "Select Contact State", constraints: ["open", "closed" ]]]
+        command "setDoor",    [[name:"Set Door",    type: "ENUM", description: "Select Door State", constraints: ["open", "closed" ]]]
         
         fingerprint profileId:"0104", model:"TS0601", manufacturer:"_TZE200_wfxuhoea", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", application:"42", deviceJoinName: "LoraTap Garage Door Opener"        // LoraTap GDC311ZBQ1
         fingerprint profileId:"0104", model:"TS0601", manufacturer:"_TZE200_nklqjk62", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", application:"42", deviceJoinName: "MatSee Garage Door Opener"         // MatSee PJ-ZGD01
@@ -57,12 +58,19 @@ metadata {
     }
 
     preferences {
-        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
-        input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "doorTimeout", type: "number", title: "<b>Door timeout</b>", description: "<i>The time needed for the door to open, seconds</i>", range: "1..100", defaultValue: DEFAULT_DOOR_TIMEOUT)
+        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "Debug information, useful for troubleshooting. Recommended value is <b>false</b>", defaultValue: false)
+        input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "Display measured values in HE log page. Recommended value is <b>true</b>", defaultValue: true)
+        input (name: "doorTimeout", type: "number", title: "<b>Door timeout</b>", description: "The time needed for the door to open, seconds", range: "1..100", defaultValue: DEFAULT_DOOR_TIMEOUT)
+        input (name: "inverseContact", type: "bool", title: "<b>Inverse Contact State</b>", description: "Inverses the contact sensor open/closed state. Recommended value is <b>false</b>", defaultValue: false)
     }
 }
 
+private String gectContactState(int fncmd) {
+    if (settings?.inverseContact == true) {
+        return fncmd == 0 ? 'open' : 'closed'
+    }
+    return fncmd == 0 ? 'closed' : 'open'
+}
 
 private getCLUSTER_TUYA() { 0xEF00 }
 
@@ -99,7 +107,7 @@ def parse(String description) {
                         break
                     case 0x03 : // Contact
                     case 0x07 : // debug/testing only!
-                        def contactState = fncmd == 0 ? "closed" : "open"    // reversed in ver 1.0.1
+                        def contactState = gectContactState(fncmd)
                         def doorState = device?.currentState('door')?.value
                         def previousContactState = device?.currentState('contact')?.value
                         sendContactEvent(contactState)
@@ -328,6 +336,7 @@ void initializeVars( boolean fullInit = true ) {
     }
     if (fullInit == true || settings?.logEnable == null) { device.updateSetting("logEnable", false) }
     if (fullInit == true || settings?.txtEnable == null) { device.updateSetting("txtEnable", true) }
+    if (fullInit == true || settings?.inverseContact == null) { device.updateSetting("inverseContact", false) }
     if (fullInit == true || settings?.doorTimeout == null) { device.updateSetting("doorTimeout", DEFAULT_DOOR_TIMEOUT) }
     
     if (device?.currentState('contact')?.value == null ) {
