@@ -19,7 +19,7 @@
  * ver. 1.0.4 2022-07-06 kkossev  - on() command opens the door if it was closed, off() command closes the door if it was open; 'contact is open/closed' info and warning logs are shown only on contact state change;
  * ver. 1.0.5 2023-10-09 kkossev  - added _TZE204_nklqjk62 fingerprint
  * ver. 1.1.0 2024-07-15 kkossev  - added commands setContact() and setDoor()
- * ver. 1.2.0 2024-12-21 kkossev  - HE Platform 2.4.x adjustments; added TS0603 _TZE608_c75zqghm @kuzenkohome; adding contact sensor inverse preference;
+ * ver. 1.2.0 2024-12-21 kkossev  - HE Platform 2.4.x adjustments; added TS0603 _TZE608_c75zqghm @kuzenkohome; adding contact sensor inverse preference @PM_Disaster;
  *
 */
 
