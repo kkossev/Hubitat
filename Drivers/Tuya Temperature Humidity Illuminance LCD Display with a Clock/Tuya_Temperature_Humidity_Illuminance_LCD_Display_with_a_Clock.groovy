@@ -53,7 +53,8 @@
  * ver. 1.6.6  2024-08-14 kkossev - added TS0601 _TZE204_myd45weu; added TS0601 _TZE204_qyflbnbj
  * ver. 1.6.7  2024-10-23 kkossev - added TS0222 _TZ3000_kky16aay in a new 'TS0222_Soil' group
  * ver. 1.6.8  2024-11-19 kkossev - added TS0601 _TZE284_sgabhwa6 and _TZE284_nhgdf6qr into 'TS0601_Soil_II'; added _TZE200_qrztc3ev _TZE200_snloy4rw _TZE200_eanjj2pa _TZE200_ydrdfkim into 'TS0601_Tuya' group
- * ver. 1.7.0  2024-11-23 kkossev - (dev. branch) temperatureOffset and humidityOffset moved outside of the configParams; added queryAllTuyaDPs() on Refresh
+ * ver. 1.7.0  2024-11-23 kkossev - temperatureOffset and humidityOffset moved outside of the configParams; added queryAllTuyaDPs() on Refresh
+ * ver. 1.8.0  2024-12-30 kkossev - HE platform 2.4.0.x compatibility patch
  *
  *                                  TODO: queryOnDeviceAnnounce for TS0601_Tuya_2 group
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
@@ -63,8 +64,8 @@
  *                                  TODO: add Batteryreporting time configuration (like in the TS004F driver)
 */
 
-@Field static final String VERSION = '1.7.0'
-@Field static final String TIME_STAMP = '2024/11/23 11:16 PM'
+@Field static final String VERSION = '1.8.0'
+@Field static final String TIME_STAMP = '2024/12/30 5:39 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -96,7 +97,7 @@ metadata {
         }
 
         command 'resetStats', [[name: 'Reset statistics' ]]
-        command 'initialize', [[name: 'Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****' ]]
+        command 'initialize', [[name: 'Manually initialize the device after switching drivers. ***** Will load device default values! *****' ]]
 
         attribute   '_info', 'string'        // when defined as attribute, will be shown on top of the 'Current States' list ...
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
@@ -194,7 +195,7 @@ metadata {
         input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', description: 'May not be supported by all devices!', defaultValue: false)
         if (advancedOptions == true) {
             if (isConfigurableSleepyDevice()) {
-                input(title: 'To configure a sleepy device, try any of the methods below :', description: '<b> * Rapidly change the temperature or the humidity<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>', type: 'paragraph', element: 'paragraph')
+                input(name: 'dummy', title: 'To configure a sleepy device, try any of the methods below :', description: '<b> * Rapidly change the temperature or the humidity<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>', type: 'hidden', element: 'paragraph')
             }
             configParams.each {
                 if (it.value.input.limit == null || 'ALL' in it.value.input.limit || getModelGroup() in it.value.input.limit) {
@@ -275,7 +276,7 @@ metadata {
 
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       //
-    
+
     '_TZE200_pisltm67'  : 'TS0601_AUBESS',       // illuminance only sensor
     '_TZ2000_a476raq2'  : 'TS0201',              // KK
     '_TZ3000_lfa05ajd'  : 'TS0201',              // Zemismart ZXZTH
