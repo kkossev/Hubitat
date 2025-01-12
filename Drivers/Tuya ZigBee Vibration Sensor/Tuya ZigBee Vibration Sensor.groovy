@@ -25,8 +25,11 @@
  * ver 1.1.0 2023-03-07 kkossev - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj ; IAS is initialized on configure();
  * ver 1.2.0 2024-05-20 kkossev - add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability and preference 'ThreeAxis'; added Samsung multisensor; logsOff scheduler; added sensitivity attribute,
  * ver 1.2.1 2024-05-22 kkossev - delete scheduled jobs on Save Preferences; added lastBattery attribute; added setAccelarationInactive command;
- * ver 1.2.2 2024-06-03 kkossev - (dev. branch) - sensitivity preference is hidden for non-Tuya models; threeAxis preference is hidden for Tuya models;
+ * ver 1.2.2 2024-06-03 kkossev - sensitivity preference is hidden for non-Tuya models; threeAxis preference is hidden for Tuya models;
+ * ver 1.3.0 2025-01-12 kkossev - (dev.branch) adding Tuya Cluster parser; added TS0601 _TZE200_kzm5w4iz (contact&vibration); adding TS0601 _TZE200_iba1ckek (Tilt Xyz Axis Sensor) (ZG-103Z)
  * 
+ *                                TODO: add TS0601 _TZE200_iba1ckek https://s.click.aliexpress.com/e/_oBVBlUh https://www.aliexpress.com/item/1005007987634820.html https://github.com/adam-zlatniczki/zha-device-handlers/blob/5b44d581ae56e4909a953cc5e554bf441a7b7aa7/zhaquirks/tuya/ts601_door.py 
+ *                                TODO: this driver does not process ZCL battery percentage reports, only voltage reports!
  *                                TODO: bugFix: healthCheck is not started on installed()
  *                                TODO: add powerSource attribute
  *                                TODO: make sensitivity range dependant on the device model
@@ -35,8 +38,8 @@
  *                                TODO: handle tamper: (zoneStatus & 1<<2); handle battery_low: (zoneStatus & 1<<3); TODO: check const sens = {'high': 0, 'medium': 2, 'low': 6}[value];
  */
 
-static String version() { "1.2.2" }
-static String timeStamp() { "2024/06/03 1:03 PM" }
+static String version() { "1.3.0" }
+static String timeStamp() { "2025/01/12 7:48 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -73,6 +76,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TZ3000_fkxmyics" // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,FFF1",           outClusters:"0019", model:"3RVS01031Z", manufacturer:"Third Reality, Inc"          // Third Reality vibration sensor   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0500,0B05,FC02", outClusters:"0003,0019", model:"multi", manufacturer:"Samjin" // Samsung Multisensor
+		fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_kzm5w4iz"     // https://github.com/flatsiedatsie/zigbee-herdsman-converters/blob/ef4d559ccba0a39cd6957d2270352e29fb1d0296/converters/fromZigbee.js#L7449-L7467
+		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_iba1ckek"     // https://nl.aliexpress.com/item/1005007520278259.html Tilt Xyz Axis Sensor (ZG-103Z)
 	}
 
 	preferences {
@@ -94,6 +99,14 @@ metadata {
             }
         }
 	}
+}
+
+boolean isTuyaVibrationDoorSensor() {
+    return device.getDataValue("manufacturer") == "_TZE200_kzm5w4iz"    // Tuya TS0601 Vibration and Door Sensor
+}
+
+boolean isTuyaTiltXyzAxisSensor() {
+    return device.getDataValue("manufacturer") == "_TZE200_iba1ckek"    // Tuya TS0601 Tilt Xyz Axis Sensor
 }
 
 @Field static final Integer COMMAND_TIMEOUT = 10             // timeout time in seconds
@@ -236,7 +249,7 @@ def parse(String description) {
     else if (description?.startsWith("catchall") || description?.startsWith("read attr")) {
         Map descMap = zigbee.parseDescriptionAsMap(description)        
         if (descMap.clusterInt == zigbee.POWER_CONFIGURATION_CLUSTER && descMap.attrInt == 0x0020) {
-            map = parseBattery(descMap.value)
+            map = parseBatteryVoltage(descMap.value)
         }
         else if (descMap.command == "07") {
             // Process "Configure Reporting" response            
@@ -286,6 +299,24 @@ def parse(String description) {
         else if (descMap.clusterInt == 0xFC02 && descMap.command in ['01', '0A']) {
             handleThreeAxisSamsung(descMap)
         }
+        else if ((descMap?.clusterInt == 0xEF00) && (descMap?.command == '01' || descMap?.command == '02' || descMap?.command == '06')) {
+            int dataLen = descMap?.data.size()
+            //log.warn "dataLen=${dataLen}"
+            //def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
+            if (dataLen <= 5) {
+                logWarn "unprocessed short Tuya command response: dp_id=${descMap?.data[3]} dp=${descMap?.data[2]} fncmd_len=${fncmd_len} data=${descMap?.data})"
+                return
+            }
+            boolean isSpammyDeviceProfileDefined = this.respondsTo('isSpammyDeviceProfile') // check if the method exists 05/21/2024
+            for (int i = 0; i < (dataLen - 4); ) {
+                int dp = zigbee.convertHexToInt(descMap?.data[2 + i])          // "dp" field describes the action/message of a command frame
+                int dp_id = zigbee.convertHexToInt(descMap?.data[3 + i])       // "dp_identifier" is device dependant
+                int fncmd_len = zigbee.convertHexToInt(descMap?.data[5 + i])
+                int fncmd = getTuyaAttributeValue(descMap?.data, i)          //
+                processTuyaDP(descMap, dp, dp_id, fncmd)
+                i = i + fncmd_len + 4
+            }
+        } // if (descMap?.command == "01" || descMap?.command == "02")        
         else {
             if (logEnable) log.warn ("Description map not parsed: $descMap")            
         }
@@ -300,6 +331,65 @@ def parse(String description) {
 	} else {
 		return [:]
     }
+}
+
+private int getTuyaAttributeValue(final List<String> _data, final int index) {
+    int retValue = 0
+    if (_data.size() >= 6) {
+        int dataLength = zigbee.convertHexToInt(_data[5 + index])
+        if (dataLength == 0) { return 0 }
+        int power = 1
+        for (i in dataLength..1) {
+            retValue = retValue + power * zigbee.convertHexToInt(_data[index + i + 5])
+            power = power * 256
+        }
+    }
+    return retValue
+}
+
+
+void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd) {
+    switch (dp) {
+        case 0x01:
+        case 0x65:  // (101) - for debugging only!
+            // isTuyaVibrationDoorSensor()
+            logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            logInfo "TuyaVibrationDoorSensor: contact is ${fncmd == 1 ? 'open' : 'closed'}"
+            // TODO - create a child device?
+            break
+        case 0x02:
+            logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            break
+        case 0x03:  // thitBatteryPercentage  isTuyaVibrationDoorSensor() TS0601 _TZE200_kzm5w4iz
+            logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            sendBatteryPercentageEvent(fncmd)
+            sendLastBatteryEvent()
+            break
+        case 0x0A:  // (10) tuyaVibration isTuyaVibrationDoorSensor() TS0601 _TZE200_kzm5w4iz
+        case 0x67:  // (103) - for debugging only!
+            logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            sendVibrationEvent(fncmd != 0)
+            break
+        default :
+            logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            break
+    }
+}
+
+def sendBatteryPercentageEvent(rawValuePar) {
+    def rawValue = rawValuePar as int
+    logDebug "sendBatteryPercentageEvent: rawValue = ${rawValue}"
+    def result = [:]
+    if (rawValue < 0) { rawValue = 0; logWarn "batteryPercentage rawValue corrected to ${rawValue}" }
+    if (rawValue > 100 ) { rawValue = 100; logWarn "batteryPercentage rawValue corrected to ${rawValue}" }
+    result.name = 'battery'
+    result.translatable = true
+    result.value = Math.round(rawValue)
+    result.descriptionText = "${device.displayName} battery is ${result.value}%"
+    result.isStateChange = true
+    result.unit = '%'
+    result.type = 'physical'
+    sendEvent(result)
 }
 
 def sendEnrollResponse() {
@@ -365,6 +455,17 @@ Map parseIasMessage(ZoneStatus zs) {
     }
 }
 
+void sendVibrationEvent(boolean vibrationActive) {
+    logDebug "Vibration : $vibrationActive"
+    Map result = handleVibration(vibrationActive)
+    if (result != [:]) {
+        sendEvent(result)
+    }
+    else {
+        logDebug "Vibration event not sent"
+    }
+}
+
 private handleVibration(boolean vibrationActive) {    
     if (vibrationActive) {
         int timeout = vibrationReset ?: 3
@@ -419,7 +520,7 @@ int getSecondsInactive() {
 
 // Convert 2-byte hex string to voltage
 // 0x0020 BatteryVoltage -  The BatteryVoltage attribute is 8 bits in length and specifies the current actual (measured) battery voltage, in units of 100mV.
-private parseBattery(valueHex) {
+private parseBatteryVoltage(valueHex) {
 	//logDebug("Battery parse string = ${valueHex}")
 	def rawVolts = Integer.parseInt(valueHex, 16) / 10
 	def minVolts = voltsmin ? voltsmin : 2.5
