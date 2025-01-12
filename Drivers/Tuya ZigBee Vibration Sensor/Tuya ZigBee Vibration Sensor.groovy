@@ -24,16 +24,19 @@
  * ver 1.0.8 2022-11-08 kkossev - TS0210 _TZ3000_bmfw9ykl
  * ver 1.1.0 2023-03-07 kkossev - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj ; IAS is initialized on configure();
  * ver 1.2.0 2024-05-20 kkossev - add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability and preference 'ThreeAxis'; added Samsung multisensor; logsOff scheduler; added sensitivity attribute,
+ * ver 1.2.1 2024-05-22 kkossev - delete scheduled jobs on Save Preferences; added lastBattery attribute; added setAccelarationInactive command;
+ * ver 1.2.2 2024-06-03 kkossev - sensitivity preference is hidden for non-Tuya models; threeAxis preference is hidden for Tuya models;
  * 
- *                                TODO: Publish a new HE forum thread
+ *                                TODO: bugFix: healthCheck is not started on installed()
+ *                                TODO: add powerSource attribute
  *                                TODO: make sensitivity range dependant on the device model
  *                                TODO: minimum time filter : https://community.hubitat.com/t/tuya-vibration-sensor-better-laundry-monitor/113296/9?u=kkossev 
  *                                TODO: add capability.tamperAlert
  *                                TODO: handle tamper: (zoneStatus & 1<<2); handle battery_low: (zoneStatus & 1<<3); TODO: check const sens = {'high': 0, 'medium': 2, 'low': 6}[value];
  */
 
-static String version() { "1.2.0" }
-static String timeStamp() { "2024/05/20 8:43 PM" }
+static String version() { "1.2.2" }
+static String timeStamp() { "2024/06/03 1:03 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -51,12 +54,15 @@ metadata {
         capability "Refresh"
         capability 'Health Check'
         capability 'ThreeAxis'              // Attributes: threeAxis - VECTOR3
+
+        command 'setAccelarationInactive', [[name: 'Reset the accelaration to inactive state']]
         
         attribute "batteryVoltage", "number"
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute 'rtt', 'number'
         attribute 'batteryStatus', 'enum', ["normal", "replace"]
         attribute 'sensitivity', 'number'
+        attribute 'lastBattery', 'date'         // last battery event time - added in 1.2.1 05/21/2024
         
 		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_3zv6oleo"     // KK
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_kulduhbj"     // not tested https://fr.aliexpress.com/item/1005002490419821.html
@@ -72,9 +78,13 @@ metadata {
 	preferences {
 		input name: "txtEnable", type: "bool", title: "<b>Enable info message logging</b>", description: ""
 		input name: "logEnable", type: "bool", title: "<b>Enable debug message logging</b>", description: ""
-        input name: "sensitivity", type: "enum", title: "<b>Vibration Sensitivity</b>", description: "Select Vibration Sensitivity", defaultValue: "3", options:["0":"0 - Maximum", "1":"1", "2":"2", "3":"3 - Medium", "4":"4", "5":"5", "6":"6 - Minimum"]
+        if (device && isTuya()) {
+            input name: "sensitivity", type: "enum", title: "<b>Vibration Sensitivity</b>", description: "Select Vibration Sensitivity", defaultValue: "3", options:["0":"0 - Maximum", "1":"1", "2":"2", "3":"3 - Medium", "4":"4", "5":"5", "6":"6 - Minimum"]
+        }
 		input "vibrationReset", "number", title: "After vibration is detected, wait ___ second(s) until <b>resetting to inactive state</b>. Default = 3 seconds.", description: "", range: "1..7200", defaultValue: 3
-        input name: 'threeAxis', type: 'enum', title: '<b>Three Axis</b>', description: '<i>Enable or disable the Three Axis reporting<br>(ThirdReality and Samsung)</i>', defaultValue: ThreeAxisOpts.defaultValue, options: ThreeAxisOpts.options
+        if (device && !isTuya()) {
+            input name: 'threeAxis', type: 'enum', title: '<b>Three Axis</b>', description: '<i>Enable or disable the Three Axis reporting<br>(ThirdReality and Samsung)</i>', defaultValue: ThreeAxisOpts.defaultValue, options: ThreeAxisOpts.options
+        }
         if (device) {
             input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
             if (advancedOptions == true) {
@@ -198,12 +208,14 @@ def parse(String description) {
             event.unit = '%'
             event.isStateChange = true
             event.descriptionText = "battery is ${event.value} ${event.unit}"
+            sendLastBatteryEvent()
         }
 	    else if (event.name == "batteryVoltage")
 	    {
     		event.unit = "V"
             event.isStateChange = true
     		event.descriptionText = "battery voltage is ${event.value} volts"
+            sendLastBatteryEvent()
     	}
         else {
              logDebug("event: $event")    
@@ -366,24 +378,31 @@ private handleVibration(boolean vibrationActive) {
 }
 
 Map getVibrationResult(vibrationActive) {
-	def descriptionText = "Detected vibration"
+	String descriptionText = "Detected vibration"
     if (!vibrationActive) {
 		descriptionText = "Vibration reset to inactive after ${getSecondsInactive()}s"
     }
 	return [
 			name			: 'acceleration',
 			value			: vibrationActive ? 'active' : 'inactive',
+            type            : 'physical',
 			descriptionText : descriptionText
 	]
 }
 
-void resetToVibrationInactive() {
+void setAccelarationInactive() {
+    resetToVibrationInactive(true)
+}
+
+void resetToVibrationInactive(boolean isDigital = false) {
 	if (device.currentState('acceleration')?.value == "active") {
-		String descText = "Vibration reset to inactive after ${getSecondsInactive()}s"
+        String type = isDigital ? "digital" : "physical"
+		String descText = "Vibration reset to inactive after ${getSecondsInactive()}s [$type]"
 		sendEvent(
 			name : "acceleration",
 			value : "inactive",
 			isStateChange : true,
+            type : type,
 			descriptionText : descText
 		)
 		logInfo(descText)
@@ -402,7 +421,7 @@ int getSecondsInactive() {
 // 0x0020 BatteryVoltage -  The BatteryVoltage attribute is 8 bits in length and specifies the current actual (measured) battery voltage, in units of 100mV.
 private parseBattery(valueHex) {
 	//logDebug("Battery parse string = ${valueHex}")
-	def rawVolts = Integer.parseInt(valueHex, 16) / 10 // hexStrToSignedInt(valueHex)/10
+	def rawVolts = Integer.parseInt(valueHex, 16) / 10
 	def minVolts = voltsmin ? voltsmin : 2.5
 	def maxVolts = voltsmax ? voltsmax : 3.0
 	def pct = (rawVolts - minVolts) / (maxVolts - minVolts)
@@ -417,7 +436,13 @@ private parseBattery(valueHex) {
 		//isStateChange: true,
 		descriptionText: descText
 	]
+    sendLastBatteryEvent()
 	return result
+}
+
+void sendLastBatteryEvent() {
+    final Date lastBattery = new Date()
+    sendEvent(name: 'lastBattery', value: lastBattery, descriptionText: "Last battery event at ${lastBattery}")
 }
 
 String getDEGREE() { return String.valueOf((char)(176)) }
@@ -516,12 +541,27 @@ void refresh() {
 
 // updated() runs every time user saves preferences
 void updated() {
+    unschedule()        // added 05/21/2024
     if (logEnable == true) {
         runIn(86400, 'logsOff', [overwrite: true, misfire: 'ignore'])    // turn off debug logging after 30 minutes
         if (settings?.txtEnable) { log.info "${device.displayName} Debug logging will be turned off after 24 hours" }
     }
     else {
         unschedule('logsOff')
+    }
+    final int healthMethod = (settings.healthCheckMethod as Integer) ?: 0
+    if (healthMethod == 1 || healthMethod == 2) {                            //    [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
+        // schedule the periodic timer
+        final int interval = (settings.healthCheckInterval as Integer) ?: 0
+        if (interval > 0) {
+            //log.trace "healthMethod=${healthMethod} interval=${interval}"
+            log.info "scheduling health check every ${interval} minutes by ${HealthcheckMethodOpts.options[healthCheckMethod as int]} method"
+            scheduleDeviceHealthCheck(interval, healthMethod)
+        }
+    }
+    else {
+        unScheduleDeviceHealthCheck()        // unschedule the periodic job, depending on the healthMethod
+        log.info 'Health Check is disabled!'
     }
 
     String currentTreeAxis = device.currentState('threeAxis')?.value
@@ -541,7 +581,7 @@ boolean isTuya() {
     String model = device.getDataValue('model')
     String manufacturer = device.getDataValue('manufacturer')
     /* groovylint-disable-next-line UnnecessaryTernaryExpression */
-    return (model?.startsWith('TS') && manufacturer?.startsWith('_T')) ? true : false
+    return (model?.startsWith('T') && manufacturer?.startsWith('_T')) ? true : false
 }
 
 void updateTuyaVersion() {
@@ -645,6 +685,28 @@ void sendRttEvent( String value=null) {
         logInfo "${descriptionText}"
         sendEvent(name: 'rtt', value: value, descriptionText: descriptionText, isDigital: true)
     }
+}
+
+String getCron(int timeInSeconds) {
+    //schedule("${rnd.nextInt(59)} ${rnd.nextInt(9)}/${intervalMins} * ? * * *", 'ping')
+    // TODO: runEvery1Minute runEvery5Minutes runEvery10Minutes runEvery15Minutes runEvery30Minutes runEvery1Hour runEvery3Hours
+    final Random rnd = new Random()
+    int minutes = (timeInSeconds / 60 ) as int
+    int  hours = (minutes / 60 ) as int
+    if (hours > 23) { hours = 23 }
+    String cron
+    if (timeInSeconds < 60) {
+        cron = "*/$timeInSeconds * * * * ? *"
+    }
+    else {
+        if (minutes < 60) {
+            cron = "${rnd.nextInt(59)} ${rnd.nextInt(9)}/$minutes * ? * *"
+        }
+        else {
+            cron = "${rnd.nextInt(59)} ${rnd.nextInt(59)} */$hours ? * *"
+        }
+    }
+    return cron
 }
 
 /**
@@ -758,7 +820,7 @@ void initializeVars( boolean fullInit = false ) {
         state.clear()
         unschedule()
         resetStats()
-        state.comment = 'Works with Tuya TS0210 Vibration Sensors'
+        state.comment = 'Works with Tuya TS0210 and TR Vibration Sensors'
         logInfo 'all states and scheduled jobs cleared!'
         state.driverVersion = driverVersionAndTimeStamp()
     }
@@ -804,7 +866,7 @@ void configureReporting() {
     // added 03/07/2023
     cmds += zigbee.enrollResponse(200) + zigbee.readAttribute(0x0500, 0x0000, [:], delay=200)
     //
-    if ( settings?.sensitivity != null ) {
+    if (settings?.sensitivity != null && isTuya()) {
     logDebug("Configuring vibration sensitivity to : ${settings?.sensitivity}")
             int iSens = settings.sensitivity?.toInteger()
             if (iSens>=0 && iSens<7)  {
