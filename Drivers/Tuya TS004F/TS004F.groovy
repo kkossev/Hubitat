@@ -53,7 +53,7 @@
  * ver. 2.7.2 2024-05-06 kkossev     - bug fix: TS0044 _TZ3000_vp6clf9d _TZ3000_ur5fpg7p _TZ3000_wkai4ga5 needed to be pushed twice to active a button; Configure button will reset the statistics;
  * ver. 2.7.3 2024-06-22 kkossev     - added TS0041 _TZ3000_s0i14ubi; added TS0041 _TZ3000_mrpevh8p
  * ver. 2.7.4 2024-12-03 kkossev     - debounce for TS0043 TZ3000_gbm10jnj
- * ver. 2.8.0 2024-12-04 kkossev     - (dev. branch) added forcedDebounce preference; default debounce timer changed to 1200ms
+ * ver. 2.8.0 2024-12-04 kkossev     - added forcedDebounce preference; default debounce timer changed to 1200ms
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: batteryReporting is not initialized!
