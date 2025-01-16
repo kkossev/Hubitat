@@ -44,6 +44,7 @@
  * ver. 1.7.0 2024-08-15 kkossev  - added lumi.sensor_occupy.agl1 - Aqara FP1E; capability 'Refresh'; added spammy reports filtering for FP1E
  * ver. 1.7.1 2024-11-19 kkossev  - added motionSensitivity for FP1E; added targetDistance for FP1E; added detectionRange for FP1E
  * ver. 1.7.2 2024-11-28 kkossev  - HE platfrom 2.4.0.x compatibility fixes;
+ * ver. 1.7.3 2025-01-16 kkossev  - first ping() throwing exception bug fix tnx@user2428 
  * 
  *                                 TODO: powerSource 'unknown' fix; No signature of method: user_driver_kkossev_Aqara_P1_Motion_Sensor_3016.resetState() is applicable for argument types: () values: [] on line 1130 (method deviceCommandTimeout)
  *                                 TODO: WARN log, when the device model is not registered during the pairing !!!!!!!!
@@ -57,8 +58,8 @@
  *
  */
 
-static String version() { "1.7.2" }
-static String timeStamp() {"2024/11/28 7:22 AM"}
+static String version() { "1.7.3" }
+static String timeStamp() {"2025/01/16 11:46 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -147,8 +148,6 @@ metadata {
     preferences {
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Show motion activity in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
-        //input (title: "<b>Information on Pairing and Configuration:</b>", description: "<i>Pair the P1 and FP1/FP1E devices <b>two times (without deleting), very close to the HE hub</b>. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences</i>", type: "paragraph", element: "paragraph")        
-        //input (name: 'helpInfo',  type: 'bool', title: "Information on Pairing and Configuration", description: "<i>Pair the P1 and FP1/FP1E devices <b>two times (without deleting), very close to the HE hub</b>. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences</i>")
         input (name: 'helpInfo',  type: 'hidden', title: "Information on Pairing and Configuration", description: "Pair the P1 and FP1/FP1E devices two times (without deleting), very close to the HE hub. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences")
         if (device) {
             if (!(isFP1() || isFP1E()) && !isLightSensor()) {
@@ -1162,9 +1161,9 @@ void ping() {
 
 void sendRttEvent() {
     def now = new Date().getTime()
-    def timeRunning = now.toInteger() - state.pingTime.toInteger()
-    logInfo "RTT is ${timeRunning} (ms)"    
-    sendEvent(name: "rtt", value: timeRunning, unit: "ms", isDigital: true)    
+    def timeRunning = now.toInteger() - state.pingTime?.toInteger() ?: now.toInteger()
+    logInfo "Round Trip Time is ${timeRunning} (ms)"    
+    sendEvent(name: "rtt", value: timeRunning, unit: "ms", type: "digital", descriptionText: "Round Trip Time is ${timeRunning} ms")    
 }
 
 private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
