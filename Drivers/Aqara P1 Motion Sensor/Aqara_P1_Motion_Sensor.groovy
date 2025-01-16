@@ -43,7 +43,7 @@
  * ver. 1.6.1 2024-07-22 kkossev  - bugfix: illuminanceThreshold and illuminanceMinReportingTime not working for lumi.sen_ill.mgl01 (GZCGQ01LM)
  * ver. 1.7.0 2024-08-15 kkossev  - added lumi.sensor_occupy.agl1 - Aqara FP1E; capability 'Refresh'; added spammy reports filtering for FP1E
  * ver. 1.7.1 2024-11-19 kkossev  - added motionSensitivity for FP1E; added targetDistance for FP1E; added detectionRange for FP1E
- * ver. 1.7.2 2024-11-28 kkossev  - (dev.branch) HE platfrom 2.4.0.x compatibility fixes;
+ * ver. 1.7.2 2024-11-28 kkossev  - HE platfrom 2.4.0.x compatibility fixes;
  * 
  *                                 TODO: powerSource 'unknown' fix; No signature of method: user_driver_kkossev_Aqara_P1_Motion_Sensor_3016.resetState() is applicable for argument types: () values: [] on line 1130 (method deviceCommandTimeout)
  *                                 TODO: WARN log, when the device model is not registered during the pairing !!!!!!!!
@@ -67,7 +67,7 @@ import hubitat.zigbee.zcl.DataType
 import hubitat.helper.HexUtils
 import java.util.concurrent.ConcurrentHashMap
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean deviceSimulation = false
 @Field static final Boolean _REGIONS = false
 @Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, FP1E, Aqara/Xiaomi/Mija other motion and illuminance sensors'
