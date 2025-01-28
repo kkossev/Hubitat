@@ -26,7 +26,7 @@
  * ver 1.2.0 2024-05-20 kkossev - add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability and preference 'ThreeAxis'; added Samsung multisensor; logsOff scheduler; added sensitivity attribute,
  * ver 1.2.1 2024-05-22 kkossev - delete scheduled jobs on Save Preferences; added lastBattery attribute; added setAccelarationInactive command;
  * ver 1.2.2 2024-06-03 kkossev - sensitivity preference is hidden for non-Tuya models; threeAxis preference is hidden for Tuya models;
- * ver 1.3.0 2025-01-12 kkossev - (dev.branch) adding Tuya Cluster parser; added TS0601 _TZE200_kzm5w4iz (contact&vibration); adding TS0601 _TZE200_iba1ckek (Tilt Xyz Axis Sensor) (ZG-103Z)
+ * ver 1.3.0 2025-01-28 kkossev - (dev.branch) adding Tuya Cluster parser; added TS0601 _TZE200_kzm5w4iz (contact&vibration); added TS0601 _TZE200_iba1ckek (Tilt Xyz Axis Sensor) (ZG-103Z); added queryAllTuyaDP(); missing [overwrite: true] bug fix;
  * 
  *                                TODO: add TS0601 _TZE200_iba1ckek https://s.click.aliexpress.com/e/_oBVBlUh https://www.aliexpress.com/item/1005007987634820.html https://github.com/adam-zlatniczki/zha-device-handlers/blob/5b44d581ae56e4909a953cc5e554bf441a7b7aa7/zhaquirks/tuya/ts601_door.py 
  *                                TODO: this driver does not process ZCL battery percentage reports, only voltage reports!
@@ -39,7 +39,7 @@
  */
 
 static String version() { "1.3.0" }
-static String timeStamp() { "2025/01/12 7:48 PM" }
+static String timeStamp() { "2025/01/28 11:26 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -66,6 +66,7 @@ metadata {
         attribute 'batteryStatus', 'enum', ["normal", "replace"]
         attribute 'sensitivity', 'number'
         attribute 'lastBattery', 'date'         // last battery event time - added in 1.2.1 05/21/2024
+        attribute 'tilt', 'enum', ["clear", "detected"]
         
 		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_3zv6oleo"     // KK
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_kulduhbj"     // not tested https://fr.aliexpress.com/item/1005002490419821.html
@@ -77,7 +78,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,FFF1",           outClusters:"0019", model:"3RVS01031Z", manufacturer:"Third Reality, Inc"          // Third Reality vibration sensor   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0500,0B05,FC02", outClusters:"0003,0019", model:"multi", manufacturer:"Samjin" // Samsung Multisensor
 		fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_kzm5w4iz"     // https://github.com/flatsiedatsie/zigbee-herdsman-converters/blob/ef4d559ccba0a39cd6957d2270352e29fb1d0296/converters/fromZigbee.js#L7449-L7467
-		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_iba1ckek"     // https://nl.aliexpress.com/item/1005007520278259.html Tilt Xyz Axis Sensor (ZG-103Z)
+		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_iba1ckek"     // https://nl.aliexpress.com/item/1005007520278259.html Tilt Xyz Axis Sensor (ZG-103Z)
 	}
 
 	preferences {
@@ -86,8 +87,8 @@ metadata {
         if (device && isTuya()) {
             input name: "sensitivity", type: "enum", title: "<b>Vibration Sensitivity</b>", description: "Select Vibration Sensitivity", defaultValue: "3", options:["0":"0 - Maximum", "1":"1", "2":"2", "3":"3 - Medium", "4":"4", "5":"5", "6":"6 - Minimum"]
         }
-		input "vibrationReset", "number", title: "After vibration is detected, wait ___ second(s) until <b>resetting to inactive state</b>. Default = 3 seconds.", description: "", range: "1..7200", defaultValue: 3
-        if (device && !isTuya()) {
+		input "vibrationReset", "number", title: "After vibration is detected, wait $vibrationReset second(s) until <b>resetting to inactive state</b>. Default = $VIBRATION_RESET seconds.", description: "", range: "1..7200", defaultValue: VIBRATION_RESET
+        if (device && (!isTuya() || isTuyaTiltXyzAxisSensor )) {
             input name: 'threeAxis', type: 'enum', title: '<b>Three Axis</b>', description: '<i>Enable or disable the Three Axis reporting<br>(ThirdReality and Samsung)</i>', defaultValue: ThreeAxisOpts.defaultValue, options: ThreeAxisOpts.options
         }
         if (device) {
@@ -95,7 +96,7 @@ metadata {
             if (advancedOptions == true) {
                 input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
                 input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
-                input "batteryReportingHours", "number", title: "Report battery every ___ hours. Default = 12h (Minimum 2 h)", description: "", range: "2..12", defaultValue: 12
+                input "batteryReportingHours", "number", title: "Report battery every $batteryReportingHours hours. Default = 12h (Minimum 2 h)", description: "", range: "2..12", defaultValue: 12
             }
         }
 	}
@@ -110,6 +111,7 @@ boolean isTuyaTiltXyzAxisSensor() {
 }
 
 @Field static final Integer COMMAND_TIMEOUT = 10             // timeout time in seconds
+@Field static final Integer VIBRATION_RESET = 3            // timeout time in seconds
 @Field static final Integer MAX_PING_MILISECONDS = 10000     // rtt more than 10 seconds will be ignored
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3     // missing 3 checks will set the device healthStatus to offline
 @Field static final int PING_ATTR_ID = 0x01
@@ -351,13 +353,18 @@ private int getTuyaAttributeValue(final List<String> _data, final int index) {
 void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd) {
     switch (dp) {
         case 0x01:
-        case 0x65:  // (101) - for debugging only!
-            // isTuyaVibrationDoorSensor()
-            logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
-            logInfo "TuyaVibrationDoorSensor: contact is ${fncmd == 1 ? 'open' : 'closed'}"
+            if (isTuyaVibrationDoorSensor()) {
+                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                logInfo "TuyaVibrationDoorSensor: contact is ${fncmd == 1 ? 'open' : 'closed'}"
             // TODO - create a child device?
+            }
+            else {
+                // isTuyaTiltXyzAxisSensor() - Vibration State 
+                logDebug "Tuya Vibration State cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                sendVibrationEvent(fncmd != 0)
+            }
             break
-        case 0x02:
+        case 0x02:  // ?
             logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             break
         case 0x03:  // thitBatteryPercentage  isTuyaVibrationDoorSensor() TS0601 _TZE200_kzm5w4iz
@@ -365,16 +372,94 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
             sendBatteryPercentageEvent(fncmd)
             sendLastBatteryEvent()
             break
+        case 0x07 :// tilt
+            logDebug "Tuya tilt cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            sendTiltEvent(fncmd != 0)
+            break
         case 0x0A:  // (10) tuyaVibration isTuyaVibrationDoorSensor() TS0601 _TZE200_kzm5w4iz
-        case 0x67:  // (103) - for debugging only!
             logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             sendVibrationEvent(fncmd != 0)
+            break
+        case 0x65:  // (101) X-axis acceleration
+            logDebug "Tuya X-axis acceleration cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            state.lastAcceleration['x'] = fncmd
+            break
+        case 0x66:  // (102) Y-axis acceleration
+            logDebug "Tuya 102) Y-axis acceleration cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            state.lastAcceleration['y'] = fncmd
+            break
+        case 0x67:  // (103) Z-axis acceleration
+            logDebug "Tuya Z-axis acceleration cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            state.lastAcceleration['z'] = fncmd
+            sendTuyaThreeAxisEvent(state.lastAcceleration.x, state.lastAcceleration.y, state.lastAcceleration.z)
+            break
+        case 0x68:  // (104) Sensitivity Setting
+            logDebug "Tuya Sensitivity Setting cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            break
+        case 0x69:  // (105) Battery Percentage
+            logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            sendBatteryPercentageEvent(fncmd)
+            sendLastBatteryEvent()
             break
         default :
             logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             break
     }
 }
+
+void sendTuyaThreeAxisEvent(Integer x, Integer y, Integer z) {
+    convertXYZtoPsiPhiTheta(x ?: 0, y ?: 0, z ?: 0)
+}
+
+void sendTiltEvent(boolean tiltActive) {
+    logDebug "Tilt : $tiltActive"
+    Map result = handleTilt(tiltActive)
+    if (result != [:]) {
+        sendEvent(result)
+        logInfo (result.descriptionText)
+    }
+    else {
+        logDebug "Tilt event not sent"
+    }
+}
+
+private handleTilt(boolean tiltActive) {    
+    if (tiltActive) {
+        if (device.currentState('tilt')?.value != "detected") {
+            // Tilt detected
+            return getTiltResult(true)
+        }
+        else {
+            logDebug "Tilt already detected"
+            return [:]
+        }
+    }
+    else {
+        if (device.currentState('tilt')?.value == "detected") {
+            // Tilt reset to inactive
+            return getTiltResult(false)
+        }
+        else {
+            logDebug "Tilt was already cleared"
+            return [:]
+        }
+    }
+}
+
+Map getTiltResult(tiltActive) {
+    String descriptionText = "Tilt detected"
+    if (!tiltActive) {
+        descriptionText = "Tilt reset to clear"
+    }
+    return [
+            name            : 'tilt',
+            value           : tiltActive ? 'detected' : 'clear',
+            type            : 'physical',
+            descriptionText : descriptionText
+    ]
+}
+
+
 
 def sendBatteryPercentageEvent(rawValuePar) {
     def rawValue = rawValuePar as int
@@ -455,31 +540,43 @@ Map parseIasMessage(ZoneStatus zs) {
     }
 }
 
+// called when processing Tuya EF00 cluster commands
 void sendVibrationEvent(boolean vibrationActive) {
-    logDebug "Vibration : $vibrationActive"
+    log.trace "Vibration : $vibrationActive"
     Map result = handleVibration(vibrationActive)
     if (result != [:]) {
         sendEvent(result)
+        logInfo (result.descriptionText)
     }
     else {
         logDebug "Vibration event not sent"
     }
 }
 
-private handleVibration(boolean vibrationActive) {    
+Map handleVibration(boolean vibrationActive) {    
     if (vibrationActive) {
         int timeout = vibrationReset ?: 3
-        // The sensor only sends a vibration detected message so reset to vibration inactive is performed in code
-        runIn(timeout, resetToVibrationInactive)        
+        // Some sensors will send only a vibration detected message, so reset to vibration inactive is performed in code
+        runIn(timeout, resetToVibrationInactive, [overwrite: true])        
         if (device.currentState('acceleration')?.value != "active") {
             state.vibrationStarted = now()
         }
+    	return getVibrationResult(vibrationActive)
     }
-	return getVibrationResult(vibrationActive)
+    else { // vibration inactive event
+        unschedule('resetToVibrationInactive')
+        if (device.currentState('acceleration')?.value != "inactive") {
+        	return getVibrationResult(vibrationActive)
+        }
+        else {
+            logDebug "Vibration already inactive"
+            return [:]
+        }
+    }
 }
 
 Map getVibrationResult(vibrationActive) {
-	String descriptionText = "Detected vibration"
+	String descriptionText = "Vibration detected"
     if (!vibrationActive) {
 		descriptionText = "Vibration reset to inactive after ${getSecondsInactive()}s"
     }
@@ -625,6 +722,12 @@ void configure() {
     configureReporting()
 }
 
+List<String> queryAllTuyaDP() {
+    logDebug 'queryAllTuyaDP()'
+    List<String> cmds = zigbee.command(0xEF00, 0x03)
+    return cmds
+}
+
 void refresh() {
 	logInfo("Refreshing...")
     List<String> cmds = []
@@ -635,6 +738,9 @@ void refresh() {
     }
     else if (device?.getDataValue('manufacturer') == 'Third Reality, Inc') {
         cmds += zigbee.readAttribute(0xFFF1, [0x0000, 0x0001, 0x0002, 0x0003], [:], delay=200) // vibration and three axis
+    }
+    if (isTuya()) {
+        cmds += queryAllTuyaDP()
     }
     sendZigbeeCommands(cmds)
 }
@@ -905,6 +1011,7 @@ void checkDriverVersion(final Map state) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (state.lastTx == null) { state.lastTx = [:] }
     if (state.stats  == null) { state.stats =  [:] }
+    if (state.lastAcceleration == null) { state.lastAcceleration = [:] }
 }
 
 void resetStats() {
