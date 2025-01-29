@@ -23,7 +23,8 @@
  * ver. 3.2.3  2024-07-27 kkossev  - added Sonoff SNZB-03P
  * ver. 3.3.0  2024-08-30 kkossev  - main branch release.
  * ver. 3.3.1  2024-10-26 kkossev  - added TS0601 _TZE200_f1pvdgoh into a new device profile group 'TS0601_2IN1_MYQ_ZMS03'
- * ver. 3.3.2  2024-11-30 kkossev  - (dev. branch) added Azoula Zigbee 4 in 1 Multi Sensor model:'HK-SENSOR-4IN1-A', manufacturer:'Sunricher' into SIHAS group
+ * ver. 3.3.2  2024-11-30 kkossev  - added Azoula Zigbee 4 in 1 Multi Sensor model:'HK-SENSOR-4IN1-A', manufacturer:'Sunricher' into SIHAS group
+ * ver. 3.3.3  2025-01-29 kkossev  - (dev. branch) TS0601 _TZE200_ppuj1vem moved to 'TS0601_2IN1_MYQ_ZMS03' deviceProfile @ltdonjohnson
  *                                   
  *                                   TODO: add TS0601 _TZE200_agumlajc https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1077?u=kkossev
  *                                   TODO: 
@@ -52,8 +53,8 @@
  *                                   TODO: check temperatureOffset and humidityOffset
 */
 
-static String version() { "3.3.2" }
-static String timeStamp() {"2024/11/30 9:11 PM"}
+static String version() { "3.3.3" }
+static String timeStamp() {"2025/01/29 10:06 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -208,7 +209,6 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_7hfcudw5', deviceJoinName: 'Tuya NAS-PD07 Multi Sensor 3 In 1'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ppuj1vem', deviceJoinName: 'Tuya NAS-PD07 Multi Sensor 3 In 1']
             ],
             tuyaDPs:        [
                 [dp:101, name:'motion',          type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'], description:'Motion'],
@@ -262,10 +262,12 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             models         : ['TS0601'],
             device        : [type: 'PIR', isIAS:false, powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'Battery': true],
-            preferences   : ['motionReset':true, 'invertMotion':false],
+            preferences   : ['motionReset':true, 'invertMotion':true],
             commands      : ['resetStats':'resetStats', 'refresh':'refresh'],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_f1pvdgoh', deviceJoinName: 'Tuya MYQ_ZMS03 Multi Sensor 2 In 1'],          // https://s.click.aliexpress.com/e/_DdNVVZx 
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_f1pvdgoh', deviceJoinName: 'Tuya MYQ_ZMS03 Multi Sensor 2 in 1'],          // https://s.click.aliexpress.com/e/_DdNVVZx 
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ppuj1vem', deviceJoinName: 'Treatlife human presence sensor 2 in 1']        // https://github.com/benedicttobias/zigbee-herdsman-converters/blob/ddaad14c80cadb2bff8d314ed8128139958ee02a/src/devices/tuya.ts#L12117-L12133
+                //  ^^^^  this return the opposite value. presence is 'false' when motion is detected!
             ],
             tuyaDPs:        [
                 [dp:1,   name:'motion',                   type:'enum',   rw: 'ro', min:0, max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'Motion'],
@@ -273,7 +275,7 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:101, name:'illuminance',              type:'number', rw: 'ro', min:0, max:1000, defVal:0,    scale:1,  unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance'],
             ],
             refresh:        ['queryAllTuyaDP'],
-            deviceJoinName: 'Tuya MYQ_ZMS03 Multi Sensor 2 In 1'
+            deviceJoinName: 'Tuya MYQ_ZMS03 Multi Sensor 2 in 1'
     ],
 
     'RH3040_TUYATEC'   : [ // testing TUYATEC-53o41joc   // non-configurable

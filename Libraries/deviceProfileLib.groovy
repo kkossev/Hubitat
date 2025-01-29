@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy', documentationLink: '',
-    version: '3.3.4'
+    version: '3.4.0'
 )
 /*
  *  Device Profile Library
@@ -31,7 +31,8 @@ library(
  * ver. 3.3.1  2024-07-06 kkossev  - added powerSource event in the initEventsDeviceProfile
  * ver. 3.3.2  2024-08-18 kkossev  - release 3.3.2
  * ver. 3.3.3  2024-08-18 kkossev  - sendCommand and setPar commands commented out; must be declared in the main driver where really needed
- * ver. 3.3.4  2024-09-28 kkossev  - (dev.branch) fixed exceptions in resetPreferencesToDefaults() and initEventsDeviceProfile()
+ * ver. 3.3.4  2024-09-28 kkossev  - fixed exceptions in resetPreferencesToDefaults() and initEventsDeviceProfile()
+ * ver. 3.4.0  2025-01-29 kkossev  - (dev. branch) deviceProfilesV3 optimizations; is2in1() mod
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
@@ -44,8 +45,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.3.4' }
-static String deviceProfileLibStamp() { '2024/09/28 6:33 PM' }
+static String deviceProfileLibVersion()   { '3.4.0' }
+static String deviceProfileLibStamp() { '2025/01/29 9:48 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -86,7 +87,7 @@ metadata {
     }
 }
 
-private boolean is2in1() { return getDeviceProfile().contains('TS0601_2IN1') }    // patch removed 05/29/2024
+private boolean is2in1() { return getDeviceProfile().startsWith('TS0601_2IN1')  }   // patch!
 
 public String  getDeviceProfile()       { state?.deviceProfile ?: 'UNKNOWN' }
 public Map     getDEVICE()              { deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : deviceProfilesV2 != null ? deviceProfilesV2[getDeviceProfile()] : [:] }
@@ -715,6 +716,10 @@ public boolean sendCommand(final String command_orig=null, final String val_orig
     def func, funcResult
     try {
         func = DEVICE?.commands.find { it.key == command }.value
+        // added 01/25/2025 : the commands now can be shorted : instead of a map kay and value 'printFingerprints':'printFingerprints' we can skip the value when it is the same:  'printFingerprints:'  - the value is the same as the key
+        if (func == null || func == '') {
+            func = command
+        }
         if (val != null && val != '') {
             logInfo "executed <b>$func</b>($val)"
             funcResult = "${func}"(val)
@@ -1410,23 +1415,44 @@ public boolean validateAndFixPreferences(boolean debug=false) {
     return true
 }
 
-// command for debugging
-public void printFingerprints() {
-    deviceProfilesV3.each { profileName, profileMap ->
-        profileMap.fingerprints?.each { fingerprint ->
-            logInfo "${fingerprint}"
-        }
+public String fingerprintIt(Map profileMap, Map fingerprint) {
+    if (profileMap == null) { return 'profileMap is null' }
+    if (fingerprint == null) { return 'fingerprint is null' }
+    Map defaultFingerprint = profileMap.defaultFingerprint ?: [:]
+    // if there is no defaultFingerprint, use the fingerprint as is
+    if (defaultFingerprint == [:]) {
+        return fingerprint.toString()
     }
+    // for the missing keys, use the default values
+    String fingerprintStr = ''
+    defaultFingerprint.each { key, value ->
+        String keyValue = fingerprint[key] ?: value
+        fingerprintStr += "${key}:'${keyValue}', "
+    }
+    // remove the last comma and space
+    fingerprintStr = fingerprintStr[0..-3]
+    return fingerprintStr
 }
 
-// command for debugging
+public void printFingerprints() {
+    int count = 0
+    deviceProfilesV3.each { profileName, profileMap ->
+        logInfo "Device Profile: ${profileName}"
+        profileMap.fingerprints?.each { fingerprint ->
+            log.info "${fingerprintIt(profileMap, fingerprint)}"
+            count++
+        }
+    }
+    logInfo "Total fingerprints: ${count}"
+}
+
 public void printPreferences() {
     logDebug "printPreferences: DEVICE?.preferences=${DEVICE?.preferences}"
     if (DEVICE != null && DEVICE?.preferences != null && DEVICE?.preferences != [:] && DEVICE?.device?.isDepricated != true) {
         (DEVICE?.preferences).each { key, value ->
             Map inputMap = inputIt(key, true)   // debug = true
             if (inputMap != null && inputMap != [:]) {
-                log.trace inputMap
+                log.info inputMap
             }
         }
     }

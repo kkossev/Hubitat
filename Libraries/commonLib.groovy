@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy', documentationLink: '',
-    version: '3.3.2'
+    version: '3.3.4'
 )
 /*
   *  Common ZCL Library
@@ -40,6 +40,7 @@ library(
   * ver. 3.3.1  2024-07-06 kkossev  - removed isFingerbot() dependancy; added FC03 cluster (Frient); removed noDef from the linter; added customParseIasMessage and standardParseIasMessage; powerSource set to unknown on initialize();
   * ver. 3.3.2  2024-07-12 kkossev  - added PollControl (0x0020) cluster; ping for SONOFF
   * ver. 3.3.3  2024-09-15 kkossev  - added queryAllTuyaDP(); 2 minutes healthCheck option;
+  * ver. 3.3.4  2025-01-29 kkossev  - (dev.branch) 'LOAD ALL DEFAULTS' is the default Configure command.
   *
   *                                   TODO: check deviceCommandTimeout()
   *                                   TODO: offlineCtr is not increasing! (ZBMicro);
@@ -54,8 +55,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.3.3' }
-String commonLibStamp() { '2024/09/15 10:22 AM' }
+String commonLibVersion() { '3.3.4' }
+String commonLibStamp() { '2025/01/29 10:04 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -131,6 +132,7 @@ metadata {
 ]
 
 @Field static final Map ConfigureOpts = [
+    '*** LOAD ALL DEFAULTS ***'  : [key:0, function: 'loadAllDefaults'],
     'Configure the device'       : [key:2, function: 'configureNow'],
     'Reset Statistics'           : [key:9, function: 'resetStatistics'],
     '           --            '  : [key:3, function: 'configureHelp'],
@@ -139,8 +141,7 @@ metadata {
     'Delete All Scheduled Jobs'  : [key:6, function: 'deleteAllScheduledJobs'],
     'Delete All State Variables' : [key:7, function: 'deleteAllStates'],
     'Delete All Child Devices'   : [key:8, function: 'deleteAllChildDevices'],
-    '           -             '  : [key:1, function: 'configureHelp'],
-    '*** LOAD ALL DEFAULTS ***'  : [key:0, function: 'loadAllDefaults']
+    '           -             '  : [key:1, function: 'configureHelp']
 ]
 
 public boolean isVirtual() { device.controllerType == null || device.controllerType == '' }
