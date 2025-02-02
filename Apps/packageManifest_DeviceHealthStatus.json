@@ -6,13 +6,13 @@
   "dateReleased": "2023-12-20",
   "documentationLink": "https://community.hubitat.com/t/project-alpha-device-health-status/111817/3?u=kkossev",
   "communityLink": "https://community.hubitat.com/t/project-alpha-device-health-status/111817",
-  "releaseNotes": "1.0.8 2023-11-12 - added MAT controllerType\n1.0.7 2023-02-16 (FriedCheese2006 )- Added DataTables for enhance table sorting/searching\n1.0.6 2023-02-15 - IntelliJ lint; merged Tonesto7 pull request;\n1.0.5 2023-02-08 - added toggle 'Show only offline (INACTIVE / not present) devices'\n...\n1.0.0 2023-02-03 - first version: 'Light Usage Table' sample app code modification",
+  "releaseNotes": "1.1.1 2025-02-02 - (dev.branch) added lastBattery option (default:disabled)\n1.1.0 2024-05-33 - Groovy linting;\n1.0.8 2023-11-12 - added MAT controllerType\n1.0.7 2023-02-16 (FriedCheese2006 )- Added DataTables for enhance table sorting/searching\n1.0.6 2023-02-15 - IntelliJ lint; merged Tonesto7 pull request;\n1.0.5 2023-02-08 - added toggle 'Show only offline (INACTIVE / not present) devices'\n...\n1.0.0 2023-02-03 - first version: 'Light Usage Table' sample app code modification",
   "apps": [
     {
       "id": "18f500cd-fe3e-45fa-8b9d-2c17089c7d7f",
       "name": "Device Health Status",
       "namespace": "kkossev",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Apps/Device%20Health%20Status.groovy",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Apps/Device%20Health%20Status.groovy",
       "required": true,
       "oauth": false,
       "primary": false
