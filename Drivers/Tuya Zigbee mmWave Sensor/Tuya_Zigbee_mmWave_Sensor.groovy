@@ -35,7 +35,7 @@
  * ver. 3.3.4  2024-11-17 kkossev  - TS0225 _TZE200_2aaelwxk power source changed to 'dc'; bug fixed for 'humanMotionState' attribite - 'presence' is now changed to 'present'.
  * ver. 3.3.5  2024-11-30 kkossev  - added TS0601 _TZ6210_duv6fhwt (Heiman presence sesnor); added TS0601 _TZE204_uxllnywp @Televisi
  * ver. 3.3.6  2025-01-04 kkossev  - changed TS0601 _TZE204_ya4ft0w4 dp102 scale to 10 - tnx @Jon7sky 
- * ver. 3.4.0  2025-01-26 kkossev  - (dev. branch) deviceProfilesV3 optimizations; adding add TS0225 _TZ321C_fkzihax8 into LEAPMMW new device profile @Wilson;
+ * ver. 3.4.0  2025-02-02 kkossev  - (dev. branch) deviceProfilesV3 optimizations; adding add TS0225 _TZ321C_fkzihax8 into LEAPMMW new device profile @Wilson; changed TS0601 _TZE204_ya4ft0w4 dp102 scale back to 1  
  *                                   
  *                                   TODO: check why ignoreDistance prefrence is not shown when forcebly changing the deviceProfile
  *                                   TODO: Optimize the deviceProfilesV3 !! (reached max size ... :( )
@@ -53,7 +53,7 @@
 */
 
 static String version() { "3.4.0" }
-static String timeStamp() {"2025/01/26 9:56 AM"}
+static String timeStamp() {"2025/02/02 9:59 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -729,17 +729,17 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             tuyaDPs:        [   
                 [dp:1,   name:'humanMotionState',   preProc:'motionOrNotYA4FT0W4', type:'enum',    rw: 'ro', map:[0:'none', 1:'present', 2:'moving', 3:'none'], description:'Presence state'],
                 [dp:2,   name:'radarSensitivity',   type:'number',  rw: 'rw', min:1,    max:10,   defVal:5, title:'<b>Motion sensitivity</b>', description:'Radar motion sensitivity'],
-                [dp:3,   name:'minimumDistance',    type:'decimal', rw: 'rw', min:0.0,  max:82.5, defVal:0.75, step:75, scale:100,  unit:'meters',   title:'<b>Minimum distance</b>',      description:'Shield range of the radar'],         // was shieldRange
-                [dp:4,   name:'maximumDistance',    type:'decimal', rw: 'rw', min:0.75, max:82.5, defVal:6.00, step:75, scale:100,  unit:'meters',   title:'<b>Maximum distance</b>',      description:'Detection range of the radar'],      // was detectionRange
+                [dp:3,   name:'minimumDistance',    type:'decimal', rw: 'rw', min:0.0,  max:8.25, defVal:0.75, step:75, scale:100,  unit:'meters',   title:'<b>Minimum distance</b>',      description:'Shield range of the radar'],         // was shieldRange
+                [dp:4,   name:'maximumDistance',    type:'decimal', rw: 'rw', min:0.75, max:9.00, defVal:6.00, step:75, scale:100,  unit:'meters',   title:'<b>Maximum distance</b>',      description:'Detection range of the radar'],      // was detectionRange
                 [dp:9,   name:'distance',           type:'decimal', rw: 'ro', min:0.0,  max:10.0, scale:10, unit:'meters', description:'Target distance'],
                 [dp:101, name:'distanceReporting',  type:'enum',    rw: 'rw', min:0,    max:1,       defVal:'0',  map:[0:'disabled', 1:'enabled'], title:'<b>Distance Reports</b>', description:'Effectively disable the spammy distance reporting!<br>The recommended default value is <b>disabled</b>'],
 //                [dp:102, name:'staticDetectionSensitivity',   type:'number',  rw: 'rw', min:1, max:10, defVal:5, title:'<b>Static detection sensitivity</b>', description:'Presence sensitivity'],
-                [dp:102, name:'staticDetectionSensitivity',   type:'decimal',  rw: 'rw', min:0.0, max:10.0, defVal:5.0, scale:10, title:'<b>Static detection sensitivity</b>', description:'Presence sensitivity'],
+                [dp:102, name:'staticDetectionSensitivity',   type:'decimal',  rw: 'rw', min:0.0, max:10.0, defVal:5.0, scale:1, title:'<b>Static detection sensitivity</b>', description:'Presence sensitivity'],
                 [dp:103, name:'illuminance',        type:'number',  rw: 'ro', unit:'lx', description:'illuminance'],
-                [dp:104, name:'motion',             type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'Presence state'],
+                //[dp:104, name:'motion',             type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'Presence state'],
                 // DP:104 is still sent by the device.... and is processed in this driver.
-                [dp:105, name:'fadingTime',         type:'decimal', rw: 'rw', min:5,    max:15000, , defVal:10, unit:'seconds', title:'<b>Delay time</b>', description:'Delay (fading) time'],
-                [dp:255, name:'unknownDp255',       type:'number',  rw: 'ro', description:'unknownDp255']
+                [dp:105, name:'fadingTime',         type:'decimal', rw: 'rw', min:5,    max:15000, , defVal:15, unit:'seconds', title:'<b>Delay time</b>', description:'Delay (fading) time'],
+                [dp:255, name:'unknownDp255',       type:'enum',  rw: 'ro', description:'unknownDp255'] // 0x00 | 0xFF  boolean?  target_dis_closest (dis_key)
             ],
             refresh: ['queryAllTuyaDP'],
             spammyDPsToIgnore : [9],

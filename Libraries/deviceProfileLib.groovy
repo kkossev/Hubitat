@@ -32,10 +32,9 @@ library(
  * ver. 3.3.2  2024-08-18 kkossev  - release 3.3.2
  * ver. 3.3.3  2024-08-18 kkossev  - sendCommand and setPar commands commented out; must be declared in the main driver where really needed
  * ver. 3.3.4  2024-09-28 kkossev  - fixed exceptions in resetPreferencesToDefaults() and initEventsDeviceProfile()
- * ver. 3.4.0  2025-01-29 kkossev  - (dev. branch) deviceProfilesV3 optimizations; is2in1() mod
+ * ver. 3.4.0  2025-02-02 kkossev  - (dev. branch) deviceProfilesV3 optimizations (defaultFingerprint); is2in1() mod
  *
  *                                   TODO - remove the 2-in-1 patch !
- *                                   TODO - add defaults for profileId:'0104', endpointId:'01', inClusters, outClusters, in the deviceProfilesV3 map
  *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
  *                                   TODO - when [refresh], send Info logs for parameters that are not events or preferences
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
@@ -46,7 +45,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.4.0' }
-static String deviceProfileLibStamp() { '2025/01/29 9:48 PM' }
+static String deviceProfileLibStamp() { '2025/02/02 4:03 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
