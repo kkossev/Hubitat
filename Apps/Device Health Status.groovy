@@ -27,15 +27,15 @@
  *  ver. 1.0.7 2023-02-16 FriedCheese2006 - Added DataTables for enhance table sorting/searching
  *  ver. 1.0.8 2023-11-12 kkossev - added "MAT" controllerType
  *  ver. 1.1.0 2024-05-33 kkossev - Groovy linting;
- *  ver. 1.1.1 2025-02-02 kkossev - (dev.branch) added lastBattery option (default:disabled)
+ *  ver. 1.1.1 2025-02-02 kkossev - added lastBattery option (default:disabled); added hideDisabledDevices option (default:enabled)
  *
- *                                  TODO: add hideDisabledDevices option (default:enabled)
+ *                                  TODO: option to calculate and show the time since the last activity in (D, H, M, S)
  */
 
 import groovy.transform.Field
 
 final String version() { '1.1.1' }
-final String timeStamp() { '2025/02/02 9:09 AM' }
+final String timeStamp() { '2025/02/02 3:01 PM' }
 
 @Field static final Boolean debug = false
 
@@ -80,6 +80,7 @@ def mainPage() {
                         //log.trace 'status = ${dev.status} (device ${state.devices["$dev.id"]})'
                         def hasBattery = dev.capabilities.find { it.toString().contains('Battery') } ? true : false
                         def hasPowerSource = dev.capabilities.find { it.toString().contains('PowerSource') } ? true : false
+                        //log.trace "$dev.name hasBattery=${hasBattery} hasPowerSource=${hasPowerSource} isDisabled=${isDisabled}"
                         state.devices["$dev.id"] = [
                                 healthStatus  : dev.currentValue('healthStatus'),
                                 hasPowerSource: hasPowerSource,
@@ -140,6 +141,7 @@ def mainPage() {
                 input name: 'hideNotBatteryDevices', type: 'bool', title: 'Hide <b>not</b> battery-powered devices', submitOnChange: true, defaultValue: false
                 input name: 'hideNoHealthStatusAttributeDevices', type: 'bool', title: 'Hide devices without healthStatus attribute', submitOnChange: true, defaultValue: false
                 input name: 'hideVirtualAndUnknownDevices', type: 'bool', title: 'Hide virtual/unknown type devices', submitOnChange: true, defaultValue: false
+                input name: 'hideDisabledDevices', type: 'bool', title: 'Hide disabled devices', submitOnChange: true, defaultValue: true
                 paragraph ''
                 paragraph '<b>Thresholds</b> :'
                 input name: 'lastActivityGreen', type: 'number', title: "Devices w/ lastActivity less than $lastActivityGreen hours will be shown in green", submitOnChange: true, defaultValue: 9
@@ -188,6 +190,7 @@ String displayTable() {
     }
     devices = devicesSorted
     devices.sort { it?.displayName.toLowerCase() }.each { dev ->
+        //log.trace "processing device ${dev.id} ${dev.displayName} isDisabled=${dev.disabled} settings?.hideDisabledDevices=${settings?.hideDisabledDevices}"
         def devData = dev.getData()
         def devType = dev.getTypeName()
         if (settings?.hideNotBatteryDevices == true && state.devices["$dev.id"].hasBattery == false) {
@@ -196,6 +199,8 @@ String displayTable() {
             //logDebug "SKIPPING dev.id=${dev.id} w/o healthStatus"
         } else if (settings?.hideVirtualAndUnknownDevices == true && !(dev.controllerType in ['ZGB', 'ZWV', 'LNK', 'MAT'])) {
             //logDebug "SKIPPING dev.id=${dev.id} VirtualAndUnknownDevices ${dev.controllerType}"
+        } else if (settings?.hideDisabledDevices == true && dev.disabled == true) {
+            logDebug "SKIPPING dev.id=${dev.id} disabled" 
         } else { //
             String devLink = "<a href='/device/edit/$dev.id' target='_blank' title='Open Device Page for $dev'>$dev"
             def healthColor = dev.currentHealthStatus == null ? 'black' : dev.currentHealthStatus == 'online' ? 'green' : 'red'
@@ -207,6 +212,10 @@ String displayTable() {
             def batteryPercentageColor = 'black'
             def statusColor = (dev.status ?: 'n/a') == 'INACTIVE' ? 'red' : (dev.status ?: 'n/a') == 'ACTIVE' ? 'green' : 'black'
             def presenceColor = (dev.currentPresence ?: 'n/a') == 'not present' ? 'red' : (dev.currentPresence ?: 'n/a') == 'present' ? 'green' : 'black'
+            def status = dev.status ?: 'n/a'
+            if (dev.disabled == true) {
+                status += ' (DISABLED)'
+            }
             if (readableUTCDate != 'n/a') {
                 Date date = Date.parse('yyyy-MM-dd HH:mm:ss', readableUTCDate)
                 lastActivity = new Date(date.getTime() + TimeZone.getDefault().getOffset(date.getTime()))
@@ -239,7 +248,7 @@ String displayTable() {
                         "<td style='color:${batteryPercentageColor}'>${dev.currentBattery ?: 'n/a'}</td>" +
                         (settings?.hideLastBatteryColumn != true ? "<td style='color:${batteryPercentageColor}'>${dev.currentLastBattery ?: 'n/a'}</td>" : '') +
                         (settings?.hideLastActivityAtColumn != true ? "<td style='color:${lastActivityColor}'>${lastActivity}</td>" : '') +
-                        "<td style='color:${statusColor}'>${dev.status ?: 'n/a'}</td>" +
+                        "<td style='color:${statusColor}'>${status}</td>" +
                         (settings?.hidePresenceColumn != true ? "<td style='color:${presenceColor}'>${dev.currentPresence ?: 'n/a'}</td>" : '') +
                         (settings?.hidePowerSourceColumn != true ? "<td style='color:${black}'>${dev.currentPowerSource ?: 'n/a'}</td>" : '') +
                         (settings?.hideModelAndManufacturerColumns != true ? "<td style='color:${black}'>${devData.model ?: 'n/a'}</td>" : '') +
