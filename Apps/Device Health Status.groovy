@@ -1,4 +1,4 @@
-/* groovylint-disable CompileStatic, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, LineLength, MethodParameterTypeRequired, NestedBlockDepth, NoDef, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter, VariableTypeRequired */
+/* groovylint-disable CompileStatic, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, LineLength, MethodParameterTypeRequired, MethodSize, NestedBlockDepth, NoDef, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter, VariableTypeRequired */
 /**
  *  Device Health Status - application for Hubitat Elevation hub
  *
@@ -26,15 +26,16 @@
  *  ver. 1.0.6 2023-02-15 kkossev - IntelliJ lint; merged Tonesto7 pull request;
  *  ver. 1.0.7 2023-02-16 FriedCheese2006 - Added DataTables for enhance table sorting/searching
  *  ver. 1.0.8 2023-11-12 kkossev - added "MAT" controllerType
- *  ver. 1.1.0 2024-05-33 kkossev - (dev branch) Groovy linting
+ *  ver. 1.1.0 2024-05-33 kkossev - Groovy linting;
+ *  ver. 1.1.1 2025-02-02 kkossev - (dev.branch) added lastBattery option (default:disabled)
  *
- *                                  TODO: add lastBattery
+ *                                  TODO: add hideDisabledDevices option (default:enabled)
  */
 
 import groovy.transform.Field
 
-final String version() { '1.1.0' }
-final String timeStamp() { '2024/05/22 8:15 AM' }
+final String version() { '1.1.1' }
+final String timeStamp() { '2025/02/02 9:09 AM' }
 
 @Field static final Boolean debug = false
 
@@ -46,7 +47,7 @@ definition(
         category: 'Utility',
         iconUrl: '',
         iconX2Url: '',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/main/Apps/Device%20Health%20Status.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Apps/Device%20Health%20Status.groovy',
         documentationLink: 'https://community.hubitat.com/t/alpha-device-health-status/111817/1'
 )
 
@@ -54,6 +55,7 @@ preferences {
     page(name: 'mainPage')
 }
 
+/* groovylint-disable-next-line MethodReturnTypeRequired */
 def mainPage() {
     if (state.devices == null) { state.devices = [:] }
     if (state.devicesList == null) { state.devicesList = [] }
@@ -130,7 +132,7 @@ def mainPage() {
                 paragraph 'Table filtering options: <b>columns</b> :'
                 input name: 'hidePowerSourceColumn', type: 'bool', title: 'Hide powerSource column', submitOnChange: true, defaultValue: false
                 input name: 'hideLastActivityAtColumn', type: 'bool', title: 'Hide LastActivityAt column', submitOnChange: true, defaultValue: false
-                input name: 'hideLastBatteryColumn', type: 'bool', title: 'Hide LastBattery column', submitOnChange: true, defaultValue: false
+                input name: 'hideLastBatteryColumn', type: 'bool', title: 'Hide LastBattery column', submitOnChange: true, defaultValue: true
                 input name: 'hideModelAndManufacturerColumns', type: 'bool', title: 'Hide Model and Manufacturer columns', submitOnChange: true, defaultValue: false
                 input name: 'hidePresenceColumn', type: 'bool', title: 'Hide Presence column (the one that we are trying to depricate)', submitOnChange: true, defaultValue: true
                 paragraph ''
@@ -140,9 +142,9 @@ def mainPage() {
                 input name: 'hideVirtualAndUnknownDevices', type: 'bool', title: 'Hide virtual/unknown type devices', submitOnChange: true, defaultValue: false
                 paragraph ''
                 paragraph '<b>Thresholds</b> :'
-                input name: 'lastActivityGreen', type: 'number', title: 'Devices w/ lastActivity less than N hours will be shown in green', submitOnChange: true, defaultValue: 9
-                input name: 'lastActivityRed', type: 'number', title: 'Devices w/ lastActivity more than N hours will be shown in red', submitOnChange: true, defaultValue: 25
-                input name: 'batteryLowThreshold', type: 'number', title: 'Devices w/ Battery percentage below N % will be shown in red', submitOnChange: true, defaultValue: 33
+                input name: 'lastActivityGreen', type: 'number', title: "Devices w/ lastActivity less than $lastActivityGreen hours will be shown in green", submitOnChange: true, defaultValue: 9
+                input name: 'lastActivityRed', type: 'number', title: "Devices w/ lastActivity more than $lastActivityRed hours will be shown in red", submitOnChange: true, defaultValue: 25
+                input name: 'batteryLowThreshold', type: 'number', title: "Devices w/ Battery percentage below $batteryLowThreshold % will be shown in red", submitOnChange: true, defaultValue: 33
             }
         } else {
             section('CLICK DONE TO INSTALL APP AFTER SELECTING DEVICES') {
@@ -163,7 +165,7 @@ String displayTable() {
             "<thead><tr style='border-bottom:2px solid black'><th style='border-right:2px solid black'><div>Device</div><div>Name</div></th>" +
             '<th><div>Health</div><div>Status</div></th>' +
             '<th><div>Battery</div><div>%</div></th>' +
-            '<th><div>Last</div><div>Battery</div></th>' +
+            (settings?.hideLastBatteryColumn != true ? '<th><div>Last</div><div>Battery</div></th>' : '') +
             (settings?.hideLastActivityAtColumn != true ? '<th><div>Last</div><div>Activity</div></th>' : '') +
             '<th><div>HE</div><div>Status</div></th>' +
             (settings?.hidePresenceColumn != true ? '<th><div>Presence</div><div>Attr.</div></th>' : '') +
@@ -235,7 +237,7 @@ String displayTable() {
                 str += "<tr style='color:black'><td style='border-right:2px solid black'>$devLink</td>" +
                         "<td style='color:${healthColor}'>$healthStatus</td>" +
                         "<td style='color:${batteryPercentageColor}'>${dev.currentBattery ?: 'n/a'}</td>" +
-                        "<td style='color:${batteryPercentageColor}'>${dev.currentLastBattery ?: 'n/a'}</td>" +
+                        (settings?.hideLastBatteryColumn != true ? "<td style='color:${batteryPercentageColor}'>${dev.currentLastBattery ?: 'n/a'}</td>" : '') +
                         (settings?.hideLastActivityAtColumn != true ? "<td style='color:${lastActivityColor}'>${lastActivity}</td>" : '') +
                         "<td style='color:${statusColor}'>${dev.status ?: 'n/a'}</td>" +
                         (settings?.hidePresenceColumn != true ? "<td style='color:${presenceColor}'>${dev.currentPresence ?: 'n/a'}</td>" : '') +
@@ -261,18 +263,20 @@ String buttonLink(String btnName, String linkText, color = '#1A77C9', font = '15
 void appButtonHandler(btn) {
     logDebug "appButtonHandler(${btn} start)"
     List toBeDel = []
-    if (btn == 'refresh') state.devices.each { k, v ->
-        try {
-            def dev = devices.find { "$it.id" == k }
-            //logDebug "checking state.devices[${k}]"
-            if ((dev.currentStatus ?: 'unknown') == 'ACTIVE') {
-                //state.devices[k].refreshTime = now()
+    if (btn == 'refresh') {
+        state.devices.each { k, v ->
+            try {
+                def dev = devices.find { "$it.id" == k }
+                //logDebug "checking state.devices[${k}]"
+                if ((dev.currentStatus ?: 'unknown') == 'ACTIVE') {
+                    //state.devices[k].refreshTime = now()
+                }
             }
-        }
-        catch (e) {
-            logWarn "catched exception in appButtonHandler : ${e} "
-            logWarn "problematic device has key=${k}"
-            toBeDel += k
+            catch (e) {
+                logWarn "catched exception in appButtonHandler : ${e} "
+                logWarn "problematic device has key=${k}"
+                toBeDel += k
+            }
         }
     }
     toBeDel.each { k ->
