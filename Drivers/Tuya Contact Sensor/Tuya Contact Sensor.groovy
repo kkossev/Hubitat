@@ -1,4 +1,4 @@
-/* groovylint-disable DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, InsecureRandom, LineLength, MethodCount, NoDouble, NoJavaUtilDate, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter, UnnecessarySetter, UnusedPrivateMethod */
+/* groovylint-disable DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, InsecureRandom, LineLength, MethodCount, MethodParameterTypeRequired, NoDouble, NoJavaUtilDate, ParameterName, ParameterReassignment, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter, UnnecessarySetter, UnusedPrivateMethod */
 /**
  *  Tuya Contact Sensor+ with healthStatus driver for Hubitat
  *
@@ -27,7 +27,8 @@
  * ver. 1.2.3  2024-07-10 kkossev  - fixed outOfSync and pollContactStatus bugs; notPresentCounter-1 correction in the debug logs;
  * ver. 1.2.4  2024-08-14 kkossev  - added TS0203 _TZ3000_rcuyhwe3
  * ver. 1.2.5  2024-08-20 kkossev  - pollContactStatus only when the current message is not IAS !
- * ver. 1.2.6  2024-10-02 kkossev  - (dev.branch) added SNZB-04P; added capability 'TamperAlert'; pollContactStatus bug fix;
+ * ver. 1.2.6  2024-10-02 kkossev  - added SNZB-04P; added capability 'TamperAlert'; pollContactStatus bug fix;
+ * ver. 1.2.7  2025-02-03 kkossev  - Xfinity/Visonic MCT-350 Zigbee Contact Sensor fingerprint typo fix - tnx @thanhvle-94
  *
  *                                   TODO: handle the case when 'lastBattery' is missing.
  *                                   TODO: filter duplicated open/close messages when 'Poll Contact Status' option is enabled
@@ -39,8 +40,8 @@
  *                                   TODO: refactor - use libraries !
  */
 
-static String version() { '1.2.6' }
-static String timeStamp() { '2024/10/02 10:02 PM' }
+static String version() { '1.2.7' }
+static String timeStamp() { '2025/02/03 3:58 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -137,7 +138,7 @@ metadata {
 
 @Field static final Map batteryReportingOptions = [
     defaultValue: 00,
-    options     : [00: 'Default (no explicit battery configuration)', 600:'Every 10 minutes (not recommended!)', 3600: 'Every 1 hour',7200: 'Every 2 Hours', 14400: 'Every 4 Hours', 28800: 'Every 8 Hours', 43200: 'Every 12 Hours', 86400: 'Every 24 Hours']
+    options     : [00: 'Default (no explicit battery configuration)', 600:'Every 10 minutes (not recommended!)', 3600: 'Every 1 hour', 7200: 'Every 2 Hours', 14400: 'Every 4 Hours', 28800: 'Every 8 Hours', 43200: 'Every 12 Hours', 86400: 'Every 24 Hours']
 ]
 
 @Field static final Map deviceProfiles = [
@@ -244,7 +245,7 @@ metadata {
     ],
     'XFINITY_VISONIC_CONTACT_BATT' : [
         model         : 'URC4460BC0-X-R',
-        manufacturers : ['Universal Electronics Inc"'],
+        manufacturers : ['Universal Electronics Inc'],
         deviceJoinName: 'Xfinity/Visonic MCT-350 Zigbee Contact Sensor',
         inClusters    : '0000,0001,0003,0020,0402,0500,0B05"',
         outClusters   : '0019',
@@ -1388,9 +1389,8 @@ void updateInfo(msg = ' ') {
 }
 
 void zTest(dpCommand, dpValue, dpTypeString) {
-    ArrayList<String> cmds = []
-    def dpType = dpTypeString == 'DP_TYPE_VALUE' ? DP_TYPE_VALUE : dpTypeString == 'DP_TYPE_BOOL' ? DP_TYPE_BOOL : dpTypeString == 'DP_TYPE_ENUM' ? DP_TYPE_ENUM : null
-    def dpValHex = dpTypeString == 'DP_TYPE_VALUE' ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
+    String dpType = dpTypeString == 'DP_TYPE_VALUE' ? DP_TYPE_VALUE : dpTypeString == 'DP_TYPE_BOOL' ? DP_TYPE_BOOL : dpTypeString == 'DP_TYPE_ENUM' ? DP_TYPE_ENUM : null
+    String dpValHex = dpTypeString == 'DP_TYPE_VALUE' ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
     if (settings?.logEnable) { log.warn "${device.displayName}  sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}" }
     sendZigbeeCommands(sendTuyaCommand(dpCommand, dpType, dpValHex))
 }
