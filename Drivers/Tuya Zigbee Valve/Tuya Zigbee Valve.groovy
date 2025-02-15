@@ -41,6 +41,8 @@
  *  ver. 1.3.5 2024-09-22 kkossev - removed tuyaVersion for non-Tuya devices; combined on() + timedOff() command for opening the Sonoff valve;
  *  ver. 1.3.6 2024-09-23 kkossev - Sonoff valve: irrigationDuration 0 will disable the valve auto-off; default auto-off timer changed to 0 (was 60 seconds); invalid 'digital' type of autoClose fixed; added workState attribute; logging improvements;
  *  ver. 1.4.0 2024-11-22 kkossev - supressed 'Sonoff SWV sendIrrigationDuration is not avaiable!' warning; added NovaDigital TS0601 _TZE200_fphxkxue @Rafael as TS0601_SASWELL_VALVE (working partially!); added queryAllTuyaDP for TS0601 devices;
+ *  ver. 1.5.0 2024-12-16 kkossev - added TS0601 _TZE284_8zizsafo _TZE284_eaet5qt5 in 'TS0601_TZE284_VALVE' group 
+ *  ver. 1.6.0 2025-02-15 kkossev - added Switch capability
  *
  *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
@@ -51,10 +53,12 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-static String version() { '1.4.0' }
-static String timeStamp() { '2024/11/22 10:38 AM' }
+static String version() { '1.6.0' }
+static String timeStamp() { '2025/02/15 9:28 PM' }
 
 @Field static final Boolean _DEBUG = false
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = true                // disable it for the production release !
+@Field static final String SIMULATED_PROFILE = 'TS0601_TZE284_VALVE'    // in _DEBUG mode only
 
 metadata {
     definition(name: 'Tuya Zigbee Valve', namespace: 'kkossev', author: 'Krassimir Kossev', importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve.groovy', singleThreaded: true ) {
@@ -67,12 +71,14 @@ metadata {
         capability 'Battery'
         capability 'SignalStrength'         // Sonoff SWV
         capability 'LiquidFlowRate'         // Sonoff SWV (attribute 'rate')
+        capability 'Switch'                 // added in 1.6.0
 
         attribute 'batteryVoltage', 'number'
         attribute 'healthStatus', 'enum', ['offline', 'online']
         attribute 'rtt', 'number'
         attribute 'timerState', 'enum', ['disabled', 'active (on)', 'enabled (off)']
         attribute 'timerTimeLeft', 'number'
+        attribute 'timerTimeLeft2', 'number'             // isTZE284()
         attribute 'lastValveOpenDuration', 'number'
         attribute 'weatherDelay', 'enum', ['disabled', '24h', '48h', '72h']
         attribute 'irrigationStartTime', 'string'
@@ -82,17 +88,20 @@ metadata {
         attribute 'irrigationVolume', 'number'
         attribute 'irrigationDuration', 'number'        // Sonoff SWV, frankEver FK_V02
         attribute 'irrigationCapacity', 'number'
-        attribute 'valveStatus', 'enum', ['normal', 'shortage', 'leakage', 'shortageAndLeakage', 'clear']    // SONOFF {ID: 0x500c, type: 0x20},
-        attribute 'valveOpenThreshold', 'number'   // FrankEver FK_V02 - the set threshold for valve open 
-        attribute 'valveOpenPercentage', 'number'   // FrankEver FK_V02 - the current valve open percentage reported by the device
+        attribute 'valveStatus',  'enum', ['normal', 'shortage', 'leakage', 'shortageAndLeakage', 'clear', 'manual', 'auto', 'idle']    // SONOFF {ID: 0x500c, type: 0x20},
+        attribute 'valveStatus2', 'enum', ['normal', 'shortage', 'leakage', 'shortageAndLeakage', 'clear', 'manual', 'auto', 'idle']    // isTZE284()
+        attribute 'valveOpenThreshold', 'number'        // FrankEver FK_V02 - the set threshold for valve open 
+        attribute 'valveOpenPercentage', 'number'       // FrankEver FK_V02 - the current valve open percentage reported by the device
         attribute 'workState', 'enum', ['manual control', 'Cycle timing / quantity control', 'Schedule control']
         //attribute 'workState', 'enum', SonoffWorkStateOptions.values() as List<String>
+        attribute 'valve2', 'enum', ['open', 'closed']  // isTZE284()
 
         command 'initialize', [[name: 'Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****']]
         command 'setIrrigationTimer', [[name:'auto-off timer (irrigationDuration ), in seconds or minutes (depending on the model)', type: 'NUMBER', description: 'Set the irrigation duration timer<br>, in seconds or minutes (depending on the model). Zero value disables the auto-off!', constraints: ['0..86400']]]
         command 'setIrrigationCapacity', [[name:'capacity, liters (Saswell and GiEX)', type: 'NUMBER', description: 'Set Irrigation Capacity, litres', constraints: ['0..9999']]]
-        command 'setIrrigationMode', [[name:'select the mode (Saswell and GiEX)', type: 'ENUM', description: 'Set Irrigation Mode', constraints: ['--select--', 'duration', 'capacity']]]
+        command 'setIrrigationMode', [[name:'select the mode (Saswell and GiEX)', type: 'ENUM', description: 'Set Irrigation Mode', constraints: ['duration', 'capacity']]]
         command 'setValveOpenThreshold', [[name:'Valve Open Threshold, % (FrankEver FK_V02)', type: 'NUMBER', description: 'Valve Open Threshold, % (FrankEver FK_V02)', constraints: ['0..100']]]
+        command 'setValve2', [[name:'select state (TZE284)', type: 'ENUM', description: 'Set TZE284 second valve Mode', constraints: ['open', 'closed']]]
 
         if (_DEBUG == true) {
             command 'testTuyaCmd', [
@@ -115,12 +124,12 @@ metadata {
 
     preferences {
         input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: 'Display measured values in HE log page. Recommended value is <b>true</b>', defaultValue: true)
-        input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: 'Debug information, useful for troubleshooting. Recommended value is <b>false</b>', defaultValue: true)
+        input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: 'Debug information, useful for troubleshooting. Recommended value is <b>false</b>', defaultValue: DEFAULT_DEBUG_LOGGING)
         if (device) {
             if (deviceProfilesV2[getModelGroup()]?.capabilities?.powerOnBehaviour != false) {
                 input(name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options: powerOnBehaviourOptions)
             }
-            if (isSASWELL() || isGIEX() || isSonoff() || isFankEver()) {
+            if (isSASWELL() || isGIEX() || isSonoff() || isFankEver() || isTZE284()) {
                 input(name: 'autoOffTimer', type: 'number', title: '<b>Auto off timer (Irrigation Duration)</b> ', description: 'Automatically turn off after how many seconds or minutes<br>(depending on the model).<br>Zero value disables the auto-off!', defaultValue: DEFAULT_AUTOOFF_TIMER, required: false)
             }
             if (isSASWELL() || isGIEX()) {
@@ -162,6 +171,7 @@ boolean isTS0049()               { return getModelGroup().contains('TS0049') }
 boolean isBatteryPowered()       { return isGIEX() || isSASWELL() || isTS0049() }
 boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') }
 boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
+boolean isTZE284()               { return getModelGroup().contains('TZE284') || _DEBUG == true }
 
 // Constants
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3
@@ -225,6 +235,12 @@ boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
     '4': 'rainy',
     '5': 'snow',
     '6': 'fog'
+]
+
+@Field static final Map tze284StateOptions = [
+    '0': 'manual',
+    '1': 'auto',
+    '2': 'idle'
 ]
 
 // // Valve Work State (Valve working status)  // 0 - 'manual control'; 1 - 'Cycle timing / quantity control''; 2 - 'Schedule control'
@@ -418,6 +434,22 @@ boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
             ]
     ],
 
+    'TS0601_TZE284_VALVE'   : [              // https://de.aliexpress.com/item/1005007836145637.html
+            model         : 'TS0601',        // https://github.com/zigpy/zha-device-handlers/blob/a1f6378fba3a727b5f9432d711ef3d5320e45827/zhaquirks/tuya/ts0601_valve.py#L489 
+            manufacturers : ['_TZE284_8zizsafo', '_TZE284_eaet5qt5'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,0000,ED00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_8zizsafo'],    // GX-03ZG
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,0000,ED00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_eaet5qt5'],    // Insoma SGW08W https://www.aliexpress.us/item/3256807355418184.html
+            ],
+            deviceJoinName: 'GiEX Zigbee TZE284 Double Valve',
+            capabilities  : ['valve': true, 'battery': true],
+            configuration : ['battery': false],
+            attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery'],
+            preferences   : [
+                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+            ]
+    ],
+
     'UNKNOWN'      : [                // TODO: _TZE200_5uodvhgc https://github.com/sprut/Hub/issues/1316 https://www.youtube.com/watch?v=lpL6xAYuBHk
         model         : 'UNKNOWN',
         manufacturers : [],
@@ -598,13 +630,14 @@ void sendSwitchEvent(final String switchValue) {
     else {
         map.descriptionText = "${device.displayName} is ${value} [${map.type}]"
     }
-    //if ( bWasChange==true )
-    //{
     if (txtEnable) { log.info "${device.displayName } ${map.descriptionText }" }
     sendEvent(map)
-    //}
+    // added 02/15/2025 - send a switch event as well for compatibility with Alexa and Google Home and Apple HomeKit
+    sendEvent(name: 'switch', value: value == 'open' ? 'on' : 'off', descriptionText: map.descriptionText)
     clearIsDigital()
 }
+
+
 
 void parseZDOcommand(Map descMap) {
     switch (descMap.clusterId) {
@@ -709,17 +742,24 @@ void parseZHAcommand(Map descMap) {
                                     }
                                 }
                                 else {
-                                    sendSwitchEvent(value == 0 ? 'off' : 'on')    // TS0601
+                                    sendSwitchEvent(value == 0 ? 'off' : 'on')    // TS0601, GiEX TZE284
                                 }
                                 break
-                            case '02' : // isGIEX() - WaterValveState   1=on 0 = 0ff        // _TZE200_sh1btabb WaterState # off=0 / on=1
-                                String timerState = timerStateOptions[value.toString()]
-                                logInfo "Water Valve State (dp=${cmd}) is ${timerState} (${value})"
-                                sendSwitchEvent(value == 0 ? 'off' : 'on')
-                                sendEvent(name: 'timerState', value: timerState, type: 'physical')
-                                if (settings?.autoSendTimer == true) {
-                                    logDebug "scheduled again to set the GiEX autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
-                                    runIn(5, 'sendIrrigationDuration')
+                            case '02' : 
+                                if (isTZE284()) {   // second valve
+                                    String status2 = value == 0 ? 'closed' : 'open' 
+                                    logInfo "valve2 is ${status2} (${value})"
+                                    sendEvent(name: 'valve2', value: status2, type: 'physical')
+                                }
+                                else {  // isGIEX() - WaterValveState   1=on 0 = 0ff        // _TZE200_sh1btabb WaterState # off=0 / on=1
+                                    String timerState = timerStateOptions[value.toString()]
+                                    logInfo "Water Valve State (dp=${cmd}) is ${timerState} (${value})"
+                                    sendSwitchEvent(value == 0 ? 'off' : 'on')
+                                    sendEvent(name: 'timerState', value: timerState, type: 'physical')
+                                    if (settings?.autoSendTimer == true) {
+                                        logDebug "scheduled again to set the GiEX autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
+                                        runIn(5, 'sendIrrigationDuration')
+                                    }
                                 }
                                 break
                             case '03' : // flow_state or percent_state?  (0..100%) SASWELL ?
@@ -792,18 +832,29 @@ void parseZHAcommand(Map descMap) {
                                     String valueString = smartWeatherOptions[safeToInt(value).toString()]
                                     logInfo "smart_weather (${cmd}) is: ${valueString} (${value})"
                                 }
+                                else if (isTZE284()) {
+                                    logInfo "TZE284 valve1 countdown timer is: ${value} minutes"
+                                    sendEvent(name: 'timerTimeLeft', value: value, type: 'physical')
+                                }
                                 else {
                                     logInfo "relay status (${cmd}) is: ${value}"
                                 }
                                 break
-                            case '0E' : // (14) SASWELL "smart_weather_switch"
-                                logInfo "smart_weather_switch (${cmd}) is: ${value}"
+                            case '0E' : // (14)
+                                if (isTZE284()) {
+                                    logInfo "TZE284 valve2 countdown timer is: ${value} minutes"
+                                    sendEvent(name: 'timerTimeLeft2', value: value, type: 'physical')
+                                }
+                                else {  // SASWELL "smart_weather_switch"
+                                    logInfo "smart_weather_switch (${cmd}) is: ${value}"
+                                }
                                 break
                             case '0F' : // (15) SASWELL lastValveOpenDuration in seconds last_valve_open_duration (once_using_time, last irrigation duration) (0..86400, seconds)
-                                logInfo "last valve open duration (${cmd}) is: ${value} seconds"
+                                logInfo "last valve open duration is: ${value} seconds"    // also TZE284
                                 sendEvent(name: 'lastValveOpenDuration', value: value, type: 'physical')
                                 break
-                            case '10' : // (16) SASWELL RawToCycleTimer1 ?     ("cycle_irrigation")
+                            case '10' : // (16)
+                                // (16) SASWELL RawToCycleTimer1 ?     ("cycle_irrigation")
                                 // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1205015123
                                 logInfo "SASWELL RawToCycleTimer1 (${cmd}) is: ${value}"
                                 break
@@ -814,7 +865,17 @@ void parseZHAcommand(Map descMap) {
                                 logInfo "inching switch(!?!) is: ${value}"
                                 break
                             case '1A' : // (26) TS049
-                                logInfo "TS049 fault (${cmd}) is: ${value}"
+                                if (isTZE284()) {
+                                    logInfo "last valve2 open duration is: ${value} seconds"
+                                    sendEvent(name: 'lastValveOpenDuration2', value: value, type: 'physical')
+                                }
+                                else {
+                                    logInfo "TS049 fault (${cmd}) is: ${value}"
+                                }
+                                break
+                            case '3B' : // (59) isTZE284()
+                                logInfo "battery (${cmd}) is: ${value} %"
+                                sendBatteryEvent(value)
                                 break
                             case '65' : // (101) WaterValveIrrigationStartTime for GiEX and LIDL?   // IrrigationStartTime       # (string) ex: "08:12:26"
                                 if (isTS0049()) {   // TS0049 valve on/off
@@ -861,6 +922,12 @@ void parseZHAcommand(Map descMap) {
                                 if (isTS0049()) {
                                     logInfo "Automatic Execution Status (dp=${cmd}) is: (${value})"
                                 }
+                                else if (isTZE284()) {
+                                    String valveStatus = tze284StateOptions[value.toString()]
+                                    descText = "valveStatus is ${valveStatus}"
+                                    logInfo "${descText} (${value})"
+                                    sendEvent(name: 'valveStatus', value: valveStatus, descriptionText:descText, type: 'physical')
+                                }
                                 else {
                                     logInfo "IrrigationTarget (${cmd}) is: ${value}"            // TODO - Send to device irrigation_target?
                                 }
@@ -869,6 +936,12 @@ void parseZHAcommand(Map descMap) {
                                 if (isTS0049()) {   // count down timer
                                     logInfo "TS049 timer time left (${cmd}) is: ${value}"   // seconds or minutes?
                                     sendEvent(name: 'timerTimeLeft', value: value, type: 'physical')
+                                }
+                                else if (isTZE284()) {
+                                    String valveStatus = tze284StateOptions[value.toString()]
+                                    descText = "valveStatus2 is ${valveStatus}"
+                                    logInfo "${descText} (${value})"
+                                    sendEvent(name: 'valveStatus2', value: valveStatus, descriptionText:descText, type: 'physical')
                                 }
                                 else {
                                     if (txtEnable == true) { log.info "${device.displayName} CycleIrrigationInterval (${cmd}) is: ${value}" }
@@ -1213,6 +1286,8 @@ String getAttributeString(ArrayList _data) {
     return retValue
 }
 
+void off() { close() }
+
 void close() {
     if (state.states == null) { state.states = [:] }
     state.states['isDigital'] = true
@@ -1241,6 +1316,8 @@ void close() {
     logDebug "close()... sent cmds=${cmds}"
     sendZigbeeCommands(cmds)
 }
+
+void on() { open() }
 
 void open() {
     if (state.states == null) { state.states = [:] }
@@ -1326,12 +1403,12 @@ void sendRttEvent(String value=null) {
     String descriptionText = "Round-trip time is ${timeRunning} ms"
     if (value == null) {
         logInfo "${descriptionText}"
-        sendEvent(name: 'rtt', value: timeRunning, descriptionText: descriptionText, unit: 'ms', isDigital: true)
+        sendEvent(name: 'rtt', value: timeRunning, descriptionText: descriptionText, unit: 'ms', type: 'digital')
     }
     else {
         descriptionText = "Round-trip time : ${value}"
         logInfo "${descriptionText}"
-        sendEvent(name: 'rtt', value: value, descriptionText: descriptionText, isDigital: true)
+        sendEvent(name: 'rtt', value: value, descriptionText: descriptionText, type: 'digital')
     }
 }
 
@@ -1344,6 +1421,7 @@ void deviceCommandTimeout() {
     sendRttEvent('timeout')
     if ((device.currentValue('valve') ?: 'unknown') in ['opening', 'closing']) {
         sendEvent(name: 'valve', value: 'unknown', type: 'digital')
+        sendEvent(name: 'switch', value: 'unknown', type: 'digital')
     }
 }
 
@@ -1444,11 +1522,6 @@ void configure() {
             logInfo 'press F5 to refresh the page'
         }
     }
-    /* Throws an exception !!
-    if (getPowerSource() != (device.currentValue('powerSource') ?: 'unknown')) {
-        sendEvent(name: 'powerSource', value: getPowerSource(), type: 'digital')
-    }
-    */
 
     if (settings?.powerOnBehaviour != null) {
         Map.Entry modeName =  powerOnBehaviourOptions.find { it.key == settings?.powerOnBehaviour }
@@ -1503,6 +1576,10 @@ def setDeviceNameAndProfile(String model=null, String manufacturer=null) {
         logInfo "deviceProfile was set to ${currentModelMap}"
         device.updateSetting('forcedProfile', [value:currentModelMap, type:'enum'])
     }
+    else if (_DEBUG == true) {
+        logWarn "##### Setting ${SIMULATED_PROFILE}"
+        state.deviceProfile = SIMULATED_PROFILE
+    }
     //
     return [deviceName, currentModelMap]
 }
@@ -1539,11 +1616,26 @@ void resetStats() {
     state.lastTx['pingTime'] = new Date().getTime()
 }
 
+void deleteAll() {
+    String deleted = ''
+    settings.each { it -> deleted += "${it.key} (${it.value}), " ; device.removeSetting("${it.key}") }
+    logDebug "Deleted settings: ${deleted}" ; deleted = ''
+    device.properties.supportedAttributes.each { it -> deleted += "${it}, " ; device.deleteCurrentState("$it") }
+    logDebug "Deleted attributes: ${deleted}" ; deleted = ''
+    state.each { it -> deleted += "${it.key}, " }
+    state.clear()
+    logDebug "Deleted states: ${stateDeleted}" ; deleted = ''
+    unschedule() ; logDebug 'All scheduled jobs DELETED'
+    getChildDevices().each { child -> log.info "${device.displayName} Deleting ${child.deviceNetworkId}" ; deleteChildDevice(child.deviceNetworkId) }
+    logDebug 'All child devices DELETED'
+}
+
 void initializeVars(boolean fullInit = true) {
     logInfo "InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true) {
         state.clear()
         unschedule()
+        deleteAll() // added 12/10/2024
         resetStats()
         logInfo 'all states and scheduled jobs cleared!'
         setDeviceNameAndProfile()
@@ -1558,12 +1650,14 @@ void initializeVars(boolean fullInit = true) {
 
     if (fullInit == true || state.states['lastSwitch'] == null) { state.states['lastSwitch'] = 'unknown' }
     if (fullInit == true || state.states['notPresentCtr'] == null)  { state.states['notPresentCtr']  = 0 }
-    if (fullInit == true || settings?.logEnable == null)  { device.updateSetting('logEnable', true) }
+    if (fullInit == true || settings?.logEnable == null)  { device.updateSetting('logEnable', DEFAULT_DEBUG_LOGGING) }
     if (fullInit == true || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
     if (fullInit == true || settings?.powerOnBehaviour == null) { device.updateSetting('powerOnBehaviour', [value:'2', type:'enum']) }   // last state
     if (fullInit == true || settings?.switchType == null) { device.updateSetting('switchType', [value:'0', type:'enum']) }               // toggle
     if (fullInit == true || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', [value:false, type:'bool']) }               // toggle
-    if (fullInit == true || settings?.autoOffTimer == null) { device.updateSetting('autoOffTimer', [value: DEFAULT_AUTOOFF_TIMER, type: 'number']) }
+    if (isSASWELL() || isGIEX() || isSonoff() || isFankEver()) {
+        if (fullInit == true || settings?.autoOffTimer == null) { device.updateSetting('autoOffTimer', [value: DEFAULT_AUTOOFF_TIMER, type: 'number']) }
+    }
     if (fullInit == true || settings?.autoSendTimer == null) { device.updateSetting('autoSendTimer', (isGIEX() ? true : false)) }
     if (fullInit == true || settings?.threeStateEnable == null) { device.updateSetting('threeStateEnable', false) }
 
@@ -1675,7 +1769,7 @@ void deviceHealthCheck() {
 }
 
 void sendHealthStatusEvent(String value) {
-    sendEvent(name: 'healthStatus', value: value, descriptionText: "${device.displayName} healthStatus set to $value")
+    sendEvent(name: 'healthStatus', value: value, descriptionText: "${device.displayName} healthStatus set to $value", type: 'digital')
 }
 
 void sendZigbeeCommands(ArrayList<String> cmd) {
@@ -1768,57 +1862,17 @@ void logWarn(final String msg) {
     }
 }
 
-/*
-    https://github.com/zigpy/zha-device-handlers/issues/1571#issuecomment-1132516457
-
-    attributes = TuyaMCUCluster.attributes.copy()
-    attributes.update(
-        {
-            0xEF01: ("time_left", t.uint32_t, True),
-            0xEF02: ("state", t.enum8, True),
-            0xEF03: ("last_valve_open_duration", t.uint32_t, True),
-            0xEF04: ("dp_6", t.uint32_t, True),
-        }
-    )
-
-*/
-
-/*
-https://github.com/zigpy/zha-device-handlers/issues/1556#issuecomment-1127443288
-
-            0xef01: ("timer", t.uint32_t, True),
-            0xef02: ("timer_time_left", t.uint32_t, True),
-            0xef03: ("frost_lock", t.Bool, True),
-            0xef04: ("frost_lock_reset", t.Bool, True),  # 0 resets frost lock
-?????????????????????????????????????????
-
-*/
-
-/*
-https://github.com/simonbaudart/zha-device-handlers/blob/6cb86ce2980abbe8eb0a7670e440282a2ab5b022/zhaquirks/tuya/ts0601_garden.py
-
-    cluster_id = 0x043E
-    name = "Timer"
-    ep_attribute = "timer"
-
-    attributes = {
-        0x000C: ("state", t.uint16_t),
-        0x000B: ("time_left", t.uint16_t),
-        0x000F: ("last_valve_open_duration", t.uint16_t),
-    }
-
-https://github.com/simonbaudart/zha-device-handlers/blob/cae7400682fc2a1ffcb697e96684f607566cf123/zhaquirks/tuya/ts0601_valve.py
-
-*/
-
 void setIrrigationTimer(BigDecimal timer) {
-    //ArrayList<String> cmds = []
+    if (!(isGIEX() || isSASWELL() || isTS0049() || isFankEver() || isSonoff() || isTZE284())) {
+        logWarn 'setIrrigationTimer is avaiable for GiEX, SASWELL, TS0049, FankEver and Sonoff valves only!'
+        return
+    }
     int timerSec = safeToInt(timer, -1)
     if (timerSec < 0 || timerSec > MAX_AUTOOFF_TIMER) {
         logWarn "timer must be withing 0 and ${MAX_AUTOOFF_TIMER} seconds"
         return
     }
-    logDebug "setting the irrigation timer to ${timerSec} seconds"
+    logInfo "setting the irrigation timer to ${timerSec} ${isTZE284() ? 'minutes' : 'seconds'}"
     device.updateSetting('autoOffTimer', [value: timerSec, type: 'number'])
     String timerText = timerSec == 0 ? 'disabled' : timerSec.toString()
     sendEvent(name: 'irrigationDuration', value: timerText, type: 'digital')
@@ -1840,6 +1894,9 @@ void sendIrrigationDuration() {
     else if (isFankEver()) {
         cmds = sendTuyaCommand('09', DP_TYPE_VALUE, dpValHex)
     }
+    else if (isTZE284()) {
+        cmds = sendTuyaCommand('0D', DP_TYPE_VALUE, dpValHex) + sendTuyaCommand('0E', DP_TYPE_VALUE, dpValHex)      // was 19 / 1A
+    }
     else if (isSonoff()) {
         logDebug "Sonoff irrigation timer is ${settings?.autoOffTimer ?: DEFAULT_AUTOOFF_TIMER}"
         // nothing to send for Sonoff
@@ -1854,6 +1911,10 @@ void sendIrrigationDuration() {
 }
 
 void setIrrigationCapacity(BigDecimal litres) {
+    if (!(isGIEX() || isSASWELL())) {
+        logWarn 'setIrrigationCapacity is avaiable for GiEX/SASWELL valves only!'
+        return
+    }
     int value = safeToInt(litres, -1)
     if (value < 0 || value > MAX_CAPACITY) {
         logWarn "irrigation capacity must be withing 0 and ${MAX_CAPACITY} litres"
@@ -1867,7 +1928,7 @@ void setIrrigationCapacity(BigDecimal litres) {
 
 void sendIrrigationCapacity() {
     List<String> cmds = []
-    if (isGIEX()) {
+    if (isGIEX() || isSASWELL()) {
         String dpValHex = zigbee.convertToHexString(settings?.irrigationCapacity as int, 8)
         cmds = sendTuyaCommand('68', DP_TYPE_VALUE, dpValHex)
         logDebug "sendIrrigationCapacity= ${settings?.irrigationCapacity} : ${cmds}"
@@ -1892,11 +1953,35 @@ void setIrrigationMode(String mode) {
             dpValHex = '01'
             break
         default :
-        logWarn "incorrect irrigationMode ${ mode }, must be ${ (waterModeOptions.each { it })}"
+            logWarn "incorrect irrigationMode ${ mode }, must be ${ (waterModeOptions.each { it })}"
             return
     }
     cmds = sendTuyaCommand('01', DP_TYPE_ENUM, dpValHex)
     logDebug "setIrrigationMode= ${mode} : ${cmds}"
+    sendZigbeeCommands( cmds )
+}
+
+
+void setValve2(String mode) {
+    if (!isTZE284()) {
+        logWarn 'setValve2 command is available for GiEX double valves  only!'
+        return
+    }
+    List<String> cmds = []
+    String dpValHex
+    switch (mode)  {
+        case 'open':
+            dpValHex = '01'
+            break
+        case 'closed':
+            dpValHex = '00'
+            break
+        default :
+            logWarn "incorrect setValve2 ${ mode }, must be 'open' or 'closed'"
+            return
+    }
+    cmds = sendTuyaCommand('02', DP_TYPE_BOOL, dpValHex)
+    logDebug "setValve2= ${mode} : ${cmds}"
     sendZigbeeCommands( cmds )
 }
 
