@@ -41,7 +41,8 @@
  *  ver. 1.3.5 2024-09-22 kkossev - removed tuyaVersion for non-Tuya devices; combined on() + timedOff() command for opening the Sonoff valve;
  *  ver. 1.3.6 2024-09-23 kkossev - Sonoff valve: irrigationDuration 0 will disable the valve auto-off; default auto-off timer changed to 0 (was 60 seconds); invalid 'digital' type of autoClose fixed; added workState attribute; logging improvements;
  *  ver. 1.4.0 2024-11-22 kkossev - supressed 'Sonoff SWV sendIrrigationDuration is not avaiable!' warning; added NovaDigital TS0601 _TZE200_fphxkxue @Rafael as TS0601_SASWELL_VALVE (working partially!); added queryAllTuyaDP for TS0601 devices;
- *  ver. 1.5.0 2024-12-16 kkossev - (dev.branch) adding TS0601 _TZE284_8zizsafo _TZE284_eaet5qt5 in 'TS0601_TZE284_VALVE' group 
+ *  ver. 1.5.0 2024-12-16 kkossev - added TS0601 _TZE284_8zizsafo _TZE284_eaet5qt5 in 'TS0601_TZE284_VALVE' group 
+ *  ver. 1.6.0 2025-02-15 kkossev - (dev. branch) adding Switch capability
  *
  *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
@@ -52,8 +53,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-static String version() { '1.5.0' }
-static String timeStamp() { '2024/12/16 7:41 AM' }
+static String version() { '1.6.0' }
+static String timeStamp() { '2025/02/15 9:28 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true                // disable it for the production release !
@@ -70,6 +71,7 @@ metadata {
         capability 'Battery'
         capability 'SignalStrength'         // Sonoff SWV
         capability 'LiquidFlowRate'         // Sonoff SWV (attribute 'rate')
+        capability 'Switch'                 // added in 1.6.0
 
         attribute 'batteryVoltage', 'number'
         attribute 'healthStatus', 'enum', ['offline', 'online']
@@ -628,13 +630,14 @@ void sendSwitchEvent(final String switchValue) {
     else {
         map.descriptionText = "${device.displayName} is ${value} [${map.type}]"
     }
-    //if ( bWasChange==true )
-    //{
     if (txtEnable) { log.info "${device.displayName } ${map.descriptionText }" }
     sendEvent(map)
-    //}
+    // added 02/15/2025 - send a switch event as well for compatibility with Alexa and Google Home and Apple HomeKit
+    sendEvent(name: 'switch', value: value == 'open' ? 'on' : 'off', descriptionText: map.descriptionText)
     clearIsDigital()
 }
+
+
 
 void parseZDOcommand(Map descMap) {
     switch (descMap.clusterId) {
@@ -1283,6 +1286,8 @@ String getAttributeString(ArrayList _data) {
     return retValue
 }
 
+void off() { close() }
+
 void close() {
     if (state.states == null) { state.states = [:] }
     state.states['isDigital'] = true
@@ -1311,6 +1316,8 @@ void close() {
     logDebug "close()... sent cmds=${cmds}"
     sendZigbeeCommands(cmds)
 }
+
+void on() { open() }
 
 void open() {
     if (state.states == null) { state.states = [:] }
@@ -1414,6 +1421,7 @@ void deviceCommandTimeout() {
     sendRttEvent('timeout')
     if ((device.currentValue('valve') ?: 'unknown') in ['opening', 'closing']) {
         sendEvent(name: 'valve', value: 'unknown', type: 'digital')
+        sendEvent(name: 'switch', value: 'unknown', type: 'digital')
     }
 }
 
@@ -1514,11 +1522,6 @@ void configure() {
             logInfo 'press F5 to refresh the page'
         }
     }
-    /* Throws an exception !!
-    if (getPowerSource() != (device.currentValue('powerSource') ?: 'unknown')) {
-        sendEvent(name: 'powerSource', value: getPowerSource(), type: 'digital')
-    }
-    */
 
     if (settings?.powerOnBehaviour != null) {
         Map.Entry modeName =  powerOnBehaviourOptions.find { it.key == settings?.powerOnBehaviour }
@@ -1858,49 +1861,6 @@ void logWarn(final String msg) {
         log.warn "${device.displayName} " + msg
     }
 }
-
-/*
-    https://github.com/zigpy/zha-device-handlers/issues/1571#issuecomment-1132516457
-
-    attributes = TuyaMCUCluster.attributes.copy()
-    attributes.update(
-        {
-            0xEF01: ("time_left", t.uint32_t, True),
-            0xEF02: ("state", t.enum8, True),
-            0xEF03: ("last_valve_open_duration", t.uint32_t, True),
-            0xEF04: ("dp_6", t.uint32_t, True),
-        }
-    )
-
-*/
-
-/*
-https://github.com/zigpy/zha-device-handlers/issues/1556#issuecomment-1127443288
-
-            0xef01: ("timer", t.uint32_t, True),
-            0xef02: ("timer_time_left", t.uint32_t, True),
-            0xef03: ("frost_lock", t.Bool, True),
-            0xef04: ("frost_lock_reset", t.Bool, True),  # 0 resets frost lock
-?????????????????????????????????????????
-
-*/
-
-/*
-https://github.com/simonbaudart/zha-device-handlers/blob/6cb86ce2980abbe8eb0a7670e440282a2ab5b022/zhaquirks/tuya/ts0601_garden.py
-
-    cluster_id = 0x043E
-    name = "Timer"
-    ep_attribute = "timer"
-
-    attributes = {
-        0x000C: ("state", t.uint16_t),
-        0x000B: ("time_left", t.uint16_t),
-        0x000F: ("last_valve_open_duration", t.uint16_t),
-    }
-
-https://github.com/simonbaudart/zha-device-handlers/blob/cae7400682fc2a1ffcb697e96684f607566cf123/zhaquirks/tuya/ts0601_valve.py
-
-*/
 
 void setIrrigationTimer(BigDecimal timer) {
     if (!(isGIEX() || isSASWELL() || isTS0049() || isFankEver() || isSonoff() || isTZE284())) {
