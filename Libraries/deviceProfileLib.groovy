@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy', documentationLink: '',
-    version: '3.4.0'
+    version: '3.4.1'
 )
 /*
  *  Device Profile Library
@@ -32,7 +32,8 @@ library(
  * ver. 3.3.2  2024-08-18 kkossev  - release 3.3.2
  * ver. 3.3.3  2024-08-18 kkossev  - sendCommand and setPar commands commented out; must be declared in the main driver where really needed
  * ver. 3.3.4  2024-09-28 kkossev  - fixed exceptions in resetPreferencesToDefaults() and initEventsDeviceProfile()
- * ver. 3.4.0  2025-02-02 kkossev  - (dev. branch) deviceProfilesV3 optimizations (defaultFingerprint); is2in1() mod
+ * ver. 3.4.0  2025-02-02 kkossev  - deviceProfilesV3 optimizations (defaultFingerprint); is2in1() mod
+ * ver. 3.4.1  2025-02-02 kkossev  - (dev. branch) setPar help improvements
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
@@ -44,8 +45,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.4.0' }
-static String deviceProfileLibStamp() { '2025/02/02 4:03 PM' }
+static String deviceProfileLibVersion()   { '3.4.1' }
+static String deviceProfileLibStamp() { '2025/02/16 7:47 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -454,7 +455,14 @@ public boolean setPar(final String parPar=null, final String val=null ) {
     if (val == null) { logInfo "setPar: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return false }
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def scaledValue = validateAndScaleParameterValue(dpMap, val as String)      // convert the val to the correct type and scale it if needed
-    if (scaledValue == null) { logInfo "setPar: invalid parameter ${par} value <b>${val}</b>. Must be in the range ${dpMap.min} to ${dpMap.max}"; return false }
+    if (scaledValue == null) {
+        log.trace "$dpMap  ${dpMap.map}"
+        String helpTxt = "setPar: invalid parameter ${par} value <b>${val}</b>."
+        if (dpMap.min != null && dpMap.max != null) { helpTxt += " Must be in the range ${dpMap.min} to ${dpMap.max}" }
+        if (dpMap.map != null) { helpTxt += " Must be one of ${dpMap.map}" }
+        logInfo helpTxt
+        return false
+    }
 
     // if there is a dedicated set function, use it
     String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1]

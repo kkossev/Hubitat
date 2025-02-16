@@ -42,7 +42,7 @@
  *  ver. 1.3.6 2024-09-23 kkossev - Sonoff valve: irrigationDuration 0 will disable the valve auto-off; default auto-off timer changed to 0 (was 60 seconds); invalid 'digital' type of autoClose fixed; added workState attribute; logging improvements;
  *  ver. 1.4.0 2024-11-22 kkossev - supressed 'Sonoff SWV sendIrrigationDuration is not avaiable!' warning; added NovaDigital TS0601 _TZE200_fphxkxue @Rafael as TS0601_SASWELL_VALVE (working partially!); added queryAllTuyaDP for TS0601 devices;
  *  ver. 1.5.0 2024-12-16 kkossev - added TS0601 _TZE284_8zizsafo _TZE284_eaet5qt5 in 'TS0601_TZE284_VALVE' group 
- *  ver. 1.6.0 2025-02-15 kkossev - (dev. branch) adding Switch capability
+ *  ver. 1.6.0 2025-02-15 kkossev - added Switch capability
  *
  *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 

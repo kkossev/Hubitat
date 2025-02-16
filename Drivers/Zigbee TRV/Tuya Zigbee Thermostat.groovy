@@ -19,10 +19,13 @@
  *                                   'Battery Voltage to Percentage' and 'Minimum time between reports' are hidden; 
  * ver. 3.3.3  2024-08-01 kkossev  - added _TZE200_g9a3awaj 'AVATTO_ZWT07_BATTERY_THERMOSTAT'
  * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
- * ver. 3.4.1  2024-10-26 kkossev  - xed exception in sendDigitalEventIfNeeded when the attribute is not found (level); added faultAlarm attribute; added TRV602 profile (TS0601  _TZE200_rtrmfadk)
+ * ver. 3.4.1  2024-10-26 kkossev  - fixed exception in sendDigitalEventIfNeeded when the attribute is not found (level); added faultAlarm attribute; added TRV602 profile (TS0601  _TZE200_rtrmfadk)
  *                                   added TRV602Z profile (TS0601 _TZE204_ltwbm23f); queryAllTuyaDP() when refreshing TRV602 and TRV602Z;
- * ver. 3.4.2  2024-11-12 kkossev  - (dev.branch) added TS0601 _TZE204_xnbkhhdr (_TZE200_viy9ihs7 _TZE200_viy9ihs7) thermostat profile 'AVATTO_ZWT198_ZWT100-BH_THERMOSTAT'
+ * ver. 3.4.2  2024-11-12 kkossev  - added TS0601 _TZE204_xnbkhhdr (_TZE200_viy9ihs7 _TZE200_viy9ihs7) thermostat profile 'AVATTO_ZWT198_ZWT100-BH_THERMOSTAT'
+ * ver. 3.4.3  2025-02-16 kkossev  - (dev. branch) restored sendCommand and setPar;
  *
+ *                                   TODO: add setBrightness command @Bruno
+ *                                   TODO: Resend failed commands @Bruno
  *                                   TODO: add TS0601 _TZE204_lzriup1  https://community.hubitat.com/t/release-tuya-wall-mount-thermostat-water-electric-floor-heating-zigbee-driver/87050/318?u=kkossev 
  *                                   TODO: AVATTO -  better descriptions for anti-freeze and limescaleProtect preferences
  *                                   TODO: BEOK - needs retries, the first command is lost sometimes! :(  Battery Voltage to Percentage
@@ -50,8 +53,8 @@
  *                                   TODO: UNKNOWN TRV - update the deviceProfile - separate 'Unknown Tuya' and 'Unknown ZCL'
  */
 
-static String version() { '3.4.2' }
-static String timeStamp() { '2024/11/12 10:13 PM' }
+static String version() { '3.4.3' }
+static String timeStamp() { '2025/02/16 8:20 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -116,6 +119,15 @@ metadata {
         attribute 'preset', 'enum', ['manual', 'auto', 'away']      // TODO - remove?
         attribute 'awayPresetTemperature', 'number'
 
+        command 'sendCommand', [
+            [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
+            [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
+        ]
+        command 'setPar', [
+                [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
+                [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
+        ]
+    
         if (_DEBUG) { command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  }
 
         // itterate through all the figerprints and add them on the fly
@@ -603,7 +615,7 @@ metadata {
                 [dp:101, name:'hysteresis',         type:'decimal',         rw: 'rw', min:1.0,    max:9.5,  defVal:1.0,  step:0.5, scale:10,  title: '<b>Hysteresis</b>', description:'hysteresis'],
                 [dp:102, name:'protectionTemperature', type:'decimal',      rw: 'rw', min:20.0,   max:80.0, defVal:70.0, step:1.0, scale:1,  unit:'°C',  title: '<b>Protection Temperature Limit</b>', description:'Protection Temperature Limit'],
                 [dp:103, name:'outputReverse',      type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Output Reverse</b>',  description:'Output reverse'],  
-                [dp:104, name:'brightness',         type:'enum',            rw: 'rw', defVal:'2', map:[0:'off', 1:'low', 2:'medium', 3:'high'], title:'<b>LCD Brightness</b>',  description:'LCD brightness']
+                [dp:104, name:'brightness',         type:'enum',            rw: 'rw', defVal:'2', min:0, max:3, map:[0:'off', 1:'low', 2:'medium', 3:'high'], title:'<b>LCD Brightness</b>',  description:'LCD brightness']
             ],
             supportedThermostatModes: ['off', 'heat', 'auto'],
             refresh: ['pollTuya'],
