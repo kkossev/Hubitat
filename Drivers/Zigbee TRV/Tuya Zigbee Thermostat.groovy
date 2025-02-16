@@ -22,10 +22,9 @@
  * ver. 3.4.1  2024-10-26 kkossev  - fixed exception in sendDigitalEventIfNeeded when the attribute is not found (level); added faultAlarm attribute; added TRV602 profile (TS0601  _TZE200_rtrmfadk)
  *                                   added TRV602Z profile (TS0601 _TZE204_ltwbm23f); queryAllTuyaDP() when refreshing TRV602 and TRV602Z;
  * ver. 3.4.2  2024-11-12 kkossev  - added TS0601 _TZE204_xnbkhhdr (_TZE200_viy9ihs7 _TZE200_viy9ihs7) thermostat profile 'AVATTO_ZWT198_ZWT100-BH_THERMOSTAT'
- * ver. 3.4.3  2025-02-16 kkossev  - (dev. branch) restored sendCommand and setPar;
+ * ver. 3.5.0  2025-02-16 kkossev  - (dev. branch) restored sendCommand and setPar; added brightness attribute; added checkIfIsDuplicated; added Resend failed commands : setThermostatMode and heatingSetpoint retries; added forceManual prefrence
  *
- *                                   TODO: add setBrightness command @Bruno
- *                                   TODO: Resend failed commands @Bruno
+ *                                   TODO: BEOK Chinese time patch!
  *                                   TODO: add TS0601 _TZE204_lzriup1  https://community.hubitat.com/t/release-tuya-wall-mount-thermostat-water-electric-floor-heating-zigbee-driver/87050/318?u=kkossev 
  *                                   TODO: AVATTO -  better descriptions for anti-freeze and limescaleProtect preferences
  *                                   TODO: BEOK - needs retries, the first command is lost sometimes! :(  Battery Voltage to Percentage
@@ -53,8 +52,8 @@
  *                                   TODO: UNKNOWN TRV - update the deviceProfile - separate 'Unknown Tuya' and 'Unknown ZCL'
  */
 
-static String version() { '3.4.3' }
-static String timeStamp() { '2025/02/16 8:20 AM' }
+static String version() { '3.5.0' }
+static String timeStamp() { '2025/02/16 11:40 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -89,6 +88,7 @@ metadata {
         attribute 'batteryVoltage', 'number'
         attribute 'boostTime', 'number'                             // BRT-100
         attribute 'calibrated', 'enum', ['false', 'true']           // Aqara E1
+        attribute 'brightness', 'enum', ['off', 'low', 'medium', 'high']    // BEOK/AVATTO
         attribute 'calibrationTemp', 'number'                       // BRT-100, Sonoff
         attribute 'childLock', 'enum', ['off', 'on']                // BRT-100, Aqara E1, Sonoff, AVATTO
         attribute 'comfortTemp', 'number'                           // TRV602Z, IMMAX_Neo Lite TRV 07732L
@@ -144,8 +144,16 @@ metadata {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables command logging.'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: 'Turns on debug logging for 24 hours.'
         // the rest of the preferences are inputed from the deviceProfile maps in the deviceProfileLib
+        if (advancedOptions == true) {
+            input (name: 'resendFailed', type: 'bool', title: '<b>Resend failed commands</b>', description: '<i>If the thermostat does not change the Setpoint or Mode as expected, then commands will be resent automatically</i>', defaultValue: false)
+            input (name: 'forceManual',  type: 'bool', title: '<b>Force Manual Mode</b>', description: '<i>If the thermostat changes into schedule mode, then it automatically reverts back to manual mode</i>', defaultValue: false)
+        }
+
     }
 }
+
+@Field static final Integer MaxRetries = 5
+@Field static final Integer NOT_SET = -1
 
 @Field static final Map deviceProfilesV3 = [    // https://github.com/jacekk015/zha_quirks
     // BRT-100-B0
@@ -730,6 +738,17 @@ List pollTuya() {
 void customUpdated() {
     //ArrayList<String> cmds = []
     logDebug 'customUpdated: ...'
+    //if (setting?.advancedOptions == true) {
+        logInfo "Force manual is <b>${settings?.forceManual}</b>; Resend failed is <b>${settings?.resendFailed}</b>"
+        if (settings?.resendFailed == true) {
+            logInfo 'resendFailed is enabled!'
+            runEvery1Minute('receiveCheck')
+        }
+        else {
+            logInfo 'resendFailed is disabled'
+            unschedule('receiveCheck')
+        }
+    //}
     //
     if (settings?.forcedProfile != null) {
         //logDebug "current state.deviceProfile=${state.deviceProfile}, settings.forcedProfile=${settings?.forcedProfile}, getProfileKey()=${getProfileKey(settings?.forcedProfile)}"
@@ -790,13 +809,22 @@ void customInitializeVars(final boolean fullInit=false) {
     }
     // for Tuya TRVs and thermostats - change the default polling method to 0 'disabled'
     if (fullInit || settings?.temperaturePollingInterval == null) { device.updateSetting('temperaturePollingInterval', [value: '0', type: 'enum']) }
-
+    if (fullInit || settings?.resendFailed == null) { device.updateSetting('resendFailed', [value: 'false', type: 'bool']) }
+    if (fullInit || settings?.forceManual == null)  { device.updateSetting('forceManual',  [value: 'false', type: 'bool']) }
 }
 
 // called from initializeVars() in the main code ...
 void customInitEvents(final boolean fullInit=false) {
     logDebug "customInitEvents(${fullInit})"
     thermostatInitEvents(fullInit)
+    if (settings?.resendFailed == true) {
+        logInfo 'resendFailed is enabled!'
+        runEvery1Minute('receiveCheck')    // KK: check
+    }
+    else {
+        logInfo 'resendFailed is disabled'
+        unschedule('receiveCheck')
+    }
 }
 
 
@@ -835,6 +863,13 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
                 sendEvent(eventMap)
                 logInfo "${descText}"
                 state.lastThermostatMode = valueScaled
+            }
+            // added 02/16/2025
+            if (settings?.forceManual == true) {
+                if (valueScaled == 'auto') {
+                    logWarn "customProcessDeviceProfileEvent: forceManual is <b>enabled</b>! Changing the thermostatMode from auto to heat"
+                    runIn(1, 'heat')
+                }
             }
             break
         case 'ecoMode' :    // BRT-100 - simulate OFF mode ?? or keep the ecoMode on ?
@@ -891,6 +926,70 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
             logInfo "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy DPs ?
             //}
             break
+    }
+}
+
+void customParseTuyaCluster(final Map descMap) {
+    boolean isDuplicated = false
+/*    
+    int dp = zigbee.convertHexToInt(descMap?.data[2])
+    int fncmd = getTuyaAttributeValue(descMap?.data, 0) // PATCH! zero-based index
+    if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '0B') {    // ZCL Command Default Response
+        setLastRx( NOT_SET, NOT_SET)    // -1
+    }
+    else if (descMap?.clusterInt == CLUSTER_TUYA && dp != 24) {    // Tuya set time command
+        if (checkIfIsDuplicated( dp, fncmd )) {
+            logDebug "<b>(duplicate)</b>  <b>dp=${dp}</b> fncmd=${fncmd} command=${descMap?.command} data = ${descMap?.data}"
+            state.stats['dupeCtr'] = (state.stats['dupeCtr'] ?: 0) + 1
+            isDuplicated = true
+        }
+        else {
+            logDebug "${device.displayName} dp_id=${dp_id} <b>dp=${dp}</b> fncmd=${fncmd}" 
+            setLastRx( dp, fncmd)
+        }
+
+    }
+    */
+    if (isDuplicated == false) {
+        standardParseTuyaCluster(descMap)   // defined in commonLib
+    }
+}
+
+
+//  receiveCheck() is unconditionally scheduled Every1Minute from installed() ..
+void receiveCheck() {
+    logDebug "receiveCheck() called"
+    modeReceiveCheck()
+    setpointReceiveCheck()
+    setBrightnessReceiveCheck()
+}
+
+
+// NOT ACTIVATED !!! Needs a dedicated setBrightness() command ?
+// Brightness checking is also called every 1 minute from receiveCheck()
+void setBrightnessReceiveCheck() {
+    if (settings?.resendFailed == false ) { return }
+    if (state.lastTx.isSetBrightnessReq == false) { return }
+
+    if (state.lastTx.setBrightness != NOT_SET && ((state.lastTx.setBrightness as String) != (state.lastRx.setBrightness as String))) {
+        state.lastTx.setBrightnessRetries = (state.lastTx.setBrightnessRetries ?: 0) + 1
+        if (state.lastTx.setBrightnessRetries < MaxRetries) {
+            logWarn "setBrightnessReceiveCheck(${state.lastTx.setBrightness}) <b>failed<b/> (last received is still ${state.lastRx.setBrightness})"
+            logDebug "resending setBrightness command : ${state.lastTx.setBrightness} (retry# ${state.lastTx.setBrightnessRetries}) of ${MaxRetries}"
+            state.stats.txFailCtr = (state.stats.txFailCtr ?: 0) + 1
+            //setBrightness(lastTxMap.setBrightness)
+            setPar('brightness', state.lastTx.setBrightness)
+        }
+        else {
+            logWarn "setBrightnessReceiveCheck(${state.lastTx.setBrightness}) <b>giving up retrying<b/>"
+            state.lastTx.isSetBrightnessReq = false
+            state.lastTx.setBrightnessRetries = 0
+        }
+    }
+    else {
+        logDebug "setBrightnessReceiveCheck brightness was changed successfuly to (${state.lastTx.setBrightness}). No need for further checks."
+        state.lastTx.setBrightness = NOT_SET
+        state.lastTx.isSetBrightnessReq = false
     }
 }
 

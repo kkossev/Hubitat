@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Thermostat Library', name: 'thermostatLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy', documentationLink: '',
-    version: '3.4.0')
+    version: '3.5.0')
 /*
  *  Zigbee Thermostat Library
  *
@@ -19,14 +19,14 @@ library(
  * ver. 3.3.1  2024-06-16 kkossev  - added factoryResetThermostat() command
  * ver. 3.3.2  2024-07-09 kkossev  - release 3.3.2
  * ver. 3.3.4  2024-10-23 kkossev  - fixed exception in sendDigitalEventIfNeeded when the attribute is not found (level)
- * ver. 3.4.0  2024-10-26 kkossev  - (dev. branch) 
+ * ver. 3.5.0  2025-02-16 kkossev  - (dev. branch) added setpointReceiveCheck() and modeReceiveCheck() retries
  *
  *                                   TODO: add eco() method
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
-public static String thermostatLibVersion()   { '3.4.0' }
-public static String thermostatLibStamp() { '2024/10/26 10:45 AM' }
+public static String thermostatLibVersion()   { '3.5.0' }
+public static String thermostatLibStamp() { '2025/02/16 11:25 PM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib
@@ -130,6 +130,12 @@ void setHeatingSetpoint(final Number temperaturePar ) {
 
     logDebug "setHeatingSetpoint: calling sendAttribute heatingSetpoint ${tempBigDecimal}"
     sendAttribute('heatingSetpoint', tempBigDecimal as double)
+
+    // added 02/16/2025
+    state.lastTx.isSetPointReq = true
+    state.lastTx.setPoint = tempBigDecimal    // BEOK - float value!
+    runIn(3, setpointReceiveCheck)
+
 }
 
 // TODO - use sendThermostatEvent instead!
@@ -148,6 +154,8 @@ void sendHeatingSetpointEvent(Number temperature) {
     logDebug "sending event ${eventMap}"
     sendEvent(eventMap)
     updateDataValue('lastRunningMode', 'heat')
+    // added 02/16/2025
+    state.lastRx.setPoint = tempDouble
 }
 
 // thermostat capability standard command
@@ -216,6 +224,10 @@ public void setThermostatMode(final String requestedMode) {
     // some TRVs require some checks and additional commands to be sent before setting the mode
     final String currentMode = device.currentValue('thermostatMode')
     logDebug "setThermostatMode: currentMode = ${currentMode}, switching to ${mode} ..."
+
+    // added 02/16/2025
+    setLastTx( mode = requestedMode, isModeSetReq = true)
+    runIn(4, modeReceiveCheck)
 
     switch (mode) {
         case 'heat':
@@ -513,4 +525,86 @@ public List<String> pollBatteryPercentage() {
 
 public List<String> pollOccupancy() {
     return  zigbee.readAttribute(0x0406, 0x0000, [:], delay = 100)      // Bit 0 specifies the sensed occupancy as follows: 1 = occupied, 0 = unoccupied. This flag bit will affect the Occupancy attribute of HVAC cluster, and the operation mode.
+}
+
+////////////////////////////// added 02/16/2024 //////////////////////////////
+
+// scheduled for call from setThermostatMode() 4 seconds after the mode was potentiually changed.
+// also, called every 1 minute from receiveCheck()
+void modeReceiveCheck() {
+    logDebug "modeReceiveCheck() called"
+    if (settings?.resendFailed == false ) { return }
+
+    if (state.lastTx?.isModeSetReq == false) { return }    // no mode change was requested
+
+    if (state.lastTx.mode != device.currentState('thermostatMode', true).value) {
+        state.lastTx['setModeRetries'] = (state.lastTx['setModeRetries'] ?: 0) + 1
+        logWarn "modeReceiveCheck() <b>failed</b> (expected ${state.lastTx['mode']}, current ${device.currentState('thermostatMode', true).value}), retry#${state.lastTx['setModeRetries']} of ${MaxRetries}"
+        if (state.lastTx['setModeRetries'] < MaxRetries) {
+            logDebug "resending mode command : ${state.lastTx['mode']}"
+            state.stats['txFailCtr'] = (state.stats['txFailCtr']  ?: 0) + 1
+            setThermostatMode( state.lastTx['mode'] )
+        }
+        else {
+            logWarn "modeReceiveCheck(${state.lastTx['mode'] }}) <b>giving up retrying<b/>"
+            state.lastTx['isModeSetReq'] = false    // giving up
+            state.lastTx['setModeRetries'] = 0
+        }
+    }
+    else {
+        logDebug "modeReceiveCheck mode was changed OK to (${state.lastTx['mode']}). No need for further checks."
+        state.lastTx.isModeSetReq = false    // setting mode was successfuly confimed, no need for further checks
+        state.lastTx.setModeRetries = 0
+    }
+}
+
+//
+//  also, called every 1 minute from receiveCheck()
+public void setpointReceiveCheck() {
+    if (settings?.resendFailed == false ) { return }
+    if (state.lastTx.isSetPointReq == false) { return }
+
+    if (state.lastTx.setPoint != NOT_SET && ((state.lastTx.setPoint as String) != (state.lastRx.setPoint as String))) {
+        state.lastTx.setPointRetries = (state.lastTx.setPointRetries ?: 0) + 1
+        if (state.lastTx.setPointRetries < MaxRetries) {
+            logWarn "setpointReceiveCheck(${state.lastTx.setPoint}) <b>failed<b/> (last received is still ${state.lastRx.setPoint})"
+            logDebug "resending setpoint command : ${state.lastTx.setPoint} (retry# ${state.lastTx.setPointRetries}) of ${MaxRetries}"
+            state.stats.txFailCtr = (state.stats.txFailCtr ?: 0) + 1
+            // TODO !! sendTuyaHeatingSetpoint(state.lastTx.setPoint)
+            setHeatingSetpoint(state.lastTx.setPoint as Number)
+        }
+        else {
+            logWarn "setpointReceiveCheck(${state.lastTx.setPoint}) <b>giving up retrying<b/>"
+            state.lastTx.isSetPointReq = false
+            state.lastTx.setPointRetries = 0
+        }
+    }
+    else {
+        logDebug "setpointReceiveCheck setPoint was changed successfuly to (${state.lastTx.setPoint}). No need for further checks."
+        state.lastTx.setPoint = NOT_SET
+        state.lastTx.isSetPointReq = false
+    }
+}
+
+public void setLastRx( int dp, int fncmd) {
+    state.lastRx['dp'] = dp
+    state.lastRx['fncmd'] = fncmd
+}
+
+public void setLastTx( String mode=null, Boolean isModeSetReq=null) {
+    if (mode != null) {
+        state.lastTx['mode'] = mode
+    }
+    if (isModeSetReq != null) {
+        state.lastTx['isModeSetReq'] = isModeSetReq
+    }
+}
+
+public String getLastMode() {
+    return state.lastTx.mode ?: 'exception'
+}
+
+public boolean checkIfIsDuplicated( int dp, int fncmd ) {
+    Map oldDpFncmd = state.lastRx
+    return dp == oldDpFncmd.dp && fncmd == oldDpFncmd.fncmd
 }

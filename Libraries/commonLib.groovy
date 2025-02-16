@@ -40,7 +40,8 @@ library(
   * ver. 3.3.1  2024-07-06 kkossev  - removed isFingerbot() dependancy; added FC03 cluster (Frient); removed noDef from the linter; added customParseIasMessage and standardParseIasMessage; powerSource set to unknown on initialize();
   * ver. 3.3.2  2024-07-12 kkossev  - added PollControl (0x0020) cluster; ping for SONOFF
   * ver. 3.3.3  2024-09-15 kkossev  - added queryAllTuyaDP(); 2 minutes healthCheck option;
-  * ver. 3.3.4  2025-01-29 kkossev  - (dev.branch) 'LOAD ALL DEFAULTS' is the default Configure command.
+  * ver. 3.3.4  2025-01-29 kkossev  - 'LOAD ALL DEFAULTS' is the default Configure command.
+  * ver. 3.3.5  2025-02-16 kkossev  - (dev.branch) getTuyaAttributeValue made public
   *
   *                                   TODO: check deviceCommandTimeout()
   *                                   TODO: offlineCtr is not increasing! (ZBMicro);
@@ -55,8 +56,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.3.4' }
-String commonLibStamp() { '2025/01/29 10:04 PM' }
+String commonLibVersion() { '3.3.5' }
+String commonLibStamp() { '2025/02/16 9:46 AM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -839,7 +840,7 @@ void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, fin
     logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
 }
 
-private int getTuyaAttributeValue(final List<String> _data, final int index) {
+public int getTuyaAttributeValue(final List<String> _data, final int index) {
     int retValue = 0
     if (_data.size() >= 6) {
         int dataLength = zigbee.convertHexToInt(_data[5 + index])
