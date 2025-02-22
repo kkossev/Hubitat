@@ -19,7 +19,7 @@
 
 
 String version() { '1.0.0' }
-String timeStamp() { '2025/02/21 8:16 PM '}
+String timeStamp() { '2025/02/22 2:24 PM '}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -29,12 +29,8 @@ metadata {
     definition (name: "Z-Wave Plus Vibration Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/drivers/development/z-wave-plus-vibration-sensor.groovy", singleThreaded: true ) {
         capability "Sensor"
         capability "AccelerationSensor"
-        //capability "TamperAlert"            // tamper - ENUM ["clear", "detected"]
 		capability "Battery"
 		capability "Configuration"
-        capability "Refresh"
-        capability 'Health Check'
-        //capability "Polling"
         capability "Refresh"
         capability "HealthCheck"
         
@@ -42,7 +38,7 @@ metadata {
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute 'batteryStatus', 'enum', ["normal", "replace"]
         attribute 'sensitivity', 'number'
-        attribute 'lastBattery', 'date'         // last battery event time
+        //attribute 'lastBattery', 'date'         // last battery event time
 
         command "initialize"
         command 'setActive',   [[name: 'Set the accelaration to active state']]
@@ -69,7 +65,6 @@ metadata {
     }
 }
 
-// inClusters:"0x85,
 @Field static Map commandClassVersions = [
      0x22:1,    // Command Class Application Status (0x22/34)
      0x55:2,    // Transport Service V2

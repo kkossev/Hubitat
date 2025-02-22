@@ -24,10 +24,10 @@
  * ver. 3.3.0  2024-08-30 kkossev  - main branch release.
  * ver. 3.3.1  2024-10-26 kkossev  - added TS0601 _TZE200_f1pvdgoh into a new device profile group 'TS0601_2IN1_MYQ_ZMS03'
  * ver. 3.3.2  2024-11-30 kkossev  - added Azoula Zigbee 4 in 1 Multi Sensor model:'HK-SENSOR-4IN1-A', manufacturer:'Sunricher' into SIHAS group
- * ver. 3.3.3  2025-01-29 kkossev  - (dev. branch) TS0601 _TZE200_ppuj1vem moved to 'TS0601_2IN1_MYQ_ZMS03' deviceProfile @ltdonjohnson
+ * ver. 3.3.3  2025-01-29 kkossev  - TS0601 _TZE200_ppuj1vem moved to 'TS0601_2IN1_MYQ_ZMS03' deviceProfile @ltdonjohnson
+ * ver. 3.3.4  2025-02-22 kkossev  - (dev. branch) adding Espressif ZigbeeOccupancyPIRSensor @ilkeraktuna
  *                                   
  *                                   TODO: add TS0601 _TZE200_agumlajc https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1077?u=kkossev
- *                                   TODO: 
  *                                   TODO: Sensor 3in1 _warning: couldn't find map for preference motionReset
  *                                   TODO: Sensor 3in1 _TZE200_7hfcudw5 - fix battery percentage (shows 4)
  *                                   TODO: test TUYATEC-53o41joc IAS - add refresh commands (battery not reported when paired!);
@@ -53,8 +53,8 @@
  *                                   TODO: check temperatureOffset and humidityOffset
 */
 
-static String version() { "3.3.3" }
-static String timeStamp() {"2025/01/29 10:06 PM"}
+static String version() { "3.3.4" }
+static String timeStamp() {"2025/02/22 7:15 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -448,7 +448,7 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
     'SIHAS_USM-300Z_4_IN_1' : [
             description   : 'SiHAS USM-300Z 4-in-1',
             models        : ['ShinaSystem'],
-            device        : [type: 'radar', powerSource: 'battery', isIAS:false, isSleepy:false],
+            device        : [type: 'PIR', powerSource: 'battery', isIAS:false, isSleepy:false],
             capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'IlluminanceMeasurement': true, 'Battery': true],
             preferences   : [:],
             fingerprints  : [
@@ -464,6 +464,26 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             //configuration : ["0x0406":"bind"]     // TODO !!
             configuration : [:],
             deviceJoinName: 'SiHAS USM-300Z 4-in-1'
+    ],
+
+    'ESRESSIF_PIR_TEMP' : [
+            description   : 'Espressif motion and temp sensor',
+            models        : ['ZigbeeOccupancyPIRSensor'],
+            device        : [type: 'PIR', powerSource: 'DC', isIAS:false, isSleepy:false],
+            capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'Battery': false],
+            preferences   : [:],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'0A', inClusters:'0000,0003,0406', outClusters:'0019,000A', model:'ZigbeeOccupancyPIRSensor', manufacturer:'Espressif', deviceJoinName: 'Espressif ZigbeeOccupancyPIRSensor'],
+            ],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults'],
+            attributes    : [
+                [at:'0x0406:0x0000', name:'motion',        type:'enum',   rw: 'ro', min:0,   max:1,    defVal:'0',   scale:1,    map:[0:'inactive', 1:'active'], title:'<b>Motion</b>'],
+                // endpoint 0B: inClusters: 0000,0003,0402,000A outClusters: 0003,000A
+                [at:'0x0406:0x0000', name:'temperature',     type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0,  scale:10, unit:'deg.',       description:'Temperature']
+            ],
+            refresh       : [ 'motion', 'temperatureRefresh'],
+            configuration : [:],
+            deviceJoinName: 'Espressif ZigbeeOccupancyPIRSensor'
     ],
 
     'NONTUYA_MOTION_IAS'   : [
