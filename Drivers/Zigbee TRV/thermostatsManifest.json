@@ -1,10 +1,10 @@
 {
     "packageName":"Zigbee TRVs and Thermostats",
     "author":"Krassimir Kossev",
-    "version":"3.4.2",
+    "version":"3.5.0",
     "minimumHEVersion":"2.3.8.100",
-    "dateReleased":"2024-11-17",
-    "releaseNotes":"3.4.2  2024-11-12 - added TS0601 _TZE204_xnbkhhdr (_TZE200_viy9ihs7 _TZE200_viy9ihs7) thermostat profile 'AVATTO_ZWT198_ZWT100-BH_THERMOSTAT'\n3.4.0 - various TRVs and Thermostats drivers added to HPM",
+    "dateReleased":"2025-02-22",
+    "releaseNotes":"3.5.0  2025-02-16 - restored sendCommand and setPar; added brightness attribute; added checkIfIsDuplicated; added Resend failed commands : setThermostatMode and heatingSetpoint retries; added forceManual prefrence\n3.4.2  2024-11-12 - added TS0601 _TZE204_xnbkhhdr (_TZE200_viy9ihs7 _TZE200_viy9ihs7) thermostat profile 'AVATTO_ZWT198_ZWT100-BH_THERMOSTAT'\n3.4.0 - various TRVs and Thermostats drivers added to HPM",
     "documentationLink":"https://community.hubitat.com/t/beta-tuya-zigbee-thermostats-and-trvs-driver/128916",
     "communityLink":"https://community.hubitat.com/t/beta-tuya-zigbee-thermostats-and-trvs-driver/128916",
     "drivers": [
