@@ -24,7 +24,8 @@
  * ver. 1.3.0 2024-10-07 kkossev  - setVolume bug fix; adding Tuya Solar Alarm '_TZE200_nlrfgpny', '_TZE204_nlrfgpny'
  * ver. 1.3.1 2024-10-08 kkossev  - restored the overwritten code changes in the previous version;
  * ver. 1.3.2 2024-10-09 kkossev  - debug enabled;  added Refresh() command; setMelody(); setDuration(); stop(); both(); siren(); strobe();
- * ver. 1.3.3 2024-11-20 kkossev  - (dev.branch) added TS0601 _TZE204_hcxvyxa5 and _TZE204_q76rtoa9 in Tuya group;
+ * ver. 1.3.3 2024-11-20 kkossev  - added TS0601 _TZE204_hcxvyxa5 and _TZE204_q76rtoa9 in Tuya group;
+ * ver. 1.3.4 2025-02-22 kkossev  - added TS0601 _TZE284_nlrfgpny in TuyaSolarAlarm group;
  *
  *                                  TODO: add ping() and healthStatus
  *                                  TODO: add TS0216  _TYZB01_0wcfvptl https://github.com/zigpy/zha-device-handlers/issues/1824#issuecomment-1302637169 (https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/74?u=kkossev)
@@ -34,8 +35,8 @@
  *
 */
 
-def version() { "1.3.3" }
-def timeStamp() {"2024/11/20 8:12 AM"}
+def version() { "1.3.4" }
+def timeStamp() {"2025/02/22 1:28 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -98,8 +99,9 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:        "d0yu2xgi", deviceJoinName: "Tuya NEO Smart Siren T&H"      // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE204_t1blo2bj", deviceJoinName: "Tuya Smart Siren"              // https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/67?u=kkossev
         // https://github.com/zigpy/zha-device-handlers/issues/1379#issuecomment-1077772021 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE284_nlrfgpny", deviceJoinName: "Tuya Solar Alarm"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE204_nlrfgpny", deviceJoinName: "Tuya Solar Alarm"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE200_nlrfgpny", deviceJoinName: "Tuya Solar Alarm"         // https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/116?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE284_nlrfgpny", deviceJoinName: "Tuya Solar Alarm"         // https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/116?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE204_hcxvyxa5", deviceJoinName: "Tuya Smart Siren"              // https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/148?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE204_q76rtoa9", deviceJoinName: "Tuya Smart Siren"              // https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/148?u=kkossev
     }
@@ -138,7 +140,7 @@ metadata {
 
 def isNeo()  { (device.getDataValue("manufacturer") in ['_TZE200_d0yu2xgi', '_TZE200_d0yu2xgi', 'd0yu2xgi']) }
 def isTuya() { (device.getDataValue("manufacturer") in ['_TZE204_t1blo2bj', '_TZE204_hcxvyxa5', '_TZE204_q76rtoa9']) }
-def isSolarAlarm() { (device.getDataValue("manufacturer") in ['_TZE200_nlrfgpny', '_TZE204_nlrfgpny']) }        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/06c82b69d57358d0a879928deaff05305501366c/src/devices/neo.ts#L106
+def isSolarAlarm() { (device.getDataValue("manufacturer") in ['_TZE200_nlrfgpny', '_TZE204_nlrfgpny', '_TZE284_nlrfgpny']) }        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/92f040391a13fbd7582d872a1764df3f22c10792/src/devices/neo.ts#L107
 
 @Field static final Map TemperatureScaleOptions = [
     '0' : 'Fahrenheit',
