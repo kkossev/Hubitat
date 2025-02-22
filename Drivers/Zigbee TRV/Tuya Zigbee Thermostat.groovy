@@ -22,7 +22,7 @@
  * ver. 3.4.1  2024-10-26 kkossev  - fixed exception in sendDigitalEventIfNeeded when the attribute is not found (level); added faultAlarm attribute; added TRV602 profile (TS0601  _TZE200_rtrmfadk)
  *                                   added TRV602Z profile (TS0601 _TZE204_ltwbm23f); queryAllTuyaDP() when refreshing TRV602 and TRV602Z;
  * ver. 3.4.2  2024-11-12 kkossev  - added TS0601 _TZE204_xnbkhhdr (_TZE200_viy9ihs7 _TZE200_viy9ihs7) thermostat profile 'AVATTO_ZWT198_ZWT100-BH_THERMOSTAT'
- * ver. 3.5.0  2025-02-16 kkossev  - (dev. branch) restored sendCommand and setPar; added brightness attribute; added checkIfIsDuplicated; added Resend failed commands : setThermostatMode and heatingSetpoint retries; added forceManual prefrence
+ * ver. 3.5.0  2025-02-16 kkossev  - restored sendCommand and setPar; added brightness attribute; added checkIfIsDuplicated; added Resend failed commands : setThermostatMode and heatingSetpoint retries; added forceManual prefrence
  *
  *                                   TODO: BEOK Chinese time patch!
  *                                   TODO: add TS0601 _TZE204_lzriup1  https://community.hubitat.com/t/release-tuya-wall-mount-thermostat-water-electric-floor-heating-zigbee-driver/87050/318?u=kkossev 
