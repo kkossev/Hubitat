@@ -19,7 +19,7 @@
 
 
 String version() { '1.0.0' }
-String timeStamp() { '2025/02/22 2:24 PM '}
+String timeStamp() { '2025/02/25 7:43 PM '}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -29,6 +29,7 @@ metadata {
     definition (name: "Z-Wave Plus Vibration Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/drivers/development/z-wave-plus-vibration-sensor.groovy", singleThreaded: true ) {
         capability "Sensor"
         capability "AccelerationSensor"
+        capability "ShockSensor"                    // shock - ENUM ["clear", "detected"] attribute
 		capability "Battery"
 		capability "Configuration"
         capability "Refresh"
@@ -55,13 +56,14 @@ metadata {
 
 
     preferences {
-        input (name: "txtEnable", type: "bool",   title: "<b>Description text logging</b>", description: "<i>Display sensor states on HE log page. The recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "logEnable", type: "bool",   title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. The recommended value is <b>false</b></i>", defaultValue: true)
-        input name:"englishLang",        type:"bool",    title: "<b>English Language</b>",                  description: "Default: Yes",                              defaultValue:true
+        input (name: "txtEnable", type: "bool",   title: "<b>Description text logging</b>", description: "Display sensor states on HE log page. The recommended value is <b>true</b>", defaultValue: true)
+        input (name: "logEnable", type: "bool",   title: "<b>Debug logging</b>", description: "Debug information, useful for troubleshooting. The recommended value is <b>false</b>", defaultValue: true)
+        input (name: "shockSensor", type: "bool",   title: "<b>Shock Sensor</b>", description: "Simulate a Shock Sensor", defaultValue: true)
+        //input name:"englishLang",        type:"bool",    title: "<b>English Language</b>",                  description: "Default: Yes",                              defaultValue:true
 
-        input name: "parameter1",    type:"bool",    title: "<b>Invert LCD</b>",                        description: "Default: No",                               defaultValue:false
-        input name: "parameter2",    type:"number",  title: "<b>LCD Timeout (in secs)</b>",             description: "Default: 0-Always on, range 0..30",         defaultValue:0,      range: "0..30"
-        input name: "parameter4",    type:"enum",    title: "<b>Battery reporting</b>",                 description: "Default: once a day",                       defaultValue:1,      options: batteriestatus
+        //input name: "parameter1",    type:"bool",    title: "<b>Invert LCD</b>",                        description: "Default: No",                               defaultValue:false
+        //input name: "parameter2",    type:"number",  title: "<b>LCD Timeout (in secs)</b>",             description: "Default: 0-Always on, range 0..30",         defaultValue:0,      range: "0..30"
+        //input name: "parameter4",    type:"enum",    title: "<b>Battery reporting</b>",                 description: "Default: once a day",                       defaultValue:1,      options: batteriestatus
     }
 }
 
@@ -105,52 +107,54 @@ def parse(String description) {
 // 0x84:2,	// // COMMAND_CLASS_WAKE_UP_V2
 void zwaveEvent(hubitat.zwave.commands.wakeupv2.WakeUpNotification cmd) {
     logDebug "received NotificationReport: ${cmd}"
-    def resultat = [:]
-    resultat.name = "Notifity"
-    resultat.value = 'Wake Up'
-    resultat.displayed = true
-    logInfo "Notification : ${resultat.value}"
-    if (forceStateChange==true) {resultat.isStateChange = true}
-    sendEvent(resultat)
+    def event = [:]
+    event.name = "notify"
+    event.value = 'Wake Up'
+    event.displayed = true
+    logInfo "Notification : ${event.value}"
+    if (/*forceStateChange==*/true) {event.isStateChange = true}
+    sendEvent(event)
 }
 
 // 0x71:8,    // Notification report 7:vibration
 void zwaveEvent (hubitat.zwave.commands.notificationv8.NotificationReport cmd) {
     logDebug "received NotificationReport: ${cmd}"
-    def resultat = [:]
-    resultat.name = "Notifity"
-    resultat.displayed = true
+    def event = [:]
+    event.name = "notify"
+    event.displayed = true
     switch (cmd.notificationType) {
         case 0x07: //vibration
-        	resultat.value = 'vibration detected'
-        	break
+        	//event.value = 'vibration detected'
+            sendAccelarationEvent("active")
+            return
+        	//break
         case 0x08:
             if (cmd.event == 0x0A) {
-                resultat.value = "Less than 25% battery remaining"
+                event.value = "Less than 25% battery remaining"
             } else if (cmd.event == 0x0B) {
-                resultat.value = "Less than 15% battery remaining"
+                event.value = "Less than 15% battery remaining"
             } else {
-                resultat.value = "battery was changed"
+                event.value = "battery was changed"
             }
             break
         default : 
-        	resultat.value = "unknown type %{cmd.notificationType}"
+        	event.value = "unknown type %{cmd.notificationType}"
         	break
     }
-    logInfo "Notification : ${resultat.value}"
-    if (forceStateChange==true) {resultat.isStateChange = true}
-    sendEvent(resultat)
+    logInfo "Notification : ${event.value}"
+    if (/*forceStateChange==*/true) {event.isStateChange = true}
+    sendEvent(event)
 }
 
 void zwaveEvent (hubitat.zwave.commands.batteryv1.BatteryReport cmd) {
-    logInfo englishLang ? "Battery report ${cmd.batteryLevel} %" : "batteryreport ist ${cmd.batteryLevel} %"
-    sendEvent(name:"battery", value: cmd.batteryLevel, unit: "%", displayed: true, isStateChange: true)
+    logInfo "Battery report ${cmd.batteryLevel} %"
+    sendEvent(name:"battery", value: cmd.batteryLevel, unit: "%", isStateChange: true)
 }
 
 void zwaveEvent(hubitat.zwave.commands.deviceresetlocallyv1.DeviceResetLocallyNotification cmd) {
     logWarn "Device Reset Locally"
-    sendEvent(name:"deviceResetLocally", value: true, displayed = true, isStateChange: true)
-    sendEvent(name:"Notifity", value:"Deleted")
+    sendEvent(name:"deviceResetLocally", value: 'true', isStateChange: true)
+    sendEvent(name:"notify", value: "Deleted")
 }
 
 void zwaveEvent (hubitat.zwave.commands.switchmultilevelv1.SwitchMultilevelReport cmd) {
@@ -162,16 +166,6 @@ void zwaveEvent(hubitat.zwave.Command cmd) {
     logDebug "received Unhandled event ${cmd}"
     log.debug englishLang==true ? "${device.displayName}: Unhandled: $cmd" : "${device.displayName}: Unhandled: $cmd"
 }
-
-void off() {
-    logDebug "off"
-    def cmds = []
-    cmds << new hubitat.zwave.commands.thermostatmodev3.ThermostatModeSet(mode:0x00)
-    cmds << new hubitat.zwave.commands.thermostatmodev3.ThermostatModeGet()
-    sendToDevice(cmds)
-    sendEvent(name:"thermostatOperatingState", value: "idle", isStateChange: true)
-}
-
 
 void zwaveEvent (hubitat.zwave.commands.configurationv1.ConfigurationReport cmd) {
     logDebug "received ConfigurationReport: ${cmd}"
@@ -240,6 +234,34 @@ void sendConfigurationCommand (List<Integer> zuErneuerndeParametern) {
     }
 }
 
+void setActive() {
+    sendAccelarationEvent("active")    
+}
+
+void setInactive() {
+    sendAccelarationEvent("inactive")
+}
+
+void sendAccelarationEvent(String value, boolean forceStateChange = false) {
+    Map event = [:]
+    event.name = "acceleration"
+    event.value = value
+    logInfo "Acceleration : ${event.value}"
+    event.isStateChange = forceStateChange
+    sendEvent(event)
+    if (settings?.shockSensor) {
+        sendShockEvent(value, forceStateChange)
+    }
+}
+
+void sendShockEvent(String value, boolean forceStateChange = false) {
+    Map event = [:]
+    event.name = "shock"
+    event.value = value == "active" ? "detected" : "clear"
+    // logInfo "Shock : ${event.value}" // no need to log this event
+    event.isStateChange = forceStateChange
+    sendEvent(event)
+}
 
 void updated() {
     log.info "Device ${device.label?device.label:device.name} is updated"
@@ -267,7 +289,7 @@ void updated() {
 
 void installed() {
     log.info "Device ${device.label?device.label:device.name} is installed"
-    sendEvent(name:"Notifity", value:"Installed", displayed: true)
+    sendEvent(name:"notify", value:"Installed", displayed: true)
     sendEvent(name:"deviceResetLocally", value:false, displayed: true)
     def cmds = []
     cmds << new hubitat.zwave.commands.protectionv1.ProtectionGet()
