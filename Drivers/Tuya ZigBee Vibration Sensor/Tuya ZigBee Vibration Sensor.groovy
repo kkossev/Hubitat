@@ -28,6 +28,7 @@
  * ver 1.2.2 2024-06-03 kkossev - sensitivity preference is hidden for non-Tuya models; threeAxis preference is hidden for Tuya models;
  * ver 1.3.0 2025-01-28 kkossev - added Tuya Cluster parser; added TS0601 _TZE200_kzm5w4iz (contact&vibration); added TS0601 _TZE200_iba1ckek (Tilt Xyz Axis Sensor) (ZG-103Z); added queryAllTuyaDP(); missing [overwrite: true] bug fix;
  * ver 1.3.1 2025-02-19 kkossev - added TS0210 _TZ3000_lqpt3mvr _TZ3000_lzdjjfss _TYZB01_geigpsy4
+ * ver 1.4.0 2025-03-01 kkossev - added ShockSensor capability; added shockSensor option (default:enabled)
  * 
  *                                TODO: this driver does not process ZCL battery percentage reports, only voltage reports!
  *                                TODO: bugFix: healthCheck is not started on installed()
@@ -38,8 +39,8 @@
  *                                TODO: handle tamper: (zoneStatus & 1<<2); handle battery_low: (zoneStatus & 1<<3); TODO: check const sens = {'high': 0, 'medium': 2, 'low': 6}[value];
  */
 
-static String version() { "1.3.1" }
-static String timeStamp() { "2025/02/19 7:26 AM" }
+static String version() { "1.4.0" }
+static String timeStamp() { "2025/03/01 4:21 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -51,6 +52,7 @@ metadata {
 	definition (name: "Tuya ZigBee Vibration Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/Tuya%20ZigBee%20Vibration%20Sensor.groovy", singleThreaded: true ) {
         capability "Sensor"
         capability "AccelerationSensor"
+        capability "ShockSensor"              // shock - ENUM ["clear", "detected"] attribute
         //capability "TamperAlert"            // tamper - ENUM ["clear", "detected"]
 		capability "Battery"
 		capability "Configuration"
@@ -92,11 +94,12 @@ metadata {
         }
 		input "vibrationReset", "number", title: "After vibration is detected, wait $vibrationReset second(s) until <b>resetting to inactive state</b>. Default = $VIBRATION_RESET seconds.", description: "", range: "1..7200", defaultValue: VIBRATION_RESET
         if (device && (!isTuya() || isTuyaTiltXyzAxisSensor )) {
-            input name: 'threeAxis', type: 'enum', title: '<b>Three Axis</b>', description: '<i>Enable or disable the Three Axis reporting<br>(ThirdReality and Samsung)</i>', defaultValue: ThreeAxisOpts.defaultValue, options: ThreeAxisOpts.options
+            input name: 'threeAxis', type: 'enum', title: '<b>Three Axis</b>', description: 'Enable or disable the Three Axis reporting<br>(ThirdReality and Samsung)', defaultValue: ThreeAxisOpts.defaultValue, options: ThreeAxisOpts.options
         }
         if (device) {
-            input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
+            input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: 'These advanced options should be already automatically set in an optimal way for your device.', defaultValue: false
             if (advancedOptions == true) {
+                input (name: "shockSensor", type: "bool",   title: "<b>Shock Sensor</b>", description: "Simulate a Shock Sensor", defaultValue: true)
                 input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
                 input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
                 input "batteryReportingHours", "number", title: "Report battery every $batteryReportingHours hours. Default = 12h (Minimum 2 h)", description: "", range: "2..12", defaultValue: 12
@@ -516,40 +519,20 @@ Map parseIasMessage(ZoneStatus zs) {
     }
     else {
         logWarn "Unsupported IAS Zone status: ${zsStr}"
-        /*
-        ac = 0,
-        acSet = false,
-        alarm1 = 0,
-        alarm1Set = false,
-        alarm2 = 0,
-        alarm2Set = false,
-        battery = 0,
-        batteryDefect = 0,
-        batteryDefectSet = false,
-        batterySet = false,
-        class = class hubitat.zigbee.clusters.iaszone.ZoneStatus,
-        restoreReports = 1,
-        restoreReportsSet = true,
-        supervisionReports = 0,
-        supervisionReportsSet = false,
-        tamper = 0,
-        tamperSet = false,
-        test = 0,
-        testSet = false,
-        trouble = 0,
-        troubleSet = false,
-        */
         return [:]
     }
 }
 
-// called when processing Tuya EF00 cluster commands
+// called when processing Tuya TS0601 model EF00 cluster commands
 void sendVibrationEvent(boolean vibrationActive) {
     log.trace "Vibration : $vibrationActive"
     Map result = handleVibration(vibrationActive)
     if (result != [:]) {
         sendEvent(result)
         logInfo (result.descriptionText)
+        if (settings.shockSensor == true) {
+            sendEvent(getShockResult(vibrationActive))
+        }
     }
     else {
         logDebug "Vibration event not sent"
@@ -564,11 +547,13 @@ Map handleVibration(boolean vibrationActive) {
         if (device.currentState('acceleration')?.value != "active") {
             state.vibrationStarted = now()
         }
+        sendEvent(getShockResult(vibrationActive))
     	return getVibrationResult(vibrationActive)
     }
     else { // vibration inactive event
         unschedule('resetToVibrationInactive')
         if (device.currentState('acceleration')?.value != "inactive") {
+            sendEvent(getShockResult(vibrationActive))
         	return getVibrationResult(vibrationActive)
         }
         else {
@@ -591,6 +576,19 @@ Map getVibrationResult(vibrationActive) {
 	]
 }
 
+Map getShockResult(shockActive) {
+    String descriptionText = "Shock detected"
+    if (!shockActive) {
+        descriptionText = "Shock reset to inactive"
+    }
+    return [
+            name            : 'shock',
+            value           : shockActive ? 'detected' : 'clear',
+            type            : 'physical',
+            descriptionText : descriptionText
+    ]
+}
+
 void setAccelarationInactive() {
     resetToVibrationInactive(true)
 }
@@ -607,6 +605,9 @@ void resetToVibrationInactive(boolean isDigital = false) {
 			descriptionText : descText
 		)
 		logInfo(descText)
+        if (settings.shockSensor == true) {
+            sendEvent(getShockResult(false))
+        }
 	}
 }
 
@@ -771,7 +772,19 @@ void updated() {
     }
     else {
         unScheduleDeviceHealthCheck()        // unschedule the periodic job, depending on the healthMethod
-        log.info 'Health Check is disabled!'
+        logInfo 'Health Check is disabled!'
+    }
+    if (settings.shockSensor == true) {
+        logInfo "Shock Sensor is enabled"
+        if (device.currentState('shock') == null) {
+            sendEvent(getShockResult(false))
+        }
+    }
+    else {
+        logInfo "Shock Sensor is disabled"
+        if (device.currentState('shock') != null) {
+            device.deleteCurrentState('shock')
+        }
     }
 
     String currentTreeAxis = device.currentState('threeAxis')?.value
@@ -1050,6 +1063,7 @@ void initializeVars( boolean fullInit = false ) {
     if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
     if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) }
     if (fullInit || settings?.threeAxis == null) { device.updateSetting('threeAxis', [value: ThreeAxisOpts.defaultValue.toString(), type: 'enum']) }
+    if (fullInit || settings?.shockSensor == null) { device.updateSetting('shockSensor', true) }
     
 
     final String ep = device.getEndpointId()
