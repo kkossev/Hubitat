@@ -56,7 +56,9 @@
  * ver. 1.7.0  2024-11-23 kkossev - temperatureOffset and humidityOffset moved outside of the configParams; added queryAllTuyaDPs() on Refresh
  * ver. 1.8.0  2024-12-30 kkossev - HE platform 2.4.0.x compatibility patch
  * ver. 1.8.1  2025-02-22 kkossev - added TS000F _TZ3218_ya5d6wth in DS18B20 group (temperature only); added TS0201 _TZ3000_3xduwekl; added Temperature Unit Preference for 'TS0201_TH' group
+ * ver. 1.8.2  2025-03-03 kkossev - added TS0601 _TZE204_s139roas - Ink display T/H sensor!
  *
+ *                                  TODO: add all configurable parameters for _TZE204_s139roas
  *                                  TODO: queryOnDeviceAnnounce for TS0601_Tuya_2 group
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
@@ -65,8 +67,8 @@
  *                                  TODO: add Batteryreporting time configuration (like in the TS004F driver)
 */
 
-@Field static final String VERSION = '1.8.1'
-@Field static final String TIME_STAMP = '2025/02/22 9:41 PM'
+@Field static final String VERSION = '1.8.2'
+@Field static final String TIME_STAMP = '2025/03/03 9:34 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -129,6 +131,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_zl1kmjqx', deviceJoinName: 'Tuya Temperature Humidity sensor MIR-TE100-TY'            // https://www.aliexpress.com/item/1005002836127648.html
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_qyflbnbj', deviceJoinName: 'Tuya Temperature Humidity sensor MIR-TE100-TY'            // https://www.aliexpress.com/item/1005002836127648.html
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_qyflbnbj', deviceJoinName: 'Tuya Temperature Humidity sensor MIR-TE100-TY'            // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/522?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_zppcgbdj', deviceJoinName: 'Tuya Temperature Humidity sensor'
 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_myd45weu', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          //
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_myd45weu', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          // https://www.aliexpress.com/item/1005004979025740.html
@@ -186,6 +189,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_snloy4rw', deviceJoinName: 'Tuya Temperature Humidity Illuminance LCD Display with a Clock'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_eanjj2pa', deviceJoinName: 'Tuya Temperature Humidity Illuminance LCD Display with a Clock'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ydrdfkim', deviceJoinName: 'Tuya Temperature Humidity Illuminance LCD Display with a Clock'
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_s139roas", deviceJoinName: 'AVATTO ZWSH16 TH Sensor Ink Display'
     }
     preferences {
         input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: 'Display measured values in HE log page. <br>The recommended setting is <b>enabled</b>.', defaultValue: true)
@@ -193,7 +197,7 @@ metadata {
         input(name: 'temperatureOffset', type: 'decimal', title: '<b>Temperature offset</b>', description: 'Select how many degrees to adjust the temperature.', defaultValue: 0.0, range: '-100.0..100.0')
         input(name: 'humidityOffset', type: 'decimal', title: '<b>Humidity offset</b>', description: 'Enter a percentage to adjust the humidity.', defaultValue: 0.0, range: '-100.0..100.0')
         input(name: 'modelGroupPreference', type: 'enum', title: '<b>Model Group</b>', description:'The recommended setting is <b>Auto detect</b>.', defaultValue: 0, options:
-               ['Auto detect':'Auto detect', 'TS0601_Tuya':'TS0601_Tuya', 'TS0601_Tuya_2':'TS0601_Tuya_2', 'TS0601_Haozee':'TS0601_Haozee', 'TS0601_AUBESS':'TS0601_AUBESS', 'TS0201':'TS0201', 'TS0222':'TS0222', 'TS0201_LCZ030': 'TS0201_LCZ030',
+               ['Auto detect':'Auto detect', 'TS0601_Tuya':'TS0601_Tuya', 'TS0601_Tuya_2':'TS0601_Tuya_2', 'TS0601_Haozee':'TS0601_Haozee', 'TS0601_AUBESS':'TS0601_AUBESS', 'TS0601_AVATTO_Ink':'TS0601_AVATTO_Ink', 'TS0201':'TS0201', 'TS0222':'TS0222', 'TS0201_LCZ030': 'TS0201_LCZ030',
                 'TS0222_2':'TS0222_2', 'TS0222_Soil':'TS0222_Soil', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', , 'TS0601_Soil_II':'TS0601_Soil_II', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
         input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', description: 'May not be supported by all devices!', defaultValue: false)
         if (advancedOptions == true) {
@@ -263,6 +267,7 @@ metadata {
     '_TZE200_znbl8dj5'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005004116638127.html - TODO !
     '_TZE200_zl1kmjqx'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005002836127648.html
     '_TZE200_qyflbnbj'  : 'TS0601_Tuya',         // not tested
+    '_TZE200_zppcgbdj'  : 'TS0601_Tuya',         // not tested
     '_TZE204_qyflbnbj'  : 'TS0601_Tuya',         // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/522?u=kkossev
     '_TZE200_nnrfa68v'  : 'TS0601_Tuya',         // NOUS E6 https://community.hubitat.com/t/nous-humidity-and-temp-sensor/137764/7?u=kkossev
     '_TZE200_qrztc3ev'  : 'TS0601_Tuya',         // NOUS
@@ -284,6 +289,9 @@ metadata {
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       //
 
     '_TZE200_pisltm67'  : 'TS0601_AUBESS',       // illuminance only sensor
+
+    '_TZE204_s139roas'  : 'TS0601_AVATTO_Ink',   // AVATTO Ink Display   https://github.com/Koenkk/zigbee-herdsman-converters/blob/a32df6625f31f9e2d9cc6305971b6f5b022cd166/src/devices/avatto.ts#L10-L31
+
     '_TZ2000_a476raq2'  : 'TS0201',              // KK
     '_TZ3000_lfa05ajd'  : 'TS0201',              // Zemismart ZXZTH
     '_TZ2000_xogb73am'  : 'TS0201',
@@ -673,7 +681,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             else if (getModelGroup() == 'DS18B20') {
                 logInfo "DS18B20 Switch is ${fncmd}"
             }
-            else if (getModelGroup() != 'TS0601_AUBESS') { // temperature in C, including 'TS0601_Tuya_2'
+            else if (getModelGroup() != 'TS0601_AUBESS') { // temperature in C, including 'TS0601_Tuya_2', 'TS0601_AVATTO_Ink' - all Tuya EF00 models !
                 if (fncmd > 32767) {
                     //Here we deal with negative values
                     fncmd = fncmd - 65536
@@ -685,7 +693,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 if (settings?.logEnable) { log.debug "${device.displayName} Tuya illuminance status is: ${lomihi} (dp_id=${dp_id} dp=${dp} fncmd=${fncmd})" }
             }
             break
-        case 0x02 : // humidity % for most of the models; 'TS0601_Contact'illuminance; 'TS0601_Contact'0 battery %
+        case 0x02 : // humidity % for most of the Tuya EF00 models; 'TS0601_Contact'illuminance; 'TS0601_Contact'0 battery %
             if (getModelGroup() == 'TS0601_AUBESS') {
                 illuminanceEventLux( safeToInt( fncmd ) )
             }
@@ -697,7 +705,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                     humidityEvent( (fncmd / 10.0) as int )
                 }
                 else {
-                    humidityEvent( fncmd )        // including 'TS0601_Tuya_2'
+                    humidityEvent( fncmd )        // including 'TS0601_Tuya_2', 'TS0601_AVATTO_Ink' - all Tuya EF00 models !
                 }
             }
             break
@@ -719,7 +727,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 illuminanceEvent(fncmd)
             }
             break
-        case 0x04 : // battery
+        case 0x04 : // battery, including 'TS0601_AVATTO_Ink'
             getBatteryPercentageResult(fncmd * 2)
             if (settings?.txtEnable) { log.info "${device.displayName} battery is $fncmd %" }
             break
@@ -738,8 +746,14 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 if (settings?.logEnable) { log.warn "${device.displayName} Soil Monitor reported value ${fncmd}" }
             }
             break
-        case 0x09 : // temp. scale  1=Fahrenheit 0=Celsius (TS0601 Tuya and Haoze) TS0601_Tuya does not change the symbol on the LCD !    // including 'TS0601_Tuya_2'
-            if (settings?.logEnable) { log.info "${device.displayName} Temperature scale reported by device is: ${fncmd == 1 ? 'Fahrenheit' : 'Celsius' }" }       // {'celsius' : new Enum(0), 'fahrenheit' : new Enum(1)}
+        case 0x06 :
+            logInfo "TS0601_AVATTO_Ink sampling temperature (seconds) is ${fncmd}"
+            break
+        case 0x07 :
+            logInfo "TS0601_AVATTO_Ink sampling humidity (seconds) is ${fncmd}"
+            break
+        case 0x09 : // temp. scale  1=Fahrenheit 0=Celsius (TS0601 Tuya and Haoze) TS0601_Tuya does not change the symbol on the LCD !    // including 'TS0601_Tuya_2' and TS0601_AVATTO_Ink (_TZE204_s139roas)
+            logInfo "${device.displayName} Temperature scale reported by device is: ${fncmd == 1 ? 'Fahrenheit' : 'Celsius' }"       // {'celsius' : new Enum(0), 'fahrenheit' : new Enum(1)}
             break
         case 0x0A : // (10) Max. Temp Alarm, Value / 10  (both TS0601_Tuya and TS0601_Haozee) // including 'TS0601_Tuya_2'
             if (((safeToDouble(settings?.maxTempAlarmPar) * 10.0 as int) == (fncmd as int)) || (getModelGroup() in ['TS0601_Haozee']))  {
@@ -749,7 +763,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 if (settings?.logEnable) { log.warn "${device.displayName} warning: temperature alarm upper limit reported by the device (${fncmd / 10.0 as double} C) differs from the preference setting (${settings?.maxTempAlarmPar} C)" }
             }
             break
-        case 0x0B : // (11) Min. Temp Alarm, Value / 10 (both TS0601_Tuya and TS0601_Haozee) // including 'TS0601_Tuya_2'
+        case 0x0B : // (11) Min. Temp Alarm, Value / 10 (both TS0601_Tuya and TS0601_Haozee) // including 'TS0601_Tuya_2' and TS0601_AVATTO_Ink (_TZE204_s139roas)
             if (((safeToDouble(settings?.minTempAlarmPar) * 10.0 as int) == (fncmd as int)) || (getModelGroup() in ['TS0601_Haozee'])) {
                 if (settings?.logEnable) { log.info "${device.displayName} reported temperature alarm lower limit ${fncmd / 10.0 as double} C" }
             }
@@ -757,15 +771,17 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 if (settings?.logEnable) { log.warn "${device.displayName} warning: temperature alarm lower limit reported by the device (${fncmd / 10.0 as double} C) differs from the preference setting (${settings?.minTempAlarmPar} C)" }
             }
             break
-        case 0x0C : // (12) Max?. Humidity Alarm    (Haozee only?)
-            if (settings?.logEnable) { log.info "${device.displayName} humidity alarm upper limit is ${fncmd} " }
+        case 0x0C : // (12) Max?. Humidity Alarm    (Haozee only?)  and TS0601_AVATTO_Ink (_TZE204_s139roas)
+            def divider = getModelGroup() in ['TS0601_AVATTO_Ink'] ? 10.0 : 1.0
+            if (settings?.logEnable) { log.info "${device.displayName} humidity alarm upper limit is ${(fncmd / divider) as int} " }
             break
-        case 0x0D : // (13) Min?. Humidity Alarm    (Haozee only?)
-            if (settings?.logEnable) { log.info "${device.displayName} humidity alarm lower limit is ${fncmd} " }
+        case 0x0D : // (13) Min?. Humidity Alarm    (Haozee only?)  and TS0601_AVATTO_Ink (_TZE204_s139roas)
+            def divider = getModelGroup() in ['TS0601_AVATTO_Ink'] ? 10.0 : 1.0
+            if (settings?.logEnable) { log.info "${device.displayName} humidity alarm lower limit is ${(fncmd / divider) as int} " }
             //device.updateSetting("minHumidityAlarmPar", [value:fncmd, type:"number"])
             break
         case 0x0E : // (14) Temperature Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared
-            if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II']) {
+            if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II', 'TS0601_AVATTO_Ink']) {
                 if (settings?.txtEnable) { log.info "${device.displayName} battery_state (0x0E) is ${fncmd}" }
             }
             else if (getModelGroup() in ['DS18B20']) {
@@ -805,20 +821,30 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
         case 0x10 : // (16) Current Luminance _TZ3000_qaaysllp
             illuminanceEvent(fncmd)
             break
-        case 0x11 : // (17) temperature max reporting interval, default 120 min (Haozee only) // maxReportingTimeTemp
-            if (settings?.maxReportingTimeTemp == ((fncmd * 60 / 2.5) as int)) {
-                if (settings?.logEnable) { log.info "${device.displayName} reported temperature max reporting interval ${((fncmd * 60 / 2.5) as int)} seconds" }
+        case 0x11 : // (17) t
+            if (getModelGroup() in ['TS0601_AVATTO_Ink']) {
+                logInfo "TS0601_AVATTO_Ink temperature periodic reporting interval is ${fncmd} minutes"
             }
-            else {
-                if (settings?.logEnable) { log.warn "${device.displayName} warning: temperature max reporting interval reported by the device (${((fncmd * 60 / 2.5) as int)}s) differs from the preference setting (${settings?.maxReportingTimeTemp}s)" }
+            else {  // emperature max reporting interval, default 120 min (Haozee only) // maxReportingTimeTemp
+                if (settings?.maxReportingTimeTemp == ((fncmd * 60 / 2.5) as int)) {
+                    if (settings?.logEnable) { log.info "${device.displayName} reported temperature max reporting interval ${((fncmd * 60 / 2.5) as int)} seconds" }
+                }
+                else {
+                    if (settings?.logEnable) { log.warn "${device.displayName} warning: temperature max reporting interval reported by the device (${((fncmd * 60 / 2.5) as int)}s) differs from the preference setting (${settings?.maxReportingTimeTemp}s)" }
+                }
             }
             break
-        case 0x12 : // (18) humidity max reporting interval, default 120 min (Haozee only)
-            if (settings?.maxReportingTimeHumidity == ((fncmd * 60 / 2.5) as int)) {
-                if (settings?.logEnable) { log.info "${device.displayName} reported humidity max reporting interval ${((fncmd * 60 / 2.5) as int)}  seconds" }
+        case 0x12 : // (18)
+            if (getModelGroup() in ['TS0601_AVATTO_Ink']) {
+                logInfo "TS0601_AVATTO_Ink humidity periodic reporting interval is ${fncmd} minutes"
             }
-            else {
-                if (settings?.logEnable) { log.warn "${device.displayName} warning: humidity max reporting interval reported by the device (${((fncmd * 60 / 2.5) as int)}s) differs from the preference setting (${settings?.maxReportingTimeHumidity}s)" }
+            else {  // humidity max reporting interval, default 120 min (Haozee only)
+                if (settings?.maxReportingTimeHumidity == ((fncmd * 60 / 2.5) as int)) {
+                    if (settings?.logEnable) { log.info "${device.displayName} reported humidity max reporting interval ${((fncmd * 60 / 2.5) as int)}  seconds" }
+                }
+                else {
+                    if (settings?.logEnable) { log.warn "${device.displayName} warning: humidity max reporting interval reported by the device (${((fncmd * 60 / 2.5) as int)}s) differs from the preference setting (${settings?.maxReportingTimeHumidity}s)" }
+                }
             }
             break
         case 0x13 : // (19) temperature sensitivity(value/2/10) default 0.3C ( divide / 2 for Haozee only) // including 'TS0601_Tuya_2'
@@ -835,7 +861,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 }
             }
             break
-        case 0x14 : // (20) humidity sensitivity default 3%  (Haozee only)
+        case 0x14 : // (20) humidity sensitivity default 3%  (Haozee only) also TS0601_AVATTO_Ink
             if (settings?.humiditySensitivity == fncmd) {
                 if (settings?.logEnable) { log.info "${device.displayName} reported humidity sensitivity ${fncmd} %" }
             }
@@ -1600,7 +1626,7 @@ def deviceHealthCheck() {
 }
 
 def sendHealthStatusEvent(value) {
-    sendEvent(name: 'healthStatus', value: value, descriptionText: "${device.displayName} healthStatus set to $value")
+    sendEvent(name: 'healthStatus', value: value, descriptionText: "${device.displayName} healthStatus set to $value", type: 'digital')
 }
 
 String mapToJsonString( Map map) {

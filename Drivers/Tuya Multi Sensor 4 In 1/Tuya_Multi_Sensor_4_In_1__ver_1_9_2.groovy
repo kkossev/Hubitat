@@ -548,12 +548,8 @@ boolean isChattyRadarReport(final Map descMap) {
             ],
             deviceJoinName: 'Sonoff/eWeLink Motion sensor',
             configuration : [
-/*                
                 '0x0001':[['bind':true],  ['reporting':'0x21, 0x20, 3600, 7200, 0x02']],    // TODO - use the reproting values
                 '0x0500':[['bind':false], ['sensitivity':false], ['keepTime':false]],       // TODO - use in update function
-*/                
-                '0x0001':['bind':true,  'reporting':'0x21, 0x20, 3600, 7200, 0x02'],        // TODO - use the reproting values
-                '0x0500':['bind':false, 'sensitivity':false, 'keepTime':false],             // TODO - use in update function
             ]  // battery percentage, min 3600, max 7200, UINT8, delta 2
     ],
 
