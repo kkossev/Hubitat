@@ -41,7 +41,7 @@ library(
   * ver. 3.3.2  2024-07-12 kkossev  - added PollControl (0x0020) cluster; ping for SONOFF
   * ver. 3.3.3  2024-09-15 kkossev  - added queryAllTuyaDP(); 2 minutes healthCheck option;
   * ver. 3.3.4  2025-01-29 kkossev  - 'LOAD ALL DEFAULTS' is the default Configure command.
-  * ver. 3.3.5  2025-02-16 kkossev  - (dev.branch) getTuyaAttributeValue made public
+  * ver. 3.3.5  2025-03-02 kkossev  - (dev.branch) getTuyaAttributeValue made public
   *
   *                                   TODO: check deviceCommandTimeout()
   *                                   TODO: offlineCtr is not increasing! (ZBMicro);
@@ -57,7 +57,7 @@ library(
 */
 
 String commonLibVersion() { '3.3.5' }
-String commonLibStamp() { '2025/02/16 9:46 AM' }
+String commonLibStamp() { '2025/03/12 10:33 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -918,6 +918,7 @@ public List<String> initializeDevice() {
         List<String> customCmds = customInitializeDevice()
         if (customCmds != null && !customCmds.isEmpty()) { cmds +=  customCmds }
     }
+    else { logDebug 'no customInitializeDevice method defined' }
     logDebug "initializeDevice(): cmds=${cmds}"
     return cmds
 }
@@ -930,6 +931,7 @@ public List<String> configureDevice() {
         List<String> customCmds = customConfigureDevice()
         if (customCmds != null && !customCmds.isEmpty()) { cmds +=  customCmds }
     }
+    else { logDebug 'no customConfigureDevice method defined' }
     // sendZigbeeCommands(cmds) changed 03/04/2024
     logDebug "configureDevice(): cmds=${cmds}"
     return cmds

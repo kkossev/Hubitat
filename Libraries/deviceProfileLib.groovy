@@ -294,7 +294,7 @@ public void updateAllPreferences() {
             }
             else { logDebug "updateAllPreferences: preference ${name} is not set (preferenceValue was null)" ;  return }
         }
-        else { logDebug "warning: couldn't find map for preference ${name}" ; return }
+        else { logDebug "warning: couldn't find map for preference ${name}" ; return }  // TODO - supress the warning if the preference was boolean true/false
     }
     return
 }

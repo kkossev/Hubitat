@@ -12,14 +12,14 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  * 
- * ver 1.0.0 2025-02-21 kkossev - inital version
+ * ver 1.0.0 2025-03-01 kkossev - inital version
  * 
  *                                TODO:
  */
 
 
 String version() { '1.0.0' }
-String timeStamp() { '2025/02/25 7:43 PM '}
+String timeStamp() { '2025/03/01 9:13 PM '}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils

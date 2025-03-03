@@ -25,8 +25,11 @@
  * ver. 3.3.1  2024-10-26 kkossev  - added TS0601 _TZE200_f1pvdgoh into a new device profile group 'TS0601_2IN1_MYQ_ZMS03'
  * ver. 3.3.2  2024-11-30 kkossev  - added Azoula Zigbee 4 in 1 Multi Sensor model:'HK-SENSOR-4IN1-A', manufacturer:'Sunricher' into SIHAS group
  * ver. 3.3.3  2025-01-29 kkossev  - TS0601 _TZE200_ppuj1vem moved to 'TS0601_2IN1_MYQ_ZMS03' deviceProfile @ltdonjohnson
- * ver. 3.3.4  2025-02-22 kkossev  - (dev. branch) adding Espressif ZigbeeOccupancyPIRSensor @ilkeraktuna
+ * ver. 3.4.0  2025-03-03 kkossev  - (dev. branch) added customConfigureDevice(); SNZB-03 configuration bug fixes;  added SNZB-03P device profile; 
  *                                   
+ *                                   TODO: check why only voltage is reported for SONOFF_MOTION_IAS;
+ *                                   TODO: check the bindings commands in configure()
+ *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
  *                                   TODO: add TS0601 _TZE200_agumlajc https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1077?u=kkossev
  *                                   TODO: Sensor 3in1 _warning: couldn't find map for preference motionReset
  *                                   TODO: Sensor 3in1 _TZE200_7hfcudw5 - fix battery percentage (shows 4)
@@ -39,13 +42,9 @@
  *                                   TODO: battery level for TS0202 and TS0601 2in1 ; battery1 for Fantem 4-in-1 (100% or 0% ) Battery level for _TZE200_3towulqd (2in1)
  *                                   TODO: https://community.hubitat.com/t/moes-tuya-motion-sensor-distance-issue-ts0202-have-to-be-ridiculously-close-to-detect-movement/109917/8?u=kkossev 
  *                                   TODO: publish examples of SetPar usage : https://community.hubitat.com/t/4-in-1-parameter-for-adjusting-reporting-time/115793/12?u=kkossev
- *                                   TODO: check why only voltage is reported for SONOFF_MOTION_IAS;
- *                                   TODO: hide motionKeepTime and motionSensitivity for SONOFF_MOTION_IAS;
- *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
  *                                   TODO: TS0202_MOTION_IAS missing sensitivity and retrigger time settings bug fix;
  *                                   TOOD: Tuya 2in1 illuminance_interval (dp=102) !
  *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time ! ( 2-in-1 time is wrong)
- *                                   TODO: check the bindings commands in configure()
  *                                   TODO: ignore invalid humidity reprots (>100 %)
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
  *                                   TODO: delete all previous preferencies when changing the device profile ?
@@ -53,8 +52,8 @@
  *                                   TODO: check temperatureOffset and humidityOffset
 */
 
-static String version() { "3.3.4" }
-static String timeStamp() {"2025/02/22 7:15 PM"}
+static String version() { "3.4.0" }
+static String timeStamp() {"2025/03/03 6:01 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -95,7 +94,7 @@ metadata {
         attribute 'all', 'string'                   // all attributes in one string
         attribute 'distance', 'number'              // Tuya Radar, obsolete
         attribute 'unacknowledgedTime', 'number'    // AIR models
-        attribute 'keepTime', 'enum', ['10 seconds', '30 seconds', '60 seconds', '120 seconds']
+        attribute 'keepTime', 'enum', ['5 seconds', '10 seconds', '15 seconds','30 seconds', '45 seconds','60 seconds', '120 seconds'] 
         attribute 'motionDetectionDistance', 'decimal'  // changed 05/11/2024 - was 'number'
 
         attribute 'sensitivity', 'number'
@@ -427,21 +426,49 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
 
     'SONOFF_MOTION_IAS'   : [
             description   : 'Sonoff/eWeLink Motion sensor',
-            models        : ['eWeLink'],
+            models        : ['SNZB-03', 'MS01', 'msO1', 'SQ510A', 'RHK09', '66666'],
             device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],   // very sleepy !!
             capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : ['motionReset':true, 'keepTime':false, 'sensitivity':false],   // just enable or disable showing the motionReset preference, no link to  tuyaDPs or attributes map!
+            preferences   : ['motionReset':false/*, 'keepTime':false, 'sensitivity':false*/],   // just enable or disable showing the motionReset preference, no link to  tuyaDPs or attributes map!
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'ms01', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],        // for testL 60 seconds re-triggering period!
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'msO1', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],        // second variant
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'MS01', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],        // third variant
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'SNZB-03', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],        // SNZB-O3 OUVOPO Wireless Motion Sensor (2023)
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0020', outClusters:'0003', model:'SNZB-03', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],   // 
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'RHK09', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],          //
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0020', outClusters:'0003', model:'RHK09', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],     // 
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'SQ510A', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],          //
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0020', outClusters:'0003', model:'SQ510A', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],     // 
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'ms01', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],           // for testL 60 seconds re-triggering period!
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'msO1', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],           // second variant
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'MS01', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],           // third variant
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'66666', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],          // fourth variant
+            ],
+            refresh       : [ 'batteryRefresh'],
+            configuration : [
+                '0x0001':['bind':true,  'voltageReporting':[3600, 7200, 0x02], 'batteryReporting':[3600, 7200, 0x02] ],
+                '0x0500':['bind':false, 'sensitivity':false, 'keepTime':false],       // TODO - use in update function
+            ],  // battery percentage, min 3600, max 7200, UINT8, delta 2
+            deviceJoinName: 'Sonoff/eWeLink Motion sensor'
+    ],
+
+    'SONOFF_SNZB_03P'   : [     // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/sonoff.ts#L1131-L1157
+            description   : 'Sonoff SNZB-03P Motion sensor',        // https://community.hubitat.com/t/new-sonoff-snzb-03p-motion-sensors-not-detecting/141138/17?u=kkossev
+            models        : ['SNZB-03P'],                           // https://community.hubitat.com/t/sonoff-ewelink-snzb-03p-motion-sensor-doesnt-reporting-battery-level/150726/3?u=kkossev 
+            device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],
+            capabilities  : ['MotionSensor': true, 'Battery': true],
+            preferences   : ['motionReset':true, 'sensitivity':false, 'keepTime':'0x0406:0x0020', 'refreshOnSave':true],
+            fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0406,0500,FC57', outClusters:'0003,0019', model:'SNZB-03P', manufacturer:'eWeLink', deviceJoinName: 'SONOFF SNZB-03P Motion Sensor']         // https://community.hubitat.com/t/new-sonoff-snzb-03p-motion-sensors-not-detecting/141138?u=kkossev
             ],
-            deviceJoinName: 'Sonoff/eWeLink Motion sensor',
+            attributes:       [
+                [at:'0x0406:0x0020', name:'keepTime',       type:'enum',    dt: '0x21', rw: 'rw', min:5,  max:60,  defVal:'30', scale:1,  unit:'seconds', map:[5:'5 seconds', 10:'10 seconds', 15:'15 seconds', 30:'30 seconds', 45:'45 seconds', 60:'60 seconds'], title:'<b>Fading Time</b>',   description:'<i>Fading time in seconds</i>'],
+                [at:'0xFC11:0x2001', name:'illumState',     type:'enum',    dt: '0x20', mfgCode: '0x1286', rw: 'ro', min:0,  max:2,   defVal:2, scale:1,  unit:'',   map:[0:'dark', 1:'light', 2:'unknown'], title:'<b>Illuminance State</b>',   description:'<i>Illuminance State</i>']      // manufacturerCode: 0x1286
+            ],
+            refresh       : [ 'batteryRefresh', 'keepTime', 'illumState'],
             configuration : [
-                '0x0001':[['bind':true],  ['reporting':'0x21, 0x20, 3600, 7200, 0x02']],    // TODO - use the reproting values
-                '0x0500':[['bind':false], ['sensitivity':false], ['keepTime':false]],       // TODO - use in update function
-            ]  // battery percentage, min 3600, max 7200, UINT8, delta 2
+                '0x0001':['bind':true,  'voltageReporting':[3600, 7200, 0x02], 'batteryReporting':[3600, 7200, 0x02] ],
+                '0x0500':['bind':false, 'sensitivity':false, 'keepTime':false],       // TODO - use in update function
+            ],
+            deviceJoinName: 'SONOFF SNZB-03P Motion Sensor'
     ],
 
     // isSiHAS() and Sunricher
@@ -918,13 +945,86 @@ void customUpdated() {
     // Itterates through all settings
     cmds += updateAllPreferences()  // defined in deviceProfileLib
     sendZigbeeCommands(cmds)
-    if (getDeviceProfile() == 'SONOFF_SNZB-06P_RADAR') {
+
+    if (DEVICE?.preferences?.refreshOnSave == true) {
         setRefreshRequest() 
         runIn(2, customRefresh, [overwrite: true])
     }
     if (settings.allStatusTextEnable == true) {
         runIn(3, 'formatAttrib', [overwrite: true])
     }
+}
+
+boolean isIAS()  { DEVICE?.device?.isIAS == true  }
+
+List<String> customConfigureDevice() {
+    logDebug "customConfigureDevice()"
+    List<String> cmds = []
+    if (DEVICE?.device?.isDepricated == true) {
+        logWarn 'The use of this driver with this device is depricated. Please update to the new driver!'
+        return cmds
+    }
+    if (DEVICE?.device?.isIAS == true ) {
+        cmds += zigbee.enrollResponse(300) + zigbee.readAttribute(0x0500, 0x0000, [:], delay = 224)
+        logDebug 'Enrolling IAS device ...'
+    }
+
+    if (DEVICE?.configuration == null || DEVICE?.configuration.isEmpty()) {
+        logDebug 'No configuration found'
+        return cmds
+    }
+    int intMinTime = safeToInt(3600)    // TODO: make it configurable
+    int intMaxTime = safeToInt(7200)    // TODO: make it configurable
+    int delta = 0x02
+    //            '0x0001':['bind':true,  'voltageReporting':[3600, 7200, 0x02], 'batteryReporting':[3600, 7200, 0x02] ],    // TODO - use the reproting values
+    if ('0x0001' in DEVICE?.configuration) {    // Power Configuration cluster
+        if (DEVICE?.configuration['0x0001']['bind'] == true) {
+            cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", 'delay 229', ]
+            logDebug "binding the device to the Power Configuration cluster"
+        }
+        else {
+            logDebug "no bind in 0x0001"
+        }
+        if ('voltageReporting' in DEVICE?.configuration['0x0001']) {
+            intMinTime = safeToInt(DEVICE?.configuration['0x0001']['voltageReporting' ][0])
+            intMaxTime = safeToInt(DEVICE?.configuration['0x0001']['voltageReporting' ][1])
+            delta =      safeToInt(DEVICE?.configuration['0x0001']['voltageReporting' ][2])
+            logDebug "configuring the battery voltageReporting... (min=${intMinTime}, max=${intMaxTime}, delta=${delta})"
+            cmds += zigbee.configureReporting(0x0001, 0x20, DataType.UINT8, intMinTime, intMaxTime, delta, [:], delay = 226)  // TEST - seems to be overwritten by the next line configuration?
+            cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 228)    // try also battery voltage
+        }
+        if ('batteryReporting' in DEVICE?.configuration['0x0001']) {
+            intMinTime = safeToInt(DEVICE?.configuration['0x0001']['batteryReporting'][0])
+            intMaxTime = safeToInt(DEVICE?.configuration['0x0001']['batteryReporting'][1])
+            delta =      safeToInt(DEVICE?.configuration['0x0001']['batteryReporting'][2])
+            logDebug "configuring the battery batteryReporting... (min=${intMinTime}, max=${intMaxTime}, delta=${delta})"
+            cmds += zigbee.configureReporting(0x0001, 0x21, DataType.UINT8, intMinTime, intMaxTime, 0x02, [:], delay = 225)  // delta 0x02 = 1% change battery percentage remaining
+            cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 227)    // battery percentage   - SONOFF GW configures and reads only attr 0x0021 !
+        }
+    }
+    //            '0x0500':['bind':false, 'sensitivity':false, 'keepTime':false],       // TODO - use in update function
+    if ('0x0500' in DEVICE?.configuration && DEVICE?.configuration['0x0500']['bind'] == true) {
+        cmds += zigbee.configureReporting(0x0500, 0x0002, 0x19, 0, 3600, 0x00, [:], delay = 227)
+    }
+    if ('0x0400' in DEVICE?.configuration) {
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}", 'delay 229', ]
+    }
+    if ('0x0402' in DEVICE?.configuration) {
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}", 'delay 229', ]
+    }
+    if ('0x0405' in DEVICE?.configuration) {
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0405 {${device.zigbeeId}} {}", 'delay 229', ]
+    }
+    if ('0x0406' in DEVICE?.configuration) {
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}", 'delay 229', ]    // OWON and SONOFF motion/occupancy cluster
+    }
+    if ('0xFC11' in DEVICE?.configuration) {
+        cmds += zigbee.configureReporting(0xFC11, 0x2001, DataType.UINT16, 0, 1440, 0x01, [:], delay = 230)  // attribute 2001 - ??
+    }
+
+
+
+    return cmds
 }
 
 void customInitializeVars(final boolean fullInit=false) {
@@ -950,6 +1050,8 @@ void customInitEvents(final boolean fullInit=false) {
 }
 
 
+
+
 void customParseIlluminanceCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     if (DEVICE?.device?.ignoreIAS == true) { 
@@ -966,6 +1068,15 @@ void customParseIASCluster(final Map descMap) {
     if (result == false) {
         logDebug "customParseIASCluster: received unknown 0x0500 attribute 0x${descMap.attrId} (value ${descMap.value})"
         standardParseIASCluster(descMap) 
+    }
+}
+
+void customParseFC11Cluster(final Map descMap) {
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    logTrace "customParseFC11Cluster: zigbee received 0xFC11 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
+    if (result == false) {
+        logWarn "customParseFC11Cluster: received unknown 0xFC11 attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
 }
 
