@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Thermostat Library', name: 'thermostatLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy', documentationLink: '',
-    version: '3.5.0')
+    version: '3.5.1')
 /*
  *  Zigbee Thermostat Library
  *
@@ -19,14 +19,15 @@ library(
  * ver. 3.3.1  2024-06-16 kkossev  - added factoryResetThermostat() command
  * ver. 3.3.2  2024-07-09 kkossev  - release 3.3.2
  * ver. 3.3.4  2024-10-23 kkossev  - fixed exception in sendDigitalEventIfNeeded when the attribute is not found (level)
- * ver. 3.5.0  2025-02-16 kkossev  - (dev. branch) added setpointReceiveCheck() and modeReceiveCheck() retries
+ * ver. 3.5.0  2025-02-16 kkossev  - added setpointReceiveCheck() and modeReceiveCheck() retries
+ * ver. 3.5.1  2025-03-04 kkossev  - (dev. branch) == false bug fix; disabled switching to 'cool' mode.
  *
  *                                   TODO: add eco() method
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
-public static String thermostatLibVersion()   { '3.5.0' }
-public static String thermostatLibStamp() { '2025/02/16 11:25 PM' }
+public static String thermostatLibVersion()   { '3.5.1' }
+public static String thermostatLibStamp() { '2025/03/04 9:11 PM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib
@@ -245,8 +246,10 @@ public void setThermostatMode(final String requestedMode) {
                 sendAttribute('systemMode', 'on')
             }
             break
-        case 'cool':        // TODO !!!!!!!!!!
+        case 'cool':        // disabled the cool mode 03/04/2025
             if (!('cool' in DEVICE.supportedThermostatModes)) {
+                // why shoud we replace 'cool' with 'eco' and 'off' modes ????
+                /*
                 // replace cool with 'eco' mode, if supported by the device
                 if ('eco' in DEVICE.supportedThermostatModes) {
                     logDebug 'setThermostatMode: pre-processing: switching to eco mode instead'
@@ -263,10 +266,11 @@ public void setThermostatMode(final String requestedMode) {
                     logDebug "setThermostatMode: pre-processing: setting eco mode on (${settings.ecoTemp} &degC)"
                     sendAttribute('ecoMode', 1)
                 }
-                else {
+                */
+                //else {
                     logDebug "setThermostatMode: pre-processing: switching to 'cool' mode is not supported by this device!"
                     return
-                }
+                //}
             }
             break
         case 'emergency heat':     // TODO for Aqara and Sonoff TRVs
@@ -532,10 +536,8 @@ public List<String> pollOccupancy() {
 // scheduled for call from setThermostatMode() 4 seconds after the mode was potentiually changed.
 // also, called every 1 minute from receiveCheck()
 void modeReceiveCheck() {
-    logDebug "modeReceiveCheck() called"
-    if (settings?.resendFailed == false ) { return }
-
-    if (state.lastTx?.isModeSetReq == false) { return }    // no mode change was requested
+    if (settings?.resendFailed != true) { return }
+    if (state.lastTx?.isModeSetReq != true) { return }    // no mode change was requested
 
     if (state.lastTx.mode != device.currentState('thermostatMode', true).value) {
         state.lastTx['setModeRetries'] = (state.lastTx['setModeRetries'] ?: 0) + 1
@@ -561,8 +563,8 @@ void modeReceiveCheck() {
 //
 //  also, called every 1 minute from receiveCheck()
 public void setpointReceiveCheck() {
-    if (settings?.resendFailed == false ) { return }
-    if (state.lastTx.isSetPointReq == false) { return }
+    if (settings?.resendFailed != true) { return }
+    if (state.lastTx.isSetPointReq != true) { return }
 
     if (state.lastTx.setPoint != NOT_SET && ((state.lastTx.setPoint as String) != (state.lastRx.setPoint as String))) {
         state.lastTx.setPointRetries = (state.lastTx.setPointRetries ?: 0) + 1

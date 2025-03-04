@@ -17,8 +17,8 @@
  * ver. 2.1.6  2023-11-06 kkossev  - Aqara E1 thermostat improvements;
  * ver. 3.3.0  2024-06-08 kkossev  - new driver for Aqara E1 thermostat using thermostatLib
  * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
+ * ver. 3.4.1  2025-03-04 kkossev  - disabled 'cool' mode for the Aqara E1 thermostat
  *
- *                                   TODO: add powerSource capability
  *                                   TODO: add Info dummy preference to the driver with a hyperlink
  *                                   TODO: add state.thermostat for storing last attributes
  *                                   TODO: Healthcheck to be every hour (not 4 hours) for mains powered thermostats
@@ -44,8 +44,8 @@
  *                                   TODO: Aqara E1 external sensor
  */
 
-static String version() { '3.4.0' }
-static String timeStamp() { '2024/10/05 7:23 PM' }
+static String version() { '3.4.1' }
+static String timeStamp() { '2025/03/04 9:18 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -177,7 +177,7 @@ metadata {
             //                          ^^ unsupported attribute?  or reporting only ?
             ],
             supportedThermostatModes: ['off', 'auto', 'heat', 'away'/*, "emergency heat"*/],
-            refresh: ['refreshAqaraE1'/*,'pollAqara'*/],
+            refresh: ['refreshAqaraE1'],
             deviceJoinName: 'Aqara E1 Thermostat',
             configuration : [:]
     ]
@@ -492,6 +492,7 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
 
 void testT(String par) {
     log.trace "testT(${par}) : DEVICE.preferences = ${DEVICE.preferences}"
+    log.trace "testT: ${settings}"
     Map result
     if (DEVICE != null && DEVICE.preferences != null && DEVICE.preferences != [:]) {
         (DEVICE.preferences).each { key, value ->
