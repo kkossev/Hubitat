@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Reporting Config Library', name: 'reportingLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/reportingLib.groovy', documentationLink: '',
-    version: '3.0.0'
+    version: '3.2.1'
 )
 /*
  *  Zigbee Reporting Config Library
@@ -17,12 +17,13 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.2.0  2024-05-25 kkossev  - added reportingLib.groovy
+ * ver. 3.2.1  2025-03-09 kkossev  - configureReportingInt() integer parameters overload
  *
- *                                   TODO:
+ *                                   TODO: add bindCluster() and unbindCluster() methods
 */
 
-static String reportingLibVersion()   { '3.2.0' }
-static String reportingLibStamp() { '2024/05/25 7:27 AM' }
+static String reportingLibVersion()   { '3.2.1' }
+static String reportingLibStamp() { '2025/03/09 7:29 PM' }
 
 metadata {
     // no capabilities
@@ -41,6 +42,10 @@ metadata {
 @Field static final String AMPERAGE = 'Amperage'
 @Field static final String FREQUENCY = 'Frequency'
 @Field static final String POWER_FACTOR = 'PowerFactor'
+
+List<String> configureReportingInt(String operation, String measurement,  int minTime=0, int maxTime=0, int delta=0, boolean sendNow=true ) {
+    configureReporting(operation, measurement, minTime.toString(), maxTime.toString(), delta.toString(), sendNow)
+}
 
 List<String> configureReporting(String operation, String measurement,  String minTime='0', String maxTime='0', String delta='0', boolean sendNow=true ) {
     int intMinTime = safeToInt(minTime)

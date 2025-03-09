@@ -275,11 +275,11 @@ void updated() {
     }    
     def cmds = []
     cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber:1,    size:1,    scaledConfigurationValue: parameter1 ? 0x01 : 0x00)
-    logInfo englishLang ? "Parameter 1 will be set to ${parameter1 ? 0x01 : 0x00}" : "Parameter 1 hat den Wert ${parameter1 ? 0x01 : 0x00} übermittelt bekommen"
+    logInfo "Parameter 1 will be set to ${parameter1 ? 0x01 : 0x00}"
     cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber:3,    size:1,    scaledConfigurationValue: parameter3 ? 0x01 : 0x00)
-    logInfo englishLang ? "Parameter 3 will be set to ${parameter3 ? 0x01 : 0x00}" : "Parameter 3 hat den Wert ${parameter3 ? 0x01 : 0x00} übermittelt bekommen"
+    logInfo "Parameter 3 will be set to ${parameter3 ? 0x01 : 0x00}"
     cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber:4,    size:1,    scaledConfigurationValue: parameter4.toInteger())
-    logInfo englishLang ? "Parameter 4 will be set to ${parameter4.toInteger()}" : "Parameter 4 hat den Wert ${parameter4.toInteger()} übermittelt bekommen"
+    logInfo "Parameter 4 will be set to ${parameter4.toInteger()}"
     cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber:5,    size:1,    scaledConfigurationValue: Math.round(parameter5.toFloat() * 10).toInteger())
     for (int i=1 ; i<=8 ; i++) {
         cmds << new hubitat.zwave.commands.configurationv1.ConfigurationGet(parameterNumber: i)
@@ -288,7 +288,7 @@ void updated() {
 }
 
 void installed() {
-    log.info "Device ${device.label?device.label:device.name} is installed"
+    log.info "Device ${device.label ? device.label : device.name} is installed"
     sendEvent(name:"notify", value:"Installed", displayed: true)
     sendEvent(name:"deviceResetLocally", value:false, displayed: true)
     def cmds = []
@@ -330,14 +330,6 @@ void sendToDevice(hubitat.zwave.Command cmd, Long delay=1000) {
 List<String> commands(List<hubitat.zwave.Command> cmds, Long delay=1000) {
     logDebug "sendToDevice: $cmds"
     return delayBetween(cmds.collect{ zwaveSecureEncap(it.format()) }, delay)
-}
-
-void poll() {
-    logDebug "poll"
-    def cmds = []
-    //cmds << new hubitat.zwave.commands.thermostatmodev3.ThermostatModeGet()
-    cmds << new hubitat.zwave.commands.switchmultilevelv1.SwitchMultilevelGet()
-    sendToDevice(cmds)
 }
 
 void refresh() {

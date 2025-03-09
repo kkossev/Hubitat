@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy', documentationLink: '',
-    version: '3.4.1'
+    version: '3.4.2'
 )
 /*
  *  Device Profile Library
@@ -33,7 +33,8 @@ library(
  * ver. 3.3.3  2024-08-18 kkossev  - sendCommand and setPar commands commented out; must be declared in the main driver where really needed
  * ver. 3.3.4  2024-09-28 kkossev  - fixed exceptions in resetPreferencesToDefaults() and initEventsDeviceProfile()
  * ver. 3.4.0  2025-02-02 kkossev  - deviceProfilesV3 optimizations (defaultFingerprint); is2in1() mod
- * ver. 3.4.1  2025-02-02 kkossev  - (dev. branch) setPar help improvements
+ * ver. 3.4.1  2025-02-02 kkossev  - setPar help improvements;
+ * ver. 3.4.2  2025-03-09 kkossev  - (dev. branch) added refreshFromConfigureReadList() method
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
@@ -45,8 +46,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.4.1' }
-static String deviceProfileLibStamp() { '2025/02/16 7:47 AM' }
+static String deviceProfileLibVersion()   { '3.4.2' }
+static String deviceProfileLibStamp() { '2025/03/09 10:02 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -876,8 +877,32 @@ void setDeviceNameAndProfile(String model=null, String manufacturer=null) {
     }
 }
 
+public List<String> refreshFromConfigureReadList(List<String> refreshList) {
+    logDebug "refreshFromConfigureReadList(${refreshList})"
+    List<String> cmds = []
+    if (refreshList != null && !refreshList.isEmpty()) {
+        //List<String> refreshList = DEVICE.refresh
+        for (String k : refreshList) {
+            k = k.replaceAll('\\[|\\]', '')
+            if (k != null) {
+                // check whether the string in the refreshList matches an attribute name in the DEVICE.attributes list
+                Map map = DEVICE.attributes.find { it.name == k }
+                if (map != null) {
+                    Map mfgCode = map.mfgCode != null ? ['mfgCode':map.mfgCode] : [:]
+                    cmds += zigbee.readAttribute(hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[0]), hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[1]), mfgCode, delay = 100)
+                }
+                // check whether the string in the refreshList matches a method defined somewhere in the code
+                if (this.respondsTo(k)) {
+                    cmds += this."${k}"()
+                }
+            }
+        }
+    }
+    return cmds
+}
+
 // called from customRefresh() in the device drivers
-List<String> refreshFromDeviceProfileList() {
+public List<String> refreshFromDeviceProfileList() {
     logDebug 'refreshFromDeviceProfileList()'
     List<String> cmds = []
     if (DEVICE?.refresh != null) {

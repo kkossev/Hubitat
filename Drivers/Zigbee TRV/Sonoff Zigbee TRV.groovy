@@ -16,17 +16,18 @@
  * ver. 3.3.0  2024-06-08 kkossev  - searate new driver for TRVZB thermostat
  * ver. 3.3.1  2024-07-18 kkossev  - TimeSync() magic;
  * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
+ * ver. 3.4.1  2025-03-06 kkossev  - (dev. branch) healthCheck by pinging the TRV
  *
- *                                   TODO: initializeDeviceThermostat() - configure in the device profile !
- *                                   TODO: verify if onoffLib is needed
  *                                   TODO: sonoff - the battery is reported twice, and too often
+ *                                   TODO: Sonoff : decode weekly schedule responses (command 0x00)
+ *                                   TODO: Sonoff - add 'emergency heat' simulation ?  ( +timer ?)
+ *                                   TODO: Healthcheck to be every hour (not 4 hours) for mains powered thermostats
+ *                                   TODO: initializeDeviceThermostat() - configure in the device profile !
  *                                   TODO: add powerSource capability
  *                                   TODO: add Info dummy preference to the driver with a hyperlink
  *                                   TODO: add state.thermostat for storing last attributes
- *                                   TODO: Healthcheck to be every hour (not 4 hours) for mains powered thermostats
  *                                   TODO: add 'force manual mode' preference (like in the wall thermostat driver)
  *                                   TODO: option to disable the Auto mode ! (like in the wall thermostat driver)
- *                                   TODO: Sonoff : decode weekly schedule responses (command 0x00)
  *                                   TODO: add [refresh] for battery heatingSetpoint thermostatOperatingState events and logs
  *                                   TODO: autoPollThermostat: no polling for device profile UNKNOWN
  *                                   TODO: configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
@@ -37,11 +38,10 @@
  *                                   TODO: add receiveCheck() methods for heatingSetpint and mode (option)
  *                                   TODO: separate the autoPoll commands from the refresh commands (lite)
  *                                   TODO: All TRVs - after emergency heat, restore the last mode and heatingSetpoint
- *                                   TODO: Sonoff - add 'emergency heat' simulation ?  ( +timer ?)
  */
 
-static String version() { '3.4.0' }
-static String timeStamp() { '2024/10/05 7:01 PM' }
+static String version() { '3.4.1' }
+static String timeStamp() { '2025/03/06 10:29 PM' }
 
 @Field static final Boolean _DEBUG = false
 

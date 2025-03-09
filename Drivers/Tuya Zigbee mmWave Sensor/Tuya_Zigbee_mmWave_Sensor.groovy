@@ -36,10 +36,11 @@
  * ver. 3.3.5  2024-11-30 kkossev  - added TS0601 _TZ6210_duv6fhwt (Heiman presence sesnor); added TS0601 _TZE204_uxllnywp @Televisi
  * ver. 3.3.6  2025-01-04 kkossev  - changed TS0601 _TZE204_ya4ft0w4 dp102 scale to 10 - tnx @Jon7sky 
  * ver. 3.4.0  2025-02-02 kkossev  - deviceProfilesV3 optimizations; adding add TS0225 _TZ321C_fkzihax8 into LEAPMMW new device profile @Wilson; changed TS0601 _TZE204_ya4ft0w4 dp102 scale back to 1  
- * ver. 3.4.1  2025-02-09 kkossev  - (dev. branch) TS0601 _TZE200_kb5noeto added motionDetectionMode; 
+ * ver. 3.4.1  2025-02-09 kkossev  - TS0601 _TZE200_kb5noeto added motionDetectionMode; 
+ * ver. 3.4.2  2025-03-08 kkossev  - (dev.branch) healthCheck by pinging the device; updateRxStats() replaced with inline code;
  *                                   
  *                                   TODO: check why ignoreDistance prefrence is not shown when forcebly changing the deviceProfile
- *                                   TODO: Optimize the deviceProfilesV3 !! (reached max size ... :( )
+ *                                   TODO: Optimize the deviceProfilesV3 !! (reached max size ... :( )  
  *                                   TODO: add https://www.leapmmw.com/ mmWave radars : https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/mtd085_convertor_240628.js https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/mtd085_z2m1.4.0.js 
  *                                   TODO: update the top post in the forum with the new models mmWave radars
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
@@ -53,8 +54,8 @@
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
 */
 
-static String version() { "3.4.1" }
-static String timeStamp() {"2025/02/09 11:43 PM"}
+static String version() { "3.4.2" }
+static String timeStamp() {"2025/03/08 10:23 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones

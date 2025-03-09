@@ -26,17 +26,16 @@
  * ver. 3.0.7  2024-04-18 kkossev  - commonLib 3.0.7 and groupsLib allignment
  * ver. 3.1.1  2024-05-15 kkossev  - added SONOFF ZBMicro; commonLib 3.1.1 allignment; Groovy linting;
  * ver. 3.2.1  2024-06-04 kkossev  - commonLib 3.2.1 allignment; ZBMicro - do a refresh() after saving the preferences;
- * ver. 3.2.2  2024-06-29 kkossev  - (dev.branch)  added on/off control for SWITCH_GENERIC_EF00_TUYA 'switch' dp;
+ * ver. 3.2.2  2024-06-29 kkossev  - added on/off control for SWITCH_GENERIC_EF00_TUYA 'switch' dp;
+ * ver. 3.3.0  2025-03-09 kkossev  - (dev.branch) healthCheck by pinging the device; added Sonoff ZBMINIR2; added 'ZBMINI-L' to a new SWITCH_SONOFF_GENERIC profile
  *
- *                                   TODO: Sonof ZBMINIL2 :zigbee read BASIC_CLUSTER attribute 0x0001 error: Unsupported Attribute
  *                                   TODO: add toggle() command; initialize 'switch' to unknown
- *                                   TODO: add power-on behavior option
  *                                   TODO: add 'allStatus' attribute
  *                                   TODO: add Info dummy preference w/ link to Hubitat forum page
  */
 
-static String version() { '3.2.2' }
-static String timeStamp() { '2024/06/29 12:24 PM' }
+static String version() { '3.3.0' }
+static String timeStamp() { '2025/03/09 10:09 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -66,6 +65,20 @@ metadata {
         // all the capabilities are already declared in the libraries
         attribute 'powerOnBehavior', 'enum', ['Turn power Off', 'Turn power On', 'Restore previous state']
         attribute 'turboMode', 'enum', ['Disabled', 'Enabled']
+        attribute 'networkIndicator', 'enum', ['Disabled', 'Enabled']
+        attribute 'backLight', 'enum', ['Disabled', 'Enabled']
+        attribute 'faultCode', 'number'
+        attribute 'delayedPowerOnState', 'enum', ['Disabled', 'Enabled']
+        attribute 'delayedPowerOnTime', 'number'
+
+        command 'sendCommand', [
+            [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
+            [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
+        ]
+        command 'setPar', [
+                [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
+                [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
+        ]
 
         // itterate through all the figerprints and add them on the fly
         deviceProfilesV3.each { profileName, profileMap ->
@@ -106,8 +119,7 @@ boolean isZBMINIL2()   { return (device?.getDataValue('model') ?: 'n/a') in ['ZB
                 [at:'0x0006:0x4003', name:'powerOnBehavior', /*enum8*/ type:'enum',   rw: 'rw', min:0,   max:255,    defVal:'255',   scale:1,    map:[0:'Turn power Off', 1:'Turn power On', 255:'Restore previous state'], title:'<b>Power On Behavior</b>', description:'Power On Behavior']
             ],
             refresh       : [ 'powerOnBehavior'],
-            //configuration : ["0x0406":"bind"]     // TODO !!
-            configuration : [:],
+            configuration : ['0x0006':['onOffReporting':[1, 1800, 0]]],     // also binds the cluster
             deviceJoinName: 'Generic Zigbee Switch (ZCL)'
     ],
 
@@ -136,6 +148,27 @@ boolean isZBMINIL2()   { return (device?.getDataValue('model') ?: 'n/a') in ['ZB
             deviceJoinName: 'Generic Tuya Switch (0xEF00)'
     ],
 
+    'SWITCH_SONOFF_GENERIC' : [
+            description   : 'Sonoff Generic Switch',
+            models        : ['ZBMINI-L', '01MINIZB', 'BASICZBR3'],
+            device        : [type: 'switch', powerSource: 'mains', isSleepy:false],
+            capabilities  : ['Switch': true],
+            preferences   : [powerOnBehavior:'0x0006:0x4003'],
+            commands      : [resetStats:'resetStats', refresh:'refresh'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,0007,0020,FC57,FCA0', outClusters:'0019', model:'ZBMINI-L', manufacturer:'SONOFF', deviceJoinName: 'SONOFF ZBMINI-L'],     // https://community.hubitat.com/t/sonoff-zigbee-switch-with-no-neutral-wire-zbmini-l/88629/14?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000", outClusters:"1000", model:"01MINIZB", manufacturer:"SONOFF", deviceJoinName: 'SONOFF 01MINIZB'],
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006', outClusters:'0000', model:'BASICZBR3', manufacturer:'SONOFF', deviceJoinName: 'SONOFF Relay BASICBR3'],
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006', outClusters:'0000', model:'SA-003-Zigbee', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Relay SA-003-Zigbee'],
+            ],
+            attributes    : [
+                [at:'0x0006:0x4003', name:'powerOnBehavior', type:'enum',   rw: 'rw', min:0,   max:255,    defVal:'255',   scale:1,    map:[0:'Turn power Off', 1:'Turn power On', 255:'Restore previous state'], title:'<b>Power On Behavior</b>', description:'Power On Behavior']
+            ],
+            refresh       : [ 'powerOnBehavior'],
+            configuration : ['0x0006':['onOffReporting':[1, 1800, 0]], '0x0020':['unbind':true]],
+            deviceJoinName: 'Sonoff Generic Switch'
+    ],
+
     'SWITCH_SONOFF_ZBMICRO' : [
             description   : 'Sonoff ZBMicro Zigbee USB Switch',
             models        : ['ZBMicro'],
@@ -152,13 +185,16 @@ boolean isZBMINIL2()   { return (device?.getDataValue('model') ?: 'n/a') in ['ZB
             ],
             refresh       : [ 'powerOnBehavior', 'turboMode'],
             //configuration : ["0x0406":"bind"]     // TODO !!
-            configuration : [:],
+            configuration : [
+                '0x0006':['onOffReporting':[1, 1800, 0]],           // also binds the cluster
+                '0xFC11':['read':['onOffRefresh','turboMode']]      // onOffRefresh is a method in onOffLib!
+            ],
             deviceJoinName: 'Sonoff ZBMicro Zigbee USB Switch'
     ],
 
     'SWITCH_SONOFF_ZBMINIL2' : [
             description   : 'Sonoff ZBMini L2 Switch',
-            models        : ['ZBMicro'],
+            models        : ['ZBMINIL2'],
             device        : [type: 'switch', powerSource: 'mains', isSleepy:false],
             capabilities  : ['Switch': true],
             preferences   : [powerOnBehavior:'0x0006:0x4003'],
@@ -170,13 +206,43 @@ boolean isZBMINIL2()   { return (device?.getDataValue('model') ?: 'n/a') in ['ZB
                 [at:'0x0006:0x4003', name:'powerOnBehavior', type:'enum',   rw: 'rw', min:0,   max:255,    defVal:'255',   scale:1,    map:[0:'Turn power Off', 1:'Turn power On', 255:'Restore previous state'], title:'<b>Power On Behavior</b>', description:'Power On Behavior']
             ],
             refresh       : [ 'powerOnBehavior', 'turboMode'],
-            configuration : [:],
+            configuration : ['0x0006':['onOffReporting':[1, 1800, 0]], '0x0020':['unbind':true]],
             deviceJoinName: 'Sonoff ZBMini L2 Switch'
+    ],
+
+    'SWITCH_SONOFF_ZBMINIR2' : [        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/sonoff.ts#L1495-L1558
+            description   : 'Sonoff ZBMINI R2 Switch',
+            models        : ['ZBMINIR2'],
+            device        : [type: 'switch', powerSource: 'mains', isSleepy:false],
+            capabilities  : ['Switch': true],
+            preferences   : [powerOnBehavior:'0x0006:0x4003', turboMode:'0xFC11:0x0012', networkIndicator:'0xFC11:0x0001'/*, backLight:'0xFC11:0x0002', delayedPowerOnState:'0xFC11:0x0014', delayedPowerOnTime:'0xFC11:0x0015'*/, detachRelayMode:'0xFC11:0x0017'],
+            commands      : [resetStats:'', refresh:'', initialize:'', updateAllPreferences: '',resetPreferencesToDefaults:'', validateAndFixPreferences:''],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0006,0B05,FC57,FC11', outClusters:'0003,0006,0019', model:'ZBMINIR2', manufacturer:'SONOFF', application:"10", deviceJoinName: 'SONOFF ZBMINI R2']
+            ],
+            attributes    : [
+                [at:'0x0006:0x4003', name:'powerOnBehavior',     type:'enum',   rw: 'rw', min:0,   max:255,    defVal:'255', map:[0:'Turn power Off', 1:'Turn power On', 255:'Restore previous state'], title:'<b>Power On Behavior</b>', description:'Power On Behavior'],
+                [at:'0xFC11:0x0001', name:'networkIndicator',    type:'enum',   dt:'0x29', /*mfgCode:'0x1286',*/    rw: 'rw', defVal:'0', map:[0:'Disabled', 1:'Enabled'], title:'<b>Network Indicator.</b>', description:'Enable/disable network indicator.'],                              // BOOLEAN
+                [at:'0xFC11:0x0002', name:'backLight',           type:'enum',   dt:'0x29', mfgCode:'0x1286',    rw: 'rw', defVal:'0', map:[0:'Disabled', 1:'Enabled'], title:'<b>Backlight.</b>', description:'Enable/disable Backlight.'],                                              // BOOLEAN
+                [at:'0xFC11:0x0010', name:'faultCode',           type:'number', rw: 'ro', title:'<b>Fault Code</b>' ],                                                                                                                                                                                                  // INT32
+                [at:'0xFC11:0x0012', name:'turboMode',           type:'enum',   dt:'0x29', mfgCode:'0x1286',    rw: 'rw', min:9,   max:20,    defVal:'9',   scale:1,    map:[9:'Disabled', 20:'Enabled'], title:'<b>Zigbee Radio Power Turbo Mode.</b>', description:'Enable/disable Zigbee radio power Turbo mode.'],    // INT16
+                [at:'0xFC11:0x0014', name:'delayedPowerOnState', type:'enum',   dt:'0x29', mfgCode:'0x1286',    rw: 'rw', min:9,   max:20,    defVal:'9',   scale:1,    map:[9:'Disabled', 20:'Enabled'], title:'<b>Delayed Power On State.</b>', description:'Enable/disable Delayed Power On State.'],                  // BOOLEAN
+                [at:'0xFC11:0x0015', name:'delayedPowerOnTime',  type:'number', rw: 'rw', title:'<b>Delayed Power On Time</b>', description: 'Delayed Power On Time' ],         // UINT16
+                [at:'0xFC11:0x0016', name:'externalTriggerMode', type:'number', rw: 'rw', title:'<b>External Trigger Mode</b>', description: 'External Trigger Mode' ],         // UINT8 //                 externalTriggerMode: {ID: 0x0016, type: Zcl.DataType.UINT8},
+                [at:'0xFC11:0x0017', name:'detachRelayMode',     type:'enum',  advanced:true, dt:'0x29', rw: 'rw', defVal:'0', map:[0:'Disabled', 1:'Enabled'], title:'<b>Detach Relay Mode</b>', description: 'Enable/Disable detach relay mode' ],  // BOOLEAN //detachRelayMode: {ID: 0x0017, type: Zcl.DataType.BOOLEAN},
+                // ZBM5
+                // [at:'0xFC11:0x0018', name:'deviceWorkMode',      type:'number', rw: 'rw', title:'<b>Device Work Mode</b>', description: 'Device Work Mode' ],                   // UINT8 //deviceWorkMode: {ID: 0x0018, type: Zcl.DataType.UINT8},
+                //[at:'0xFC11:0x0019', name:'detachRelayMode2',    type:'number', rw: 'rw', title:'<b>Detach Relay Mode 2</b>', description: 'Detach Relay Mode 2' ],             // BITMAP8 //detachRelayMode2: {ID: 0x0019, type: Zcl.DataType.BITMAP8},
+
+            ],
+            refresh       : [ 'powerOnBehavior', 'turboMode', 'networkIndicator', 'backLight', 'delayedPowerOnState', 'delayedPowerOnTime', 'detachRelayMode'],
+            configuration : ['0x0006':['onOffReporting':[1, 1800, 0]]],     // also binds the cluster
+            deviceJoinName: 'Sonoff ZBMINI R2 Switch'
     ],
 
     'SWITCH_IKEA_TRADFRI' : [
             description   : 'Ikea Tradfri control outlet',
-            models        : ['ZBMicro'],
+            models        : ['TRADFRI control outlet'],
             device        : [type: 'switch', powerSource: 'mains', isSleepy:false],
             capabilities  : ['Switch': true],
             preferences   : [powerOnBehavior:'0x0006:0x4003'],
@@ -189,7 +255,7 @@ boolean isZBMINIL2()   { return (device?.getDataValue('model') ?: 'n/a') in ['ZB
                 [at:'0x0006:0x4003', name:'powerOnBehavior', type:'enum',   rw: 'rw', min:0,   max:255,    defVal:'255',   scale:1,    map:[0:'Turn power Off', 1:'Turn power On', 255:'Restore previous state'], title:'<b>Power On Behavior</b>', description:'Power On Behavior']
             ],
             refresh       : [ 'powerOnBehavior'],
-            configuration : [:],
+            configuration : ['0x0006':['onOffReporting':[1, 1800, 0]]],     // also binds the cluster
             deviceJoinName: 'Ikea Tradfri control outlet'
     ],
 
@@ -205,7 +271,7 @@ boolean isZBMINIL2()   { return (device?.getDataValue('model') ?: 'n/a') in ['ZB
             ],
             attributes    : [:],
             refresh       : [ ],
-            configuration : [:],
+            configuration : ['0x0006':['onOffReporting':[1, 1800, 0]]],     // also binds the cluster
             deviceJoinName: 'Lidl outlet'
     ],
 
@@ -221,7 +287,7 @@ boolean isZBMINIL2()   { return (device?.getDataValue('model') ?: 'n/a') in ['ZB
             ],
             attributes    : [:],
             refresh       : [ ],
-            configuration : [:],
+            configuration : ['0x0006':['onOffReporting':[1, 1800, 0]]],     // also binds the cluster
             deviceJoinName: 'LEDVANCE outlet'
     ],
 
@@ -284,28 +350,62 @@ void customInitializeVars(final boolean fullInit=false) {
 void customInitEvents(boolean fullInit=false) {
 }
 
+List<Integer> parseMinMaxDelta(String cluster, String attribute) {
+    List<Integer> result = [1, 7200, 0]
+    if (DEVICE?.configuration == null || DEVICE?.configuration.isEmpty()) {
+        logDebug 'No custom configuration found'
+        return result
+    }
+    if (cluster in DEVICE?.configuration) {
+        if (DEVICE?.configuration[cluster][attribute] != null) {
+            result[0] = safeToInt(DEVICE?.configuration[cluster][attribute][0])
+            result[1] = safeToInt(DEVICE?.configuration[cluster][attribute][1])
+            result[2] = safeToInt(DEVICE?.configuration[cluster][attribute][2])
+        }
+    }
+    return result
+}
+
 List<String> customConfigureDevice() {
     List<String> cmds = []
-    if (isZBMINIL2()) {
-        logDebug 'customConfigureDevice() : unbind ZBMINIL2 poll control cluster'
-        // Unbind genPollCtrl (0x0020) to prevent device from sending checkin message.
-        // Zigbee-herdsmans responds to the checkin message which causes the device to poll slower.
-        // https://github.com/Koenkk/zigbee2mqtt/issues/11676
-        // https://github.com/Koenkk/zigbee2mqtt/issues/10282
-        // https://github.com/zigpy/zha-device-handlers/issues/1519
-        cmds = ["zdo unbind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0020 {${device.zigbeeId}} {}",]
+    if (DEVICE?.device?.isDepricated == true) {
+        logWarn 'The use of this driver with this device is depricated. Please update to the new driver!'
+        return cmds
     }
-/*
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 251", ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 251", ]
+    if (DEVICE?.configuration == null || DEVICE?.configuration.isEmpty()) {
+        logDebug 'No custom configuration found'
+        return cmds
+    }
+    int intMinTime = safeToInt(1)
+    int intMaxTime = safeToInt(7200)
+    if ('0x0006' in DEVICE?.configuration) {
+        if (DEVICE?.configuration['0x0006']['bind'] == true) {
+            cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", 'delay 229', ]
+            logDebug "binding the device to the OnOff cluster"
+        }
+        // '0x0006':['onOffReporting':[1, 1800, 0]],
+        if (DEVICE?.configuration['0x0006']['onOffReporting'] != null) {
+            (intMinTime, intMaxTime, delta) = parseMinMaxDelta('0x0006', 'onOffReporting')
+            cmds += configureReportingInt('Write', ONOFF, intMinTime, intMaxTime, delta, sendNow = false)    // defined in reportingLib
+            logDebug "reporting for cluster 0x0006 set to ${intMinTime} - ${intMaxTime}"
+        }
+    }
+    if ('0x0020' in DEVICE?.configuration) {
+        if (DEVICE?.configuration['0x0020']['unbind'] != null) {
+            logDebug 'customConfigureDevice() : unbind ZBMINIL2 poll control cluster'
+            // Unbind genPollCtrl (0x0020) to prevent device from sending checkin message. // Zigbee-herdsmans responds to the checkin message which causes the device to poll slower.
+            // https://github.com/Koenkk/zigbee2mqtt/issues/11676  // https://github.com/Koenkk/zigbee2mqtt/issues/10282   // https://github.com/zigpy/zha-device-handlers/issues/1519
+            cmds += ["zdo unbind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0020 {${device.zigbeeId}} {}",'delay 229',]
+        }
+    }
+    //'0xFC11':['read':['turboMode']]
+    if ('0xFC11' in DEVICE?.configuration) {
+        if (DEVICE?.configuration['0xFC11']['read'] != null) {
+            cmds += refreshFromConfigureReadList(DEVICE?.configuration['0xFC11']['read'])   // defined in deviceProfileLib
+            logDebug "reading attributes ${DEVICE?.configuration['0xFC11']['read']} from cluster 0xFC11"
+        }
+    }
 
-    cmds += zigbee.readAttribute(0xFCC0, 0x0009, [mfgCode: 0x115F], delay=200)
-    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)
-    cmds += zigbee.readAttribute(0xFCC0, 0x0148, [mfgCode: 0x115F], delay=200)
-    cmds += zigbee.readAttribute(0xFCC0, 0x0149, [mfgCode: 0x115F], delay=200)
-*/
-    cmds += configureReporting('Write', ONOFF,  '1', '65534', '0', sendNow = false)    // switch state should be always reported
     logDebug "customConfigureDevice() : ${cmds}"
     return cmds
 }
