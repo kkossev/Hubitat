@@ -27,7 +27,7 @@
  * ver. 3.1.1  2024-05-15 kkossev  - added SONOFF ZBMicro; commonLib 3.1.1 allignment; Groovy linting;
  * ver. 3.2.1  2024-06-04 kkossev  - commonLib 3.2.1 allignment; ZBMicro - do a refresh() after saving the preferences;
  * ver. 3.2.2  2024-06-29 kkossev  - added on/off control for SWITCH_GENERIC_EF00_TUYA 'switch' dp;
- * ver. 3.3.0  2025-03-09 kkossev  - (dev.branch) healthCheck by pinging the device; added Sonoff ZBMINIR2; added 'ZBMINI-L' to a new SWITCH_SONOFF_GENERIC profile
+ * ver. 3.3.0  2025-03-10 kkossev  - (dev.branch) healthCheck by pinging the device; added Sonoff ZBMINIR2; added 'ZBMINI-L' to a new SWITCH_SONOFF_GENERIC profile
  *
  *                                   TODO: add toggle() command; initialize 'switch' to unknown
  *                                   TODO: add 'allStatus' attribute
@@ -35,7 +35,7 @@
  */
 
 static String version() { '3.3.0' }
-static String timeStamp() { '2025/03/09 10:09 PM' }
+static String timeStamp() { '2025/03/09 11:59 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -66,6 +66,7 @@ metadata {
         attribute 'powerOnBehavior', 'enum', ['Turn power Off', 'Turn power On', 'Restore previous state']
         attribute 'turboMode', 'enum', ['Disabled', 'Enabled']
         attribute 'networkIndicator', 'enum', ['Disabled', 'Enabled']
+        attribute 'detachRelayMode',  'enum', ['Disabled', 'Enabled']
         attribute 'backLight', 'enum', ['Disabled', 'Enabled']
         attribute 'faultCode', 'number'
         attribute 'delayedPowerOnState', 'enum', ['Disabled', 'Enabled']
@@ -215,27 +216,27 @@ boolean isZBMINIL2()   { return (device?.getDataValue('model') ?: 'n/a') in ['ZB
             models        : ['ZBMINIR2'],
             device        : [type: 'switch', powerSource: 'mains', isSleepy:false],
             capabilities  : ['Switch': true],
-            preferences   : [powerOnBehavior:'0x0006:0x4003', turboMode:'0xFC11:0x0012', networkIndicator:'0xFC11:0x0001'/*, backLight:'0xFC11:0x0002', delayedPowerOnState:'0xFC11:0x0014', delayedPowerOnTime:'0xFC11:0x0015'*/, detachRelayMode:'0xFC11:0x0017'],
+            preferences   : [powerOnBehavior:'0x0006:0x4003', turboMode:'0xFC11:0x0012', networkIndicator:'0xFC11:0x0001'/*, delayedPowerOnState:'0xFC11:0x0014', delayedPowerOnTime:'0xFC11:0x0015'*/, detachRelayMode:'0xFC11:0x0017'],
             commands      : [resetStats:'', refresh:'', initialize:'', updateAllPreferences: '',resetPreferencesToDefaults:'', validateAndFixPreferences:''],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0006,0B05,FC57,FC11', outClusters:'0003,0006,0019', model:'ZBMINIR2', manufacturer:'SONOFF', application:"10", deviceJoinName: 'SONOFF ZBMINI R2']
             ],
-            attributes    : [
-                [at:'0x0006:0x4003', name:'powerOnBehavior',     type:'enum',   rw: 'rw', min:0,   max:255,    defVal:'255', map:[0:'Turn power Off', 1:'Turn power On', 255:'Restore previous state'], title:'<b>Power On Behavior</b>', description:'Power On Behavior'],
-                [at:'0xFC11:0x0001', name:'networkIndicator',    type:'enum',   dt:'0x29', /*mfgCode:'0x1286',*/    rw: 'rw', defVal:'0', map:[0:'Disabled', 1:'Enabled'], title:'<b>Network Indicator.</b>', description:'Enable/disable network indicator.'],                              // BOOLEAN
-                [at:'0xFC11:0x0002', name:'backLight',           type:'enum',   dt:'0x29', mfgCode:'0x1286',    rw: 'rw', defVal:'0', map:[0:'Disabled', 1:'Enabled'], title:'<b>Backlight.</b>', description:'Enable/disable Backlight.'],                                              // BOOLEAN
-                [at:'0xFC11:0x0010', name:'faultCode',           type:'number', rw: 'ro', title:'<b>Fault Code</b>' ],                                                                                                                                                                                                  // INT32
-                [at:'0xFC11:0x0012', name:'turboMode',           type:'enum',   dt:'0x29', mfgCode:'0x1286',    rw: 'rw', min:9,   max:20,    defVal:'9',   scale:1,    map:[9:'Disabled', 20:'Enabled'], title:'<b>Zigbee Radio Power Turbo Mode.</b>', description:'Enable/disable Zigbee radio power Turbo mode.'],    // INT16
-                [at:'0xFC11:0x0014', name:'delayedPowerOnState', type:'enum',   dt:'0x29', mfgCode:'0x1286',    rw: 'rw', min:9,   max:20,    defVal:'9',   scale:1,    map:[9:'Disabled', 20:'Enabled'], title:'<b>Delayed Power On State.</b>', description:'Enable/disable Delayed Power On State.'],                  // BOOLEAN
-                [at:'0xFC11:0x0015', name:'delayedPowerOnTime',  type:'number', rw: 'rw', title:'<b>Delayed Power On Time</b>', description: 'Delayed Power On Time' ],         // UINT16
-                [at:'0xFC11:0x0016', name:'externalTriggerMode', type:'number', rw: 'rw', title:'<b>External Trigger Mode</b>', description: 'External Trigger Mode' ],         // UINT8 //                 externalTriggerMode: {ID: 0x0016, type: Zcl.DataType.UINT8},
-                [at:'0xFC11:0x0017', name:'detachRelayMode',     type:'enum',  advanced:true, dt:'0x29', rw: 'rw', defVal:'0', map:[0:'Disabled', 1:'Enabled'], title:'<b>Detach Relay Mode</b>', description: 'Enable/Disable detach relay mode' ],  // BOOLEAN //detachRelayMode: {ID: 0x0017, type: Zcl.DataType.BOOLEAN},
+            attributes    : [           // defaults are :    number: DataType.INT16 (0x21) // decimal: DataType.INT16 (0x21) // enum: DataType.ENUM8 (0x30) .  BOOLEAN is 0x10 // DataType.UNT16 is 0x23 // UINT8 is 0x20
+                [at:'0x0006:0x4003', name:'powerOnBehavior',     type:'enum',   rw: 'rw',  min:0,   max:255,    defVal:'255', map:[0:'Turn power Off', 1:'Turn power On', 255:'Restore previous state'], title:'<b>Power On Behavior</b>', description:'Power On Behavior'],
+                [at:'0xFC11:0x0001', name:'networkIndicator',    type:'enum',   dt:'0x10', rw: 'rw', defVal:'0', map:[0:'Disabled', 1:'Enabled'], title:'<b>Network Indicator.</b>', description:'Enable/disable network indicator.'],          // BOOLEAN
+                //[at:'0xFC11:0x0002', name:'backLight',           type:'enum',   dt:'0x10', rw: 'rw', defVal:'0', map:[0:'Disabled', 1:'Enabled'], title:'<b>Backlight.</b>', description:'Enable/disable Backlight.'],     // BOOLEAN
+                [at:'0xFC11:0x0010', name:'faultCode',           type:'number', dt:'0x2B', rw: 'ro',  title:'<b>Fault Code</b>' ],                                                                                                                                                                                                    // INT32
+                [at:'0xFC11:0x0012', name:'turboMode',           type:'enum',   dt:'0x21', rw: 'rw', min:9,   max:20,    defVal:'9', map:[9:'Disabled', 20:'Enabled'], title:'<b>Zigbee Radio Power Turbo Mode.</b>', description:'Enable/disable Zigbee radio power Turbo mode.'],    // INT16
+                [at:'0xFC11:0x0014', name:'delayedPowerOnState', type:'enum',   dt:'0x10', rw: 'rw', min:0,   max:1,     defVal:'0', map:[0:'Disabled',  1:'Enabled'], title:'<b>Delayed Power On State.</b>', description:'Enable/disable Delayed Power On State.'],                  // BOOLEAN
+                [at:'0xFC11:0x0015', name:'delayedPowerOnTime',  type:'number', dt:'0x23', rw: 'rw', title:'<b>Delayed Power On Time</b>', description: 'Delayed Power On Time' ],                     // UINT16
+                //[at:'0xFC11:0x0016', name:'externalTriggerMode', type:'number', dt:'0x20', rw: 'rw', title:'<b>External Trigger Mode</b>', description: 'External Trigger Mode' ],                     // UINT8 //                 externalTriggerMode: {ID: 0x0016, type: Zcl.DataType.UINT8},
+                [at:'0xFC11:0x0017', name:'detachRelayMode',     type:'enum',   dt:'0x10', advanced:true, rw: 'rw', defVal:'0', map:[0:'Disabled', 1:'Enabled'], title:'<b>Detach Relay Mode</b>', description: 'Enable/Disable detach relay mode' ],  // BOOLEAN //detachRelayMode: {ID: 0x0017, type: Zcl.DataType.BOOLEAN},
                 // ZBM5
                 // [at:'0xFC11:0x0018', name:'deviceWorkMode',      type:'number', rw: 'rw', title:'<b>Device Work Mode</b>', description: 'Device Work Mode' ],                   // UINT8 //deviceWorkMode: {ID: 0x0018, type: Zcl.DataType.UINT8},
                 //[at:'0xFC11:0x0019', name:'detachRelayMode2',    type:'number', rw: 'rw', title:'<b>Detach Relay Mode 2</b>', description: 'Detach Relay Mode 2' ],             // BITMAP8 //detachRelayMode2: {ID: 0x0019, type: Zcl.DataType.BITMAP8},
 
             ],
-            refresh       : [ 'powerOnBehavior', 'turboMode', 'networkIndicator', 'backLight', 'delayedPowerOnState', 'delayedPowerOnTime', 'detachRelayMode'],
+            refresh       : [ 'powerOnBehavior', 'turboMode', 'networkIndicator', 'delayedPowerOnState', 'delayedPowerOnTime', 'detachRelayMode'],
             configuration : ['0x0006':['onOffReporting':[1, 1800, 0]]],     // also binds the cluster
             deviceJoinName: 'Sonoff ZBMINI R2 Switch'
     ],
