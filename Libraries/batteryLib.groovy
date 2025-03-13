@@ -16,7 +16,7 @@ library(
  * ver. 3.2.1  2024-07-06 kkossev  - added tuyaToBatteryLevel and handleTuyaBatteryLevel; added batteryInitializeVars
  * ver. 3.2.2  2024-07-18 kkossev  - added BatteryVoltage and BatteryDelay device capability checks
  *
- *                                   TODO: 
+ *                                   TODO: add an Advanced Option resetBatteryToZeroWhenOffline
  *                                   TODO: battery voltage low/high limits configuration
 */
 

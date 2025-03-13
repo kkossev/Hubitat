@@ -67,6 +67,7 @@
  *  ver. 1.9.7 2024-07-05 kkossev - added SPM01 TS0601 _TZE200_qhlxve78 and _TZE200_bcusnqt8
  *  ver. 1.9.8 2024-11-22 kkossev - added TS011F _TZ3000_xzhnra8x _TZ3000_rdfh8cfs _TZ3000_fgwhjm9j _TZ3000_waho4jtj
  *  ver. 2.0.0 2024-11-30 kkossev - HE platform ver 2.4.0.x improved compatibility; added rtt measurement in ping(); added TS011F _TZ3000_ww6drja5; ThirdReality 3RSP02028BZ Energy divisor set to 3600000
+ *  ver. 2.0.1 2025-03-11 kkossev - (dev. branch) (no changes)
  *
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
  *                                 TODO: add toggle() command
