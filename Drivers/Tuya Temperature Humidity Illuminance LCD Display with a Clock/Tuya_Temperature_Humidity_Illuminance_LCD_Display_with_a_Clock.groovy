@@ -63,7 +63,7 @@
 */
 
 @Field static final String VERSION = '1.8.3'
-@Field static final String TIME_STAMP = '2025/03/29 1:53 PM'
+@Field static final String TIME_STAMP = '2025/03/29 6:00 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1154,7 +1154,7 @@ def updated() {
         cmds += zigbee.reportingConfiguration(0x0001, 0x0021, [:], 250)
         if (getModelGroup() in ['TS0201_TH']) {
             if (settings?.logEnable) { log.trace "temperatureScale = ${settings?.temperatureUnit}" }
-            int temperatureScale = settings?.temperatureUnit as int
+            int temperatureScale = (settings?.temperatureUnit ?: 0) as int
             // https://github.com/zigpy/zha-device-handlers/issues/3097#issuecomment-2060104995
             //     CELSIUS = 0x00     FAHRENHEIT = 0x01 TuyaMCUCluster attribute: 101 (0x65)
             if (temperatureScale == 0) {
@@ -1464,8 +1464,11 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings?.maxReportingTimeTemp == null) { device.updateSetting('maxReportingTimeTemp',  [value:3600, type:'number']) }
     if (fullInit == true || settings?.minReportingTimeHumidity == null) { device.updateSetting('minReportingTimeHumidity',  [value:10, type:'number']) }
     if (fullInit == true || settings?.maxReportingTimeHumidity == null) { device.updateSetting('maxReportingTimeHumidity',  [value:3600, type:'number']) }
-    if (fullInit == true || state.notPresentCounter == null) { state.notPresentCounter = 0 }
+    if (fullInit == true || settings?.alarmTempPar == null) { device.updateSetting('alarmTempPar', [value:'Below min temp', type:'enum']) }
+    if (fullInit == true || settings?.alarmHumidityPar == null) { device.updateSetting('alarmHumidityPar', [value:'Below min hum.', type:'enum']) }
+    if (fullInit == true || settings?.temperatureUnit == null) { device.updateSetting('temperatureUnit', [value:'Celsius', type:'enum']) }
     //
+    if (fullInit == true || state.notPresentCounter == null) { state.notPresentCounter = 0 }
     if (fullInit == true || state.modelGroup == null)  { state.modelGroup = getModelGroup() }
     //if (fullInit == true || state.lastTemp == null) state.lastTemp = now() - defaultMinReportingTime * 1000
     //if (fullInit == true || state.lastHumi == null) state.lastHumi = now() - defaultMinReportingTime * 1000
