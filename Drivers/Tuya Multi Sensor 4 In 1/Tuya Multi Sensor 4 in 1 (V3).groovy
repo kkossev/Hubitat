@@ -25,35 +25,14 @@
  * ver. 3.3.1  2024-10-26 kkossev  - added TS0601 _TZE200_f1pvdgoh into a new device profile group 'TS0601_2IN1_MYQ_ZMS03'
  * ver. 3.3.2  2024-11-30 kkossev  - added Azoula Zigbee 4 in 1 Multi Sensor model:'HK-SENSOR-4IN1-A', manufacturer:'Sunricher' into SIHAS group
  * ver. 3.3.3  2025-01-29 kkossev  - TS0601 _TZE200_ppuj1vem moved to 'TS0601_2IN1_MYQ_ZMS03' deviceProfile @ltdonjohnson
- * ver. 3.4.0  2025-03-03 kkossev  - (dev. branch) added customConfigureDevice(); SNZB-03 configuration bug fixes;  added SNZB-03P device profile; 
+ * ver. 3.4.0  2025-03-03 kkossev  - added customConfigureDevice(); SNZB-03 configuration bug fixes;  added SNZB-03P device profile;
+ * ver. 3.4.1  2025-03-29 kkossev  - (dev. branch) added custom configuration function for Espressif @ilkeraktuna
  *                                   
- *                                   TODO: check why only voltage is reported for SONOFF_MOTION_IAS;
- *                                   TODO: check the bindings commands in configure()
- *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
- *                                   TODO: add TS0601 _TZE200_agumlajc https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1077?u=kkossev
- *                                   TODO: Sensor 3in1 _warning: couldn't find map for preference motionReset
- *                                   TODO: Sensor 3in1 _TZE200_7hfcudw5 - fix battery percentage (shows 4)
- *                                   TODO: test TUYATEC-53o41joc IAS - add refresh commands (battery not reported when paired!);
- *                                   TODO: temperature and humidity thresholds SIHAS exception : List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes // library marker kkossev.deviceProfileLib, line 1118
- *                                   TODO: temperature and humidity calibration (offsets)
- *                                   TODO: for 4IN1 (Fantem) - add in refresh() : cmds += zigbee.command(0xEF00, 0x07, '00')    // Fantem Tuya Magic
- *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
- *                                   TODO: for Tuya- add in refresh() : cmds += zigbee.command(0xEF00, 0x03)
- *                                   TODO: battery level for TS0202 and TS0601 2in1 ; battery1 for Fantem 4-in-1 (100% or 0% ) Battery level for _TZE200_3towulqd (2in1)
- *                                   TODO: https://community.hubitat.com/t/moes-tuya-motion-sensor-distance-issue-ts0202-have-to-be-ridiculously-close-to-detect-movement/109917/8?u=kkossev 
- *                                   TODO: publish examples of SetPar usage : https://community.hubitat.com/t/4-in-1-parameter-for-adjusting-reporting-time/115793/12?u=kkossev
- *                                   TODO: TS0202_MOTION_IAS missing sensitivity and retrigger time settings bug fix;
- *                                   TOOD: Tuya 2in1 illuminance_interval (dp=102) !
- *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time ! ( 2-in-1 time is wrong)
- *                                   TODO: ignore invalid humidity reprots (>100 %)
- *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
- *                                   TODO: delete all previous preferencies when changing the device profile ?
- *                                   TODO: Motion reset to inactive after 43648s - convert to H:M:S
- *                                   TODO: check temperatureOffset and humidityOffset
-*/
+ *                                   TODO: update documentation : https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1 
+ */
 
-static String version() { "3.4.0" }
-static String timeStamp() {"2025/03/03 6:01 PM"}
+static String version() { "3.4.1" }
+static String timeStamp() {"2025/03/29 12:37 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -195,7 +174,6 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             ],
             refresh:        ['refreshAllIas','sensitivity', 'keepTime', 'refreshFantem'],
             configuration : ['battery': false],
-            deviceJoinName: 'Tuya Multi Sensor 4 In 1'
     ],
 
     // tested TS0601  _TZE200_7hfcudw5 - OK
@@ -224,7 +202,6 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:112, name:'humidityAlarm',   type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'Humidity alarm'],
                 [dp:113, name:'alarmType',       type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'type0', 1:'type1'] ,   unit:'',  description:'Alarm type'],
             ],
-            deviceJoinName: 'Tuya Multi Sensor 3 In 1',
             configuration : ['battery': false]
     ],
 
@@ -251,7 +228,6 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:102, name:'illuminance_interval',     type:'number', rw: 'rw', min:1, max:720,  defVal:1,    scale:1,  unit:'minutes',  title:'<b>Illuminance Interval</b>',     description:'Brightness acquisition interval (update at the time motion is activated)'],
 
             ],
-            deviceJoinName: 'Tuya Multi Sensor 2 In 1',
             configuration : ['battery': false]
     ],
 
@@ -274,7 +250,6 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:101, name:'illuminance',              type:'number', rw: 'ro', min:0, max:1000, defVal:0,    scale:1,  unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance'],
             ],
             refresh:        ['queryAllTuyaDP'],
-            deviceJoinName: 'Tuya MYQ_ZMS03 Multi Sensor 2 in 1'
     ],
 
     'RH3040_TUYATEC'   : [ // testing TUYATEC-53o41joc   // non-configurable
@@ -331,7 +306,6 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0003,0004,0500,0000', outClusters:'0004,0006,1000,0019,000A', model:'TS0202', manufacturer:'_TZ3040_wqmtjsyk', deviceJoinName: 'Tuya TS0202 Motion Sensor'],  // not tested
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0003,0004,0500,0000', outClusters:'0004,0006,1000,0019,000A', model:'TS0202', manufacturer:'_TZ3000_h4wnrtck', deviceJoinName: 'Tuya TS0202 Motion Sensor']   // not tested
             ],
-            deviceJoinName: 'Tuya TS0202 Motion Sensor',
             configuration : ['battery': false]
     ],
 
@@ -354,7 +328,6 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [at:'0x0500:0x0013', name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
                 [at:'0x0500:0xF001', name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:2,    defVal:'0',  unit:'seconds',    map:[0:'30 seconds', 1:'60 seconds', 2:'120 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)'],
             ],
-            deviceJoinName: 'Tuya TS0202 Motion Sensor configurable',
             configuration : ['battery': false]
     ],
 
@@ -374,7 +347,6 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:102, name:'illuminance',    type:'number', rw: 'ro', min:0, max:1, defVal:0,     scale:1,    unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance'],
 
             ],
-            deviceJoinName: 'Tuya Motion Sensor and Scene Switch',
             configuration : ['battery': false]
     ],
 
@@ -394,7 +366,6 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:119, name:'motion',              type:'enum',    rw: 'ro', min:0,   max:1 ,    defVal:'0',       scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
                 [dp:141, name:'humanMotionState',    type:'enum',    rw: 'ro', min:0,   max:4 ,    defVal:'0',       scale:1,    map:[0:'none', 1:'presence', 2:'peaceful', 3:'small_move', 4:'large_move'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
             ],
-            deviceJoinName: 'Tuya PIR Human Motion Sensor LQ-CG01-RDR',
             configuration : ['battery': false]
     ],
 
@@ -420,7 +391,6 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:109, name:'luminanceLevel',      type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>luminanceLevel</b>',                description:'luminanceLevel'],            // Ligter, Medium, ... ?
                 [dp:110, name:'ledStatusAIR',        type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0', scale:1,    map:[0: 'Switch On', 1:'Switch Off', 2: 'Default'] ,   unit:'',     title:'<b>LED status</b>', description:'Led status switch'],
             ],
-            deviceJoinName: 'Tuya PIR Human Motion Sensor AIR',
             configuration : ['battery': false]
     ],
 
@@ -447,7 +417,6 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 '0x0001':['bind':true,  'voltageReporting':[3600, 7200, 0x02], 'batteryReporting':[3600, 7200, 0x02] ],
                 '0x0500':['bind':false, 'sensitivity':false, 'keepTime':false],       // TODO - use in update function
             ],  // battery percentage, min 3600, max 7200, UINT8, delta 2
-            deviceJoinName: 'Sonoff/eWeLink Motion sensor'
     ],
 
     'SONOFF_SNZB_03P'   : [     // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/sonoff.ts#L1131-L1157
@@ -468,7 +437,6 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 '0x0001':['bind':true,  'voltageReporting':[3600, 7200, 0x02], 'batteryReporting':[3600, 7200, 0x02] ],
                 '0x0500':['bind':false, 'sensitivity':false, 'keepTime':false],       // TODO - use in update function
             ],
-            deviceJoinName: 'SONOFF SNZB-03P Motion Sensor'
     ],
 
     // isSiHAS() and Sunricher
@@ -490,27 +458,25 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             refresh       : [ 'batteryRefresh', 'illuminanceRefresh', 'temperatureRefresh', 'humidityRefresh', 'motion'],
             //configuration : ["0x0406":"bind"]     // TODO !!
             configuration : [:],
-            deviceJoinName: 'SiHAS USM-300Z 4-in-1'
     ],
 
     'ESRESSIF_PIR_TEMP' : [
             description   : 'Espressif motion and temp sensor',
             models        : ['ZigbeeOccupancyPIRSensor'],
-            device        : [type: 'PIR', powerSource: 'DC', isIAS:false, isSleepy:false],
+            device        : [type: 'PIR', powerSource: 'dc', isIAS:false, isSleepy:false],
             capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'Battery': false],
             preferences   : [:],
             fingerprints  : [
                 [profileId:'0104', endpointId:'0A', inClusters:'0000,0003,0406', outClusters:'0019,000A', model:'ZigbeeOccupancyPIRSensor', manufacturer:'Espressif', deviceJoinName: 'Espressif ZigbeeOccupancyPIRSensor'],
+                //                    endpoint 0B: inClusters: 0000,0003,0402,000A, outClusters: 0003,000A
             ],
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults'],
             attributes    : [
                 [at:'0x0406:0x0000', name:'motion',        type:'enum',   rw: 'ro', min:0,   max:1,    defVal:'0',   scale:1,    map:[0:'inactive', 1:'active'], title:'<b>Motion</b>'],
-                // endpoint 0B: inClusters: 0000,0003,0402,000A outClusters: 0003,000A
-                [at:'0x0406:0x0000', name:'temperature',     type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0,  scale:10, unit:'deg.',       description:'Temperature']
+                [at:'0x0402:0x0000', name:'temperature',   type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0,  scale:10, unit:'deg.',       description:'Temperature']
             ],
-            refresh       : [ 'motion', 'temperatureRefresh'],
-            configuration : [:],
-            deviceJoinName: 'Espressif ZigbeeOccupancyPIRSensor'
+            refresh       : ['motion', 'temperatureRefresh'],
+            configuration : ['custom':'configureEspressif'],
     ],
 
     'NONTUYA_MOTION_IAS'   : [
@@ -526,7 +492,6 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [at:'0x0500:0x0013', name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
                 [at:'0x0500:0xF001', name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:2,    defVal:'0',  unit:'seconds',    map:[0:'30 seconds', 1:'60 seconds', 2:'120 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)'],
             ],
-            deviceJoinName: 'Other OEM Motion sensor (IAS)',
             configuration : ['battery': false]
     ],
 
@@ -722,9 +687,7 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 ]
             ],
             configuration : ['battery': true],
-            deviceJoinName: 'Unknown device'        // used during the inital pairing, if no individual fingerprint deviceJoinName was found
     ]
-
 ]
 
 // this is a motion driver -> IAS events represent motion/occupancy
@@ -1022,8 +985,21 @@ List<String> customConfigureDevice() {
         cmds += zigbee.configureReporting(0xFC11, 0x2001, DataType.UINT16, 0, 1440, 0x01, [:], delay = 230)  // attribute 2001 - ??
     }
 
+    if ('custom' in DEVICE?.configuration) {
+        String funcName = DEVICE?.configuration['custom']
+        if (this.respondsTo(funcName)) {
+            cmds += "$funcName"()
+        }
+    }
+    return cmds
+}
 
 
+List<String> configureEspressif() {
+    logDebug "configureEspressif()"
+    List<String> cmds = []
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x0B 0x01 0x0402 {${device.zigbeeId}} {}", 'delay 229', ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x0A 0x01 0x0406 {${device.zigbeeId}} {}", 'delay 229', ]  
     return cmds
 }
 

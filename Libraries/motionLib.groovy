@@ -1,20 +1,21 @@
 /* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Motion Library', name: 'motionLib', namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/motionLib.groovy', documentationLink: '',
-    version: '3.2.0'
+    importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/motionLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-motionLib',
+    version: '3.2.1'
 )
 /*  Zigbee Motion Library
  *
  *  Licensed Virtual the Apache License, Version 2.0
  *
  * ver. 3.2.0  2024-07-06 kkossev  - added motionLib.groovy; added [digital] [physical] to the descriptionText
+ * ver. 3.2.1  2025-03-24 kkossev  - (dev.branch) documentation
  *
  *                                   TODO:
 */
 
-static String motionLibVersion()   { '3.2.0' }
-static String motionLibStamp() { '2024/07/06 8:28 PM' }
+static String motionLibVersion()   { '3.2.1' }
+static String motionLibStamp() { '2025/03/06 12:52 PM' }
 
 metadata {
     capability 'MotionSensor'

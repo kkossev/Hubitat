@@ -1,7 +1,7 @@
 /* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, InsecureRandom, LineLength, MethodCount, MethodReturnTypeRequired, MethodSize, NglParseError, NoDouble, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnnecessaryPackageReference, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport, UnusedPrivateMethod, VariableName */
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy', documentationLink: '',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/commonLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-commonLib',
     version: '3.4.0'
 )
 /*
@@ -42,7 +42,7 @@ library(
   * ver. 3.3.3  2024-09-15 kkossev  - added queryAllTuyaDP(); 2 minutes healthCheck option;
   * ver. 3.3.4  2025-01-29 kkossev  - 'LOAD ALL DEFAULTS' is the default Configure command.
   * ver. 3.3.5  2025-03-05 kkossev  - getTuyaAttributeValue made public; fixed checkDriverVersion bug on hub reboot.
-  * ver. 3.4.0  2025-03-12 kkossev  - (dev.branch) healthCheck by pinging the device; updateRxStats() replaced with inline code; added state.lastRx.timeStamp; added activeEndpoints() handler call;
+  * ver. 3.4.0  2025-03-23 kkossev  - (dev.branch) healthCheck by pinging the device; updateRxStats() replaced with inline code; added state.lastRx.timeStamp; added activeEndpoints() handler call; documentation improvements
   *
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
   *                                   TODO: make the configure() without parameter smart - analyze the State variables and call delete states.... call ActiveAndpoints() or/amd initialize() or/and configure()
@@ -59,7 +59,7 @@ library(
 */
 
 String commonLibVersion() { '3.4.0' }
-String commonLibStamp() { '2025/03/12 10:25 PM' }
+String commonLibStamp() { '2025/03/23 3:51 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -100,7 +100,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'F2', inClusters:'', outClusters:'', model:'unknown', manufacturer:'unknown', deviceJoinName: 'Zigbee device affected by Hubitat F2 bug'
 
     preferences {
-        // txtEnable and logEnable moved to the custom driver settings - coopy& paste there ...
+        // txtEnable and logEnable moved to the custom driver settings - copy& paste there ...
         //input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.'
         //input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: 'Turns on debug logging for 24 hours.'
 
@@ -277,6 +277,7 @@ public boolean isSpammyDeviceReport(final Map descMap) {
     return false
 }
 
+// not used?
 public boolean isSpammyTuyaRadar() {
     if (_TRACE_ALL == true) { return false }
     if (this.respondsTo('isSpammyDeviceProfile'())) {   // defined in deviceProfileLib
@@ -494,7 +495,7 @@ private BigDecimal approxRollingAverage(BigDecimal avgPar, BigDecimal newSample)
     return avg
 }
 
-void handlePingResponse() {
+private void handlePingResponse() {
     Long now = new Date().getTime()
     if (state.lastRx == null) { state.lastRx = [:] }
     state.lastRx['checkInTime'] = now
@@ -634,6 +635,8 @@ Map myParseDescriptionAsMap(String description) {
     return descMap
 }
 
+// return true if the messages is processed here, and further processing in the main parse method should be cancelled !
+// return false if the cluster is not a Tuya cluster
 private boolean isTuyaE00xCluster(String description) {
     if (description == null || !(description.indexOf('cluster: E000') >= 0 || description.indexOf('cluster: E001') >= 0)) {
         return false
@@ -668,7 +671,7 @@ private boolean isTuyaE00xCluster(String description) {
     return true    // processed
 }
 
-// return true if further processing in the main parse method should be cancelled !
+// return true if processed here, and further processing in the main parse method should be cancelled !
 private boolean otherTuyaOddities(final String description) {
   /*
     if (description.indexOf('cluster: 0000') >= 0 && description.indexOf('attrId: 0004') >= 0) {
@@ -867,14 +870,13 @@ public List<String> sendTuyaCommand(String dp, String dp_type, String fncmd, int
     List<String> cmds = []
     int ep = safeToInt(state.destinationEP)
     if (ep == null || ep == 0) { ep = 1 }
-    //int tuyaCmd = isFingerbot() ? 0x04 : SETDATA
     int tuyaCmd
-    // added 07/01/2024 - deviceProfilesV3 device key tuyaCmd:04 : owerwrite all sendTuyaCommand calls for a specfic device profile, if specified!\
+    // added 07/01/2024 - deviceProfilesV3 device key tuyaCmd:04 : owerwrite all sendTuyaCommand calls for a specfic device profile, if specified!
     if (this.respondsTo('getDEVICE') && DEVICE?.device?.tuyaCmd != null) {
         tuyaCmd = DEVICE?.device?.tuyaCmd
     }
     else {
-        tuyaCmd = /*isFingerbot() ? 0x04 : */ tuyaCmdDefault // 0x00 is the default command for most of the Tuya devices, except some ..
+        tuyaCmd = tuyaCmdDefault // 0x00 is the default command for most of the Tuya devices, except some ..
     }
     cmds = zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], delay = 201, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd )
     logDebug "${device.displayName} getTuyaCommand (dp=$dp fncmd=$fncmd dp_type=$dp_type) = ${cmds}"
@@ -898,7 +900,7 @@ public List<String> tuyaBlackMagic() {
     return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :ep], delay = 200)
 }
 
-List<String> queryAllTuyaDP() {
+public List<String> queryAllTuyaDP() {
     logTrace 'queryAllTuyaDP()'
     List<String> cmds = zigbee.command(0xEF00, 0x03)
     return cmds
@@ -963,7 +965,7 @@ List<String> customHandlers(final List customHandlersList) {
     return cmds
 }
 
-void refresh() {
+public void refresh() {
     logDebug "refresh()... DEVICE_TYPE is ${DEVICE_TYPE} model=${device.getDataValue('model')} manufacturer=${device.getDataValue('manufacturer')}"
     checkDriverVersion(state)
     List<String> cmds = [], customCmds = []

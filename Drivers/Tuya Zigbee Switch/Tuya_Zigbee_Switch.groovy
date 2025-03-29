@@ -28,15 +28,16 @@
  * ver. 3.2.1  2024-06-04 kkossev  - commonLib 3.2.1 allignment; ZBMicro - do a refresh() after saving the preferences;
  * ver. 3.2.2  2024-06-29 kkossev  - added on/off control for SWITCH_GENERIC_EF00_TUYA 'switch' dp;
  * ver. 3.3.0  2025-03-10 kkossev  - healthCheck by pinging the device; added Sonoff ZBMINIR2; added 'ZBMINI-L' to a new SWITCH_SONOFF_GENERIC profile
- * ver. 3.3.1  2025-03-13 kkossev  - (dev.branch) added activeEndpoints() command in test mode; sending ZCL Default Response in ZBMINIR2 Detach Relay Mode; added PushableButton capability for ZBMINIR2;
+ * ver. 3.3.1  2025-03-13 kkossev  - added activeEndpoints() command in test mode; sending ZCL Default Response in ZBMINIR2 Detach Relay Mode; added PushableButton capability for ZBMINIR2;
+ * ver. 3.3.2  2025-03-27 kkossev  - (dev.branch) fixed ZCL Default Response in ZBMINIR2 Detach Relay Mode; added updateFirmware() command; added toggle() command
  *
- *                                   TODO: add toggle() command; initialize 'switch' to unknown
+ *                                   TODO: initialize 'switch' to unknown
  *                                   TODO: add 'allStatus' attribute
  *                                   TODO: add Info dummy preference w/ link to Hubitat forum page
  */
 
-static String version() { '3.3.1' }
-static String timeStamp() { '2025/03/13 7:30 AM' }
+static String version() { '3.3.2' }
+static String timeStamp() { '2025/03/27 8:56 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -76,6 +77,8 @@ metadata {
         attribute 'delayedPowerOnTime', 'number'
         attribute 'switchActions', 'enum', ['On', 'Off', 'Toggle']
 
+        command 'toggle'
+        command 'updateFirmware'
         command 'sendCommand', [
             [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
             [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
@@ -448,7 +451,8 @@ void customParseOnOffCluster(final Map descMap) {
                 // https://community.hubitat.com/t/zigbee-zcl-default-response-0x0b/11151/10?u=kkossev 
                 // "he raw ${device.deviceNetworkId} 1 1 0x0006 {08 01 0B 0A 00}"
                 logDebug ' => Detach Relay Mode - contact open or closed ...'
-                sendZigbeeCommands(["he raw ${device.deviceNetworkId} 1 1 0x0006 {08 01 0B 0A 00}"])
+                //sendZigbeeCommands(["he raw ${device.deviceNetworkId} 1 1 0x0006 {08 01 0B 0A 00}"])
+                sendZigbeeCommands(["he raw ${device.deviceNetworkId} 1 1 0x0006 {08 01 0B 02 00}"])
                 customPush()
             }
             else {
@@ -530,6 +534,28 @@ void parseSimpleDescriptorResponse(Map descMap) {
         updateDataValue('outClusters', outputClusterList)
     }
 }
+
+void updateFirmware() {
+    sendInfoEvent("updateFirmware: check 'Hub' live logs...")
+    sendZigbeeCommands(zigbee.updateFirmware())
+}
+
+
+void toggle() {
+    logDebug "toggling switch.."
+    if (device.getDataValue('model') != "TS0601") {
+        sendZigbeeCommands(zigbee.command(0x0006,0x02))
+    }
+    else {
+        if ((device.currentState('switch')?.value ?: 'n/a') == 'off') {
+            on()
+        }
+        else {
+            off()
+        }
+    }
+}
+
 
 void testDetachRelayMode() {
     logDebug "testDetachRelayMode()"

@@ -1,7 +1,7 @@
 /* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Reporting Config Library', name: 'reportingLib', namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/reportingLib.groovy', documentationLink: '',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/reportingLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-reportingLib',
     version: '3.2.1'
 )
 /*
@@ -17,13 +17,13 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.2.0  2024-05-25 kkossev  - added reportingLib.groovy
- * ver. 3.2.1  2025-03-09 kkossev  - configureReportingInt() integer parameters overload
+ * ver. 3.2.1  2025-03-09 kkossev  - configureReportingInt() integer parameters overload; importUrl and documentationLink updated;
  *
  *                                   TODO: add bindCluster() and unbindCluster() methods
 */
 
 static String reportingLibVersion()   { '3.2.1' }
-static String reportingLibStamp() { '2025/03/09 7:29 PM' }
+static String reportingLibStamp() { '2025/03/23 7:31 PM' }
 
 metadata {
     // no capabilities

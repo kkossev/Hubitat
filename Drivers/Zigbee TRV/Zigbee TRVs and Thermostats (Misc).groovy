@@ -203,7 +203,7 @@ metadata {
     'STELPRO_MAESTRO_STZB402' : [    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f83254ca55f890514744a5902edbebf8d998307d/src/devices/stelpro.ts#L124
         description   : 'Stelpro STZB402 Ki line-voltage thermostat',
         device        : [type: 'Thermostat', powerSource: 'ac', isSleepy:false],
-        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true, 'HumidityMeasurement':true],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true, 'RelativeHumidityMeasurement':true],
         preferences   : [:],
         fingerprints  : [
             [profileId:'0104', endpointId:'19', inClusters:'0000,0003,0201,0204,0405', outClusters:'0402', model:'STZB402', manufacturer:'Stelpro', deviceJoinName: 'Stelpro STZB402 Ki line-voltage thermostat'],
