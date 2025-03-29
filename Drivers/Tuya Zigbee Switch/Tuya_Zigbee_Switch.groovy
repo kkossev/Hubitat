@@ -29,7 +29,7 @@
  * ver. 3.2.2  2024-06-29 kkossev  - added on/off control for SWITCH_GENERIC_EF00_TUYA 'switch' dp;
  * ver. 3.3.0  2025-03-10 kkossev  - healthCheck by pinging the device; added Sonoff ZBMINIR2; added 'ZBMINI-L' to a new SWITCH_SONOFF_GENERIC profile
  * ver. 3.3.1  2025-03-13 kkossev  - added activeEndpoints() command in test mode; sending ZCL Default Response in ZBMINIR2 Detach Relay Mode; added PushableButton capability for ZBMINIR2;
- * ver. 3.3.2  2025-03-27 kkossev  - (dev.branch) fixed ZCL Default Response in ZBMINIR2 Detach Relay Mode; added updateFirmware() command; added toggle() command
+ * ver. 3.3.2  2025-03-29 kkossev  - fixed ZCL Default Response in ZBMINIR2 Detach Relay Mode; added updateFirmware() command; added toggle() command; added delayedPowerOnState and delayedPowerOnTime preferences
  *
  *                                   TODO: initialize 'switch' to unknown
  *                                   TODO: add 'allStatus' attribute
@@ -37,7 +37,7 @@
  */
 
 static String version() { '3.3.2' }
-static String timeStamp() { '2025/03/27 8:56 PM' }
+static String timeStamp() { '2025/03/29 10:05 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -229,7 +229,7 @@ boolean isZBMINIL2()   { return (device?.getDataValue('model') ?: 'n/a') in ['ZB
             models        : ['ZBMINIR2'],
             device        : [type: 'switch', powerSource: 'mains', isSleepy:false],
             capabilities  : ['Switch': true, 'Button': true],
-            preferences   : [powerOnBehavior:'0x0006:0x4003', turboMode:'0xFC11:0x0012', networkIndicator:'0xFC11:0x0001'/*, delayedPowerOnState:'0xFC11:0x0014', delayedPowerOnTime:'0xFC11:0x0015'*/, externalTriggerMode: '0xFC11:0x0016', detachRelayMode:'0xFC11:0x0017'],
+            preferences   : [powerOnBehavior:'0x0006:0x4003', turboMode:'0xFC11:0x0012', networkIndicator:'0xFC11:0x0001', delayedPowerOnState:'0xFC11:0x0014', delayedPowerOnTime:'0xFC11:0x0015', externalTriggerMode: '0xFC11:0x0016', detachRelayMode:'0xFC11:0x0017'],
             commands      : [resetStats:'', refresh:'', initialize:'', updateAllPreferences: '',resetPreferencesToDefaults:'', validateAndFixPreferences:''],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0006,0B05,FC57,FC11', outClusters:'0003,0006,0019', model:'ZBMINIR2', manufacturer:'SONOFF', application:"10", deviceJoinName: 'SONOFF ZBMINI R2']
@@ -240,10 +240,10 @@ boolean isZBMINIL2()   { return (device?.getDataValue('model') ?: 'n/a') in ['ZB
                 //[at:'0xFC11:0x0002', name:'backLight',           type:'enum',   dt:'0x10', rw: 'rw', defVal:'0', map:[0:'Disabled', 1:'Enabled'], title:'<b>Backlight.</b>', description:'Enable/disable Backlight.'],     // BOOLEAN
                 [at:'0xFC11:0x0010', name:'faultCode',           type:'number', rw: 'ro',  title:'<b>Fault Code</b>' ],                                                                                                                                                                                                    // INT32
                 [at:'0xFC11:0x0012', name:'turboMode',           type:'enum',   dt:'0x29', rw: 'rw', min:9,   max:20,    defVal:'9', map:[9:'Disabled', 20:'Enabled'], title:'<b>Zigbee Radio Power Turbo Mode.</b>', description:'Enable/disable Zigbee radio power Turbo mode.'],    // INT16
-                [at:'0xFC11:0x0014', name:'delayedPowerOnState', type:'enum',   dt:'0x10', rw: 'rw', min:0,   max:1,     defVal:'0', map:[0:'Disabled',  1:'Enabled'], title:'<b>Delayed Power On State.</b>', description:'Enable/disable Delayed Power On State.'],                  // BOOLEAN
-                [at:'0xFC11:0x0015', name:'delayedPowerOnTime',  type:'number', dt:'0x23', rw: 'rw', title:'<b>Delayed Power On Time</b>', description: 'Delayed Power On Time' ],                     // UINT16
+                [at:'0xFC11:0x0014', name:'delayedPowerOnState', type:'enum',   dt:'0x10', advanced:true, rw: 'rw', defVal:'0', map:[0:'Disabled',  1:'Enabled'], title:'<b>Delayed Power On State.</b>', description:'Enable/disable Delayed Power On State.'],                  // BOOLEAN
+                [at:'0xFC11:0x0015', name:'delayedPowerOnTime',  type:'number', dt:'0x23', advanced:true, rw: 'rw', title:'<b>Delayed Power On Time</b>', description: 'Delayed Power On Time' ],                     // UINT16
                 [at:'0xFC11:0x0016', name:'externalTriggerMode', type:'enum',   dt:'0x20', advanced:true, rw: 'rw', defVal:'0', map:[0:'edge',  1:'pulse', 2:'following(off)', 130:'following(on)'], title:'<b>External Trigger Mode</b>', description: 'Select the External Trigger Mode' ],                     // UINT8 //                 externalTriggerMode: {ID: 0x0016, type: Zcl.DataType.UINT8},
-                [at:'0xFC11:0x0017', name:'detachRelayMode',     type:'enum',   dt:'0x10', advanced:true, rw: 'rw', defVal:'0', map:[0:'Disabled', 1:'Enabled'], title:'<b>Detach Relay Mode</b>', description: 'Enable/Disable detach relay mode' ],  // BOOLEAN //detachRelayMode: {ID: 0x0017, type: Zcl.DataType.BOOLEAN},
+                [at:'0xFC11:0x0017', name:'detachRelayMode',     type:'enum',   dt:'0x10', /*advanced:true, */rw: 'rw', defVal:'0', map:[0:'Disabled', 1:'Enabled'], title:'<b>Detach Relay Mode</b>', description: 'Enable/Disable detach relay mode' ],  // BOOLEAN //detachRelayMode: {ID: 0x0017, type: Zcl.DataType.BOOLEAN},
                 // ZBM5
                 // [at:'0xFC11:0x0018', name:'deviceWorkMode',      type:'number', rw: 'rw', title:'<b>Device Work Mode</b>', description: 'Device Work Mode' ],                   // UINT8 //deviceWorkMode: {ID: 0x0018, type: Zcl.DataType.UINT8},
                 //[at:'0xFC11:0x0019', name:'detachRelayMode2',    type:'number', rw: 'rw', title:'<b>Detach Relay Mode 2</b>', description: 'Detach Relay Mode 2' ],             // BITMAP8 //detachRelayMode2: {ID: 0x0019, type: Zcl.DataType.BITMAP8},
@@ -351,7 +351,7 @@ List<String> customRefresh() {
 void customPush() {    //pushableButton capability
     Integer buttonNumber = 1
     logDebug "push button $buttonNumber"
-    sendButtonEvent(buttonNumber as int, 'pushed', isDigital = true)    // defined in buttonLib
+    sendButtonEvent(buttonNumber as int, 'pushed', isDigital = false)    // defined in buttonLib
 }
 
 
