@@ -145,3 +145,27 @@ An archive containing older driver versions is available [here](https://drive.go
 
 ------------------
 
+
+ *                                   TODO: check why only voltage is reported for SONOFF_MOTION_IAS;
+ *                                   TODO: check the bindings commands in configure()
+ *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
+ *                                   TODO: add TS0601 _TZE200_agumlajc https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1077?u=kkossev
+ *                                   TODO: Sensor 3in1 _warning: couldn't find map for preference motionReset
+ *                                   TODO: Sensor 3in1 _TZE200_7hfcudw5 - fix battery percentage (shows 4)
+ *                                   TODO: test TUYATEC-53o41joc IAS - add refresh commands (battery not reported when paired!);
+ *                                   TODO: temperature and humidity thresholds SIHAS exception : List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes // library marker kkossev.deviceProfileLib, line 1118
+ *                                   TODO: temperature and humidity calibration (offsets)
+ *                                   TODO: for 4IN1 (Fantem) - add in refresh() : cmds += zigbee.command(0xEF00, 0x07, '00')    // Fantem Tuya Magic
+ *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
+ *                                   TODO: for Tuya- add in refresh() : cmds += zigbee.command(0xEF00, 0x03)
+ *                                   TODO: battery level for TS0202 and TS0601 2in1 ; battery1 for Fantem 4-in-1 (100% or 0% ) Battery level for _TZE200_3towulqd (2in1)
+ *                                   TODO: https://community.hubitat.com/t/moes-tuya-motion-sensor-distance-issue-ts0202-have-to-be-ridiculously-close-to-detect-movement/109917/8?u=kkossev 
+ *                                   TODO: publish examples of SetPar usage : https://community.hubitat.com/t/4-in-1-parameter-for-adjusting-reporting-time/115793/12?u=kkossev
+ *                                   TODO: TS0202_MOTION_IAS missing sensitivity and retrigger time settings bug fix;
+ *                                   TOOD: Tuya 2in1 illuminance_interval (dp=102) !
+ *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time ! ( 2-in-1 time is wrong)
+ *                                   TODO: ignore invalid humidity reprots (>100 %)
+ *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
+ *                                   TODO: delete all previous preferencies when changing the device profile ?
+ *                                   TODO: Motion reset to inactive after 43648s - convert to H:M:S
+ *                                   TODO: check temperatureOffset and humidityOffset
