@@ -1,16 +1,16 @@
 {
   "packageName": "Tuya Zigbee Contact Sensor++ w/ healthStatus",
   "author": "Krassimir Kossev",
-  "version": "1.2.1",
+  "version": "1.2.7",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2024-06-11",
-  "releaseNotes": "1.2.1  2024-06-03  - added resetStats command\n1.2.0  2024-05-23 - Groovy linting; setDeviceName() bug fix; added lastBattery attribute; added ThirdReality 3RDS17BZ fingerprint; added Xfinity XHS2-UE fingerprint; the configuration attempts are not repeated, if error code is returned; added setOpen and setClosed commands (for tests); added pollBatteryStatus option for devices that do not report the battery level automatically\n1.1.2  2023-10-20  - added option 'Convert Battery Voltage to Percent'; added  pollContactStatus preference\n1.1.0  2023-04-24 - added advancedOptions; added battery reporting configuration\n1.0.3  2023-02-25 - added the missing illuminance event handler for _TZE200_pay2byax; open/close was reversed for _TZE200_pay2byax; \n1.0.2  2023-02-17 - healthCheck is scheduled every 1 hour; added presenceCountThreshold option (default 12 hours); healthStatus is cleared when disabled or set to 'unknown' when enabled back; offlineThreshold bug fix; added Third Reality 3RDS17BZ\n1.0.1  2023-02-15 - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed; added BlitzWolf RH3001; _TZE200_nvups4nh fingerprint correction; healthStatus timer started; presenceCountDefaultThreshold bug fix;\n1.0.0  2023-02-12 - Initial test version",  
+  "dateReleased": "2025-02-03",
+  "releaseNotes": "1.2.7  2025-02-03 - Xfinity/Visonic MCT-350 Zigbee Contact Sensor fingerprint typo fix - tnx @thanhvle-94\n1.2.6  2024-10-02 - added SNZB-04P; added capability 'TamperAlert'; pollContactStatus bug fix;\n1.2.5  2024-08-20 - pollContactStatus only when the current message is not IAS !\n1.2.4  2024-08-14 - added TS0203 _TZ3000_rcuyhwe3\n1.2.3  2024-07-10 - fixed outOfSync and pollContactStatus bugs; notPresentCounter-1 correction in the debug logs;\n1.2.2  2024-06-14 - added ThirdReality tilt sensor 3RDTS01056Z; new _TZE200_pay2byax fingerprint; added preference to disable illuminance @Big_Bruin\n1.2.1  2024-06-03  - added resetStats command\n1.2.0  2024-05-23 - Groovy linting; setDeviceName() bug fix; added lastBattery attribute; added ThirdReality 3RDS17BZ fingerprint; added Xfinity XHS2-UE fingerprint; the configuration attempts are not repeated, if error code is returned; added setOpen and setClosed commands (for tests); added pollBatteryStatus option for devices that do not report the battery level automatically\n1.1.2  2023-10-20  - added option 'Convert Battery Voltage to Percent'; added  pollContactStatus preference\n1.1.0  2023-04-24 - added advancedOptions; added battery reporting configuration\n1.0.3  2023-02-25 - added the missing illuminance event handler for _TZE200_pay2byax; open/close was reversed for _TZE200_pay2byax; \n1.0.2  2023-02-17 - healthCheck is scheduled every 1 hour; added presenceCountThreshold option (default 12 hours); healthStatus is cleared when disabled or set to 'unknown' when enabled back; offlineThreshold bug fix; added Third Reality 3RDS17BZ\n1.0.1  2023-02-15 - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed; added BlitzWolf RH3001; _TZE200_nvups4nh fingerprint correction; healthStatus timer started; presenceCountDefaultThreshold bug fix;\n1.0.0  2023-02-12 - Initial test version",  
   "drivers": [
     {
       "id": "ea11eefa-641f-440c-9f4e-e4d921e3204f",
       "name": "Tuya Zigbee Contact Sensor++ w/ healthStatus",
       "namespace": "kkossev",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Contact%20Sensor/Tuya%20Contact%20Sensor.groovy",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Contact%20Sensor/Tuya%20Contact%20Sensor.groovy",
       "required": true
     }
   ]

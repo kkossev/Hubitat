@@ -17,13 +17,13 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added levelLib.groovy
- * ver. 3.2.0  2024-05-22 kkossev  - commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment
  *
  *                                   TODO:
 */
 
 static String levelLibVersion()   { '3.2.0' }
-static String levelLibStamp() { '2024/05/22 10:00 PM' }
+static String levelLibStamp() { '2024/05/28 12:33 PM' }
 
 metadata {
     capability 'Switch'             // TODO - move to a new library
@@ -32,9 +32,11 @@ metadata {
     // no attributes
     // no commands
     preferences {
-        input name: 'levelUpTransition', type: 'enum', title: '<b>Dim up transition length</b>', options: TransitionOpts.options, defaultValue: TransitionOpts.defaultValue, required: true, description: '<i>Changes the speed the light dims up. Increasing the value slows down the transition.</i>'
-        input name: 'levelDownTransition', type: 'enum', title: '<b>Dim down transition length</b>', options: TransitionOpts.options, defaultValue: TransitionOpts.defaultValue, required: true, description: '<i>Changes the speed the light dims down. Increasing the value slows down the transition.</i>'
-        input name: 'levelChangeRate', type: 'enum', title: '<b>Level change rate</b>', options: LevelRateOpts.options, defaultValue: LevelRateOpts.defaultValue, required: true, description: '<i>Changes the speed that the light changes when using <b>start level change</b> until <b>stop level change</b> is sent.</i>'
+        if (device != null && DEVICE_TYPE != 'Device') {
+            input name: 'levelUpTransition', type: 'enum', title: '<b>Dim up transition length</b>', options: TransitionOpts.options, defaultValue: TransitionOpts.defaultValue, required: true, description: '<i>Changes the speed the light dims up. Increasing the value slows down the transition.</i>'
+            input name: 'levelDownTransition', type: 'enum', title: '<b>Dim down transition length</b>', options: TransitionOpts.options, defaultValue: TransitionOpts.defaultValue, required: true, description: '<i>Changes the speed the light dims down. Increasing the value slows down the transition.</i>'
+            input name: 'levelChangeRate', type: 'enum', title: '<b>Level change rate</b>', options: LevelRateOpts.options, defaultValue: LevelRateOpts.defaultValue, required: true, description: '<i>Changes the speed that the light changes when using <b>start level change</b> until <b>stop level change</b> is sent.</i>'
+        }
     }
 }
 
@@ -60,7 +62,6 @@ import groovy.transform.Field
     defaultValue: 0x64,
     options: [ 0xFF: 'Device Default', 0x16: 'Very Slow', 0x32: 'Slow', 0x64: 'Medium', 0x96: 'Medium Fast', 0xC8: 'Fast' ]
 ]
-
 
 /*
  * -----------------------------------------------------------------------------
@@ -113,16 +114,16 @@ void sendLevelControlEvent(final int rawValue) {
  */
 void setLevel(final BigDecimal value, final BigDecimal transitionTime = null) {
     logInfo "setLevel (${value}, ${transitionTime})"
-/*    
+/*
     if (this.respondsTo('customSetLevel')) {
         logDebug "calling customSetLevel: ${value}, ${transitionTime}"
         customSetLevel(value.intValue(), transitionTime.intValue())
         return
     }
-*/    
-    //if (DEVICE_TYPE in  ['Bulb']) { 
+*/
+    //if (DEVICE_TYPE in  ['Bulb']) {
     setLevelBulb(value.intValue(), transitionTime ? transitionTime.intValue() : null)
-    return 
+    return
     //}
     /*
     final Integer rate = getLevelTransitionRate(value.intValue(), transitionTime.intValue())
@@ -131,6 +132,7 @@ void setLevel(final BigDecimal value, final BigDecimal transitionTime = null) {
     */
 }
 
+/* groovylint-disable-next-line NoDef */
 void setLevelBulb(value, rate=null) {
     logDebug "setLevelBulb: $value, $rate"
 
@@ -156,14 +158,12 @@ void sendLevelZigbeeCommandsDelayed() {
     }
 }
 
-
-
 /**
  * Send 'switchLevel' attribute event
  * @param isOn true if light is on, false otherwise
  * @param level brightness level (0-254)
  */
-/* groovylint-disable-next-line UnusedPrivateMethodParameter */
+/* groovylint-disable-next-line UnusedPrivateMethod, UnusedPrivateMethodParameter */
 private List<String> setLevelPrivate(final BigDecimal value, final int rate = 0, final int delay = 0, final Boolean levelPreset = false) {
     List<String> cmds = []
     final Integer level = constrain(value)
@@ -187,13 +187,13 @@ private List<String> setLevelPrivate(final BigDecimal value, final int rate = 0,
     return cmds
 }
 
-
 /**
  * Get the level transition rate
  * @param level desired target level (0-100)
  * @param transitionTime transition time in seconds (optional)
  * @return transition rate in 1/10ths of a second
  */
+/* groovylint-disable-next-line UnusedPrivateMethod */
 private Integer getLevelTransitionRate(final Integer desiredLevel, final Integer transitionTime = null) {
     int rate = 0
     final Boolean isOn = device.currentValue('switch') == 'on'
@@ -229,14 +229,12 @@ List<String> startLevelChange(String direction) {
     return zigbee.command(zigbee.LEVEL_CONTROL_CLUSTER, 0x05, [:], 0, "${upDown} ${rateHex}")
 }
 
-
 List<String> stopLevelChange() {
     if (settings.txtEnable) { log.info 'stopLevelChange' }
     scheduleCommandTimeoutCheck()
     return zigbee.command(zigbee.LEVEL_CONTROL_CLUSTER, 0x03, [:], 0) +
         ifPolling { zigbee.levelRefresh(0) + zigbee.onOffRefresh(0) }
 }
-
 
 // Delay before reading attribute (when using polling)
 @Field static final int POLL_DELAY_MS = 1000
@@ -290,8 +288,7 @@ void updatedLevel() {
     logDebug "updatedLevel: ${device.currentValue('level')}"
 }
 
-List<String> refreshLevel() {
-    List<String> cmds = []
-    cmds = zigbee.onOffRefresh(100) + zigbee.levelRefresh(101)
+List<String> levelRefresh() {
+    List<String> cmds = zigbee.onOffRefresh(100) + zigbee.levelRefresh(101)
     return cmds
 }

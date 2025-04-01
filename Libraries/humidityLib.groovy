@@ -2,50 +2,40 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Humidity Library', name: 'humidityLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/humidityLib.groovy', documentationLink: '',
-    version: '3.2.0'
+    version: '3.2.2'
 )
 /*
  *  Zigbee Humidity Library
  *
- *  Licensed Virtual the Apache License, Version 2.0 (the "License"); you may not use this file except
- *  in compliance with the License. You may obtain a copy of the License at:
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- *  for the specific language governing permissions and limitations under the License.
+ *  Licensed Virtual the Apache License, Version 2.0
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added humidityLib.groovy
- * ver. 3.2.0  2024-05-21 kkossev  - (dev.branch) commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-05-29 kkossev  - commonLib 3.2.0 allignment; added humidityRefresh()
+ * ver. 3.2.2  2024-07-02 kkossev  - fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
  *
  *                                   TODO:
 */
 
-static String humidityLibVersion()   { '3.2.0' }
-static String humidityLibStamp() { '2024/05/21 5:09 PM' }
+static String humidityLibVersion()   { '3.2.2' }
+static String humidityLibStamp() { '2024/07/02 11:17 PM' }
 
 metadata {
     capability 'RelativeHumidityMeasurement'
     // no commands
     preferences {
-        if (device) {
-            if (settings?.minReportingTime == null) {
-                input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: '<i>Minimum reporting interval, seconds (1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
-            }
-            if (settings?.minReportingTime == null) {
-                if (deviceType != 'mmWaveSensor') {
-                    input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: '<i>Maximum reporting interval, seconds (120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
-                }
-            }
-        }
+        // the minReportingTime and maxReportingTime are already defined in the temperatureLib.groovy
     }
 }
 
 void standardParseHumidityCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    final int value = hexStrToUnsignedInt(descMap.value)
-    handleHumidityEvent(value / 100.0F as BigDecimal)
+    if (descMap.attrId == '0000') {
+        final int value = hexStrToUnsignedInt(descMap.value)
+        handleHumidityEvent(value / 100.0F as BigDecimal)
+    }
+    else {
+        logWarn "standardParseHumidityCluster() - unknown attribute ${descMap.attrId} value=${descMap.value}"
+    }
 }
 
 void handleHumidityEvent(BigDecimal humidityPar, Boolean isDigital=false) {
@@ -88,5 +78,11 @@ void sendDelayedHumidityEvent(Map eventMap) {
 List<String> humidityLibInitializeDevice() {
     List<String> cmds = []
     cmds += zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0 /*RALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.UINT16, 15, 300, 400/*10/100=0.4%*/)   // 405 - humidity
+    return cmds
+}
+
+List<String> humidityRefresh() {
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay = 200)
     return cmds
 }

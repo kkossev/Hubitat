@@ -1,0 +1,18 @@
+{
+ "packageName":"Tuya Zigbee Tank Level Monitor",
+ "author":"kkossev",
+ "version":"3.3.4",
+ "minimumHEVersion":"2.3.7.100",
+ "dateReleased":"2024-09-07",
+ "releaseNotes":"first version pushed to HPM",
+ "communityLink":"https://community.hubitat.com/t/beta-tuya-zigbee-tank-level-monitor/141666",
+ "drivers": [
+  {
+     "id":"ce659049-1ea4-4cb5-aa43-bf337c56d70d",
+     "name":"Tuya Zigbee Tank Level Monitor",
+     "namespace":"kkossev",
+     "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Tank%20Level%20Monitor/Tuya_Zigbee_Tank_Level_Monitor_lib_included.groovy",
+     "required":true
+  }
+  ]
+}

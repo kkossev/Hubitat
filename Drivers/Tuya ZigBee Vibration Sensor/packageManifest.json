@@ -1,16 +1,16 @@
 {
   "packageName": "Tuya ZigBee Vibration Sensor",
   "author": "Krassimir Kossev",
-  "version": "1.2.0",
+  "version": "1.3.1",
   "minimumHEVersion": "2.1.9",
-  "dateReleased": "2024-05-20",
-  "releaseNotes": "1.2.0 2024-05-20 - added healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability and preference 'ThreeAxis'; added Samsung multisensor; logsOff scheduler; added sensitivity attribute,\n1.1.0 2023-03-07 - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj; IAS is initialized on configure();\n1.0.8 2022-11-08 - TS0210 _TZ3000_bmfw9ykl\n1.0.7 2022-05-12 - TS0210 _TYZB01_pbgpvhgx Smart Vibration Sensor HS1VS \n1.0.6 2022-03-03 - Vibration Sensitivity\n1.0.5 2022-03-03  - battery reporting\n1.0.4 2022-03-02  - 'acceleration' misspelled bug fix\n1.0.3 2022-02-28 - inital version",
+  "dateReleased": "2025-02-22",
+  "releaseNotes": "1.3.1 2025-02-19 - added TS0210 _TZ3000_lqpt3mvr _TZ3000_lzdjjfss _TYZB01_geigpsy4\n1.3.0 2025-01-28 - added Tuya Cluster parser; added TS0601 _TZE200_kzm5w4iz (contact&vibration); added TS0601 _TZE200_iba1ckek (Tilt Xyz Axis Sensor) (ZG-103Z); added queryAllTuyaDP(); missing [overwrite: true] bug fix;\n1.2.2 2024-06-03 - sensitivity preference is hidden for non-Tuya models; threeAxis preference is hidden for Tuya models;\n1.2.1 2024-05-22 - delete scheduled jobs on Save Preferences; added lastBattery attribute; added setAccelarationInactive command;\n1.2.0 2024-05-20 - added healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability and preference 'ThreeAxis'; added Samsung multisensor; logsOff scheduler; added sensitivity attribute,\n1.1.0 2023-03-07 - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj; IAS is initialized on configure();\n1.0.8 2022-11-08 - TS0210 _TZ3000_bmfw9ykl\n1.0.7 2022-05-12 - TS0210 _TYZB01_pbgpvhgx Smart Vibration Sensor HS1VS \n1.0.6 2022-03-03 - Vibration Sensitivity\n1.0.5 2022-03-03  - battery reporting\n1.0.4 2022-03-02  - 'acceleration' misspelled bug fix\n1.0.3 2022-02-28 - inital version",
   "drivers": [
     {
       "id": "7aa89d9c-bafd-487e-9eed-ade6c948e320",
       "name": "Tuya ZigBee Vibration Sensor",
       "namespace": "kkossev",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/Tuya%20ZigBee%20Vibration%20Sensor.groovy",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/Tuya%20ZigBee%20Vibration%20Sensor.groovy",
       "required": true
     }
   ]

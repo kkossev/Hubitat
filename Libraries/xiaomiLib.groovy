@@ -1,7 +1,7 @@
-/* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitReturnStatement, LineLength, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter */
+/* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitReturnStatement, LineLength, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter, UnnecessaryPublicModifier */
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Xiaomi Library', name: 'xiaomiLib', namespace: 'kkossev', importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/xiaomiLib.groovy', documentationLink: '',
-    version: '1.1.0'
+    version: '3.3.0'
 )
 /*
  *  Xiaomi Library
@@ -18,18 +18,22 @@ library(
  * ver. 1.0.0  2023-09-09 kkossev  - added xiaomiLib
  * ver. 1.0.1  2023-11-07 kkossev  - (dev. branch)
  * ver. 1.0.2  2024-04-06 kkossev  - (dev. branch) Groovy linting; aqaraCube specific code;
- * ver. 1.1.0  2024-05-21 kkossev  - (dev. branch) comonLib 3.2.0 alignmment
+ * ver. 1.1.0  2024-06-01 kkossev  - (dev. branch) comonLib 3.2.0 alignmment
+ * ver. 3.2.2  2024-06-01 kkossev  - (dev. branch) comonLib 3.2.2 alignmment
+ * ver. 3.3.0  2024-06-23 kkossev  - comonLib 3.3.0 alignmment; added parseXiaomiClusterSingeTag() method
  *
+ *                                   TODO: remove the DEVICE_TYPE dependencies for Bulb, Thermostat, AqaraCube, FP1, TRV_OLD
  *                                   TODO: remove the isAqaraXXX  dependencies !!
 */
 
-/* groovylint-disable-next-line ImplicitReturnStatement */
-static String xiaomiLibVersion()   { '1.1.0' }
-/* groovylint-disable-next-line ImplicitReturnStatement */
-static String xiaomiLibStamp() { '2024/05/21 3:28 PM' }
+static String xiaomiLibVersion()   { '3.3.0' }
+static String xiaomiLibStamp() { '2024/06/23 9:36 AM' }
 
 boolean isAqaraTVOC_Lib()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
+boolean isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
 boolean isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
+boolean isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
+boolean isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
 
 // no metadata for this library!
 
@@ -60,8 +64,9 @@ boolean isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remo
 @Field static final int PRESENCE_ACTIONS_TAG_ID = 0x66
 @Field static final int PRESENCE_TAG_ID = 0x65
 
-// called from parseXiaomiCluster() in the main code ...
-//
+// called from parseXiaomiCluster() in the main code, if no customParse is defined
+// TODO - refactor AqaraCube specific code
+// TODO - refactor for Thermostat and Bulb specific code
 void standardParseXiaomiFCC0Cluster(final Map descMap) {
     if (settings.logEnable) {
         logTrace "standardParseXiaomiFCC0Cluster: zigbee received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
@@ -152,93 +157,99 @@ void standardParseXiaomiFCC0Cluster(final Map descMap) {
     }
 }
 
-void parseXiaomiClusterTags(final Map<Integer, Object> tags) {
+// cluster 0xFCC0 attribute  0x00F7 is sent as a keep-alive beakon every 55 minutes
+public void parseXiaomiClusterTags(final Map<Integer, Object> tags) {
     final String funcName = 'parseXiaomiClusterTags'
     tags.each { final Integer tag, final Object value ->
-        switch (tag) {
-            case 0x01:    // battery voltage
-                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} battery voltage is ${value / 1000}V (raw=${value})"
-                break
-            case 0x03:
-                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} device temperature is ${value}&deg;"
-                break
-            case 0x05:
-                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} RSSI is ${value}"
-                break
-            case 0x06:
-                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} LQI is ${value}"
-                break
-            case 0x08:            // SWBUILD_TAG_ID:
-                final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0')
-                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})"
-                device.updateDataValue('aqaraVersion', swBuild)
-                break
-            case 0x0a:
-                String nwk = intToHexStr(value as Integer, 2)
-                if (state.health == null) { state.health = [:] }
-                String oldNWK = state.health['parentNWK'] ?: 'n/a'
-                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${nwk}</b>"
-                if (oldNWK != nwk ) {
-                    logWarn "parentNWK changed from ${oldNWK} to ${nwk}"
-                    state.health['parentNWK']  = nwk
-                    state.health['nwkCtr'] = (state.health['nwkCtr'] ?: 0) + 1
-                }
-                break
-            case 0x0b:
-                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} light level is ${value}"
-                break
-            case 0x64:
-                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} temperature is ${value / 100} (raw ${value})"    // Aqara TVOC
-                // TODO - also smoke gas/density if UINT !
-                break
-            case 0x65:
-                if (isAqaraFP1()) { logDebug "${funcName} PRESENCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                else              { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} humidity is ${value / 100} (raw ${value})" }    // Aqara TVOC
-                break
-            case 0x66:
-                if (isAqaraFP1()) { logDebug "${funcName} SENSITIVITY_LEVEL_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                else if (isAqaraTVOC_Lib()) { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} airQualityIndex is ${value}" }        // Aqara TVOC level (in ppb)
-                else                    { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} presure is ${value}" }
-                break
-            case 0x67:
-                if (isAqaraFP1()) { logDebug "${funcName} DIRECTION_MODE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                else              { logDebug "${funcName} unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }                        // Aqara TVOC:
-                // air quality (as 6 - #stars) ['excellent', 'good', 'moderate', 'poor', 'unhealthy'][val - 1]
-                break
-            case 0x69:
-                if (isAqaraFP1()) { logDebug "${funcName} TRIGGER_DISTANCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                else              { logDebug "${funcName} unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                break
-            case 0x6a:
-                if (isAqaraFP1()) { logDebug "${funcName} FP1 unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                else              { logDebug "${funcName} MOTION SENSITIVITY tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                break
-            case 0x6b:
-                if (isAqaraFP1()) { logDebug "${funcName} FP1 unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                else              { logDebug "${funcName} MOTION LED tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                break
-            case 0x95:
-                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} energy is ${value}"
-                break
-            case 0x96:
-                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} voltage is ${value}"
-                break
-            case 0x97:
-                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} current is ${value}"
-                break
-            case 0x98:
-                logDebug "${funcName}: 0x${intToHexStr(tag, 1)} power is ${value}"
-                break
-            case 0x9b:
-                if (isAqaraCube()) {
-                    logDebug "${funcName} Aqara cubeMode tag: 0x${intToHexStr(tag, 1)} is '${AqaraCubeModeOpts.options[value as int]}' (${value})"
-                    sendAqaraCubeOperationModeEvent(value as int)
-                }
-                else { logDebug "${funcName} CONSUMER CONNECTED tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                break
-            default:
-                logDebug "${funcName} unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
-        }
+        parseXiaomiClusterSingeTag(tag, value)
+    }
+}
+
+public void parseXiaomiClusterSingeTag(final Integer tag, final Object value) {
+    final String funcName = 'parseXiaomiClusterSingeTag'
+    switch (tag) {
+        case 0x01:    // battery voltage
+            logDebug "${funcName}: 0x${intToHexStr(tag, 1)} battery voltage is ${value / 1000}V (raw=${value})"
+            break
+        case 0x03:
+            logDebug "${funcName}: 0x${intToHexStr(tag, 1)} device temperature is ${value}&deg;"
+            break
+        case 0x05:
+            logDebug "${funcName}: 0x${intToHexStr(tag, 1)} RSSI is ${value}"
+            break
+        case 0x06:
+            logDebug "${funcName}: 0x${intToHexStr(tag, 1)} LQI is ${value}"
+            break
+        case 0x08:            // SWBUILD_TAG_ID:
+            final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0')
+            logDebug "${funcName}: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})"
+            device.updateDataValue('aqaraVersion', swBuild)
+            break
+        case 0x0a:
+            String nwk = intToHexStr(value as Integer, 2)
+            if (state.health == null) { state.health = [:] }
+            String oldNWK = state.health['parentNWK'] ?: 'n/a'
+            logDebug "${funcName}: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${nwk}</b>"
+            if (oldNWK != nwk ) {
+                logWarn "parentNWK changed from ${oldNWK} to ${nwk}"
+                state.health['parentNWK']  = nwk
+                state.health['nwkCtr'] = (state.health['nwkCtr'] ?: 0) + 1
+            }
+            break
+        case 0x0b:
+            logDebug "${funcName}: 0x${intToHexStr(tag, 1)} light level is ${value}"
+            break
+        case 0x64:
+            logDebug "${funcName}: 0x${intToHexStr(tag, 1)} temperature is ${value / 100} (raw ${value})"    // Aqara TVOC
+            // TODO - also smoke gas/density if UINT !
+            break
+        case 0x65:
+            if (isAqaraFP1()) { logDebug "${funcName} PRESENCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
+            else              { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} humidity is ${value / 100} (raw ${value})" }    // Aqara TVOC
+            break
+        case 0x66:
+            if (isAqaraFP1()) { logDebug "${funcName} SENSITIVITY_LEVEL_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
+            else if (isAqaraTVOC_Lib()) { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} airQualityIndex is ${value}" }        // Aqara TVOC level (in ppb)
+            else                    { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} presure is ${value}" }
+            break
+        case 0x67:
+            if (isAqaraFP1()) { logDebug "${funcName} DIRECTION_MODE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
+            else              { logDebug "${funcName} unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }                        // Aqara TVOC:
+            // air quality (as 6 - #stars) ['excellent', 'good', 'moderate', 'poor', 'unhealthy'][val - 1]
+            break
+        case 0x69:
+            if (isAqaraFP1()) { logDebug "${funcName} TRIGGER_DISTANCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
+            else              { logDebug "${funcName} unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
+            break
+        case 0x6a:
+            if (isAqaraFP1()) { logDebug "${funcName} FP1 unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
+            else              { logDebug "${funcName} MOTION SENSITIVITY tag: 0x${intToHexStr(tag, 1)}=${value}" }
+            break
+        case 0x6b:
+            if (isAqaraFP1()) { logDebug "${funcName} FP1 unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
+            else              { logDebug "${funcName} MOTION LED tag: 0x${intToHexStr(tag, 1)}=${value}" }
+            break
+        case 0x95:
+            logDebug "${funcName}: 0x${intToHexStr(tag, 1)} energy is ${value}"
+            break
+        case 0x96:
+            logDebug "${funcName}: 0x${intToHexStr(tag, 1)} voltage is ${value}"
+            break
+        case 0x97:
+            logDebug "${funcName}: 0x${intToHexStr(tag, 1)} current is ${value}"
+            break
+        case 0x98:
+            logDebug "${funcName}: 0x${intToHexStr(tag, 1)} power is ${value}"
+            break
+        case 0x9b:
+            if (isAqaraCube()) {
+                logDebug "${funcName} Aqara cubeMode tag: 0x${intToHexStr(tag, 1)} is '${AqaraCubeModeOpts.options[value as int]}' (${value})"
+                sendAqaraCubeOperationModeEvent(value as int)
+            }
+            else { logDebug "${funcName} CONSUMER CONNECTED tag: 0x${intToHexStr(tag, 1)}=${value}" }
+            break
+        default:
+            logDebug "${funcName} unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
     }
 }
 
@@ -261,27 +272,33 @@ private static BigInteger readBigIntegerBytes(final ByteArrayInputStream stream,
  *  returns a map of decoded tag number and value pairs where the value is either a
  *  BigInteger for fixed values or a String for variable length.
  */
-private static Map<Integer, Object> decodeXiaomiTags(final String hexString) {
-    final Map<Integer, Object> results = [:]
-    final byte[] bytes = HexUtils.hexStringToByteArray(hexString)
-    new ByteArrayInputStream(bytes).withCloseable { final stream ->
-        while (stream.available() > 2) {
-            int tag = stream.read()
-            int dataType = stream.read()
-            Object value
-            if (DataType.isDiscrete(dataType)) {
-                int length = stream.read()
-                byte[] byteArr = new byte[length]
-                stream.read(byteArr, 0, length)
-                value = new String(byteArr)
-            } else {
-                int length = DataType.getLength(dataType)
-                value = readBigIntegerBytes(stream, length)
+private Map<Integer, Object> decodeXiaomiTags(final String hexString) {
+    try {
+        final Map<Integer, Object> results = [:]
+        final byte[] bytes = HexUtils.hexStringToByteArray(hexString)
+        new ByteArrayInputStream(bytes).withCloseable { final stream ->
+            while (stream.available() > 2) {
+                int tag = stream.read()
+                int dataType = stream.read()
+                Object value
+                if (DataType.isDiscrete(dataType)) {
+                    int length = stream.read()
+                    byte[] byteArr = new byte[length]
+                    stream.read(byteArr, 0, length)
+                    value = new String(byteArr)
+                } else {
+                    int length = DataType.getLength(dataType)
+                    value = readBigIntegerBytes(stream, length)
+                }
+                results[tag] = value
             }
-            results[tag] = value
         }
+        return results
     }
-    return results
+    catch (e) {
+        if (settings.logEnable) { "${device.displayName} decodeXiaomiTags: ${e}" }
+        return [:]
+    }
 }
 
 List<String> refreshXiaomi() {
@@ -292,7 +309,7 @@ List<String> refreshXiaomi() {
 
 List<String> configureXiaomi() {
     List<String> cmds = []
-    logDebug "configureThermostat() : ${cmds}"
+    logDebug "configureXiaomi() : ${cmds}"
     if (cmds == []) { cmds = ['delay 299'] }    // no ,
     return cmds
 }
@@ -310,4 +327,21 @@ void initVarsXiaomi(boolean fullInit=false) {
 
 void initEventsXiaomi(boolean fullInit=false) {
     logDebug "initEventsXiaomi(${fullInit})"
+}
+
+List<String> standardAqaraBlackMagic() {
+    return []
+    /////////////////////////////////////////
+    List<String> cmds = []
+    if (isAqaraTVOC_OLD() || isAqaraTRV_OLD()) {
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", 'delay 200',]
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 200)    // TODO: check - battery voltage
+        if (isAqaraTVOC_OLD()) {
+            cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay = 200)    // TVOC only
+        }
+        logDebug 'standardAqaraBlackMagic()'
+    }
+    return cmds
 }

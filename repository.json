@@ -97,7 +97,7 @@
       "name": "Aqara P1 Motion Sensor",
       "category": "Control",
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Aqara%20P1%20Motion%20Sensor/packageManifest.json",
-      "description": "Aqara P1 Motion Sensor Zigbee driver for Hubitat Elevation hub",
+      "description": "Works with Aqara P1 Motion Sensor RTCGQ14LM, Aqara FP1 Human Presence Detector RTCZCGQ11LM, Aqara FP1E Human Presence Detector RTCZCGQ13LM, RTCGQ13LM, GZCGQ11LM, GZCGQ01LM, RTCGQ01LM, RTCGQ11LM, RTCGQ15LM",
       "tags": [
         "Zigbee"
       ]
@@ -296,6 +296,63 @@
         "Lights & Switches",
         "Zigbee"
        ]
+    },
+    {
+      "id":"74b72270-8de7-4064-964f-a27e4887adeb",
+      "name":"Tuya Zigbee Tank Level Monitor",
+      "category":"Control",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Tank%20Level%20Monitor/packageManifest.json",
+      "description":"Tuya Zigbee Tank Level Monitor",
+      "tags":[
+        "Misc. Devices",
+        "Monitoring",
+        "Pools & Spas",
+        "Water",
+        "Zigbee"
+       ]
+    },
+    {
+      "id":"71fc3487-1559-47a3-a25b-838c18ad260d",
+      "name":"Tuya Zigbee Chlorine Meter",
+      "category":"Control",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Chlorine%20Meter/packageManifest.json",
+      "description":"Tuya Zigbee Chlorine Meter",
+      "tags":[
+        "Misc. Devices",
+        "Monitoring",
+        "Pools & Spas",
+        "Water",
+        "Zigbee"
+       ]
+    },
+    {
+      "id":"b2212052-92d1-450f-9dca-08c0789c9c0c",
+      "name":"Tuya Zigbee Rain Sensor",
+      "category":"Convenience",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Rain%20Sensor/manifest.json",
+      "description":"Tuya Zigbee Rain Sensor",
+      "tags":[
+        "Climate Control",
+        "Irrigation",
+        "Monitoring",
+        "Multi Sensors",
+        "Water",
+        "Zigbee"
+       ]
+    },
+	{
+      "id":"99d87625-9f1d-4b0d-9c41-a0da7f450947",
+      "name":"Zigbee TRVs and Thermostats",
+      "category":"Control",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Drivers/Zigbee%20TRV/thermostatsManifest.json",
+      "description":"Zigbee Thermostats and TRVs - Aqara, Tuya, Sonoff, Sunricher, Namron, ....",
+      "tags":[
+        "Climate Control",
+        "Energy Monitoring",
+        "Temperature & Humidity",
+        "Zigbee"
+       ]
     }	
   ]
 }
+

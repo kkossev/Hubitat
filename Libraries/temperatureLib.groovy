@@ -2,41 +2,38 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Temperature Library', name: 'temperatureLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/temperatureLib.groovy', documentationLink: '',
-    version: '3.2.0'
+    version: '3.2.3'
 )
 /*
  *  Zigbee Temperature Library
  *
- *  Licensed Virtual the Apache License, Version 2.0 (the "License"); you may not use this file except
- *  in compliance with the License. You may obtain a copy of the License at:
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- *  for the specific language governing permissions and limitations under the License.
+ *  Licensed Virtual the Apache License, Version 2.0
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added temperatureLib.groovy
  * ver. 3.0.1  2024-04-19 kkossev  - temperature rounding fix
- * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment; added temperatureRefresh()
+ * ver. 3.2.1  2024-06-07 kkossev  - excluded maxReportingTime for mmWaveSensor and Thermostat
+ * ver. 3.2.2  2024-07-06 kkossev  - fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
+ * ver. 3.2.3  2024-07-18 kkossev  - added 'ReportingConfiguration' capability check for minReportingTime and maxReportingTime
  *
  *                                   TODO:
+ *                                   TODO: add temperatureOffset
+ *                                   TODO: unschedule('sendDelayedTempEvent') only if needed (add boolean flag to sendDelayedTempEvent())
+ *                                   TODO: check for negative temperature values in standardParseTemperatureCluster()
 */
 
-static String temperatureLibVersion()   { '3.2.0' }
-static String temperatureLibStamp() { '2024/05/21 5:04 PM' }
+static String temperatureLibVersion()   { '3.2.3' }
+static String temperatureLibStamp() { '2024/07/18 3:08 PM' }
 
 metadata {
     capability 'TemperatureMeasurement'
     // no commands
     preferences {
-        if (device) {
-            if (settings?.minReportingTime == null) {
-                input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: '<i>Minimum reporting interval, seconds (1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
-            }
-            if (settings?.minReportingTime == null) {
-                if (deviceType != 'mmWaveSensor') {
-                    input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: '<i>Maximum reporting interval, seconds (120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
+        if (device && advancedOptions == true) {
+            if ('ReportingConfiguration' in DEVICE?.capabilities) {
+                input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: 'Minimum reporting interval, seconds <i>(1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
+                if (!(deviceType in ['mmWaveSensor', 'Thermostat', 'TRV'])) {
+                    input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: 'Maximum reporting interval, seconds <i>(120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
                 }
             }
         }
@@ -45,8 +42,13 @@ metadata {
 
 void standardParseTemperatureCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    int value = hexStrToSignedInt(descMap.value)
-    handleTemperatureEvent(value / 100.0F as BigDecimal)
+    if (descMap.attrId == '0000') {
+        int value = hexStrToSignedInt(descMap.value)
+        handleTemperatureEvent(value / 100.0F as BigDecimal)
+    }
+    else {
+        logWarn "standardParseTemperatureCluster() - unknown attribute ${descMap.attrId} value=${descMap.value}"
+    }
 }
 
 void handleTemperatureEvent(BigDecimal temperaturePar, boolean isDigital=false) {
@@ -100,5 +102,12 @@ void sendDelayedTempEvent(Map eventMap) {
 List<String> temperatureLibInitializeDevice() {
     List<String> cmds = []
     cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1도*/)                // 402 - temperature
+    logDebug "temperatureLibInitializeDevice() cmds=${cmds}"
+    return cmds
+}
+
+List<String> temperatureRefresh() {
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200)
     return cmds
 }

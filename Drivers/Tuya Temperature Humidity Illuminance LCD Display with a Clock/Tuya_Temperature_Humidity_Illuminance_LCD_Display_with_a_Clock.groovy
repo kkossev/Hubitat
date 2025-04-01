@@ -57,18 +57,14 @@
  * ver. 1.8.0  2024-12-30 kkossev - HE platform 2.4.0.x compatibility patch
  * ver. 1.8.1  2025-02-22 kkossev - added TS000F _TZ3218_ya5d6wth in DS18B20 group (temperature only); added TS0201 _TZ3000_3xduwekl; added Temperature Unit Preference for 'TS0201_TH' group
  * ver. 1.8.2  2025-03-03 kkossev - added TS0601 _TZE204_s139roas - Ink display T/H sensor!
+ * ver. 1.8.3  2025-03-29 kkossev - TS0201 _TZ3210_ncw88jfq change C/F scale @kuzenkohome 
+ * ver. 1.8.4  2025-04-01 AlexF4Dev - added TS0210 _TZ3000_1o6x1bl0
  *
- *                                  TODO: add all configurable parameters for _TZE204_s139roas
- *                                  TODO: queryOnDeviceAnnounce for TS0601_Tuya_2 group
- *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
- *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
- *                                  TODO: _TZ3000_qaaysllp frequent illuminance reports - check configuration; add minimum time between lux reports parameter!
- *                                  TODO:  TS0201 - bindings are sent, even if nothing to configure?
- *                                  TODO: add Batteryreporting time configuration (like in the TS004F driver)
+ *                                  TODO: update documentation : 
 */
 
-@Field static final String VERSION = '1.8.2'
-@Field static final String TIME_STAMP = '2025/03/03 9:34 PM'
+@Field static final String VERSION = '1.8.4'
+@Field static final String TIME_STAMP = '2025/04/01 4:49 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -650,7 +646,7 @@ def processTuyaCluster( descMap ) {
             if (settings?.logEnable) { log.warn "${device.displayName} ATTENTION! manufacturer = ${device.getDataValue('manufacturer')} group = ${getModelGroup()} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!" }
         }
     }
-    else if ((descMap?.clusterInt == CLUSTER_TUYA) && (descMap?.command == '01' || descMap?.command == '02' || descMap?.command == '06')) {   // added command 06 - 06/26/2024
+    else if ((descMap?.clusterInt == CLUSTER_TUYA) && (descMap?.command == '01' || descMap?.command == '02' || descMap?.command == '05' || descMap?.command == '06')) {   // added command 06 - 06/26/2024; added command 05 03/29/2025
         def dataLen = descMap?.data.size()
         //log.warn "dataLen=${dataLen}"
         //def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
@@ -662,10 +658,8 @@ def processTuyaCluster( descMap ) {
             if (settings?.logEnable) { log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})" }
             processTuyaDP( descMap, dp, dp_id, fncmd)
             i = i + fncmd_len + 4
-        //log.warn "next index is : ${i}"
         }
-    //log.warn "##### end of parsing ####"
-    } // if (descMap?.command == "01" || descMap?.command == "02")
+    }
     else {
         if (settings?.logEnable) { log.warn "${device.displayName} Unprocessed Tuya cluster command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}" }
     }
@@ -877,6 +871,9 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
         case 0x65 : // (101)
             if (getModelGroup() in ['DS18B20']) {
                 logDebug "DS18B20 Work Mode is ${fncmd}"
+            }
+            else if (getModelGroup() in ['TS0201_TH']) {
+                logInfo "${device.displayName} Temperature scale reported by device is: ${fncmd == 1 ? 'Fahrenheit' : 'Celsius' }"
             }
             else {
                 if (settings?.logEnable) { log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" }
@@ -1159,10 +1156,24 @@ def updated() {
         cmds += zigbee.reportingConfiguration(0x0405, 0x0000, [:], 250)
         cmds += zigbee.reportingConfiguration(0x0001, 0x0021, [:], 250)
         if (getModelGroup() in ['TS0201_TH']) {
+        	/* was :
             log.warn "temperatureScale = ${settings?.temperatureUnit}"
             int temperatureScale = settings?.temperatureUnit as int
             // 'TS0201_TH' : cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)
             cmds += zigbee.writeAttribute(0xE002, 0xE00B, 0x30, 0x01, [value: temperatureScale], 266)
+			*/        	
+            if (settings?.logEnable) { log.trace "temperatureScale = ${settings?.temperatureUnit}" }
+            int temperatureScale = (settings?.temperatureUnit ?: 0) as int
+            // https://github.com/zigpy/zha-device-handlers/issues/3097#issuecomment-2060104995
+            //     CELSIUS = 0x00     FAHRENHEIT = 0x01 TuyaMCUCluster attribute: 101 (0x65)
+            if (temperatureScale == 0) {
+                cmds += sendTuyaCommand('65', DP_TYPE_ENUM, '00', tuyaCmd=0x04)
+                if (settings?.logEnable) { log.trace "${device.displayName} setting temperature scale to Celsius: ${cmds}" }
+            }
+            else  {    // Fahrenheit
+                cmds += sendTuyaCommand('65', DP_TYPE_ENUM, '01', tuyaCmd=0x04)
+                if (settings?.logEnable) { log.trace "${device.displayName} setting temperature scale to Fahrenheit: ${cmds}" }
+            }
         }
     }
 
@@ -1462,8 +1473,11 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings?.maxReportingTimeTemp == null) { device.updateSetting('maxReportingTimeTemp',  [value:3600, type:'number']) }
     if (fullInit == true || settings?.minReportingTimeHumidity == null) { device.updateSetting('minReportingTimeHumidity',  [value:10, type:'number']) }
     if (fullInit == true || settings?.maxReportingTimeHumidity == null) { device.updateSetting('maxReportingTimeHumidity',  [value:3600, type:'number']) }
-    if (fullInit == true || state.notPresentCounter == null) { state.notPresentCounter = 0 }
+    if (fullInit == true || settings?.alarmTempPar == null) { device.updateSetting('alarmTempPar', [value:'Below min temp', type:'enum']) }
+    if (fullInit == true || settings?.alarmHumidityPar == null) { device.updateSetting('alarmHumidityPar', [value:'Below min hum.', type:'enum']) }
+    if (fullInit == true || settings?.temperatureUnit == null) { device.updateSetting('temperatureUnit', [value:'Celsius', type:'enum']) }
     //
+    if (fullInit == true || state.notPresentCounter == null) { state.notPresentCounter = 0 }
     if (fullInit == true || state.modelGroup == null)  { state.modelGroup = getModelGroup() }
     //if (fullInit == true || state.lastTemp == null) state.lastTemp = now() - defaultMinReportingTime * 1000
     //if (fullInit == true || state.lastHumi == null) state.lastHumi = now() - defaultMinReportingTime * 1000
@@ -1526,9 +1540,9 @@ def initialize() {
     runIn( 3, logInitializeRezults)
 }
 
-private sendTuyaCommand(dp, dp_type, fncmd) {
+private sendTuyaCommand(dp, dp_type, fncmd, tuyaCmd=SETDATA) {
     ArrayList<String> cmds = []
-    cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay = 200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd )
+    cmds += zigbee.command(CLUSTER_TUYA, tuyaCmd, [:], delay = 200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd )
     if (settings?.logEnable) { log.trace "${device.displayName} sendTuyaCommand = ${cmds}" }
     return cmds
 }
@@ -1692,3 +1706,4 @@ def test( String description) {
 }
 
 // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/5483
+
