@@ -57,13 +57,14 @@
  * ver. 1.8.0  2024-12-30 kkossev - HE platform 2.4.0.x compatibility patch
  * ver. 1.8.1  2025-02-22 kkossev - added TS000F _TZ3218_ya5d6wth in DS18B20 group (temperature only); added TS0201 _TZ3000_3xduwekl; added Temperature Unit Preference for 'TS0201_TH' group
  * ver. 1.8.2  2025-03-03 kkossev - added TS0601 _TZE204_s139roas - Ink display T/H sensor!
- * ver. 1.8.3  2025-03-29 kkossev - (dev. branch) TS0201 _TZ3210_ncw88jfq change C/F scale @kuzenkohome 
+ * ver. 1.8.3  2025-03-29 kkossev - TS0201 _TZ3210_ncw88jfq change C/F scale @kuzenkohome 
+ * ver. 1.8.4  2025-04-01 AlexF4Dev - added TS0210 _TZ3000_1o6x1bl0
  *
  *                                  TODO: update documentation : 
 */
 
-@Field static final String VERSION = '1.8.3'
-@Field static final String TIME_STAMP = '2025/03/29 6:00 PM'
+@Field static final String VERSION = '1.8.4'
+@Field static final String TIME_STAMP = '2025/04/01 4:15 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -117,6 +118,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_pisltm67', deviceJoinName: 'AUBESS Light Sensor S-LUX-ZB'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TYST11_pisltm67', deviceJoinName: 'AUBESS Light Sensor S-LUX-ZB'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000',      outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_pay2byax', deviceJoinName: 'Tuya Contact and Illuminance Sensor'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,E002,0000', outClusters:'0003,0019,000A', model:'TS0201', manufacturer:'_TZ3000_1o6x1bl0', deviceJoinName: 'Tuya temperature and humidity sensor RCTW1Z'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,E002,0000', outClusters:'0003,0019,000A', model:'TS0201', manufacturer:'_TZ3000_itnrsufe', deviceJoinName: 'Tuya temperature and humidity sensor RCTW1Z'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,E002,0000', outClusters:'0003,0019,000A', model:'TS0201', manufacturer:'_TZ3000_ywagc4rj', deviceJoinName: 'Tuya temperature and humidity sensor'       // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock/88093/211?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,EF00,0000',      outClusters:'0019,000A',      model:'TS0201', manufacturer:'_TZ3210_ncw88jfq', deviceJoinName: 'Tuya temperature and humidity sensor'       // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock/88093/211?u=kkossev
@@ -311,7 +313,8 @@ metadata {
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
     '_TZ3000_kky16aay'  : 'TS0222_Soil',        // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/535?u=kkossev
     '_TZE200_pay2byax'  : 'TS0601_Contact',     // Contact and illuminance sensor
-    '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor; // reports both battery voltage and perceintage; cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)
+    '_TZ3000_1o6x1bl0'  : 'TS0201_TH',          // Temperature and humidity sensor; // reports both battery voltage and perceintage; cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)
+    '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor; // reports both battery voltage and perceintage; cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)    
     '_TZ3000_ywagc4rj'  : 'TS0201_TH',          // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock/88093/210?u=kkossev
     '_TZ3210_ncw88jfq'  : 'TS0201_TH',          // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/436?u=kkossev
     '_TZ3000_3xduwekl'  : 'TS0201_TH',          // not tested
@@ -1153,6 +1156,12 @@ def updated() {
         cmds += zigbee.reportingConfiguration(0x0405, 0x0000, [:], 250)
         cmds += zigbee.reportingConfiguration(0x0001, 0x0021, [:], 250)
         if (getModelGroup() in ['TS0201_TH']) {
+        	/* was :
+            log.warn "temperatureScale = ${settings?.temperatureUnit}"
+            int temperatureScale = settings?.temperatureUnit as int
+            // 'TS0201_TH' : cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)
+            cmds += zigbee.writeAttribute(0xE002, 0xE00B, 0x30, 0x01, [value: temperatureScale], 266)
+			*/        	
             if (settings?.logEnable) { log.trace "temperatureScale = ${settings?.temperatureUnit}" }
             int temperatureScale = (settings?.temperatureUnit ?: 0) as int
             // https://github.com/zigpy/zha-device-handlers/issues/3097#issuecomment-2060104995
