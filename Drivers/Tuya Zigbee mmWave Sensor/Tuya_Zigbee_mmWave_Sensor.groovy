@@ -37,7 +37,8 @@
  * ver. 3.3.6  2025-01-04 kkossev  - changed TS0601 _TZE204_ya4ft0w4 dp102 scale to 10 - tnx @Jon7sky 
  * ver. 3.4.0  2025-02-02 kkossev  - deviceProfilesV3 optimizations; adding add TS0225 _TZ321C_fkzihax8 into LEAPMMW new device profile @Wilson; changed TS0601 _TZE204_ya4ft0w4 dp102 scale back to 1  
  * ver. 3.4.1  2025-02-09 kkossev  - TS0601 _TZE200_kb5noeto added motionDetectionMode; 
- * ver. 3.4.2  2025-03-24 kkossev  - (dev.branch) healthCheck by pinging the device; updateRxStats() replaced with inline code; deviceProfilesV3 optimizations; 
+ * ver. 3.4.2  2025-03-24 kkossev  - healthCheck by pinging the device; updateRxStats() replaced with inline code; deviceProfilesV3 optimizations; 
+ * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException in common.lib for HE platform version 2.4.1.155
  *                                   
  *                                   TODO: check why ignoreDistance prefrence is not shown when forcebly changing the deviceProfile
  *                                   TODO: Optimize the deviceProfilesV3 !! (reached max size ... :( )  
@@ -54,8 +55,8 @@
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
 */
 
-static String version() { "3.4.2" }
-static String timeStamp() {"2025/03/24 2:27 PM"}
+static String version() { "3.5.0" }
+static String timeStamp() {"2025/04/08 8:36 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones

@@ -42,7 +42,8 @@ library(
   * ver. 3.3.3  2024-09-15 kkossev  - added queryAllTuyaDP(); 2 minutes healthCheck option;
   * ver. 3.3.4  2025-01-29 kkossev  - 'LOAD ALL DEFAULTS' is the default Configure command.
   * ver. 3.3.5  2025-03-05 kkossev  - getTuyaAttributeValue made public; fixed checkDriverVersion bug on hub reboot.
-  * ver. 3.4.0  2025-03-23 kkossev  - (dev.branch) healthCheck by pinging the device; updateRxStats() replaced with inline code; added state.lastRx.timeStamp; added activeEndpoints() handler call; documentation improvements
+  * ver. 3.4.0  2025-03-23 kkossev  - healthCheck by pinging the device; updateRxStats() replaced with inline code; added state.lastRx.timeStamp; added activeEndpoints() handler call; documentation improvements
+  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
   *
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
   *                                   TODO: make the configure() without parameter smart - analyze the State variables and call delete states.... call ActiveAndpoints() or/amd initialize() or/and configure()
@@ -58,8 +59,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.4.0' }
-String commonLibStamp() { '2025/03/23 3:51 PM' }
+String commonLibVersion() { '3.5.0' }
+String commonLibStamp() { '2025/04/08 8:36 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -154,12 +155,12 @@ public boolean isVirtual() { device.controllerType == null || device.controllerT
  * @param description Zigbee message in hex format
  */
 public void parse(final String description) {
-    Map stateCopy = state.clone() // copy the state to avoid concurrent modification
+    Map stateCopy = state            // .clone() throws java.lang.CloneNotSupportedException in HE platform version 2.4.1.155 !
     checkDriverVersion(stateCopy)    // +1 ms
     if (state.stats != null) { state.stats?.rxCtr= (state.stats?.rxCtr ?: 0) + 1 } else { state.stats = [:] }  // updateRxStats(state) // +1 ms
     if (state.lastRx != null) { state.lastRx?.timeStamp = unix2formattedDate(now()) } else { state.lastRx = [:] }
     unscheduleCommandTimeoutCheck(state)
-    setHealthStatusOnline(state) // +2 ms
+    setHealthStatusOnline(state)    // +2 ms
 
     if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {
         logDebug "parse: zone status: $description"

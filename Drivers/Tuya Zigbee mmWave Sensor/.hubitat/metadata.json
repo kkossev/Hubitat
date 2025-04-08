@@ -1,16 +1,10 @@
 {
   "files": [
     {
-      "filepath": "/C:/Work/Hubitat/Drivers/Tuya Zigbee mmWave Sensor/Tuya_Zigbee_mmWave_Sensor.groovy",
-      "id": 2862,
-      "codeType": "driver",
-      "version": 5
-    },
-    {
       "filepath": "/c:/Work/Hubitat/Drivers/Tuya Zigbee mmWave Sensor/Tuya_Zigbee_mmWave_Sensor.groovy",
       "id": 2862,
       "codeType": "driver",
-      "version": 336
+      "version": 345
     }
   ]
 }
