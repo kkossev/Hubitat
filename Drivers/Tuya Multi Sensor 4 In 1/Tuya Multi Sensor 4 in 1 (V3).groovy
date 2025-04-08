@@ -26,13 +26,14 @@
  * ver. 3.3.2  2024-11-30 kkossev  - added Azoula Zigbee 4 in 1 Multi Sensor model:'HK-SENSOR-4IN1-A', manufacturer:'Sunricher' into SIHAS group
  * ver. 3.3.3  2025-01-29 kkossev  - TS0601 _TZE200_ppuj1vem moved to 'TS0601_2IN1_MYQ_ZMS03' deviceProfile @ltdonjohnson
  * ver. 3.4.0  2025-03-03 kkossev  - added customConfigureDevice(); SNZB-03 configuration bug fixes;  added SNZB-03P device profile;
- * ver. 3.4.1  2025-03-29 kkossev  - (dev. branch) added custom configuration function for Espressif @ilkeraktuna
+ * ver. 3.4.1  2025-03-29 kkossev  - added custom configuration function for Espressif @ilkeraktuna
+ * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  *                                   
  *                                   TODO: update documentation : https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1 
  */
 
-static String version() { "3.4.1" }
-static String timeStamp() {"2025/03/29 12:37 PM"}
+static String version() { "3.5.0" }
+static String timeStamp() {"2025/04/08 9:06 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
