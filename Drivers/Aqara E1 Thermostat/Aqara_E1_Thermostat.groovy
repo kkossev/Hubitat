@@ -18,6 +18,7 @@
  * ver. 3.3.0  2024-06-08 kkossev  - new driver for Aqara E1 thermostat using thermostatLib
  * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
  * ver. 3.4.1  2025-03-04 kkossev  - disabled 'cool' mode for the Aqara E1 thermostat
+ * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  *
  *                                   TODO: add Info dummy preference to the driver with a hyperlink
  *                                   TODO: add state.thermostat for storing last attributes
@@ -44,8 +45,8 @@
  *                                   TODO: Aqara E1 external sensor
  */
 
-static String version() { '3.4.1' }
-static String timeStamp() { '2025/03/04 9:18 PM' }
+static String version() { '3.5.0' }
+static String timeStamp() { '2025/04/08 9:19 PM' }
 
 @Field static final Boolean _DEBUG = false
 

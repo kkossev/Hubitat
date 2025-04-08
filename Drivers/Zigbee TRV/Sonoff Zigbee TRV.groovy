@@ -17,6 +17,7 @@
  * ver. 3.3.1  2024-07-18 kkossev  - TimeSync() magic;
  * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
  * ver. 3.4.1  2025-03-06 kkossev  - (dev. branch) healthCheck by pinging the TRV
+ * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  *
  *                                   TODO: sonoff - the battery is reported twice, and too often
  *                                   TODO: Sonoff : decode weekly schedule responses (command 0x00)
@@ -40,8 +41,8 @@
  *                                   TODO: All TRVs - after emergency heat, restore the last mode and heatingSetpoint
  */
 
-static String version() { '3.4.1' }
-static String timeStamp() { '2025/03/06 10:29 PM' }
+static String version() { '3.5.0' }
+static String timeStamp() { '2025/04/08 9:20 PM' }
 
 @Field static final Boolean _DEBUG = false
 

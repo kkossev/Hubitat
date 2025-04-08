@@ -34,6 +34,7 @@
  * ver. 3.3.0  2024-06-07 kkossev  - moved all Tuya, Aqara E1, NAMRON and TRVZB to separate drivers;
  * ver. 3.3.5  2024-07-15 kkossev  - using the new thermostatLib; Stelpro thermostats;
  * ver. 3.4.0  2024-10-05 kkossev  - driver renamed to Zigbee TRVs and Thermostats (Misc); code cleanup; added to HPM
+ * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  *
  *                                   TODO: add Info dummy preference to the driver with a hyperlink
  *                                   TODO: add state.thermostat for storing last attributes
@@ -56,8 +57,8 @@
  *                                   TODO: UNKNOWN TRV - update the deviceProfile - separate 'Unknown Tuya' and 'Unknown ZCL'
  */
 
-static String version() { '3.4.0' }
-static String timeStamp() { '2024/10/05 6:13 PM' }
+static String version() { '3.5.0' }
+static String timeStamp() { '2024/04/08 9:21 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true

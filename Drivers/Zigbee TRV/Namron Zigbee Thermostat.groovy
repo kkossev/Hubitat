@@ -24,12 +24,13 @@
  * ver. 3.3.7  2024-09-01 kkossev  - New 'Sunricher Thermostat' device profile; fixed missing eco() method; rounded the floorTemperature to 0.1; heatingSetpoint is updated to the ecoSetpoint when eco mode is activated; added ecoSetPoint attribute;
  *                                   removed systemMode'; added command 'eco'; added state.lastHeatingSetpoint; fixed thermostatMode switching from 'eco' to 'off'; fixed emergencyHeating mode update;
  * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
+ * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  *
  *                                   TODO:
 */
 
-static String version() { '3.4.0' }
-static String timeStamp() { '2024/10/05 7:14 PM' }
+static String version() { '3.5.0' }
+static String timeStamp() { '2025/04/08 9:19 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
