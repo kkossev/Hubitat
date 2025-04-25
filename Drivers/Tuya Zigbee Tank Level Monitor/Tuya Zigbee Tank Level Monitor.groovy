@@ -16,15 +16,14 @@
  * ver. 3.3.1  2024-08-08 kkossev  - driver renamed to 'Tuya Zigbee Tank Level Monitor'
  * ver. 3.3.2  2024-08-11 kkossev  - driver renamed to 'Tuya Zigbee Tank Level Monitor', pars renamed to upperLimit/lowerLimit; added MOREYALEC_TUYA_ME201WZ device profile for tests;
  * ver. 3.3.3  2024-08-30 kkossev  - updated _TZE284_kyyu8rbj fingerprint for Morayelec ME201WZ; changeed battery from percentage to voltage; queryAllTuyaDP on refresh
- * ver. 3.3.4  2024-09-06 kkossev  - (dev.branch) default Debig option is off; installationHeight is now a in meters;
+ * ver. 3.3.4  2024-09-06 kkossev  - default Debig option is off; installationHeight is now a in meters;
+ * ver. 3.4.0  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
  *                                   
- *                                   TODO: 'Installation Height' not updating @digitalturbo
- *                                   TODO: queryAllTuyaDP on refresh to be made optional
- *                                   TODO: HPM
+ *                                   TODO:
  */
 
-static String version() { "3.3.4" }
-static String timeStamp() {"2024/09/06 1:04 PM"}
+static String version() { "3.4.0" }
+static String timeStamp() {"2025/04/25 6:93 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones

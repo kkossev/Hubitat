@@ -5,6 +5,12 @@
       "id": 144,
       "codeType": "library",
       "version": 623
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLib.groovy",
+      "id": 142,
+      "codeType": "library",
+      "version": 606
     }
   ]
 }

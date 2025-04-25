@@ -17,6 +17,12 @@
       "codeType": "driver",
       "id": 3221,
       "version": 10
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Drivers/Misc/shelly_1pm_gen4_driver.groovy",
+      "id": 3817,
+      "codeType": "driver",
+      "version": 34
     }
   ]
 }

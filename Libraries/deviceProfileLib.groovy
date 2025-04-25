@@ -34,7 +34,8 @@ library(
  * ver. 3.3.4  2024-09-28 kkossev  - fixed exceptions in resetPreferencesToDefaults() and initEventsDeviceProfile()
  * ver. 3.4.0  2025-02-02 kkossev  - deviceProfilesV3 optimizations (defaultFingerprint); is2in1() mod
  * ver. 3.4.1  2025-02-02 kkossev  - setPar help improvements;
- * ver. 3.4.2  2025-03-24 kkossev  - (dev. branch) added refreshFromConfigureReadList() method; documentation update; getDeviceNameAndProfile uses DEVICE.description instead of deviceJoinName
+ * ver. 3.4.2  2025-03-24 kkossev  - added refreshFromConfigureReadList() method; documentation update; getDeviceNameAndProfile uses DEVICE.description instead of deviceJoinName
+ * ver. 3.4.3  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
@@ -46,8 +47,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.4.2' }
-static String deviceProfileLibStamp() { '2025/03/24 1:31 PM' }
+static String deviceProfileLibVersion()   { '3.4.3' }
+static String deviceProfileLibStamp() { '2025/04/25 12:43 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -801,7 +802,8 @@ public Map inputIt(String paramPar, boolean debug = false) {
     input.description = foundMap.description ?: ''   // if description is not defined, skip it
     if (input.type in ['number', 'decimal']) {
         if (foundMap.min != null && foundMap.max != null) {
-            input.range = "${foundMap.min}..${foundMap.max}"
+            //input.range = "${foundMap.min}..${foundMap.max}"
+            input.range = "${Math.ceil(foundMap.min) as int}..${Math.ceil(foundMap.max) as int}"
         }
         if (input.range != null && input.description != null) {
             if (input.description != '') { input.description += '<br>' }
