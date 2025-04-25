@@ -1,10 +1,10 @@
 {
   "packageName": "Tuya Multi Sensor 4 In 1",
   "author": "Krassimir Kossev",
-  "version": "3.3.3",
+  "version": "3.5.1",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2025-02-02",
-  "releaseNotes": "3.3.3  2025-01-29 - _TZE200_ppuj1vem moved to 'TS0601_2IN1_MYQ_ZMS03' deviceProfile @ltdonjohnson\n3.3.2  2024-11-30 - added Azoula Zigbee 4 in 1 Multi Sensor model:'HK-SENSOR-4IN1-A', manufacturer:'Sunricher' into SIHAS group3.3.1  2024-10-26 - added TS0601 _TZE200_f1pvdgoh into a new device profile group 'TS0601_2IN1_MYQ_ZMS03'\n3.3.0  2024-08-30 - main branch release.\n3.2.3  2024-07-27 - added Sonoff SNZB-03P\n3.2.2  2024-07-05 - created motionLib; restored 'all' attribute\n3.2.1  2024-05-31 - commonLib ver 3.2.1 allignment; tested 2In1 _TZE200_3towulqd ; new device profile group 'RH3040_TUYATEC'; SiHAS; \n3.2.0  2024-05-26 - first version, based on the mmWave radar driver code : depricated Linptech; added TS0202 add _TYZB01_vwqnz1sn; ",
+  "dateReleased": "2025-04-25",
+  "releaseNotes": "3.5.1  2025-04-25 - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.\n3.5.0  2025-04-08 - urgent fix for java.lang.CloneNotSupportedException\n3.4.1  2025-03-29 - added custom configuration function for Espressif @ilkeraktuna\n3.4.0  2025-03-03 - added customConfigureDevice(); SNZB-03 configuration bug fixes;  added SNZB-03P device profile;\n3.3.3  2025-01-29 - _TZE200_ppuj1vem moved to 'TS0601_2IN1_MYQ_ZMS03' deviceProfile @ltdonjohnson\n3.3.2  2024-11-30 - added Azoula Zigbee 4 in 1 Multi Sensor model:'HK-SENSOR-4IN1-A', manufacturer:'Sunricher' into SIHAS group3.3.1  2024-10-26 - added TS0601 _TZE200_f1pvdgoh into a new device profile group 'TS0601_2IN1_MYQ_ZMS03'\n3.3.0  2024-08-30 - main branch release.\n3.2.3  2024-07-27 - added Sonoff SNZB-03P\n3.2.2  2024-07-05 - created motionLib; restored 'all' attribute\n3.2.1  2024-05-31 - commonLib ver 3.2.1 allignment; tested 2In1 _TZE200_3towulqd ; new device profile group 'RH3040_TUYATEC'; SiHAS; \n3.2.0  2024-05-26 - first version, based on the mmWave radar driver code : depricated Linptech; added TS0202 add _TYZB01_vwqnz1sn; ",
   "documentationLink": "https://community.hubitat.com/t/beta-tuya-zigbee-multi-sensor-4-in-1/92441/2",
   "communityLink": "https://community.hubitat.com/t/beta-tuya-zigbee-multi-sensor-4-in-1/92441",  
   "drivers": [
