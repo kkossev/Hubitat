@@ -53,7 +53,9 @@
  * ver. 2.7.2 2024-05-06 kkossev     - bug fix: TS0044 _TZ3000_vp6clf9d _TZ3000_ur5fpg7p _TZ3000_wkai4ga5 needed to be pushed twice to active a button; Configure button will reset the statistics;
  * ver. 2.7.3 2024-06-22 kkossev     - added TS0041 _TZ3000_s0i14ubi; added TS0041 _TZ3000_mrpevh8p
  * ver. 2.7.4 2024-12-03 kkossev     - debounce for TS0043 TZ3000_gbm10jnj
- * ver. 2.8.0 2024-12-04 kkossev     - (dev. branch) added forcedDebounce preference; default debounce timer changed to 1200ms
+ * ver. 2.8.0 2024-12-04 kkossev     - added forcedDebounce preference; default debounce timer changed to 1200ms
+ * ver. 2.8.1 2025-01-12 kkossev     - added SiHAS models SBM300Z2, SBM300Z3, SBM300Z4, SBM300Z5, SBM300Z6, ISM300Z3
+ * ver. 2.8.2 2025-05-04 kkossev     - added TS0044 _TZ3000_5tqxpine 
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: batteryReporting is not initialized!
@@ -72,8 +74,8 @@
  *                                   - TODO: add supports forZigbee identify cluster (0x0003) ( activate LEDs as feedback that HSM is armed/disarmed ..)
  */
 
-static String version() { '2.8.0' }
-static String timeStamp() { '2024/12/04 8:11 AM' }
+static String version() { '2.8.2' }
+static String timeStamp() { '2025/05/04 7:42 AM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -159,6 +161,7 @@ metadata {
         fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TYZB01_cnlmkhbk', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // not tested
         fingerprint inClusters: '0000,0001,0006', outClusters: '0019,000A', manufacturer: '_TZ3000_u3nv1jwk', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // not tested https://community.hubitat.com/t/zigbee-wireless-scene-switch/108146?u=kkossev
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0006,E000,0000', outClusters: '0019,000A', model: 'TS0044', manufacturer: '_TZ3000_mh9px7cq', deviceJoinName: 'Moes 4 button controller'    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
+        fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0006,E000,0000', outClusters: '0019,000A', model: 'TS0044', manufacturer: '_TZ3000_5tqxpine', deviceJoinName: 'Tuya 4 button controller'    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/268?u=kkossev
 
         fingerprint inClusters: '0000,0001,0003,0004,0006,1000', outClusters: '0019,000A,0003,0004,0005,0006,0008,1000', manufacturer: '_TZ3000_abci1hiu', model: 'TS0044', deviceJoinName: 'MOES Remote TS0044'
 
@@ -198,6 +201,14 @@ metadata {
 
         fingerprint inClusters: '0000,0001,0003,0004,1000', outClusters: '0019,000A,0003,0004,0005,0006,0008,0300,1000', manufacturer: '_TZ3000_b3mgfu0d', model: 'TS0044', deviceJoinName: 'Candeo remote' //https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/187?u=kkossev
         fingerprint inClusters: '0000,0001,0003,0004,1000', outClusters: '0019,000A,0003,0004,0005,0006,0008,0300,1000', manufacturer: '_TZ3000_czuyt8lz', model: 'TS0044', deviceJoinName: 'Candeo remote'
+
+		// SiHAS Switch (2~6 Gang) https://github.com/SmartThingsCommunity/SmartThingsPublic/blob/eb3cee1775bc55148813909aa9e891631de1e2e8/devicetypes/smartthings/zigbee-multi-switch.src/zigbee-multi-switch.groovy#L102
+		fingerprint inClusters: "0000,0003,0006,0019", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "SBM300Z2", deviceJoinName: "SiHAS Switch 2"
+		fingerprint inClusters: "0000,0003,0006,0019", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "SBM300Z3", deviceJoinName: "SiHAS Switch 3"
+		fingerprint inClusters: "0000,0003,0006,0019", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "SBM300Z4", deviceJoinName: "SiHAS Switch 4"
+		fingerprint inClusters: "0000,0003,0006,0019", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "SBM300Z5", deviceJoinName: "SiHAS Switch 5"
+		fingerprint inClusters: "0000,0003,0006,0019", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "SBM300Z6", deviceJoinName: "SiHAS Switch 6"
+		fingerprint inClusters: "0000,0003,0006,0019", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "ISM300Z3", deviceJoinName: "SiHAS Switch 3"        
     }
     preferences {
         input(name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_LOG_ENABLE)
@@ -238,6 +249,7 @@ boolean needsDebouncing() { (settings?.forcedDebounce == true) || (device.getDat
 boolean needsMagic() { device.getDataValue('model') in ['TS004F', 'TS0044', 'TS0043', 'TS0042', 'TS0041', 'TS0046'] }
 boolean isSOSbutton() { device.getDataValue('manufacturer') in ['_TZ3000_4fsgukof', '_TZ3000_wr2ucaj9', '_TZ3000_zsh6uat3', '_TZ3000_tj4pwzzm', '_TZ3000_2izubafb', '_TZ3000_pkfazisv' ] }
 boolean isUSBpowered() { device.getDataValue('manufacturer') in ['_TZ3000_b3mgfu0d', '_TZ3000_czuyt8lz'] }
+boolean isSiHAS() { device.getDataValue('manufacturer') == 'ShinaSystem' }
 
 // Parse incoming device messages to generate events
 void parse(String description) {
@@ -652,10 +664,10 @@ void initialize() {
     else if ((device.getDataValue('model') in ['TS0041', '3AFE280100510001', '3AFE170100510001']) || (device.getDataValue('manufacturer') in ['_TZ3000_ja5osu5g', 'eWeLink'])) {
         numberOfButtons = 1
     }
-    else if (device.getDataValue('model') in ['TS0042', 'TS0021']) {
+    else if (device.getDataValue('model') in ['TS0042', 'TS0021', 'SBM300Z2']) {
         numberOfButtons = 2
     }
-    else if (device.getDataValue('model') == 'TS0043') {
+    else if (device.getDataValue('model') in ['TS0043', 'SBM300Z3', 'ISM300Z3']) {
         numberOfButtons = 3
     }
     else if (device.getDataValue('model') == 'TS004F' || device.getDataValue('model') == 'TS0044') {
@@ -670,14 +682,14 @@ void initialize() {
             supportedValues = ['pushed', 'double', 'held']    // no released events are generated in scene switch mode
         }
     }
-    else if (device.getDataValue('model') == 'TS0215') {
+    else if (device.getDataValue('model') in ['TS0215']) {
         numberOfButtons = 4
         supportedValues = ['pushed']
     }
-    else if (device.getDataValue('model') == 'TS0045') {    // just in case a new Tuya devices manufacturer decides to invent a new  model! :)
+    else if (device.getDataValue('model') in ['TS0045', 'SBM300Z5']) {    // just in case a new Tuya devices manufacturer decides to invent a new  model! :)
         numberOfButtons = 5
     }
-    else if (device.getDataValue('model') in ['TS0601', 'TS0046']) {
+    else if (device.getDataValue('model') in ['TS0601', 'TS0046', 'SBM300Z6']) {
         numberOfButtons = 6
     }
     else if (isIcasa()) {
@@ -692,6 +704,9 @@ void initialize() {
         numberOfButtons = 3
         supportedValues = ['pushed', 'held', 'released']
     }
+    else if (device.getDataValue('model') in ['SBM300Z4']) {
+        supportedValues = ['pushed']
+    }    
     else {
         numberOfButtons = 4    // unknown
         supportedValues = ['pushed', 'double', 'held', 'released']
