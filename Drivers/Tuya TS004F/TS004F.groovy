@@ -54,7 +54,8 @@
  * ver. 2.7.3 2024-06-22 kkossev     - added TS0041 _TZ3000_s0i14ubi; added TS0041 _TZ3000_mrpevh8p
  * ver. 2.7.4 2024-12-03 kkossev     - debounce for TS0043 TZ3000_gbm10jnj
  * ver. 2.8.0 2024-12-04 kkossev     - added forcedDebounce preference; default debounce timer changed to 1200ms
- * ver. 2.8.1 2025-01-12 kkossev     - (dev.branch) - added SiHAS models SBM300Z2, SBM300Z3, SBM300Z4, SBM300Z5, SBM300Z6, ISM300Z3
+ * ver. 2.8.1 2025-01-12 kkossev     - added SiHAS models SBM300Z2, SBM300Z3, SBM300Z4, SBM300Z5, SBM300Z6, ISM300Z3
+ * ver. 2.8.2 2025-05-04 kkossev     - added TS0044 _TZ3000_5tqxpine 
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: batteryReporting is not initialized!
@@ -73,8 +74,8 @@
  *                                   - TODO: add supports forZigbee identify cluster (0x0003) ( activate LEDs as feedback that HSM is armed/disarmed ..)
  */
 
-static String version() { '2.8.1' }
-static String timeStamp() { '2025/01/12 9:09 AM' }
+static String version() { '2.8.2' }
+static String timeStamp() { '2025/05/04 7:42 AM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -160,6 +161,7 @@ metadata {
         fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TYZB01_cnlmkhbk', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // not tested
         fingerprint inClusters: '0000,0001,0006', outClusters: '0019,000A', manufacturer: '_TZ3000_u3nv1jwk', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // not tested https://community.hubitat.com/t/zigbee-wireless-scene-switch/108146?u=kkossev
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0006,E000,0000', outClusters: '0019,000A', model: 'TS0044', manufacturer: '_TZ3000_mh9px7cq', deviceJoinName: 'Moes 4 button controller'    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
+        fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0006,E000,0000', outClusters: '0019,000A', model: 'TS0044', manufacturer: '_TZ3000_5tqxpine', deviceJoinName: 'Tuya 4 button controller'    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/268?u=kkossev
 
         fingerprint inClusters: '0000,0001,0003,0004,0006,1000', outClusters: '0019,000A,0003,0004,0005,0006,0008,1000', manufacturer: '_TZ3000_abci1hiu', model: 'TS0044', deviceJoinName: 'MOES Remote TS0044'
 
