@@ -23,7 +23,8 @@
  *  ver. 1.1.3 2023-11-19 kkossev - (dev. branch) fixed _TZE200_m9skfctm battery reporting; fix RTT negative values bug
  *  ver. 1.1.3 2024-03-26 hubivlad -(main branch) added _TZE200_rccxox8p
  *  ver. 1.2.0 2024-02-20 kkossev - (dev. branch) Groovy lint; added TZE204_ntcy3xu1
- *  ver. 1.2.1 2024-03-27 kkossev - (dev. branch) merged main branch ver. 1.1.3 commit by hubivlad
+ *  ver. 1.2.1 2024-03-27 kkossev - merged main branch ver. 1.1.3 commit by hubivlad
+ *  ver. 1.3.0 2025-05-13 kkossev - (dev.branch) added TS0601 _TZE204_iuk8kupi @John_Land; added GasDetector and CarbonMonoxideDetector capabilities
  *
  *            TODO: re-send the powerSource event on every check-in, so that HE Active state is refreshed ...
  *            TODO: more tuyaMagic, if the periodic check-in patch doesn't work.
@@ -34,8 +35,8 @@
 import groovy.json.*
 import groovy.transform.Field
 
-def version() { '1.2.1' }
-def timeStamp() { '2024/03/27 7:24 AM' }
+def version() { '1.3.0' }
+def timeStamp() { '2025/05/13 7:21 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -49,9 +50,15 @@ metadata {
         capability 'Battery'            //  ea.STATE, ['low', 'middle', 'high']).withDescription('Battery level state'),    dp14 0=25% 1=50% 2=90% [dp=14] battery low   value 2 (FULL)
         capability 'PowerSource'        //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
         capability 'Health Check'
+        capability 'GasDetector'                // Methane (CH4) Attributes: naturalGas - ENUM ["clear", "tested", "detected"]
+        capability 'CarbonMonoxideDetector'     // Attributes: carbonMonoxide - ENUM ["clear", "tested", "detected"]
+        //capability 'CarbonDioxideMeasurement' // Attributes: carbonDioxide - NUMBER, unit:ppm
         //capability "Refresh"
 
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
+        attribute 'smokeValue', 'number'
+        attribute 'naturalGasValue', 'number'
+        attribute 'carbonMonoxideValue', 'number'
         attribute 'rtt', 'number'
 
         command 'clear'
@@ -84,6 +91,9 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_ytibqbra'    // not tested
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_dnz6yvl2'    // not tested
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_rccxox8p'    // being tested by hubivlad
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_iuk8kupi'    // https://community.hubitat.com/t/tuya-natural-gas-co-detector-need-driver/153418?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_iuk8kupi'    // 
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_8isdky6j'    // not tested (Gas sensor)
     }
 
     preferences {
@@ -112,7 +122,8 @@ private getDP_TYPE_STRING()     { '03' }    // [ N byte string ]
 private getDP_TYPE_ENUM()       { '04' }    // [ 0-255 ]
 private getDP_TYPE_BITMAP()     { '05' }    // [ 1,2,4 bytes ] as bits
 
-def isTS0601() { return device.getDataValue('model') in ['TS0601'] }
+def isTS0601()   { return device.getDataValue('model') in ['TS0601'] }
+def isTuya2in1() { return device.getDataValue('manufacturer') in ['_TZE204_iuk8kupi', '_TZE200_iuk8kupi', '_TZE200_8isdky6j'] } // Gas & Carbon Monoxide detector (CO&CH4)?
 
 def parse(String description) {
     if (logEnable) { log.debug "${device.displayName } description is $description" }
@@ -283,26 +294,39 @@ def parseZHAcommand( Map descMap) {
                         //if (logEnable==true) log.trace "${device.displayName} Tuya cluster cmd=${cmd} value=${value} ()"
                         //def map = [:]
                         switch (cmd) {
-                            case '01' : // smoke alarm for all models
-                                if (txtEnable) { log.info "${device.displayName} smoke alarm (dp=${cmd}) is: ${value}" }
-                                sendSmokeAlarmEvent( value)
+                            case '01' : 
+                                if (isTuya2in1()) {
+                                    if (logEnable) { log.info "${device.displayName} smnatural gas alarm (dp=${cmd}) is: ${value}" }
+                                    sendNaturalGasAlarmEvent( value, true)
+                                }
+                                else { // smoke alarm for all other models
+                                    if (logEnable) { log.info "${device.displayName} smoke alarm (dp=${cmd}) is: ${value}" }
+                                    sendSmokeAlarmEvent( value)
+                                }
                                 break
                             case '02' : // raw data from _TZE200_m9skfctm '_TZE200_e2bedvo9', '_TZE200_dnz6yvl2'
-                                if (txtEnable) { log.info "${device.displayName} smoke concentration  (dp=${cmd}) is: ${value / 10}ppm (${value})" }
+                                if (isTuya2in1()) {
+                                    if (logEnable) { log.info "${device.displayName} Natural Gas concentration (dp=${cmd}) is: ${value / 1000} (raw:${value})" }
+                                    sendNaturalGasValueEvent( value / 1000)
+                                }
+                                else {
+                                    if (logEnable) { log.info "${device.displayName} smoke concentration  (dp=${cmd}) is: ${value / 10}ppm (raw=${value})" }
+                                    sendSmokeAlarmValueEvent( value / 10 )
+                                }
                                 break
                             case '04' : // "TamperAlert" for all models
-                                if (txtEnable) { log.info "${device.displayName} tamper alert (dp=${cmd}) is: ${value}" }
+                                if (logEnable) { log.info "${device.displayName} tamper alert (dp=${cmd}) is: ${value}" }
                                 sendTamperAlertEvent( value )
                                 break
                             case '0B' : // (11) "Fault Alarm" for _TZE200_yh7aoahi _TZE200_m9skfctm
-                                if (txtEnable) { log.info "${device.displayName} Fault Alarm (dp=${cmd}) is: ${value}" }
+                                if (logEnable) { log.info "${device.displayName} Fault Alarm (dp=${cmd}) is: ${value}" }
                                 break
                             case '0E' : // (14) "battery level state" ['low', 'middle', 'high'] dp14 0=25% 1=50% 2=90% also for _TZE200_yh7aoahi
-                                if (txtEnable) { log.info "${device.displayName} Battery level state (dp=${cmd}) is: ${value}" }
+                                if (logEnable) { log.info "${device.displayName} Battery level state (dp=${cmd}) is: ${value}" }
                                 sendBatteryStateEvent( value )
                                 break
                             case '0F' : // (15) "battery level % for _TZE200_yh7aoahi
-                                if (txtEnable) { log.info "${device.displayName} Battery level % (dp=${cmd}) is: ${value}%" }
+                                if (logEnable) { log.info "${device.displayName} Battery level % (dp=${cmd}) is: ${value}%" }
                                 sendBatteryPercentEvent( value )
                                 break
                             case '10' : // (16) "silence" for _TZE200_yh7aoahi _TZE200_ytibqbra
@@ -311,6 +335,15 @@ def parseZHAcommand( Map descMap) {
                             case '11' : // (17) "alarm" for  _TZE200_ytibqbra
                                 if (txtEnable) { log.info "${device.displayName} 'alarm' state (dp=${cmd}) is: ${value}" }
                                 break
+                            case '12' : // (18) co Alarm for _TZE204_iuk8kupi
+                                if (logEnable) { log.info "${device.displayName} 'carbonMonoxide' state (dp=${cmd}) is: ${value}" }
+                                sendCarbonMonoxideAlarmEvent( value )
+                                break
+                            case '13' : // (19) "carbon monoxide" value for _TZE204_iuk8kupi 
+                                if (logEnable) { log.info "${device.displayName} 'carbon monoxide' value (dp=${cmd}) is: ${value / 100} (raw:${value})" }
+                                sendCarbonMonoxideValueEvent( value / 100)
+                                break
+
                             case '65' : // (101) test for _TZE200_m9skfctm; alarm for _TZE200_dq1mfjug
                                 if (device.getDataValue('manufacturer') in ['_TZE200_m9skfctm']) {
                                     if (txtEnable) { log.info "${device.displayName} test (dp=${cmd}) is: ${value}" }
@@ -399,6 +432,7 @@ private int getAttributeValue(ArrayList _data) {
     return retValue
 }
 
+// capability 'Smoke Detector' 
 def sendSmokeAlarmEvent( value, isDigital=false ) {    // attributes: smoke ("detected","clear","tested")    ea.STATE, true, false).withDescription('Smoke alarm status'),  [dp=1]
     def map = [:]
     map.value = value == 0 ? 'detected' : value == 1 ? 'clear' : value == 2 ? 'tested' : null
@@ -410,6 +444,69 @@ def sendSmokeAlarmEvent( value, isDigital=false ) {    // attributes: smoke ("de
     if (settings?.txtEnable) { log.info "${device.displayName } ${map.descriptionText }" }
     sendEvent(map)
 }
+
+def sendSmokeAlarmValueEvent( value, isDigital=false ) {    // attributes: smoke ("detected","clear","tested")    ea.STATE, true, false).withDescription('Smoke alarm status'),  [dp=1]
+    def map = [:]
+    map.value = value > 10000 ? 10000 : value
+    map.name = 'smokeValue'
+    map.unit = 'ppm'
+    map.type = isDigital == true ? 'digital' : 'physical'
+    map.isStateChange = true
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (settings?.txtEnable) { log.info "${device.displayName } ${map.descriptionText }" }
+    sendEvent(map)
+}
+
+//capability 'CarbonMonoxideDetector'   
+def sendCarbonMonoxideAlarmEvent( value, isDigital=false ) {    // attributes: carbonMonoxide  ("detected","clear","tested")
+    def map = [:]
+    map.value = value == 0 ? 'detected' : value == 1 ? 'clear' : value == 2 ? 'tested' : null
+    map.name = 'carbonMonoxide'
+    map.unit = ''
+    map.type = isDigital == true ? 'digital' : 'physical'
+    //map.isStateChange = true
+    map.descriptionText = "${map.name} is ${map.value}"
+    if (settings?.txtEnable) { log.info "${device.displayName } ${map.descriptionText }" }
+    sendEvent(map)
+}
+
+def sendCarbonMonoxideValueEvent( value, isDigital=false ) {
+    def map = [:]
+    map.value = value > 10000 ? 10000 : value
+    map.name = 'carbonMonoxideValue'
+    map.unit = 'ppm'
+    map.type = isDigital == true ? 'digital' : 'physical'
+    //map.isStateChange = true
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (settings?.txtEnable) { log.info "${device.displayName } ${map.descriptionText }" }
+    sendEvent(map)
+}
+
+// capability 'GasDetector'       // Methane (CH4) Attributes: naturalGas - ENUM ["clear", "tested", "detected"]
+def sendNaturalGasAlarmEvent( value, isDigital=false ) {    // attributes: naturalGas - ENUM ["clear", "tested", "detected"]
+    def map = [:]
+    map.value = value == 0 ? 'detected' : value == 1 ? 'clear' : value == 2 ? 'tested' : null
+    map.name = 'naturalGas'
+    map.unit = ''
+    map.type = isDigital == true ? 'digital' : 'physical'
+    map.isStateChange = true
+    map.descriptionText = "${map.name} is ${map.value}"
+    if (settings?.txtEnable) { log.info "${device.displayName } ${map.descriptionText }" }
+    sendEvent(map)
+}
+
+def sendNaturalGasValueEvent( value, isDigital=false ) {    // attributes: naturalGasValue, number
+    def map = [:]
+    map.value = value > 10000 ? 10000 : value
+    map.name = 'naturalGasValue'
+    map.unit = 'ppm'
+    map.type = isDigital == true ? 'digital' : 'physical'
+    map.isStateChange = true
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (settings?.txtEnable) { log.info "${device.displayName } ${map.descriptionText }" }
+    sendEvent(map)
+}
+
 
 def sendTamperAlertEvent( value, isDigital=false ) {    // attributes: tamper - ENUM ["clear", "detected"]    [dp=4 ]  values 1/0
     def map = [:]
@@ -622,7 +719,13 @@ def installed() {
     if (txtEnable) { log.info "${device.displayName} Installed()..." }
     initializeVars()
     def descText = 'driver just installed'
-    sendEvent(name: 'smoke', value: 'unknown', descriptionText: descText, type:  'digital' , isStateChange: true )
+    if (isTuya2in1()) {
+        sendEvent(name: 'naturalGas', value: 'unknown', descriptionText: descText, type:  'digital' , isStateChange: true )
+        sendEvent(name: 'naturalGasValue', value: 0, descriptionText: descText, type:  'digital' , isStateChange: true )
+    }
+    else {
+        sendEvent(name: 'smoke', value: 'unknown', descriptionText: descText, type:  'digital' , isStateChange: true )
+    }
     sendEvent(name: 'healthStatus', value: 'unknown', descriptionText: descText, type:  'digital' , isStateChange: true )
     sendEvent(name: 'powerSource', value: 'unknown', descriptionText: descText, type:  'digital' , isStateChange: true )
     runIn( 5, initialize, [overwrite: true])
