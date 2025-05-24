@@ -45,21 +45,14 @@
  * ver. 1.7.1 2024-11-19 kkossev  - added motionSensitivity for FP1E; added targetDistance for FP1E; added detectionRange for FP1E
  * ver. 1.7.2 2024-11-28 kkossev  - HE platfrom 2.4.0.x compatibility fixes;
  * ver. 1.7.3 2025-01-16 kkossev  - first ping() throwing exception bug fix tnx@user2428 
+ * ver. 1.7.4 2025-05-24 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
  * 
- *                                 TODO: powerSource 'unknown' fix; No signature of method: user_driver_kkossev_Aqara_P1_Motion_Sensor_3016.resetState() is applicable for argument types: () values: [] on line 1130 (method deviceCommandTimeout)
- *                                 TODO: WARN log, when the device model is not registered during the pairing !!!!!!!!
- *                                 TODO: automatic logsOff() is not working sometimes!
- *                                 TODO: configure to clear the current states and events
- *                                 TODO: Info logs only when parameters (sensitivity, etc..) are changed from the previous value
- *                                 TODO: state motionStarted in human readable form
- *                                 TODO: add 'remove FP1 regions' command
- *                                 TODO: fill in the aqaraVersion from SWBUILD_TAG_ID, not from HE application version !
- *                                 TODO: check why the logsoff was not scheduled on fresh install (version 1.2.4 )
+ *                                 TODO: 
  *
  */
 
-static String version() { "1.7.3" }
-static String timeStamp() {"2025/01/16 11:46 PM"}
+static String version() { "1.7.4" }
+static String timeStamp() {"2025/05/24 5:49 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -151,7 +144,7 @@ metadata {
         input (name: 'helpInfo',  type: 'hidden', title: "Information on Pairing and Configuration", description: "Pair the P1 and FP1/FP1E devices two times (without deleting), very close to the HE hub. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences")
         if (device) {
             if (!(isFP1() || isFP1E()) && !isLightSensor()) {
-                input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "<i>After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 30 seconds</i>", range: "0..7200", defaultValue: 30)
+                input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "<i>After motion is detected, wait ${motionResetTimer} second(s) until resetting to inactive state. Default = 30 seconds</i>", range: "0..7200", defaultValue: 30)
             }    
             if (isRTCGQ13LM() || isP1() || isT1()) {
                 input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "<i>Motion Retrigger Interval, seconds (2..200)</i>", range: "2..202", defaultValue: 30)
@@ -168,13 +161,13 @@ metadata {
             }
             if (isFP1E()) {
                 input (name: "filterSpam", type: "bool", title: "<b>Filter FP1E Distance Reports</b>", description: "<i>Filter the FP1E distance reports, if not really used in automations. Recommended value is <b>true</b></i>", defaultValue: true)
-                input (name: 'detectionRange', type: 'decimal', title: '<b>Detection Range</b>', description: '<i>Maximum detection distance, range (0.10..6.00)</i>', range: '0.5..6.0', defaultValue: 6.00)
+                input (name: 'detectionRange', type: 'decimal', title: '<b>Detection Range</b>', description: '<i>Maximum detection distance, range (0.10..6.00)</i>', range: '0..6', defaultValue: 6.00)
             }
             if (isLightSensor()) {
                 input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "<i>illuminance minimum reporting interval, seconds (4..300)</i>", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
                 input (name: "illuminanceMaxReportingTime", type: "number", title: "<b>Maximum time between Illuminance Reports</b>", description: "<i>illuminance maximum reporting interval, seconds (120..10000)</i>", range: "120..10000", defaultValue: DEFAULT_ILLUMINANCE_MAX_TIME)
                 input (name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "<i>illuminance reporting threshold, value (1..255)<br>Bigger values will result in less frequent reporting</i>", range: "1..255", defaultValue: 1)
-                input (name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: '<i>Illuminance correction coefficient, range (0.10..10.00)</i>', range: '0.10..10.00', defaultValue: 1.00)
+                input (name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: '<i>Illuminance correction coefficient, range (0.1..10.0)</i>', range: '0..10', defaultValue: 1.00)
             }
             input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "<i>The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b></i>", defaultValue: false)
             if (internalTemperature == true) {
