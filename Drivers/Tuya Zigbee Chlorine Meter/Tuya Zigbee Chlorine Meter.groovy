@@ -14,13 +14,14 @@
  *
  * ver. 3.3.0  2024-08-03 kkossev  - first test version
  * ver. 3.3.1  2024-08-31 kkossev  - added tuyaDataQuery; added dp 103 104 114 115 116 118 decoding; invalid freeChlorine value -1.0  (0xFFFFFFFFF) returned as 0 (zero), added automatic polling (configurable)
- * ver. 3.3.2  2024-09-06 kkossev  - (release candidate) debug is off by default; freeChlorine is divided by 10;
- *                                   
+ * ver. 3.3.2  2024-09-06 kkossev  - debug is off by default; freeChlorine is divided by 10;
+ * ver. 3.4.0  2025-05-24 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
+ * 
  *                                   TODO: 
  */
 
-static String version() { "3.3.2" }
-static String timeStamp() { "2024/09/06 1:32 PM" }
+static String version() { "3.4.0" }
+static String timeStamp() { "2025/05/24 6:46 PM" }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
