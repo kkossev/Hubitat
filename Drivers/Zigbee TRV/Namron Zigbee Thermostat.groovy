@@ -25,12 +25,13 @@
  *                                   removed systemMode'; added command 'eco'; added state.lastHeatingSetpoint; fixed thermostatMode switching from 'eco' to 'off'; fixed emergencyHeating mode update;
  * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
+ * ver. 3.5.2  2025-05-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
  *
  *                                   TODO:
 */
 
-static String version() { '3.5.0' }
-static String timeStamp() { '2025/04/08 9:19 PM' }
+static String version() { '3.5.2' }
+static String timeStamp() { '2025/05/25 9:29 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true

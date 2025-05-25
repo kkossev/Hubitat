@@ -19,34 +19,13 @@
  * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
  * ver. 3.4.1  2025-03-04 kkossev  - disabled 'cool' mode for the Aqara E1 thermostat
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
+ * ver. 3.5.2  2025-05-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
  *
- *                                   TODO: add Info dummy preference to the driver with a hyperlink
- *                                   TODO: add state.thermostat for storing last attributes
- *                                   TODO: Healthcheck to be every hour (not 4 hours) for mains powered thermostats
- *                                   TODO: add 'force manual mode' preference (like in the wall thermostat driver)
- *                                   TODO: option to disable the Auto mode ! (like in the wall thermostat driver)
- *                                   TODO: verify if onoffLib is needed
- *                                   TODO: initializeDeviceThermostat() - configure in the device profile !
- *                                   TODO: add [refresh] for battery heatingSetpoint thermostatOperatingState events and logs
- *                                   TODO: autoPollThermostat: no polling for device profile UNKNOWN
- *                                   TODO: configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
- *                                   TODO: Ping the device on initialize
- *                                   TODO: add factoryReset command Basic -0x0000 (Server); command 0x00
- *                                   TODO: add option 'Simple TRV' (no additinal attributes)
- *                                   TODO: HomeKit - min and max temperature limits?
- *                                   TODO: add receiveCheck() methods for heatingSetpint and mode (option)
- *                                   TODO: separate the autoPoll commands from the refresh commands (lite)
- *                                   TODO: All TRVs - after emergency heat, restore the last mode and heatingSetpoint
- *                                   TODO: Aqara TRV refactoring : add 'defaults' in the device profile to set up the systemMode initial value as 'unknown' ?
- *                                   TODO: Aqara TRV refactoring : eco mode simualtion
- *                                   TODO: Aqara TRV refactoring : emergency heat mode similation by setting maxTemp and when off - restore the previous temperature
- *                                   TODO: Aqara TRV refactoring : calibration as a command !
- *                                   TODO: Aqara TRV refactoring : physical vs digital events ?
- *                                   TODO: Aqara E1 external sensor
+ *                                   TODO: 
  */
 
-static String version() { '3.5.0' }
-static String timeStamp() { '2025/04/08 9:19 PM' }
+static String version() { '3.5.2' }
+static String timeStamp() { '2025/05/25 9:33 AM' }
 
 @Field static final Boolean _DEBUG = false
 
