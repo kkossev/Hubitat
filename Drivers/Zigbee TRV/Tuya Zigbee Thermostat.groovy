@@ -24,37 +24,13 @@
  * ver. 3.4.2  2024-11-12 kkossev  - added TS0601 _TZE204_xnbkhhdr (_TZE200_viy9ihs7 _TZE200_viy9ihs7) thermostat profile 'AVATTO_ZWT198_ZWT100-BH_THERMOSTAT'
  * ver. 3.5.0  2025-02-16 kkossev  - restored sendCommand and setPar; added brightness attribute; added checkIfIsDuplicated; added Resend failed commands : setThermostatMode and heatingSetpoint retries; added forceManual prefrence
  * ver. 3.5.1  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
+ * ver. 3.5.2  2025-05-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
  *
- *                                   TODO: BEOK Chinese time patch!
- *                                   TODO: add TS0601 _TZE204_lzriup1  https://community.hubitat.com/t/release-tuya-wall-mount-thermostat-water-electric-floor-heating-zigbee-driver/87050/318?u=kkossev 
- *                                   TODO: AVATTO -  better descriptions for anti-freeze and limescaleProtect preferences
- *                                   TODO: BEOK - needs retries, the first command is lost sometimes! :(  Battery Voltage to Percentage
- *                                   TODO: BEOK: check calibration and correction DPs !!!
- *                                   TODO: BEOK: do NOT synchronize the clock between 00:00 and 09:00 local time !!
- *                                   TODO: add Info dummy preference to the driver with a hyperlink
- *                                   TODO: add state.thermostat for storing last attributes
- *                                   TODO: Healthcheck to be every hour (not 4 hours) for mains powered thermostats
- *                                   TODO: add 'force manual mode' preference (like in the wall thermostat driver)
- *                                   TODO: option to disable the Auto mode ! (like in the wall thermostat driver)
- *                                   TODO: BRT-100 : what is emergencyHeatingTime and boostTime ?
- *                                   TODO: initializeDeviceThermostat() - configure in the device profile !
- *                                   TODO: partial match for the fingerprint (model if Tuya, manufacturer for the rest)
- *                                   TODO: add [refresh] for battery heatingSetpoint thermostatOperatingState events and logs
- *                                   TODO: autoPollThermostat: no polling for device profile UNKNOWN
- *                                   TODO: configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
- *                                   TODO: Ping the device on initialize
- *                                   TODO: add factoryReset command Basic -0x0000 (Server); command 0x00
- *                                   TODO: add option 'Simple TRV' (no additinal attributes)
- *                                   TODO: HomeKit - min and max temperature limits?
- *                                   TODO: add receiveCheck() methods for heatingSetpint and mode (option)
- *                                   TODO: separate the autoPoll commands from the refresh commands (lite)
- *                                   TODO: All TRVs - after emergency heat, restore the last mode and heatingSetpoint
- *                                   TODO: VIRTUAL thermostat - option to simualate the thermostatOperatingState
- *                                   TODO: UNKNOWN TRV - update the deviceProfile - separate 'Unknown Tuya' and 'Unknown ZCL'
+ *                                   TODO:
  */
 
-static String version() { '3.5.1' }
-static String timeStamp() { '2025/04/08 9:20 PM' }
+static String version() { '3.5.2' }
+static String timeStamp() { '2025/05/25 8:54 AM' }
 
 @Field static final Boolean _DEBUG = false
 

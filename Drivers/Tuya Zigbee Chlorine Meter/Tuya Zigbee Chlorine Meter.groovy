@@ -115,6 +115,7 @@ Measures :
     // https://community.home-assistant.io/t/pool-monitoring-device-yieryi-ble-yl01-zigbee-ph-orp-free-chlorine-salinity-etc/659545/10
     // https://github.com/Koenkk/zigbee2mqtt/issues/18704#issuecomment-1732263086 
     // https://github.com/zigbeefordomoticz/z4d-certified-devices/blob/e65463300dda776145ca4b2953ebe162c2f60b3d/z4d_certified_devices/Certified/Tuya/TS0601-BLE-YL01.json#L7
+    // https://github.com/Koenkk/zigbee2mqtt/issues/18704#issuecomment-2899808006 
     'CHLORINE_METER_BLE_YL01'  : [
             description   : 'BLE_YL01 Tuya Zigbee Chlorine Meter',
             models        : ['TS0601'],
