@@ -1,0 +1,4 @@
+
+MDNS Entries for _awtrix._tcp: [[server:awtrix_21b0c0.local., port:80, ip4Addresses:192.168.0.235, ip6Addresses:, type:awtrix3, name:awtrix_21b0c0, id:awtrix_21b0c0]]
+app:16802025-06-06 22:34:54.599debug[[server:awtrix_21b0c0.local., port:80, ip4Addresses:192.168.0.235, ip6Addresses:, type:awtrix3, name:awtrix_21b0c0, id:awtrix_21b0c0]]
+

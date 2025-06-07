@@ -1,0 +1,106 @@
+substitutions:
+  device_name: "generic-outlet"
+  friendly_name: "Generic Outlet"
+  output_power: "20"
+  project_name: "generic.outlet"
+  project_version: "1.0"
+  restore_mode: "RESTORE_DEFAULT_ON"
+
+esphome:
+  name: "${device_name}"
+  comment: ${friendly_name}
+  name_add_mac_suffix: true
+  project:
+    name: "${project_name}"
+    version: "${project_version}"
+
+esp8266:
+  board: esp01_1m
+  restore_from_flash: true
+
+# Configure WiFi
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  output_power: ${output_power}
+  ap: # Enable fallback hotspot in case wifi connection fails
+    ssid: "${device_name}"
+
+# Enable captive portal in case wifi connection fails
+captive_portal:
+
+# Provides basic web interface and firmware upload capability
+web_server:
+  include_internal: true
+
+# Enable logging
+logger:
+  level: INFO
+  baud_rate: 0 # Disable logging to serial
+
+# Enable native API
+api:
+
+# Enable OTA updates
+ota:
+  on_error:
+    then:
+      - button.press: restart_button
+
+# red led, blink when not connected to wifi or Home Assistant
+status_led:
+    pin:
+      number: GPIO0
+      inverted: true
+
+binary_sensor:
+  # Reports when the button is pressed
+  - platform: gpio
+    name: ${friendly_name} Button
+    device_class: power
+    pin:
+      number: GPIO13
+      inverted: True
+    filters:
+      - delayed_on: 100ms
+    on_press:
+      - switch.toggle: relay
+
+sensor:
+  # WiFi Signal Strength
+  - platform: wifi_signal
+    name: "${friendly_name} WiFi RSSI"
+    update_interval: 10s
+    filters:
+      - sliding_window_moving_average:
+          window_size: 12
+          send_every: 6
+      - delta: 2.0
+
+switch:
+  - platform: gpio
+    name: ${friendly_name}
+    device_class: outlet
+    icon: mdi:power-plug
+    pin: GPIO15
+    id: relay
+    restore_mode: ${restore_mode}
+    on_turn_on:
+      - switch.turn_on: blue_led
+    on_turn_off:
+      - switch.turn_off: blue_led
+
+  - platform: gpio
+    name: "${friendly_name} Blue LED"
+    id: blue_led
+    internal: true
+    pin:
+      number: GPIO2
+      inverted: true
+
+# Reboot
+button:
+  - platform: restart
+    id: restart_button
+    name: "${friendly_name} Restart Firmware"
+    disabled_by_default: true

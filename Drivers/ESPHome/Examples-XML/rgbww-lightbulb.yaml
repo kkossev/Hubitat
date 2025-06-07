@@ -1,0 +1,154 @@
+substitutions:
+  device_name: "rgbww-light"
+  friendly_name: "RGBWW Light"
+  min_power: "0"
+  max_power: "1.0"
+  output_power: "20"
+  project_name: "rgbww-light"
+  project_version: "1.0"
+  restore_mode: "RESTORE_DEFAULT_ON"
+  transition_length: "1s"
+
+esphome:
+  name: "${device_name}"
+  comment: ${friendly_name}
+  name_add_mac_suffix: true
+  project:
+    name: "${project_name}"
+    version: "${project_version}"
+
+esp8266:
+  board: esp01_1m
+  restore_from_flash: true
+
+# Configure WiFi
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  output_power: ${output_power}
+  ap: # Enable fallback hotspot in case wifi connection fails
+    ssid: "${device_name}"
+
+# Enable captive portal in case wifi connection fails
+captive_portal:
+
+# Provides basic web interface and firmware upload capability
+web_server:
+  include_internal: true
+
+# Enable logging
+logger:
+  level: INFO
+  baud_rate: 0 # Disable logging to serial
+
+# Enable native API
+api:
+
+# Enable OTA updates
+ota:
+  on_error:
+    then:
+      - button.press: restart_button
+
+# Enable time component for use by daily power sensor
+time:
+  - platform: homeassistant
+
+# Light platform
+light:
+  - platform: rgbww
+    id: lightbulb
+    icon: mdi:lightbulb
+    restore_mode: ${restore_mode}
+    default_transition_length: ${transition_length}
+    name: "${friendly_name}"
+    red: pwm_red
+    green: pwm_green
+    blue: pwm_blue
+    warm_white: pwm_ww
+    cold_white: pwm_cw
+    cold_white_color_temperature: 6000 K
+    warm_white_color_temperature: 2700 K
+    color_interlock: true
+    constant_brightness: true
+    effects:
+      - random:
+      - pulse:
+      - strobe:
+      - flicker:
+
+# Define output pins
+output:
+  - platform: esp8266_pwm
+    pin: GPIO5
+    id: pwm_red
+    min_power: ${min_power}
+    max_power: ${max_power}
+    zero_means_zero: true
+  - platform: esp8266_pwm
+    pin: GPIO4
+    id: pwm_green
+    min_power: ${min_power}
+    max_power: ${max_power}
+    zero_means_zero: true
+  - platform: esp8266_pwm
+    pin: GPIO13
+    id: pwm_blue
+    min_power: ${min_power}
+    max_power: ${max_power}
+    zero_means_zero: true
+  - platform: esp8266_pwm
+    pin: GPIO14
+    id: pwm_cw
+    min_power: ${min_power}
+    max_power: ${max_power}
+    zero_means_zero: true
+  - platform: esp8266_pwm
+    pin: GPIO12
+    id: pwm_ww
+    min_power: ${min_power}
+    max_power: ${max_power}
+    zero_means_zero: true
+
+# Reboot
+button:
+  - platform: restart
+    id: restart_button
+    name: "${friendly_name} Restart Firmware"
+    disabled_by_default: true
+
+# WiFi Signal Strength
+sensor:
+  - platform: wifi_signal
+    name: "${friendly_name} WiFi RSSI"
+    update_interval: 10s
+    filters:
+      - sliding_window_moving_average:
+          window_size: 12
+          send_every: 6
+      - delta: 2.0
+
+  # Reports the total Power so-far each day, resets at midnight, see https://esphome.io/components/sensor/total_daily_energy.html
+  - platform: total_daily_energy
+    name: ${friendly_name} Total Daily Energy
+    power_id: power_consumption_estimate
+    filters:
+      - multiply: 0.001 ## convert Wh to kWh
+    unit_of_measurement: kWh
+
+  - platform: template
+    name: ${friendly_name} Estimated Power
+    id: power_consumption_estimate
+    device_class: power
+    state_class: measurement
+    unit_of_measurement: W
+    accuracy_decimals: 0
+    lambda: |-
+      if (id(lightbulb).remote_values.is_on()) {
+        return id(lightbulb).remote_values.get_brightness();
+      } else {
+        return 0.0;
+      }
+    filters:
+      - multiply: 6
+    update_interval: 10s
