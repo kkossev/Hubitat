@@ -43,6 +43,7 @@
  *  ver. 1.4.0 2024-11-22 kkossev - supressed 'Sonoff SWV sendIrrigationDuration is not avaiable!' warning; added NovaDigital TS0601 _TZE200_fphxkxue @Rafael as TS0601_SASWELL_VALVE (working partially!); added queryAllTuyaDP for TS0601 devices;
  *  ver. 1.5.0 2024-12-16 kkossev - added TS0601 _TZE284_8zizsafo _TZE284_eaet5qt5 in 'TS0601_TZE284_VALVE' group 
  *  ver. 1.6.0 2025-02-15 kkossev - added Switch capability
+ *  ver. 1.6.1 2025-06-07 kkossev - added TS0601 _TZE284_fhvpaltk MUCIAKiE into TS0601_TZE284_VALVE group
  *
  *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
@@ -53,8 +54,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-static String version() { '1.6.0' }
-static String timeStamp() { '2025/02/15 9:28 PM' }
+static String version() { '1.6.1' }
+static String timeStamp() { '2025/06/07 11:49 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true                // disable it for the production release !
@@ -440,6 +441,7 @@ boolean isTZE284()               { return getModelGroup().contains('TZE284') || 
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,0000,ED00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_8zizsafo'],    // GX-03ZG
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,0000,ED00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_eaet5qt5'],    // Insoma SGW08W https://www.aliexpress.us/item/3256807355418184.html
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,0000,ED00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_fhvpaltk'],    // https://community.hubitat.com/t/release-tuya-zigbee-valve-driver-w-healthstatus/92788/405?u=kkossev MUCIAKiE brand
             ],
             deviceJoinName: 'GiEX Zigbee TZE284 Double Valve',
             capabilities  : ['valve': true, 'battery': true],
