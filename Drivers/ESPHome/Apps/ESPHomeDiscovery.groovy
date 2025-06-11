@@ -22,12 +22,16 @@
 import groovy.transform.Field
 
 final String version() { '1.0.0' }
-final String timeStamp() { '2025/06/06 8:42 PM' }
+final String timeStamp() { '2025/06/07 9:51 PM' }
 
 @Field static final Boolean _DEBUG = true
-//@Field static final Integer ESPHOME_PORT = 6053 // default port for ESPHome devices
-@Field static final Integer ESPHOME_PORT = 80
-@Field static final String  ESPHOME_URN = "urn:schemas-upnp-org:device:esphome:1" // urn for ESPHome devices
+@Field static final Integer ESPHOME_PORT = 6053 // default port for ESPHome devices
+//@Field static final Integer ESPHOME_PORT = 80
+//@Field static final String  ESPHOME_MDNS = "_awtrix._tcp"
+@Field static final String  ESPHOME_MDNS = "_raop._tcp"
+//@Field static final String  ESPHOME_MDNS = "_services._dns-sd._udp"
+//@Field static final String  ESPHOME_MDNS = "_aqara._tcp" // mDNS service name for ESPHome devices
+
 
 definition(
     name: "ESPHome Discovery",
@@ -48,20 +52,16 @@ preferences {
     page(name: "configurePDevice")
     page(name: "deletePDevice")
     page(name: "changeName")
-    page(name: "discoveryPage", title: "Device Discovery", content: "discoveryPage", refreshTimeout:10)
-    page(name: "addDevices", title: "Add ESPHome Switches", content: "addDevices")
+    page(name: "discoveryPage", title: "ESPHome Devices Discovery", content: "discoveryPage", refreshTimeout:10)
+    page(name: "addDevices", title: "Add ESPHome Devices", content: "addDevices")
     page(name: "manuallyAdd")
     page(name: "manuallyAddConfirm")
     page(name: "deviceDiscovery")
 }
 
 def mainPage() {
-	dynamicPage(name: "mainPage", title: "Manage your ESPHome switches", nextPage: null, uninstall: true, install: true) {
+	dynamicPage(name: "mainPage", title: "Discover your <b>ESPHome</b> Devices <i>(app ver. ${driverVersionAndTimeStamp()})</i>", nextPage: null, uninstall: true, install: true) {
         logDebug "mainPage() called"
-        section ("Options") {
-            input "logEnable", "bool", title: "Enable debug logging", defaultValue: true, required: false
-            input "txtEnable", "bool", title: "Enable descriptionText logging", defaultValue: true, required: false
-        }
         section("Configure"){
            href "deviceDiscovery", title:"Discover Devices", description:""
            href "manuallyAdd", title:"Manually Add Device", description:""
@@ -70,6 +70,10 @@ def mainPage() {
             getChildDevices().sort({ a, b -> a["deviceNetworkId"] <=> b["deviceNetworkId"] }).each {
                 href "configurePDevice", title:"$it.label", description:"", params: [did: it.deviceNetworkId]
             }
+        }
+        section ("Options") {
+            input "logEnable", "bool", title: "Enable debug logging", defaultValue: true, required: false
+            input "txtEnable", "bool", title: "Enable descriptionText logging", defaultValue: true, required: false
         }
     }
 }
@@ -97,16 +101,56 @@ def configurePDevice(params){
    }
 }
 
+@Field static final Map DEVICE_TYPES = [
+    "ESPHome Wifi Switch" : "ESPHome Wifi Switch",
+    "Sonoff TH Wifi Switch": "Sonoff TH Wifi Switch",
+    "Sonoff POW Wifi Switch": "Sonoff POW Wifi Switch",
+    "Sonoff Dual Wifi Switch": "Sonoff Dual Wifi Switch",
+    "Sonoff 4CH Wifi Switch": "Sonoff 4CH Wifi Switch",
+    "Sonoff 2CH Wifi Switch": "Sonoff 2CH Wifi Switch"
+]
+
 def manuallyAdd(){
    dynamicPage(name: "manuallyAdd", title: "Manually add an ESPHome device", nextPage: "manuallyAddConfirm") {
-		section {
-			paragraph "This process will manually create an ESPHome device based on the entered IP address. The SmartApp needs to then communicate with the device to obtain additional information from it. Make sure the device is on and connected to your wifi network."
-            input "deviceType", "enum", title:"Device Type", description: "", required: false, options: ["ESPHome Wifi Switch","Sonoff TH Wifi Switch","Sonoff POW Wifi Switch","Sonoff Dual Wifi Switch","Sonoff 4CH Wifi Switch","Sonoff 2CH Wifi Switch"]
+        section {
+            paragraph "This process will manually create an ESPHome device based on the entered IP address. The SmartApp needs to then communicate with the device to obtain additional information from it. Make sure the device is on and connected to your wifi network."
+            input "deviceType", "enum", title:"Device Type", description: "", required: false, options: DEVICE_TYPES.keySet()
             input "ipAddress", "text", title:"IP Address", description: "", required: false 
-		}
+        }
     }
 }
 
+/**
+ * Manually adds an ESPHome device based on the provided IP address.
+ *
+ * This method validates the provided IP address and, if valid, creates a new ESPHome device
+ * with the specified IP and port. If the IP address is invalid, it displays an error message.
+ *
+ * Preconditions:
+ * - The `ipAddress` variable must contain the IP address to be validated and used.
+ * - The `ESPHOME_PORT` variable must contain the port number for the ESPHome device.
+ * - The `convertIPtoHex` and `convertPortToHex` methods must be defined to convert IP and port
+ *   values to their hexadecimal representations.
+ * - The `addChildDevice` method must be available to add the ESPHome device.
+ * - The `app.updateSetting` method must be available to reset the `ipAddress` setting.
+ *
+ * Behavior:
+ * - If the IP address matches the IPv4 format (e.g., "192.168.1.1"):
+ *   - Logs the creation of the ESPHome device.
+ *   - Adds the ESPHome device with the specified IP and port.
+ *   - Resets the `ipAddress` setting to an empty string.
+ *   - Displays a confirmation message to the user.
+ * - If the IP address is invalid:
+ *   - Displays an error message to the user indicating the IP address is not valid.
+ *
+ * Dynamic Pages:
+ * - Displays a confirmation page if the device is successfully added.
+ * - Displays an error page if the IP address is invalid.
+ *
+ * Note:
+ * - The `deviceType` variable is optional. If not provided, it defaults to "ESPHome Device".
+ * - The `location.hubs[0].id` is used to associate the device with the first hub in the location.
+ */
 def manuallyAddConfirm(){
    if ( ipAddress =~ /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/) {
        log.debug "Creating ESPHome Device with dni: ${convertIPtoHex(ipAddress)}:${convertPortToHex(ESPHOME_PORT.toString())}"
@@ -134,6 +178,19 @@ def manuallyAddConfirm(){
     }
 }
 
+/**
+ * Deletes the currently selected physical device and handles any errors that may occur during the process.
+ *
+ * This method performs the following actions:
+ * 1. Unsubscribes from any subscriptions associated with the device.
+ * 2. Deletes the child device identified by `state.currentDeviceId`.
+ * 3. Displays a dynamic page summarizing the deletion process.
+ *
+ * If an error occurs during the deletion process, it:
+ * - Displays a dynamic page with an error message extracted from the exception.
+ *
+ * @throws Exception If an error occurs during the deletion of the child device.
+ */
 def deletePDevice(){
     try {
         unsubscribe()
@@ -166,32 +223,60 @@ def changeName(){
 }
 
 void logMDNSEntries() {
-    log.debug getMDNSEntries("_awtrix._tcp")
-    def entries = getMDNSEntries("_awtrix._tcp")
+    def entries = getMDNSEntries(ESPHOME_MDNS)
     if (entries) {
-        log.debug "MDNS Entries for _awtrix._tcp: ${entries}"
+        log.debug "MDNS Entries for ${ESPHOME_MDNS}: ${entries}"
     } else {
-        log.debug "No MDNS entries found for _awtrix._tcp"
+        log.debug "No MDNS entries found for ${ESPHOME_MDNS}"
     }
 }
 
 
-void hubRestartHandler(evt) {
-    registerMDNSListener("_awtrix._tcp")
+def hubRestartHandler(evt) {
+    log.info "hubRestartHandler() called - Hub restarted. Scheduling mDNSDiscover in 60s"
+    runIn(60, "mDNSDiscover")
 }
-
-
 
 def discoveryPage(){
     log.debug "discoveryPage() called"
     return deviceDiscovery()
 }
 
+/**
+ * Discovers ESPHome devices on the network and provides a dynamic page for device selection.
+ *
+ * This method performs the following tasks:
+ * - Logs the method call and any provided parameters.
+ * - Logs mDNS entries and initiates mDNS discovery.
+ * - Retrieves the list of discovered devices.
+ * - Manages the refresh count and resets the state if necessary.
+ * - Periodically sends discovery and verification requests.
+ * - Generates a dynamic page for users to select discovered devices.
+ *
+ * @param params A map of optional parameters. Supported keys:
+ *               - "reset": If set to "true", clears the list of discovered devices and resets the refresh count.
+ *
+ * @return A dynamicPage object that displays the discovery status and allows device selection.
+ *
+ * State Variables:
+ * - state.deviceRefreshCount: Tracks the number of refresh cycles.
+ * - state.devices: Stores the list of discovered devices.
+ *
+ * Key Logic:
+ * - Devices are rediscovered every 5 refresh cycles.
+ * - Device verification is performed every 3 refresh cycles, except during discovery cycles.
+ * - If no devices are found after 25 refresh cycles or if reset is requested, the state is cleared.
+ *
+ * Dynamic Page Sections:
+ * - Displays a message about the discovery process.
+ * - Provides a dropdown for selecting discovered devices.
+ * - Includes an option to reset the list of discovered devices.
+ */
 def deviceDiscovery(params=[:])
 {
     log.debug "deviceDiscovery() called with params: ${params}"
     logMDNSEntries()
-    logDebug "deviceDiscovery() called with params: ${params}"
+    mDNSDiscover()
 	def devices = devicesDiscovered()
     
 	int deviceRefreshCount = !state.deviceRefreshCount ? 0 : state.deviceRefreshCount as int
@@ -209,8 +294,8 @@ def deviceDiscovery(params=[:])
     }
 
     log.debug "deviceDiscovery() - deviceRefreshCount: ${deviceRefreshCount}, numFound: ${numFound}, options: ${options}"
-    log.debug "deviceDiscovery() - calling ssdpSubscribe()"
-	ssdpSubscribe()
+    //log.debug "deviceDiscovery() - calling mDNSSubscribe()"
+	//mDNSSubscribe()
 
 	//ESPHome discovery request every 15 //25 seconds
 	if((deviceRefreshCount % 5) == 0) {
@@ -232,7 +317,16 @@ def deviceDiscovery(params=[:])
 	}
 }
 
+/**
+ * Retrieves a map of discovered and verified devices.
+ *
+ * This method fetches a list of verified devices and constructs a map where
+ * the keys are the MAC addresses of the devices and the values are their names.
+ *
+ * @return A map containing the MAC addresses as keys and device names as values.
+ */
 Map devicesDiscovered() {
+
 	def vdevices = getVerifiedDevices()
 	def map = [:]
 	vdevices.each {
@@ -243,17 +337,23 @@ Map devicesDiscovered() {
 	map
 }
 
+/**
+ * Retrieves a list of verified devices.
+ *
+ * This method filters the devices returned by the `getDevices()` method
+ * and includes only those devices that have their `verified` property set to `true`.
+ *
+ * @return A list of devices where the `verified` property is `true`.
+ */
 def getVerifiedDevices() {
 	getDevices().findAll{ it?.value?.verified == true }
 }
 
 private discoverDevices() {
-    logDebug "discoverDevices() called"
-	sendHubCommand(new hubitat.device.HubAction("lan discovery urn:schemas-upnp-org:device:Basic:1", hubitat.device.Protocol.LAN))
+	log.warn "discoverDevices() not implemented!"
 }
 
 def configured() {
-	
 }
 
 def buttonConfigured(idx) {
@@ -287,34 +387,73 @@ private getDeviceID(number) {
 }
 
 def installed() {
-	initialize()
+    log.info "installed() called"
+    subscribe(location, "systemStart", "hubRestartHandler")
+    runIn(5, "mDNSDiscover")
+}
+
+def uninstalled() {
+    log.info "uninstalled() called"
+    unsubscribe()
+    unschedule()
+    state.remove("latestEntries")
+    state.remove("mdnsSubscribed")
 }
 
 def updated() {
-	unsubscribe()
+    log.info "updated() called"
+    unsubscribe()
     unschedule()
-	initialize()
     subscribe(location, "systemStart", "hubRestartHandler")
+    runIn(5, "mDNSDiscover")
+}
+
+
+void logsOff() {
+    log.info "logsOff() called - disabling debug logging"
+    logEnable = false
+    app.updateSetting("logEnable", [value: false, type: "bool"])
+    log.info "Debug logging disabled"
 }
 
 def initialize() {
-    ssdpSubscribe()
-    registerMDNSListener("_awtrix._tcp")
-    log.debug "initialize(): Calling registerMDNSListener() with _awtrix._tcp"
-    runEvery5Minutes("ssdpDiscover")
+    log.info "initialize() called"
+    if (logEnable == null) logEnable = true
+    if (!state.mdnsSubscribed) {
+        registerMDNSListener(ESPHOME_MDNS)
+        state.mdnsSubscribed = true
+        log.info "Registered mDNS listener for ${ESPHOME_MDNS}"
+    }
+    runIn(2, "mDNSDiscover")
+    runEvery1Minute("mDNSDiscover")
 }
 
-void ssdpSubscribe() {
-    log.debug "ssdpSubscribe() called : subscribe(location, 'ssdpTerm.urn:schemas-upnp-org:device:Basic:1', ssdpHandler)"
-    subscribe(location, "ssdpTerm.urn:schemas-upnp-org:device:Basic:1", ssdpHandler)
-    registerMDNSListener("_awtrix._tcp")
-    log.debug "ssdpSubscribe(): Calling registerMDNSListener() with _awtrix._tcp"
+def mDNSSubscribe() {
+    log.debug "mDNSSubscribe(): Calling registerMDNSListener() with ${ESPHOME_MDNS}"
+    registerMDNSListener(ESPHOME_MDNS)
 }
 
-void ssdpDiscover() {
-    logDebug "ssdpDiscover() called : sendHubCommand(new hubitat.device.HubAction('lan discovery urn:schemas-upnp-org:device:Basic:1', hubitat.device.Protocol.LAN))"
-    sendHubCommand(new hubitat.device.HubAction("lan discovery urn:schemas-upnp-org:device:Basic:1", hubitat.device.Protocol.LAN))
+def mDNSDiscover() {
+    log.info "mDNSDiscover() called"
+    def entries = getMDNSEntries(ESPHOME_MDNS)
+    if (state.devices == null) {
+        state.devices = [:]
+    }
+    if (entries && entries.size() > 0) {
+        entries.each { entry ->
+            state.devices[entry.toString()] = entry 
+            /*
+            if (!state.devices.find { it.toString() == entry.toString() }) {
+                state.devices.add(entry as Map)
+                log.info "New device added to discoveredDevices: ${entry}"
+            }
+            */
+        }
+    } else {
+        log.warn "No mDNS entries found for ${ESPHOME_MDNS}"
+    }
 }
+
 
 def ssdpHandler(evt) {
     log.debug "ssdpHandler() called with event: ${evt}"
@@ -360,17 +499,41 @@ void verifyDevices() {
     def devices = getDevices().findAll { it?.value?.verified != true }
     logDebug "verifyDevices() called with devices: ${devices}"
     devices.each {
+        /*
         def ip = convertHexToIP(it.value.networkAddress)
         def port = convertHexToInt(it.value.deviceAddress)
         String host = "${ip}:${port}"
         sendHubCommand(new hubitat.device.HubAction("""GET ${it.value.ssdpPath} HTTP/1.1\r\nHOST: $host\r\n\r\n""", hubitat.device.Protocol.LAN, host, [callback: deviceDescriptionHandler]))
+        */
     }
 }
 
 def getDevices() {
     state.devices = state.devices ?: [:]
+    return state.devices
 }
 
+/**
+ * Handles the response from a device's description.xml request.
+ *
+ * This method processes the XML response from a device and extracts relevant information
+ * such as the friendly name, model name, serial number, and IP address. It verifies if the
+ * device is an ESPHome device and updates the device list accordingly.
+ *
+ * @param hubResponse The response object from the Hubitat hub containing the XML data.
+ *
+ * The method performs the following steps:
+ * - Logs the received hubResponse for debugging purposes.
+ * - Parses the XML body of the response to extract device details.
+ * - Checks if the device model name starts with "ESPHome".
+ * - Searches for the device in the existing device list using its UDN (Unique Device Name).
+ * - If the device exists, updates its details (name, serial number, and verification status).
+ * - Logs an error if the device is not found in the existing device list.
+ *
+ * Note:
+ * - The method assumes the response contains valid XML data with a specific structure.
+ * - The `convertHexToIP` method is used to convert the IP address from hexadecimal format.
+ */
 void deviceDescriptionHandler(hubitat.device.HubResponse hubResponse) {
     logDebug "deviceDescriptionHandler() called with hubResponse: ${hubResponse}"
 	//log.trace "description.xml response (application/xml)"
@@ -463,13 +626,14 @@ def addDevices() {
 }
     }
 
+/*
 def uninstalled() {
     unsubscribe()
     getChildDevices().each {
         deleteChildDevice(it.deviceNetworkId)
     }
 }
-
+*/
 
 
 private String convertHexToIP(hex) {
@@ -497,3 +661,22 @@ void logDebug(String msg) { if (logEnable) { log.debug msg } }
 void logWarn(String msg) { if (logEnable) { log.warn msg } }
 
 void logInfo(String msg) { if (txtEnable) { log.info msg } }
+
+def runDiagnosticScan() {
+    log.warn "[mDNS Diagnostic] Running immediate one-shot mDNS scan..."
+    try {
+        registerMDNSListener(ESPHOME_MDNS)
+        pauseExecution(3000)  // wait 3 seconds for responses
+        def entries = getMDNSEntries(ESPHOME_MDNS)
+        if (entries && entries.size() > 0) {
+            log.warn "[mDNS Diagnostic] Found ${entries.size()} entries:"
+            entries.each { log.warn "[mDNS Diagnostic] ➤ ${it}" }
+        } else {
+            log.warn "[mDNS Diagnostic] No entries found for ${ESPHOME_MDNS}"
+        }
+    } catch (e) {
+        log.error "[mDNS Diagnostic] Exception during scan: ${e.message}"
+    }
+}
+
+
