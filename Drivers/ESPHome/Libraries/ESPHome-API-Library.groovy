@@ -22,14 +22,14 @@
  */
 
 library(
-        name: 'espHomeApiHelper',
+        name: 'espHomeApiHelper2',
         namespace: 'esphome',
         author: 'jb@nrgup.net',
         description: 'ESPHome Native Protobuf API Library',
         importUrl: 'https://raw.githubusercontent.com/bradsjm/hubitat-drivers/main/ESPHome/ESPHome-API-Library.groovy'
 )
 
-@Field static final String API_HELPER_VERSION = '1.2'
+@Field static final String API_HELPER_VERSION = '2.0'   // was 1.2
 
 import groovy.transform.CompileStatic
 import groovy.transform.Field
@@ -1485,7 +1485,9 @@ private boolean supervisionCheck(int msgType, Map<Integer, List> tags) {
 }
 
 private void logWarning(String s) {
-    log.warn s
+    if (logWarnEnable) {
+        log.warn s
+    }
 }
 
 /**
