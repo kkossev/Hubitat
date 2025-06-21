@@ -19,17 +19,21 @@
  *  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  *  SOFTWARE.
- */
+ *
+ *  version 2.0.0 - 2025-06-21 kkossev
+ *
+ *                             TODO: 
+ **/
 
 library(
-        name: 'espHomeApiHelper',
+        name: 'espHomeApiHelperKKmod',
         namespace: 'esphome',
         author: 'jb@nrgup.net',
         description: 'ESPHome Native Protobuf API Library',
         importUrl: 'https://raw.githubusercontent.com/bradsjm/hubitat-drivers/main/ESPHome/ESPHome-API-Library.groovy'
 )
 
-@Field static final String API_HELPER_VERSION = '1.2'
+@Field static final String API_HELPER_VERSION = '2.0.0'   // was 1.2
 
 import groovy.transform.CompileStatic
 import groovy.transform.Field
@@ -77,7 +81,7 @@ void closeSocket(String reason) {
     unschedule('healthCheck')
     unschedule('sendMessageQueue')
     espReceiveBuffer.remove(device.id)
-    log.info "ESPHome closing socket to ${settings.ipAddress}:${API_PORT_NUMBER}"
+    logInfoLib "ESPHome closing socket to ${settings.ipAddress}:${API_PORT_NUMBER}"
     if (!isOffline()) {
         sendMessage(MSG_DISCONNECT_REQUEST)
     }
@@ -91,11 +95,11 @@ void closeSocket(String reason) {
 @CompileStatic
 void socketStatus(String message) {
     if (message.contains('error')) {
-        logWarning "ESPHome socket error: ${message}"
+        logWarnLib "ESPHome socket error: ${message}"
         closeSocket(message)
         scheduleConnect()
     } else {
-        logWarning "ESPHome socket status: ${message}"
+        logWarnLib "ESPHome socket status: ${message}"
     }
 }
 
@@ -240,13 +244,13 @@ void espHomeSirenCommand(Map<String, Object> tags) {
 }
 
 void espHomeSubscribe() {
-    log.info 'Subscribing to ESPHome HA services'
+    logInfoLib 'Subscribing to ESPHome HA services'
     espHomeSubscribeHaServicesRequest()
 
-    log.info "Subscribing to ESPHome ${settings.logEnable ? 'DEBUG' : 'INFO'} logging"
+    logInfoLib "Subscribing to ESPHome ${settings.logEnable ? 'DEBUG' : 'INFO'} logging"
     espHomeSubscribeLogs(settings.logEnable ? LOG_LEVEL_DEBUG : LOG_LEVEL_INFO)
 
-    log.info 'Subscribing to ESPHome device states'
+    logInfoLib 'Subscribing to ESPHome device states'
     espHomeSubscribeStatesRequest()
 
     sendMessageQueue()
@@ -255,10 +259,10 @@ void espHomeSubscribe() {
 void espHomeCallService(String serviceName) {
     Map service = state.services.find { service -> service.objectId == serviceName }
     if (service) {
-        if (settings.logEnable) { log.trace "Calling ESPHome Service: ${serviceName}" }
+        if (settings.logEnable) { logTraceLib "Calling ESPHome Service: ${serviceName}" }
         espHomeExecuteServiceRequest(service)
     } else {
-        if (settings.logEnable) { log.error "No ESPHome Service found: ${serviceName}" }
+        if (settings.logEnable) { logErrorLib "No ESPHome Service found: ${serviceName}" }
     }
 }
 
@@ -295,10 +299,10 @@ void parse(String hexString) {
             }
             parseMessage(stream, length)
         } else if (b == 0x01) {
-            logWarning 'Driver does not support ESPHome native API encryption'
+            logWarnLib 'Driver does not support ESPHome native API encryption'
             return
         } else {
-            logWarning "ESPHome expecting delimiter 0x00 but got 0x${Integer.toHexString(b)} instead"
+            logWarnLib "ESPHome expecting delimiter 0x00 but got 0x${Integer.toHexString(b)} instead"
             return
         }
     }
@@ -980,7 +984,7 @@ private static List<String> toCapabilities(int capability) {
 private void parseMessage(ByteArrayInputStream stream, long length) {
     int msgType = (int) readVarInt(stream, true)
     if (msgType < 1) {
-        logWarning "ESPHome message type ${msgType} out of range, skipping"
+        logWarnLib "ESPHome message type ${msgType} out of range, skipping"
         return
     }
 
@@ -1095,7 +1099,7 @@ private void parseMessage(ByteArrayInputStream stream, long length) {
             break
         default:
             if (!handled) {
-                logWarning "ESPHome received unhandled message type ${msgType} with ${tags}"
+                logWarnLib "ESPHome received unhandled message type ${msgType} with ${tags}"
             }
     }
 
@@ -1105,7 +1109,7 @@ private void parseMessage(ByteArrayInputStream stream, long length) {
 private void espHomeConnectRequest(String password = null) {
     // Message sent after the hello response to authenticate the client
     // Can only be sent by the client and only at the beginning of the connection
-    log.info "ESPHome sending connect request (${password ? 'using' : 'no'} password)"
+    logInfoLib "ESPHome sending connect request (${password ? 'using' : 'no'} password)"
     sendMessage(MSG_CONNECT_REQUEST, [
             1: [ password as String, WIRETYPE_LENGTH_DELIMITED ]
     ], MSG_CONNECT_RESPONSE, 'espHomeConnectResponse')
@@ -1115,7 +1119,7 @@ private void espHomeConnectRequest(String password = null) {
 private void espHomeConnectResponse(Map<Integer, List> tags) {
     Boolean invalidPassword = getBooleanTag(tags, 1)
     if (invalidPassword) {
-        log.error 'ESPHome invalid password (update configuration setting)'
+        logErrorLib 'ESPHome invalid password (update configuration setting)'
         closeSocket('invalid password')
         return
     }
@@ -1186,7 +1190,7 @@ private void espHomeDeviceInfoResponse(Map<Integer, List> tags) {
 
 private void espHomeGetTimeRequest() {
     long value = new Date().getTime().intdiv(1000)
-    log.info 'ESPHome sending device current time'
+    logInfoLib 'ESPHome sending device current time'
     sendMessage(MSG_GET_TIME_RESPONSE, [
             1: [ value as Long, WIRETYPE_VARINT ]
     ])
@@ -1196,7 +1200,7 @@ private void espHomeGetTimeRequest() {
 private void espHomeHelloRequest() {
     // Can only be sent by the client and only at the beginning of the connection
     String client = "Hubitat ${location.hub.name}"
-    log.info 'ESPHome requesting API version'
+    logInfoLib 'ESPHome requesting API version'
     sendMessage(MSG_HELLO_REQUEST, [
             1: [ client as String, WIRETYPE_LENGTH_DELIMITED ]
     ], MSG_HELLO_RESPONSE, 'espHomeHelloResponse')
@@ -1207,23 +1211,23 @@ private void espHomeHelloResponse(Map<Integer, List> tags) {
     // Confirmation of successful connection request.
     // Can only be sent by the server and only at the beginning of the connection
     String version = getIntTag(tags, 1) + '.' + getIntTag(tags, 2)
-    log.info "ESPHome API version: ${version}"
+    logInfoLib "ESPHome API version: ${version}"
     device.updateDataValue 'API Version', version
     if (getIntTag(tags, 1) > 1) {
-        log.error 'ESPHome API version > 1 not supported - disconnecting'
+        logErrorLib 'ESPHome API version > 1 not supported - disconnecting'
         closeSocket('API version not supported')
         return
     }
 
     String info = getStringTag(tags, 3)
     if (info) {
-        log.info "ESPHome server info: ${info}"
+        logInfoLib "ESPHome server info: ${info}"
         device.updateDataValue 'Server Info', info
     }
 
     String name = getStringTag(tags, 4)
     if (name) {
-        log.info "ESPHome device name: ${name}"
+        logInfoLib "ESPHome device name: ${name}"
         if (device.getDataValue('Device Name') != name) {
             device.updateDataValue 'Device Name', name
             device.name = name
@@ -1236,7 +1240,7 @@ private void espHomeHelloResponse(Map<Integer, List> tags) {
 }
 
 private void espHomeListEntitiesRequest() {
-    if (logEnable) { log.trace 'ESPHome requesting entities list' }
+    if (logEnable) { logTraceLib 'ESPHome requesting entities list' }
     sendMessage(MSG_LIST_ENTITIES_REQUEST)
 }
 
@@ -1259,7 +1263,7 @@ private void espHomePingRequest() {
 /* groovylint-disable-next-line UnusedPrivateMethod, UnusedPrivateMethodParameter */
 private void espHomePingResponse(Map<Integer, List> tags) {
     setNetworkStatus('online', 'ping response')
-    if (logEnable) { log.trace 'ESPHome ping response received from device' }
+    if (logEnable) { logTraceLib 'ESPHome ping response received from device' }
     espHomeSchedulePing()
 }
 
@@ -1283,18 +1287,19 @@ private void espHomeSubscribeLogsResponse(Map<Integer, List> tags) {
     String message = getStringTag(tags, 3).replaceAll(/\x1b\[[0-9;]*m/, '')
     switch (getIntTag(tags, 1)) {
         case LOG_LEVEL_ERROR:
-            log.error message
+            logErrorLib message
             break
         case LOG_LEVEL_WARN:
-            log.warn message
+            logWarnLib message
             break
         case LOG_LEVEL_INFO:
-            log.info message
+            logInfoLib message
             break
         case LOG_LEVEL_VERY_VERBOSE:
-            log.trace message
+            logTraceLib message
+            break
         default:
-            log.debug message
+            logDebugLib message
             break
     }
 }
@@ -1315,7 +1320,7 @@ private void espHomeListEntitiesServicesResponse(Map<Integer, List> tags) {
         key: getLongTag(tags, 2),
         args: getStringTagList(tags, 3)
     ]
-    if (settings.logEnable) { log.trace "ESPHome Service discovered: ${service}" }
+    if (settings.logEnable) { logTraceLib "ESPHome Service discovered: ${service}" }
     state.services = (state.services ?: []) << service
 }
 
@@ -1358,7 +1363,7 @@ private void healthCheck() {
 
     // send ping request when online and send queue is empty
     if (!isOffline() && getSendQueue().isEmpty()) {
-        if (logEnable) { log.trace 'ESPHome sending ping to device' }
+        if (logEnable) { logTraceLib 'ESPHome sending ping to device' }
         espHomePingRequest()
     }
 }
@@ -1384,17 +1389,17 @@ private void scheduleConnect() {
     if (reconnectDelay > MAX_RECONNECT_SECONDS) { reconnectDelay = MAX_RECONNECT_SECONDS }
     int jitter = (int) Math.ceil(reconnectDelay * 0.25)
     reconnectDelay += random.nextInt(jitter)
-    log.info "ESPHome reconnecting in ${reconnectDelay} seconds"
+    logInfoLib "ESPHome reconnecting in ${reconnectDelay} seconds"
     state.reconnectDelay = reconnectDelay * 2
     runIn(reconnectDelay, 'openSocket')
 }
 
 private void sendMessage(int msgType, Map<Integer, List> tags = [:]) {
-    if (logEnable) { log.debug "ESPHome send msg type #${msgType} with ${tags}" }
+    if (logEnable) { logDebugLib "ESPHome send msg type #${msgType} with ${tags}" }
     try {
         interfaces.rawSocket.sendMessage(encodeMessage(msgType, tags))
     } catch (IOException e) {
-        log.error "sendMessage: ${e}"
+        logErrorLib "sendMessage: ${e}"
     }
 }
 
@@ -1421,11 +1426,11 @@ private void sendMessageQueue() {
         queue.removeIf { entry ->
             if (entry.retries > 0) {
                 entry.retries--
-                log.info "ESPHome sending message type #${entry.msgType} (${entry.retries} retries left)"
+                logInfoLib "ESPHome sending message type #${entry.msgType} (${entry.retries} retries left)"
                 sendMessage(entry.msgType, entry.tags)
                 return false
             }
-            log.info "ESPHome message type #${entry.msgType} retry count exceeded"
+            logInfoLib "ESPHome message type #${entry.msgType} retry count exceeded"
             // maybe a broken connection
             closeSocket('message retry count exceeded')
             scheduleConnect()
@@ -1478,14 +1483,40 @@ private boolean supervisionCheck(int msgType, Map<Integer, List> tags) {
     }
 
     onSuccess.each { e ->
-        if (logEnable) { log.trace "ESPHome executing ${e}" }
+        if (logEnable) { logTraceLib "ESPHome executing ${e}" }
         "${e}"(tags)
     }
     return result
 }
 
-private void logWarning(String s) {
-    log.warn s
+private void logWarnLib(String s) {
+    if (logWarnEnable) {
+        log.warn s
+    }
+}
+
+private void logInfoLib(String s) {
+    if (logWarnEnable) {
+        log.info s
+    }
+}
+
+private void logTraceLib(String s) {
+    if (logTraceEnable) {
+        log.trace s
+    }
+}
+
+private void logErrorLib(String s) {
+    if (logDebugEnable) {
+        log.error s
+    }
+}
+
+private void logDebugLib(String s) {
+    if (logDebugEnable) {
+        log.debug s
+    }
 }
 
 /**

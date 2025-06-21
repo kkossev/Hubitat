@@ -424,4 +424,4 @@ private void updateAttribute(final String attribute, final Object value, final S
 }
 
 // Put this line at the end of the driver to include the ESPHome API library helper
-#include esphome.espHomeApiHelper
+#include esphome.espHomeApiHelperKKmod

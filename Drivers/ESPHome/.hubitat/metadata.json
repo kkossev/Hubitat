@@ -10,19 +10,25 @@
       "filepath": "/c:/Work/Hubitat/Drivers/ESPHome/Apollo MSR-2.groovy",
       "codeType": "driver",
       "id": 4060,
-      "version": 4
+      "version": 8
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/ESPHome/Apollo TEMP-1B.groovy",
       "codeType": "driver",
       "id": 4061,
-      "version": 30
+      "version": 33
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/ESPHome/Libraries/ESPHome-API-Library.groovy",
       "codeType": "library",
       "id": 193,
-      "version": 2
+      "version": 10
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Drivers/ESPHome/Libraries/ESPHome-API-Library-KK-mod.groovy",
+      "id": 195,
+      "codeType": "library",
+      "version": 7
     }
   ]
 }

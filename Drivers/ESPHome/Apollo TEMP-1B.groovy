@@ -178,7 +178,7 @@ public void parse(Map message) {
             break
 
         case 'state':
-            log.trace "ESPHome state message: message.key = ${message.key}, message.hasState = ${message.hasState}, message.state = ${message.state}"
+            //log.trace "ESPHome state message: message.key = ${message.key}, message.hasState = ${message.hasState}, message.state = ${message.state}"
             // check sensors state map for the key
             def stateMapFound = state.sensors?.find { k, v -> k as Long == message.key as Long}
             if (stateMapFound != null && stateMapFound != [:]) {
@@ -285,4 +285,4 @@ void setRgbLight(String value) {
 }
 
 // Put this line at the end of the driver to include the ESPHome API library helper
-#include esphome.espHomeApiHelper2
+#include esphome.espHomeApiHelperKKmod
