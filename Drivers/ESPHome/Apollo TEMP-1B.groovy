@@ -26,7 +26,7 @@ metadata {
         namespace: 'esphome',
         author: 'Krassimir Kossev',
         singleThreaded: true,
-        importUrl: 'https://raw.githubusercontent.com/bradsjm/hubitat-drivers/main/ESPHome/ESPHome-TemperatureSensor.groovy') {
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/ESPHome/Drivers/ESPHome/Apollo%20TEMP-1B.groovy') {
 
         capability 'Sensor'
         capability 'Refresh'

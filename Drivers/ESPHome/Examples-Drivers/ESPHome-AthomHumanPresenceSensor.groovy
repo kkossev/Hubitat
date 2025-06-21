@@ -187,6 +187,11 @@ void parseState(final Map message) {
     if (message.key == null) { return }
     final long key = message.key as long
 
+    log.trace "ESPHome state key: ${key} (${message.objectId})"
+    ///////
+    return
+    ////////
+
     switch (key) {
         case state.entities['illuminance']:
             // Illuminance Sensor

@@ -30,7 +30,7 @@ library(
         namespace: 'esphome',
         author: 'jb@nrgup.net',
         description: 'ESPHome Native Protobuf API Library',
-        importUrl: 'https://raw.githubusercontent.com/bradsjm/hubitat-drivers/main/ESPHome/ESPHome-API-Library.groovy'
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/ESPHome/Drivers/ESPHome/Libraries/ESPHome-API-Library-KK-mod.groovy'
 )
 
 @Field static final String API_HELPER_VERSION = '2.0.0'   // was 1.2

@@ -26,25 +26,37 @@ metadata {
         namespace: 'esphome',
         author: 'Krassimir Kossev',
         singleThreaded: true,
-        importUrl: 'https://raw.githubusercontent.com/bradsjm/hubitat-drivers/main/ESPHome/ESPHome-EverythingPresenceOnce.groovy') {
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/ESPHome/Drivers/ESPHome/Apollo%20MSR-2.groovy') {
 
         capability 'Configuration'
         capability 'IlluminanceMeasurement'
         capability 'MotionSensor'
         capability 'Sensor'
         capability 'Refresh'
-        //capability 'RelativeHumidityMeasurement'
-        capability 'TemperatureMeasurement'
+        //capability 'TemperatureMeasurement'
         capability 'Initialize'
         
-        attribute 'distance', 'number'
-        attribute 'mmwave', 'enum', [ 'active', 'not active' ]
-        attribute 'pir', 'enum', [ 'active', 'not active' ]
-
         // attribute populated by ESPHome API Library automatically
         attribute 'networkStatus', 'enum', [ 'connecting', 'online', 'offline' ]
+        attribute 'radarMovingDistance', 'number'
+        attribute 'radarStillDistance', 'number'
+        attribute 'mmwave', 'enum', [ 'active', 'not active' ]
+        attribute 'pir', 'enum', [ 'active', 'not active' ]
+        attribute 'rgbLight', 'enum', ['on', 'off'] 
+        attribute 'uptime', 'string'
+        attribute 'boardTemperature', 'number'
+        attribute 'espTemperature', 'number'
+        attribute 'pressure', 'number'
+        attribute 'rssi', 'number'
+        attribute 'radarTarget', 'string'
+        attribute 'radarStillTarget', 'string'
+        attribute 'radarZone1Occupanncy', 'enum', [ 'active', 'inactive' ]
+        attribute 'radarZone2Occupanncy', 'enum', [ 'active', 'inactive' ]
+        attribute 'radarZone3Occupanncy', 'enum', [ 'active', 'inactive' ]  
 
         command 'restart'
+        command 'setRgbLight', [[name:'LED control', type: 'ENUM', constraints: ['off', 'on']]]
+        command 'test'
     }
 
     preferences {
@@ -58,47 +70,7 @@ metadata {
             title: '<b>Device Password</b>',
             description: '<i>(if required)</i>',
             required: false
-/*
-        input name: 'mmwaveSensitivity',
-            type: 'number',
-            title: '<b>mmWave Sensitivity</b>',
-            description: '<i>How much motion is required to trigger the sensor (0 is most, 9 is least sensitive)</i>',
-            required: false,
-            range: '0..9'
 
-        input name: 'mmwaveDistance',
-            type: 'number',
-            title: '<b>mmWave Distance</b>',
-            description: '<i>Set to the distance of the room you have the EP1 in (0 to 800cm)</i>',
-            required: false,
-            range: '0..800'
-
-        input name: 'mmwaveOnLatency (Advanced)',
-            type: 'number',
-            title: '<b>mmWave On Latency</b>',
-            description: '<i>How long motion must be detected for before triggering (0 to 60 seconds)</i>',
-            required: false,
-            range: '0..60'
-
-        input name: 'mmwaveOffLatency (Advanced)',
-            type: 'number',
-            title: '<b>mmWave Off Latency</b>',
-            description: '<i>How long after motion is no longer detected to wait (1 to 60 seconds)</i>',
-            required: false,
-            range: '1..60'
-
-        input name: 'statusLedEnable',
-            type: 'bool',
-            title: '<b>Enable Status LED</b>',
-            required: false,
-            defaultValue: true
-
-        input name: 'mmwaveLedEnable',
-            type: 'bool',
-            title: '<b>Enable mmWave LED</b>',
-            required: false,
-            defaultValue: true
-*/
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: \
              '<i>Enables command logging.</i>'
 
@@ -108,60 +80,7 @@ metadata {
 }
 
 void configure() {
-    if (logEnable) { log.debug "ESPHome configure()" }
-    /*
-    if (isNullOrEmpty(settings['mmwaveOnLatency'])) {
-        final Long key = state.entities['mmwave_on_latency'] as Long
-        if (key) {
-            final BigDecimal value = settings['mmwaveOnLatency'] as BigDecimal
-            if (value < 0 || value > 60) {
-                log.warn "mmWave On Latency must be between 0 and 60 seconds"
-            } else {
-                log.info "Setting mmWave On Latency to ${value}"
-                espHomeNumberCommand([key: key, state: value])
-            }
-        }
-    }
 
-    if (isNullOrEmpty(settings['mmwaveOffLatency'])) {
-        final Long key = state.entities['mmwave_off_latency'] as Long
-        if (key) {
-            final BigDecimal value = settings['mmwaveOffLatency'] as BigDecimal
-            if (value < 1 || value > 60) {
-                log.warn "mmWave Off Latency must be between 1 and 60 seconds"
-            } else {
-                log.info "Setting mmWave Off Latency to ${value}"
-                espHomeNumberCommand([key: key, state: value])
-            }
-        }
-    }
-
-    if (isNullOrEmpty(settings['mmwaveDistance'])) {
-        final Long key = state.entities['mmwave_distance'] as Long
-        if (key) {
-            final BigDecimal value = settings['mmwaveDistance'] as Integer
-            if (value < 0 || value > 800) {
-                log.warn "mmWave Distance must be between 0 and 800 cm"
-            } else {
-                log.info "Setting mmWave Distance to ${value}"
-                espHomeNumberCommand([key: key, state: value])
-            }
-        }
-    }
-
-    if (isNullOrEmpty(settings['mmwaveSensitivity'])) {
-        final Long key = state.entities['mmwave_sensitivity'] as Long
-        if (key) {
-            final BigDecimal value = settings['mmwaveSensitivity'] as Integer
-            if (value < 0 || value > 9) {
-                log.warn "mmWave Sensitivity must be between 0 and 9"
-            } else {
-                log.info "Setting mmWave Sensitivity to ${value}"
-                espHomeNumberCommand([key: key, state: value])
-            }
-        }
-    }
-    */
 }
 
 void initialize() {
@@ -210,11 +129,10 @@ void uninstalled() {
 // the parse method is invoked by the API library when messages are received
 void parse(final Map message) {
     if (logEnable) { log.debug "ESPHome received: ${message}" }
-    return
+
     switch (message.type) {
         case 'device':
             // Device information
-            log.info "device info: ${message}"
             break
 
         case 'entity':
@@ -223,178 +141,134 @@ void parse(final Map message) {
 
         case 'state':
             parseState(message)
-            break
-
-        default:
-            log.warn "ESPHome message type not supported: ${message.type}"
-            break
     }
 }
 
 void parseKeys(final Map message) {
-    if (logEnable) { log.debug "ESPHome entity: ${message}" }
     if (state.entities == null) { state.entities = [:] }
-    final long key = message.key as long
+    Long key = message.key.toLong() // Convert to Long if necessary
 
-    switch (message.objectId) {
-        case ~/_illuminance$/:
-            // Illuminance Sensor
-            state.entities['illuminance'] = key
-            break
-        case ~/_mmwave$/:
-            // Millimeter wave radar sensor
-            state.entities['mmwave'] = key
-            break
-        case ~/_occupancy$/:
-            // Occupancy Sensor
-            state.entities['occupancy'] = key
-            break
-        case ~/_pir$/:
-            // Passive Infrared Sensor
-            state.entities['pir'] = key
-            break
-        case ~/_temperature$/:
-            // Temperature Sensor
-            state.entities['temperature'] = key
-            break
-        case ~/_humidity$/:
-            // Humidity Sensor
-            state.entities['humidity'] = key
-            break
-        case 'esp32_status_led':
-            // ESP32 Status LED
-            state.entities['status_led'] = key
-            break
-        case 'everything-presence-one_safe_mode':
-            // Safe mode switch
-            state.entities['safe_mode'] = key
-            break
-        case 'mmwave_distance':
-            // Millimeter wave radar sensor distance
-            state.entities['mmwave_distance'] = key
-            break
-        case 'mmwave_led':
-            // Millimeter wave radar sensor LED
-            state.entities['mmwave_led'] = key
-            break
-        case 'mmwave_off_latency':
-            // Millimeter wave radar sensor off latency
-            state.entities['mmwave_off_latency'] = key
-            break
-        case 'mmwave_on_latency':
-            // Millimeter wave radar sensor on latency
-            state.entities['mmwave_on_latency'] = key
-            break
-        case 'mmwave_sensitivity':
-            // Millimeter wave radar sensor sensitivity
-            state.entities['mmwave_sensitivity'] = key
-            break
-        case 'mmwave_sensor':
-            // Millimeter wave radar sensor switch
-            state.entities['mmwave_switch'] = key
-            break
-        case 'restart_everything-presence-one':
-            // Restart everything switch
-            state.entities['restart'] = key
-            break
-        case 'uart_presence_output':
-        case 'uart_target_output':
-            // ignore
-            break
-        default:
-            log.warn "ESPHome entity not supported: ${message}"
-            break
+    // Check if the message contains the required keys
+    if (message.objectId && message.key) {
+        // Store the entity in the state map using message.key as the key
+        def entity = state.entities["$key"]
+        state.entities[message.key] = message
+        if (logEnable) { log.debug "entity registered: ${message.objectId} (key=${message.key})" }
+    } else {
+        if (logEnable) { log.warn "Message does not contain required keys: ${message}" }
     }
 }
 
 void parseState(final Map message) {
-    if (logEnable) { log.debug "ESPHome state: ${message}" }
     if (message.key == null) { return }
     final long key = message.key as long
+    def entity = state.entities["$key"]
+    if (logEnable) {
+        log.debug "ESPHome parseState() : key: ${key}, entity: ${entity}"
+    }
+    if (entity == null) { log.warn "ESPHome parseState() : Entity for key: ${key} is null" ; return }
+ 
+    if (message.hasState != true) { if (logEnable) { log.warn "ESPHome parseState() : Message does not have 'hasState' key: ${message}" } ; return }
+    if (isNullOrEmpty(message.state)) { if (logEnable) { log.warn "ESPHome parseState() : Message state is null or empty: ${message}" } ; return }
+    def objectId = entity["objectId"]
+    if (isNullOrEmpty(objectId)) { if (logEnable) { log.warn "ESPHome parseState() : Message objectId is null or empty: ${message}" } ; return }
 
-    switch (key) {
-        case state.entities['illuminance']:
-            // Illuminance Sensor
-            if (message.hasState) {
-                updateAttribute('illuminance', message.state as Integer, 'lx')
-            }
+    switch (objectId) {
+        case 'uptime':
+            // Uptime in seconds
+            Long uptime = message.state as Long
+            int days = uptime / 86400
+            int hours = (uptime % 86400) / 3600
+            int minutes = (uptime % 3600) / 60
+            int seconds = uptime % 60
+            String uptimeString = "${days}d ${hours}h ${minutes}m ${seconds}s"
+            sendEvent(name: "uptime", value: uptimeString, descriptionText: "Uptime is ${uptimeString}")
+            if (txtEnable) { log.info "Uptime is ${uptimeString}" }
             break
-        case state.entities['mmwave']:
-            // Millimeter wave radar sensor
-            if (message.hasState) {
-                updateAttribute('mmwave', message.state ? 'active' : 'inactive')
-            }
+        case 'rssi':
+            // Signal strength in dBm
+            def rssi = message.state as Integer
+            sendEvent(name: "rssi", value: rssi, unit: "dBm", descriptionText: "Signal Strength is ${rssi} dBm")
+            if (txtEnable) { log.info "Signal Strength is ${rssi} dBm" }
             break
-        case state.entities['occupancy']:
-            // Combined Millimeter wave radar and PIR
-            if (message.hasState) {
-                updateAttribute('motion', message.state ? 'active' : 'inactive')
-            }
+        case 'rgb_light':
+            // RGB light state
+            def rgbLightState = message.state as Boolean
+            sendEvent(name: "rgbLight", value: rgbLightState ? 'on' : 'off', descriptionText: "RGB Light is ${rgbLightState ? 'on' : 'off'}")
+            if (txtEnable) { log.info "RGB Light is ${rgbLightState ? 'on' : 'off'}" }
             break
-        case state.entities['pir']:
-            // PIR sensor
-            if (message.hasState) {
-                updateAttribute('pir', message.state ? 'active' : 'inactive')
-            }
+        case 'dps310_temperature':
+            def temp = String.format("%.1f", message.state as Float)
+            sendEvent(name: "boardTemperature", value: temp, unit: "°C", descriptionText: "Board Temperature is ${temp} °C")
+            if (txtEnable) { log.info "Board Temperature is ${temp} °C" }
             break
-        case state.entities['temperature']:
-            // Temperature Sensor
-            if (message.hasState) {
-                final String value = convertTemperatureIfNeeded(message.state as BigDecimal, 'C', 0)
-                updateAttribute('temperature', value)
-            }
+        case 'esp_temperature':
+            def temp = String.format("%.1f", message.state as Float)
+            sendEvent(name: "espTemperature", value: temp, unit: "°C", descriptionText: "ESP Temperature is ${temp} °C")
+            if (txtEnable) { log.info "ESP Temperature is ${temp} °C" }
             break
-        case state.entities['humidity']:
-            // Humidity Sensor
-            if (message.hasState) {
-                updateAttribute('humidity', message.state as Integer, '%rh')
-            }
+        case 'dps310_pressure':
+            // Pressure in hPa
+            def pressure = String.format("%.1f", message.state as Float)
+            sendEvent(name: "pressure", value: pressure, unit: "hPa", descriptionText: "Pressure is ${pressure} hPa")
+            if (txtEnable) { log.info "Pressure is ${pressure} hPa" }
             break
-        case state.entities['esp32_status_led']:
-            // ESP32 Status LED
-            if (message.hasState) {
-                log.info "ESP32 Status LED: ${message.state}"
-                device.updateSetting('statusLedEnable', message.state)
-            }
+        case 'ltr390_light':
+            // Illuminance in lux
+            def illuminance = message.state as Integer
+            sendEvent(name: "illuminance", value: illuminance, unit: "lx", descriptionText: "Illuminance is ${illuminance} lx")
+            if (txtEnable) { log.info "Illuminance is ${illuminance} lx" }
             break
-        case state.entities['mmwave_distance']:
+        case 'radar_detection_distance':
             // Millimeter wave radar sensor distance
-            if (message.hasState) {
-                log.info "Millimeter wave radar sensor distance: ${message.state}"
-                device.updateSetting('mmwaveDistance', message.state)
-            }
+            def distance = message.state as Integer
+            sendEvent(name: "radarMovingDistance", value: distance, unit: "cm", descriptionText: "Millimeter wave radar sensor distance is ${distance} cm")
+            if (txtEnable) { log.info "Millimeter wave radar sensor distance is ${distance} cm" }
             break
-        case state.entities['mmwave_led']:
-            // Millimeter wave radar sensor LED
-            if (message.hasState) {
-                log.info "Millimeter wave radar sensor LED: ${message.state}"
-                device.updateSetting('mmwaveLedEnable', message.state)
-            }
+        case 'radar_still_distance':
+            // Millimeter wave radar sensor still distance
+            def stillDistance = message.state as Integer
+            sendEvent(name: "radarStillDistance", value: stillDistance, unit: "cm", descriptionText: "Millimeter wave radar sensor still distance is ${stillDistance} cm")
+            if (txtEnable) { log.info "Millimeter wave radar sensor still distance is ${stillDistance} cm" }
             break
-        case state.entities['mmwave_off_latency']:
-            // Millimeter wave radar sensor off latency
-            if (message.hasState) {
-                log.info "Millimeter wave radar sensor off latency: ${message.state}"
-                device.updateSetting('mmwaveOffLatency', message.state)
-            }
+        case 'radar_target':
+            // Millimeter wave radar sensor target
+            def target = message.state as String
+            sendEvent(name: "radarTarget", value: target, descriptionText: "Millimeter wave radar sensor target is ${target}")
+            if (txtEnable) { log.info "Millimeter wave radar sensor target is ${target}" }
+            String motionValue = (target == 'true') ? 'active' : 'inactive'
+            sendEvent(name: "motion", value: motionValue, descriptionText: "motion is ${motionValue}")
             break
-        case state.entities['mmwave_on_latency']:
-            // Millimeter wave radar sensor on latency
-            if (message.hasState) {
-                log.info "Millimeter wave radar sensor on latency: ${message.state}"
-                device.updateSetting('mmwaveOnLatency', message.state)
-            }
+        case 'radar_still_target':
+            // Millimeter wave radar sensor still target
+            def stillTarget = message.state as String
+            sendEvent(name: "radarStillTarget", value: stillTarget, descriptionText: "Millimeter wave radar sensor still target is ${stillTarget}")
+            if (txtEnable) { log.info "Millimeter wave radar sensor still target is ${stillTarget}" }
             break
-        case state.entities['mmwave_sensitivity']:
-            // Millimeter wave radar sensor sensitivity
-            if (message.hasState) {
-                log.info "Millimeter wave radar sensor sensitivity: ${message.state}"
-                device.updateSetting('mmwaveSensitivity', message.state)
-            }
+        case 'radar_zone_1_occupancy':
+            // Millimeter wave radar sensor occupancy
+            def occupancy = message.state as Boolean
+            sendEvent(name: "radarZone1Occupanncy", value: occupancy ? 'active' : 'inactive', descriptionText: "Millimeter wave radar sensor is ${occupancy ? 'active' : 'inactive'}")
+            if (txtEnable) { log.info "Zone 1 Occupanncy is ${occupancy ? 'active' : 'inactive'}" }
             break
+        case 'radar_zone_2_occupancy':
+            // Millimeter wave radar sensor occupancy
+            def occupancy = message.state as Boolean
+            sendEvent(name: "radarZone2Occupanncy", value: occupancy ? 'active' : 'inactive', descriptionText: "Millimeter wave radar sensor is ${occupancy ? 'active' : 'inactive'}")
+            if (txtEnable) { log.info "Zone 2 Occupanncy is ${occupancy ? 'active' : 'inactive'}" }
+            break
+        case 'radar_zone_3_occupancy':
+            // Millimeter wave radar sensor occupancy
+            def occupancy = message.state as Boolean
+            sendEvent(name: "radarZone3Occupanncy", value: occupancy ? 'active' : 'inactive', descriptionText: "Millimeter wave radar sensor is ${occupancy ? 'active' : 'inactive'}")
+            if (txtEnable) { log.info "Zone 3 Occupanncy is ${occupancy ? 'active' : 'inactive'}" }
+            break
+
         default:
-            // Unknown state
-            log.warn "ESPHome state not supported: ${message}"
+            // Handle other objectIds if needed
+            if (logEnable) {
+                log.debug "ESPHome parseState() : Unhandled objectId: ${objectId} for key: ${key} objectId: ${objectId}, state: ${message.state}"
+            }
             break
     }
 }
@@ -418,10 +292,47 @@ private static boolean isNullOrEmpty(final Object value) {
 private void updateAttribute(final String attribute, final Object value, final String unit = null, final String type = null) {
     final String descriptionText = "${attribute} was set to ${value}${unit ?: ''}"
     if (device.currentValue(attribute) != value && settings.txtEnable) {
-        log.info descriptionText
+        if (txtEnable) { log.info descriptionText }
     }
     sendEvent(name: attribute, value: value, unit: unit, type: type, descriptionText: descriptionText)
 }
+
+void setRgbLight(String value) {
+    def lightKey = state.light?.keySet()?.first() as Long
+    if (value == 'on') {
+        if (txtEnable) { log.info "${device} RGB light on" }
+        espHomeLightCommand(key: lightKey, state: true)
+    } else if (value == 'off') {
+        if (txtEnable) { log.info "${device} RGB light off" }
+        espHomeLightCommand(key: lightKey, state: false)
+    } else {
+        if (logEnable) { log.warn "Unsupported RGBlight value: ${value}" }
+    }
+}
+
+void test() {
+    log.info "${device} test command executed"
+    def ssstate = state.parseEntities
+    //log.trace "Test command: state.entities = ${state.entities}"
+    Long key = 68806113 // Example key, replace with actual key if needed
+    log.trace "Test command: key = ${key}"
+    def entity = state.entities["$key"]
+    if (entity) {
+        log.info "Entity with key ${key} found: ${entity}"
+
+    } else {
+        log.warn "Entity with key ${key} not found"
+    }
+
+   
+
+    if (!isNullOrEmpty(state.entities["$key"])) {
+        log.info "Entity with key ${key} found: ${state.entities["$key"]}"
+    } else {
+        log.warn "Entity with key ${key} not found"
+    }
+}
+
 
 // Put this line at the end of the driver to include the ESPHome API library helper
 #include esphome.espHomeApiHelperKKmod
