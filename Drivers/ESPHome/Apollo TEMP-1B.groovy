@@ -19,7 +19,18 @@
  *  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  *  SOFTWARE.
- */
+ *
+ *  ver. 1.0.0  2022-06-28 kkossev  - first beta version
+ * 
+ *                         TODO: add driver version
+*/
+
+import groovy.transform.Field
+
+@Field static final Boolean _DEBUG = true
+@Field static final String DRIVER_VERSION =  '1.0.0'
+@Field static final String DATE_TIME_STAMP = '06/28/2025 11:51 PM'
+
 metadata {
     definition(
         name: 'ESPHome Apollo TEMP-1B',
@@ -59,199 +70,49 @@ metadata {
         attribute 'maxProbeTemp', 'number'
 
         command 'setRgbLight', [[name:'LED control', type: 'ENUM', constraints: ['off', 'on']]]
-        //command 'setSelectedProbe', [[name:'Probe Selection', type: 'ENUM', constraints: ['Temperature', 'Food']]]
     }
 
     preferences {
-        input name: 'ipAddress', type: 'text', title: 'Device IP Address', required: true    // required setting for API library
-        input name: 'password', type: 'text', title: 'Device Password <i>(if required)</i>', required: false     // optional setting for API library
-        input name: 'selectedProbe', type: 'enum', title: 'Temperature Sensor Selection', required: false, options: ['Temperature', 'Food'], defaultValue: 'Temperature', description: 'Select which sensor to use for main temperature attribute'    // allows the user to select which sensor to use for temperature
-        input name: 'diagnosticsReporting', type: 'bool', title: 'Enable Diagnostic Attributes', required: false, defaultValue: false, description: 'Enable reporting of technical diagnostic attributes (advanced users only)'
         input name: 'logEnable', type: 'bool', title: 'Enable Debug Logging', required: false, defaultValue: false    // if enabled the library will log debug details
         input name: 'txtEnable', type: 'bool', title: 'Enable descriptionText logging', required: false, defaultValue: true
+        input name: 'ipAddress', type: 'text', title: 'Device IP Address', required: true    // required setting for API library
+        input name: 'selectedProbe', type: 'enum', title: 'Temperature Sensor Selection', required: false, options: ['Temperature', 'Food'], defaultValue: 'Temperature', description: 'Select which sensor to use for main temperature attribute'    // allows the user to select which sensor to use for temperature
+        input name: 'boardHumidityOffset', type: 'decimal', title: 'Board Humidity Offset (%)', required: false, defaultValue: 0.0, range: '-50..50', description: 'Calibration offset for board humidity sensor'
         input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: 'Flip to see or hide the advanced options', defaultValue: false
         if (advancedOptions == true) {
+            input name: 'password', type: 'text', title: 'Device Password <i>(if required)</i>', required: false     // optional setting for API library
+            input name: 'diagnosticsReporting', type: 'bool', title: 'Enable Diagnostic Attributes', required: false, defaultValue: false, description: 'Enable reporting of technical diagnostic attributes (advanced users only)'
             input name: 'logWarnEnable', type: 'bool', title: 'Enable warning logging', required: false, defaultValue: true, description: '<i>Enables API Library warnings and info logging.</i>'
         }
     }
 }
 
 @Field static final Map<String, Map<String, Object>> ALL_ENTITIES = [
-    'alarm_outside_temp_range': [
-        attr: 'alarmOutsideTempRange',
-        isDiag: true,
-        type: 'switch',
-        description: 'Temperature range alarm switch'
-        // No unit needed for switches
-    ],
-    'battery_level': [
-        attr: 'battery',
-        isDiag: false,
-        type: 'sensor',
-        description: 'Battery charge level percentage'
-        // Unit "%" provided by state.entities
-    ],
-    'battery_voltage': [
-        attr: 'batteryVoltage',
-        isDiag: false,
-        type: 'sensor',
-        description: 'Battery voltage measurement'
-        // Unit "V" provided by state.entities
-    ],
-    'board_humidity': [
-        attr: 'humidity',
-        isDiag: false,
-        type: 'sensor',
-        description: 'Internal board humidity sensor reading'
-        // Unit "%" provided by state.entities
-    ],
-    'board_humidity_offset': [
-        attr: 'boardHumidityOffset', 
-        isDiag: true,
-        type: 'offset',
-        description: 'Board humidity sensor calibration offset'
-        // Unit "%" provided by state.entities
-    ],
-    'board_temperature': [
-        attr: 'boardTemperature', 
-        isDiag: true,
-        type: 'temperature',
-        description: 'Internal board temperature sensor reading'
-        // Unit "°C" provided by state.entities
-    ],
-    'board_temperature_offset': [
-        attr: 'boardTemperatureOffset', 
-        isDiag: true,
-        type: 'offset',
-        description: 'Board temperature sensor calibration offset'
-        // Unit "°C" provided by state.entities
-    ],
-    'esp_reboot': [
-        attr: 'espReboot',
-        isDiag: true,
-        type: 'button',
-        description: 'ESP device reboot button'
-        // No unit needed for buttons
-    ],
-    'esp_temperature': [
-        attr: 'espTemperature', 
-        isDiag: true,
-        type: 'temperature',
-        description: 'ESP32 chip internal temperature'
-        // Unit "°C" provided by state.entities
-    ],
-    'factory_reset_esp': [
-        attr: 'factoryResetEsp',
-        isDiag: true,
-        type: 'button',
-        description: 'Factory reset ESP device button'
-        // No unit needed for buttons
-    ],
-    'food_probe': [
-        attr: 'foodProbe', 
-        isDiag: true,
-        type: 'temperature',
-        description: 'External food probe temperature reading'
-        // Unit "°C" provided by state.entities
-    ],
-    'food_probe_offset': [
-        attr: 'foodProbeOffset', 
-        isDiag: true,
-        type: 'offset',
-        description: 'Food probe calibration offset'
-        // Unit "°C" provided by state.entities
-    ],
-    'max_probe_temp': [
-        attr: 'maxProbeTemp', 
-        isDiag: true,
-        type: 'config',
-        description: 'Maximum valid probe temperature threshold'
-        // Unit "°C" provided by state.entities
-    ],
-    'min_probe_temp': [
-        attr: 'minProbeTemp', 
-        isDiag: true,
-        type: 'config',
-        description: 'Minimum valid probe temperature threshold'
-        // Unit "°C" provided by state.entities
-    ],
-    'notify_only_outside_temp_difference': [
-        attr: 'notifyOnlyOutsideTempDifference',
-        isDiag: true,
-        type: 'switch',
-        description: 'Notify only when outside temperature difference threshold'
-        // No unit needed for switches
-    ],
-    'online': [
-        attr: 'networkStatus', 
-        isDiag: true,
-        type: 'status',
-        description: 'Network connection status'
-        // No unit needed for binary sensors
-    ],
-    'prevent_sleep': [
-        attr: 'preventSleep',
-        isDiag: true,
-        type: 'switch',
-        description: 'Prevent device sleep mode switch'
-        // No unit needed for switches
-    ],
-    'probe_temp_difference_threshold': [
-        attr: 'probeTempDifferenceThreshold', 
-        isDiag: true,
-        type: 'config',
-        description: 'Temperature difference threshold for notifications'
-        // Unit "°C" provided by state.entities
-    ],
-    'rgb_light': [
-        attr: 'rgbLight',
-        isDiag: false,
-        type: 'light',
-        description: 'RGB status light control'
-        // No unit needed for lights
-    ],
-    'rssi': [
-        attr: 'rssi', 
-        isDiag: true,
-        type: 'signal',
-        description: 'WiFi signal strength indicator'
-        // Unit "dBm" provided by state.entities
-    ],
-    'select_probe': [
-        attr: 'selectedProbe', 
-        isDiag: true,
-        type: 'selector',
-        description: 'Active temperature probe selection'
-        // No unit needed for selectors
-    ],
-    'sleep_duration': [
-        attr: 'sleepDuration', 
-        isDiag: true,
-        type: 'config',
-        description: 'Device sleep duration between measurements'
-        // Unit "h" provided by state.entities
-    ],
-    'temperature_probe': [
-        attr: 'temperatureProbe', 
-        isDiag: true,
-        type: 'temperature',
-        description: 'Primary external temperature probe reading'
-        // Unit "°C" provided by state.entities
-    ],
-    'temp_probe_offset': [
-        attr: 'tempProbeOffset', 
-        isDiag: true,
-        type: 'offset',
-        description: 'Temperature probe calibration offset'
-        // Unit "°C" provided by state.entities
-    ],
-    'uptime': [
-        attr: 'uptime', 
-        isDiag: true,
-        type: 'status',
-        description: 'Device uptime since last restart'
-        // Unit "s" provided by state.entities
-    ]
+    'alarm_outside_temp_range':            [attr: 'alarmOutsideTempRange',          isDiag: true,  type: 'switch',      description: 'Temperature range alarm switch'],
+    'battery_level':                       [attr: 'battery',                        isDiag: false, type: 'sensor',      description: 'Battery charge level percentage'],
+    'battery_voltage':                     [attr: 'batteryVoltage',                 isDiag: false, type: 'sensor',      description: 'Battery voltage measurement'],
+    'board_humidity':                      [attr: 'humidity',                       isDiag: false, type: 'sensor',      description: 'Internal board humidity sensor reading'],
+    'board_humidity_offset':               [attr: 'boardHumidityOffset',            isDiag: true,  type: 'offset',      description: 'Board humidity sensor calibration offset'],
+    'board_temperature':                   [attr: 'boardTemperature',               isDiag: true,  type: 'temperature', description: 'Internal board temperature sensor reading'],
+    'board_temperature_offset':            [attr: 'boardTemperatureOffset',         isDiag: true,  type: 'offset',      description: 'Board temperature sensor calibration offset'],
+    'esp_reboot':                          [attr: 'espReboot',                      isDiag: true,  type: 'button',      description: 'ESP device reboot button'],
+    'esp_temperature':                     [attr: 'espTemperature',                 isDiag: true,  type: 'temperature', description: 'ESP32 chip internal temperature'],
+    'factory_reset_esp':                   [attr: 'factoryResetEsp',                isDiag: true,  type: 'button',      description: 'Factory reset ESP device button'],
+    'food_probe':                          [attr: 'foodProbe',                      isDiag: true,  type: 'temperature', description: 'External food probe temperature reading'],
+    'food_probe_offset':                   [attr: 'foodProbeOffset',                isDiag: true,  type: 'offset',      description: 'Food probe calibration offset'],
+    'max_probe_temp':                      [attr: 'maxProbeTemp',                   isDiag: true,  type: 'config',      description: 'Maximum valid probe temperature threshold'],
+    'min_probe_temp':                      [attr: 'minProbeTemp',                   isDiag: true,  type: 'config',      description: 'Minimum valid probe temperature threshold'],
+    'notify_only_outside_temp_difference': [attr: 'notifyOnlyOutsideTempDifference',isDiag: true,  type: 'switch',      description: 'Notify only when outside temperature difference threshold'],
+    'online':                              [attr: 'networkStatus',                  isDiag: true,  type: 'status',      description: 'Network connection status'],
+    'prevent_sleep':                       [attr: 'preventSleep',                   isDiag: true,  type: 'switch',      description: 'Prevent device sleep mode switch'],
+    'probe_temp_difference_threshold':     [attr: 'probeTempDifferenceThreshold',   isDiag: true,  type: 'config',      description: 'Temperature difference threshold for notifications'],
+    'rgb_light':                           [attr: 'rgbLight',                       isDiag: false, type: 'light',       description: 'RGB status light control'],
+    'rssi':                                [attr: 'rssi',                           isDiag: true,  type: 'signal',      description: 'WiFi signal strength indicator'],
+    'select_probe':                        [attr: 'selectedProbe',                  isDiag: true,  type: 'selector',    description: 'Active temperature probe selection'],
+    'sleep_duration':                      [attr: 'sleepDuration',                  isDiag: true,  type: 'config',      description: 'Device sleep duration between measurements'],
+    'temperature_probe':                   [attr: 'temperatureProbe',               isDiag: true,  type: 'temperature', description: 'Primary external temperature probe reading'],
+    'temp_probe_offset':                   [attr: 'tempProbeOffset',                isDiag: true,  type: 'offset',      description: 'Temperature probe calibration offset'],
+    'uptime':                              [attr: 'uptime',                         isDiag: true,  type: 'status',      description: 'Device uptime since last restart']
 ]
 
 /**
@@ -353,6 +214,7 @@ public void logsOff() {
 }
 
 public void refresh() {
+    checkDriverVersion()
     log.info "${device} refresh"
     state.clear()
     state.requireRefresh = true
@@ -360,6 +222,7 @@ public void refresh() {
 }
 
 public void updated() {
+    checkDriverVersion()
     log.info "${device} driver configuration updated"
     
     // Delete diagnostic attribute states if diagnostics reporting is disabled
@@ -376,6 +239,11 @@ public void updated() {
     // Sync temperature preference with ESPHome select_probe entity
     if (settings.selectedProbe) {
         syncTemperatureSelection()
+    }
+    
+    // Sync board humidity offset preference with ESPHome
+    if (settings.boardHumidityOffset != null) {
+        syncBoardHumidityOffset()
     }
     
     initialize()
@@ -404,6 +272,29 @@ private void syncTemperatureSelection() {
     espHomeSelectCommand(key: selectKey, state: selectedProbe)
 }
 
+private void syncBoardHumidityOffset() {
+    // Find the board_humidity_offset entity key
+    def offsetKey = null
+    state.entities?.each { key, entity ->
+        if (entity.objectId == 'board_humidity_offset') {
+            offsetKey = key as Long
+        }
+    }
+    
+    if (offsetKey == null) {
+        if (logEnable) { 
+            log.warn "Board humidity offset entity not found - available entities: ${state.entities?.values()?.collect { it.objectId }}" 
+        }
+        return
+    }
+    
+    Float offset = settings.boardHumidityOffset as Float
+    if (txtEnable) { log.info "${device} syncing board humidity offset to ${offset}% (key: ${offsetKey})" }
+    
+    // Send the offset to ESPHome
+    espHomeNumberCommand(key: offsetKey, state: offset)
+}
+
 public void uninstalled() {
     closeSocket('driver uninstalled') // make sure the socket is closed when uninstalling
     log.info "${device} driver uninstalled"
@@ -411,6 +302,7 @@ public void uninstalled() {
 
 // the parse method is invoked by the API library when messages are received
 void parse(final Map message) {
+    checkDriverVersion()
     if (logEnable) { log.debug "ESPHome received: ${message}" }
 
     switch (message.type) {
@@ -493,9 +385,6 @@ void parseState(final Map message) {
         case 'temperature_probe':
             handleTemperatureProbeState(message, entity)
             break
-        case 'online':
-            handleOnlineState(message)
-            break
         default:
             // Use common handler for most entities
             handleGenericEntityState(message, entity)
@@ -546,6 +435,17 @@ private void handleGenericEntityState(Map message, Map entity) {
             } else {  // Other offsets (humidity, etc.)
                 processedValue = rawValue as Float
                 formattedValue = String.format("%.1f", processedValue)
+                
+                // Special case: Sync board humidity offset preference
+                if (objectId == 'board_humidity_offset') {
+                    Float currentPref = settings.boardHumidityOffset as Float
+                    if (currentPref != processedValue) {
+                        device.updateSetting('boardHumidityOffset', processedValue)
+                        if (txtEnable && shouldReportDiagnostic(objectId)) {
+                            log.info "Board humidity offset preference synced from ESPHome to ${processedValue}%"
+                        }
+                    }
+                }
             }
             break
             
@@ -621,8 +521,8 @@ private void handleGenericEntityState(Map message, Map entity) {
         sendEvent(eventData)
     }
     
-    // Always log if text logging is enabled
-    if (txtEnable) {
+    // Only log if text logging is enabled AND diagnostic reporting allows it
+    if (txtEnable && shouldReportDiagnostic(objectId)) {
         log.info "${description}: ${formattedValue} ${unit}".trim()
     }
 }
@@ -656,42 +556,7 @@ void setRgbLight(String value) {
     }
 }
 
-private void handleUptimeState(Map message) {
-    if (message.hasState) {
-        Long uptime = message.state as Long
-        int days = uptime / 86400
-        int hours = (uptime % 86400) / 3600
-        int minutes = (uptime % 3600) / 60
-        int seconds = uptime % 60
-        String uptimeString = "${days}d ${hours}h ${minutes}m ${seconds}s"
-        
-        if (shouldReportDiagnostic('uptime')) {
-            sendEvent(name: "uptime", value: uptimeString, descriptionText: "Uptime is ${uptimeString}")
-        }
-        if (txtEnable) { log.info "Uptime is ${uptimeString}" }
-    }
-}
 
-private void handleOnlineState(Map message) {
-    if (message.hasState) {
-        boolean online = message.state as Boolean
-        String status = online ? 'online' : 'offline'
-        if (txtEnable) { log.info "Network status is ${status}" }
-    }
-}
-
-private void handleRssiState(Map message) {
-    if (message.hasState) {
-        def rssi = message.state as Integer
-        String unit = getEntityUnit('rssi')
-        String description = getEntityDescription('rssi')
-        
-        if (shouldReportDiagnostic('rssi')) {
-            sendEvent(name: "rssi", value: rssi, unit: unit, descriptionText: "Signal Strength is ${rssi} ${unit}")
-        }
-        if (txtEnable) { log.info "${description}: ${rssi} ${unit}" }
-    }
-}
 
 private void handleRgbLightState(Map message) {
     // For light entities, check for 'state' directly since they don't use 'hasState'
@@ -704,34 +569,7 @@ private void handleRgbLightState(Map message) {
     }
 }
 
-private void handleBoardTemperatureState(Map message) {
-    if (message.hasState) {
-        Float tempC = message.state as Float
-        Float temp = convertTemperature(tempC)
-        String unit = getTemperatureUnit()
-        String tempStr = String.format("%.1f", temp)
-        
-        if (shouldReportDiagnostic('board_temperature')) {
-            sendEvent(name: "boardTemperature", value: tempStr, unit: unit, descriptionText: "Board Temperature is ${tempStr} ${unit}")
-        }
-        
-        if (txtEnable) { log.info "Board Temperature is ${tempStr} ${unit}" }
-    }
-}
 
-private void handleEspTemperatureState(Map message) {
-    if (message.hasState) {
-        Float tempC = message.state as Float
-        Float temp = convertTemperature(tempC)
-        String unit = getTemperatureUnit()
-        String tempStr = String.format("%.1f", temp)
-        
-        if (shouldReportDiagnostic('esp_temperature')) {
-            sendEvent(name: "espTemperature", value: tempStr, unit: unit, descriptionText: "ESP Temperature is ${tempStr} ${unit}")
-        }
-        if (txtEnable) { log.info "ESP Temperature is ${tempStr} ${unit}" }
-    }
-}
 
 private void handleFoodProbeState(Map message, Map entity) {
     if (message.hasState) {
@@ -749,7 +587,10 @@ private void handleFoodProbeState(Map message, Map entity) {
             sendEvent(name: "temperature", value: tempStr, unit: unit, descriptionText: "Temperature is ${tempStr} ${unit}")
         }
         
-        if (txtEnable) { log.info "Food Probe Temperature is ${tempStr} ${unit}" }
+        // Only log if diagnostic reporting allows it
+        if (txtEnable && shouldReportDiagnostic('food_probe')) { 
+            log.info "Food Probe Temperature is ${tempStr} ${unit}" 
+        }
     }
 }
 
@@ -769,101 +610,16 @@ private void handleTemperatureProbeState(Map message, Map entity) {
             sendEvent(name: "temperature", value: tempStr, unit: unit, descriptionText: "Temperature is ${tempStr} ${unit}")
         }
         
-        if (txtEnable) { log.info "Temperature Probe is ${tempStr} ${unit}" }
+        // Only log if diagnostic reporting allows it
+        if (txtEnable && shouldReportDiagnostic('temperature_probe')) { 
+            log.info "Temperature Probe is ${tempStr} ${unit}" 
+        }
     }
 }
 
-private void handleTempProbeOffsetState(Map message) {
-    if (message.hasState) {
-        Float offsetC = message.state as Float
-        Float offset = convertTemperature(offsetC) - convertTemperature(0)
-        String unit = getTemperatureUnit()
-        
-        if (shouldReportDiagnostic('temp_probe_offset')) {
-            sendEvent(name: "tempProbeOffset", value: offset, unit: unit, descriptionText: "Temperature probe offset is ${offset} ${unit}")
-        }
-        if (txtEnable) { log.info "Temperature probe offset is ${offset} ${unit}" }
-    }
-}
 
-private void handleFoodProbeOffsetState(Map message) {
-    if (message.hasState) {
-        Float offsetC = message.state as Float
-        Float offset = convertTemperature(offsetC) - convertTemperature(0)
-        String unit = getTemperatureUnit()
-        
-        if (shouldReportDiagnostic('food_probe_offset')) {
-            sendEvent(name: "foodProbeOffset", value: offset, unit: unit, descriptionText: "Food probe offset is ${offset} ${unit}")
-        }
-        if (txtEnable) { log.info "Food probe offset is ${offset} ${unit}" }
-    }
-}
-
-private void handleBoardTemperatureOffsetState(Map message) {
-    if (message.hasState) {
-        Float offsetC = message.state as Float
-        Float offset = convertTemperature(offsetC) - convertTemperature(0)
-        String unit = getTemperatureUnit()
-        
-        if (shouldReportDiagnostic('board_temperature_offset')) {
-            sendEvent(name: "boardTemperatureOffset", value: offset, unit: unit, descriptionText: "Board temperature offset is ${offset} ${unit}")
-        }
-        if (txtEnable) { log.info "Board temperature offset is ${offset} ${unit}" }
-    }
-}
-
-private void handleBoardHumidityOffsetState(Map message) {
-    if (message.hasState) {
-        def offset = message.state as Float
-        
-        if (shouldReportDiagnostic('board_humidity_offset')) {
-            sendEvent(name: "boardHumidityOffset", value: offset, unit: "%", descriptionText: "Board humidity offset is ${offset} %")
-        }
-        if (txtEnable) { log.info "Board humidity offset is ${offset} %" }
-    }
-}
-
-private void handleProbeTempDifferenceThresholdState(Map message) {
-    if (message.hasState) {
-        Float thresholdC = message.state as Float
-        Float threshold = convertTemperature(thresholdC) - convertTemperature(0)
-        String unit = getTemperatureUnit()
-        
-        if (shouldReportDiagnostic('probe_temp_difference_threshold')) {
-            sendEvent(name: "probeTempDifferenceThreshold", value: threshold, unit: unit, descriptionText: "Probe temperature difference threshold is ${threshold} ${unit}")
-        }
-        if (txtEnable) { log.info "Probe temperature difference threshold is ${threshold} ${unit}" }
-    }
-}
-
-private void handleMinProbeTempState(Map message) {
-    if (message.hasState) {
-        Float minTempC = message.state as Float
-        Float minTemp = convertTemperature(minTempC)
-        String unit = getTemperatureUnit()
-        
-        if (shouldReportDiagnostic('min_probe_temp')) {
-            sendEvent(name: "minProbeTemp", value: minTemp, unit: unit, descriptionText: "Minimum probe temperature is ${minTemp} ${unit}")
-        }
-        if (txtEnable) { log.info "Minimum probe temperature is ${minTemp} ${unit}" }
-    }
-}
-
-private void handleMaxProbeTempState(Map message) {
-    if (message.hasState) {
-        Float maxTempC = message.state as Float
-        Float maxTemp = convertTemperature(maxTempC)
-        String unit = getTemperatureUnit()
-        
-        if (shouldReportDiagnostic('max_probe_temp')) {
-            sendEvent(name: "maxProbeTemp", value: maxTemp, unit: unit, descriptionText: "Maximum probe temperature is ${maxTemp} ${unit}")
-        }
-        if (txtEnable) { log.info "Maximum probe temperature is ${maxTemp} ${unit}" }
-    }
-}
 
 private void handleSelectProbeState(Map message) {
-    log.trace "handleSelectProbeState: ${message}"
     if (message.hasState) {
         def selectedProbe = message.state as String
         
@@ -871,91 +627,27 @@ private void handleSelectProbeState(Map message) {
             sendEvent(name: "selectedProbe", value: selectedProbe, descriptionText: "Selected probe is ${selectedProbe}")
         }
         
-        if (txtEnable) { log.info "ESPHome selected probe changed to: ${selectedProbe}" }
+        // Only log if diagnostic reporting allows it
+        if (txtEnable && shouldReportDiagnostic('select_probe')) { 
+            log.info "ESPHome selected probe changed to: ${selectedProbe}" 
+        }
         
         // Sync the preference setting with ESPHome selection (avoid loops)
         if (settings.selectedProbe != selectedProbe) {
             device.updateSetting('selectedProbe', selectedProbe)
-            if (txtEnable) { log.info "Selected probe preference synced from ESPHome to ${selectedProbe}" }
+            if (txtEnable && shouldReportDiagnostic('select_probe')) { 
+                log.info "Selected probe preference synced from ESPHome to ${selectedProbe}" 
+            }
         }
         
-        if (txtEnable) { log.info "Selected probe is ${selectedProbe}" }
+        if (txtEnable && shouldReportDiagnostic('select_probe')) { 
+            log.info "Selected probe is ${selectedProbe}" 
+        }
     } else {
         if (logEnable) { log.warn "Select probe message does not have state: ${message}" }
     }
 }
 
-private void handleSleepDurationState(Map message) {
-    if (message.hasState) {
-        def duration = message.state as Integer
-        String unit = getEntityUnit('sleep_duration')
-        String description = getEntityDescription('sleep_duration')
-        
-        if (shouldReportDiagnostic('sleep_duration')) {
-            sendEvent(name: "sleepDuration", value: duration, unit: unit, descriptionText: "Sleep duration is ${duration} ${unit}")
-        }
-        if (txtEnable) { log.info "${description}: ${duration} ${unit}" }
-    }
-}
-
-private void handleBoardHumidityState(Map message) {
-    if (message.hasState) {
-        def humidity = message.state as Float
-        String humidityStr = String.format("%.1f", humidity)
-        sendEvent(name: "humidity", value: humidityStr, unit: "%", descriptionText: "Board Humidity is ${humidityStr} %")
-        if (txtEnable) { log.info "Board Humidity is ${humidityStr} %" }
-    }
-}
-
-private void handleBatteryVoltageState(Map message) {
-    if (message.hasState) {
-        def voltage = message.state as Float
-        sendEvent(name: "batteryVoltage", value: voltage, unit: "V", descriptionText: "Battery voltage is ${voltage} V")
-        if (txtEnable) { log.info "Battery voltage is ${voltage} V" }
-    }
-}
-
-private void handleBatteryLevelState(Map message) {
-    if (message.hasState) {
-        def level = message.state as Integer
-        sendEvent(name: "battery", value: level, unit: "%", descriptionText: "Battery level is ${level} %")
-        if (txtEnable) { log.info "Battery level is ${level} %" }
-    }
-}
-
-private void handleAlarmOutsideTempRangeState(Map message) {
-    if (message.hasState) {
-        def alarmState = message.state as Boolean
-        sendEvent(name: "alarmOutsideTempRange", value: alarmState ? "on" : "off", descriptionText: "Outside temperature alarm is ${alarmState ? 'on' : 'off'}")
-        if (txtEnable) { log.info "Outside temperature alarm is ${alarmState ? 'on' : 'off'}" }
-    }
-}
-
-private void handleNotifyOnlyOutsideTempDifferenceState(Map message) {
-    if (message.hasState) {
-        def notifyState = message.state as Boolean
-        sendEvent(name: "notifyOnlyOutsideTempDifference", value: notifyState ? "on" : "off", descriptionText: "Notify only outside temp difference is ${notifyState ? 'on' : 'off'}")
-        if (txtEnable) { log.info "Notify only outside temp difference is ${notifyState ? 'on' : 'off'}" }
-    }
-}
-
-private void handlePreventSleepState(Map message) {
-    if (message.hasState) {
-        def preventState = message.state as Boolean
-        sendEvent(name: "preventSleep", value: preventState ? "on" : "off", descriptionText: "Prevent sleep is ${preventState ? 'on' : 'off'}")
-        if (txtEnable) { log.info "Prevent sleep is ${preventState ? 'on' : 'off'}" }
-    }
-}
-
-private void handleEspRebootState(Map message) {
-    // Button entities typically don't have state changes to handle
-    if (txtEnable) { log.info "ESP reboot button entity available" }
-}
-
-private void handleFactoryResetEspState(Map message) {
-    // Button entities typically don't have state changes to handle
-    if (txtEnable) { log.info "Factory reset ESP button entity available" }
-}
 
 /**
  * Convert temperature based on hub's temperature scale setting
@@ -977,30 +669,21 @@ private String getTemperatureUnit() {
     return location.temperatureScale == 'F' ? '°F' : '°C'
 }
 
-/*
-void setSelectedProbe(String probe) {
-    // Find the select_probe entity key
-    def selectKey = null
-    state.entities?.each { key, entity ->
-        if (entity.objectId == 'select_probe') {
-            selectKey = key as Long
-        }
-    }
-    
-    if (selectKey == null) {
-        log.warn "Select probe entity not found - available entities: ${state.entities?.values()?.collect { it.objectId }}"
-        return
-    }
-    
-    if (txtEnable) { log.info "${device} setting selected probe to ${probe}" }
-    
-    // Send the selection to ESPHome
-    espHomeSelectCommand(key: selectKey, state: probe)
-    
-    // Also update the preference setting to keep them in sync
-    device.updateSetting('selectedProbe', probe)
+private String driverVersionAndTimeStamp() { 
+    String debugSuffix = _DEBUG ? ' (debug version!)' : ''
+    return "${DRIVER_VERSION} ${DATE_TIME_STAMP} ${debugSuffix} (${getHubVersion()} ${location.hub.firmwareVersionString})"
 }
-*/
+
+//@CompileStatic
+public void checkDriverVersion() {
+    if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
+        if (txtEnable) { log.info "checkDriverVersion: updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}" }
+        //sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()}")
+        //logInfo("Updated to version ${driverVersionAndTimeStamp()}")
+        state.driverVersion = driverVersionAndTimeStamp()
+    }
+}
+
 
 // Put this line at the end of the driver to include the ESPHome API library helper
 
