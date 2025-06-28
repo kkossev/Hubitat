@@ -19,6 +19,12 @@
  *  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  *  SOFTWARE.
+ * 
+ *  ver. 1.0.0  2022-06-18 kkossev  - first beta version
+ * 
+ *                         TODO: check the restart() command - state.entities['restart'] 
+ *                         TODO : LED control! 
+ *                         TODO: add driver version
  */
 metadata {
     definition(
@@ -60,35 +66,29 @@ metadata {
     }
 
     preferences {
-        input name: 'ipAddress',    // required setting for API library
-            type: 'text',
-            title: '<b>Device IP Address</b>',
-            required: true
-
-        input name: 'password',     // optional setting for API library
-            type: 'text',
-            title: '<b>Device Password</b>',
-            description: '<i>(if required)</i>',
-            required: false
-
-        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: \
-             '<i>Enables command logging.</i>'
-
-        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: false, description: \
-             '<i>Turns on debug logging for 30 minutes.</i>'
+        input name: 'ipAddress', type: 'text', title: '<b>Device IP Address</b>', required: true
+        input name: 'password',  type: 'text', title: '<b>Device Password</b>', description: '<i>(if required)</i>', required: false
+        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: false, description: '<i>Turns on debug logging for 30 minutes.</i>'
+        input name: 'distanceReporting', type: 'bool', title: '<b>Distance Reporting</b>', defaultValue: false, description: '<i>Enables distance reporting from the radar sensor.<br>Keep it <b>disabled</b> if not really used in automations!</i>'
+        input name: 'diagnosticsReporting', type: 'bool', title: '<b>Diagnostics Reporting</b>', defaultValue: false, description: '<i>Enables diagnostics reporting from the device.</i>'
+        input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: 'Flip to see or hide the advanced options', defaultValue: false
+        if (advancedOptions == true) {
+            input name: 'logWarnEnable', type: 'bool', title: 'Enable warning logging', required: false, defaultValue: true, description: '<i>Enables API Library warnings and info logging.</i>'
+        }
     }
 }
 
+// called from updated() method after 5 seconds
 void configure() {
-
+    if (logEnable) { log.debug "${device} configure()" }
 }
 
 void initialize() {
-    // API library command to open socket to device, it will automatically reconnect if needed
+    // API library command to open socket to device, it will automatically reconnect if needed.  initialize() is called automatically when the hub reboots!
     openSocket()
-
     if (logEnable) {
-        runIn(1800, 'logsOff')
+        runIn(1800, 'logsOff')  // keep debug logging enabled for 30 minutes
     }
 }
 
@@ -117,6 +117,17 @@ void restart() {
 
 void updated() {
     log.info "${device} driver configuration updated"
+    if (settings.distanceReporting == false) {
+        device.deleteCurrentState('radarMovingDistance')
+        device.deleteCurrentState('radarStillDistance')
+    }
+    if (settings.diagnosticsReporting == false) {
+        device.deleteCurrentState('uptime')
+        device.deleteCurrentState('rssi')
+        device.deleteCurrentState('boardTemperature')
+        device.deleteCurrentState('espTemperature')
+        device.deleteCurrentState('pressure')
+    }
     initialize()
     runIn(5, 'configure')
 }
@@ -176,6 +187,10 @@ void parseState(final Map message) {
     switch (objectId) {
         case 'uptime':
             // Uptime in seconds
+            if (!settings.diagnosticsReporting) {
+                if (logEnable) { log.warn "Diagnostics reporting is disabled, ignoring uptime." }
+                return
+            }
             Long uptime = message.state as Long
             int days = uptime / 86400
             int hours = (uptime % 86400) / 3600
@@ -187,6 +202,10 @@ void parseState(final Map message) {
             break
         case 'rssi':
             // Signal strength in dBm
+            if (!settings.diagnosticsReporting) {
+                if (logEnable) { log.warn "Diagnostics reporting is disabled, ignoring RSSI." }
+                return
+            }
             def rssi = message.state as Integer
             sendEvent(name: "rssi", value: rssi, unit: "dBm", descriptionText: "Signal Strength is ${rssi} dBm")
             if (txtEnable) { log.info "Signal Strength is ${rssi} dBm" }
@@ -198,11 +217,21 @@ void parseState(final Map message) {
             if (txtEnable) { log.info "RGB Light is ${rgbLightState ? 'on' : 'off'}" }
             break
         case 'dps310_temperature':
+            // Board temperature in Celsius
+            if (!settings.diagnosticsReporting) {
+                if (logEnable) { log.warn "Diagnostics reporting is disabled, ignoring board temperature." }
+                return
+            }
             def temp = String.format("%.1f", message.state as Float)
             sendEvent(name: "boardTemperature", value: temp, unit: "°C", descriptionText: "Board Temperature is ${temp} °C")
             if (txtEnable) { log.info "Board Temperature is ${temp} °C" }
             break
         case 'esp_temperature':
+            // ESP temperature in Celsius
+            if (!settings.diagnosticsReporting) {
+                if (logEnable) { log.warn "Diagnostics reporting is disabled, ignoring ESP temperature." }
+                return
+            }
             def temp = String.format("%.1f", message.state as Float)
             sendEvent(name: "espTemperature", value: temp, unit: "°C", descriptionText: "ESP Temperature is ${temp} °C")
             if (txtEnable) { log.info "ESP Temperature is ${temp} °C" }
@@ -221,19 +250,27 @@ void parseState(final Map message) {
             break
         case 'radar_detection_distance':
             // Millimeter wave radar sensor distance
-            def distance = message.state as Integer
+            if (!distanceReporting) {
+                if (logEnable) { log.warn "Distance reporting is disabled, ignoring radar detection distance." }
+                return
+            }
+            Integer distance = message.state as Integer
             sendEvent(name: "radarMovingDistance", value: distance, unit: "cm", descriptionText: "Millimeter wave radar sensor distance is ${distance} cm")
-            if (txtEnable) { log.info "Millimeter wave radar sensor distance is ${distance} cm" }
+            if (logEnable) { log.info "Millimeter wave radar sensor distance is ${distance} cm" }
             break
         case 'radar_still_distance':
+            if (!distanceReporting) {
+                if (logEnable) { log.warn "Distance reporting is disabled, ignoring radar still distance." }
+                return
+            }
             // Millimeter wave radar sensor still distance
-            def stillDistance = message.state as Integer
+            Integer stillDistance = message.state as Integer
             sendEvent(name: "radarStillDistance", value: stillDistance, unit: "cm", descriptionText: "Millimeter wave radar sensor still distance is ${stillDistance} cm")
-            if (txtEnable) { log.info "Millimeter wave radar sensor still distance is ${stillDistance} cm" }
+            if (logEnable) { log.info "Millimeter wave radar sensor still distance is ${stillDistance} cm" }
             break
         case 'radar_target':
             // Millimeter wave radar sensor target
-            def target = message.state as String
+            String target = message.state as String
             sendEvent(name: "radarTarget", value: target, descriptionText: "Millimeter wave radar sensor target is ${target}")
             if (txtEnable) { log.info "Millimeter wave radar sensor target is ${target}" }
             String motionValue = (target == 'true') ? 'active' : 'inactive'
@@ -241,26 +278,26 @@ void parseState(final Map message) {
             break
         case 'radar_still_target':
             // Millimeter wave radar sensor still target
-            def stillTarget = message.state as String
+            String stillTarget = message.state as String
             sendEvent(name: "radarStillTarget", value: stillTarget, descriptionText: "Millimeter wave radar sensor still target is ${stillTarget}")
             if (txtEnable) { log.info "Millimeter wave radar sensor still target is ${stillTarget}" }
             break
         case 'radar_zone_1_occupancy':
             // Millimeter wave radar sensor occupancy
-            def occupancy = message.state as Boolean
-            sendEvent(name: "radarZone1Occupanncy", value: occupancy ? 'active' : 'inactive', descriptionText: "Millimeter wave radar sensor is ${occupancy ? 'active' : 'inactive'}")
+            boolean occupancy = message.state as Boolean
+            sendEvent(name: "radarZone1Occupanncy", value: occupancy ? 'active' : 'inactive', descriptionText: "Zone 1 Occupanncy is ${occupancy ? 'active' : 'inactive'}")
             if (txtEnable) { log.info "Zone 1 Occupanncy is ${occupancy ? 'active' : 'inactive'}" }
             break
         case 'radar_zone_2_occupancy':
             // Millimeter wave radar sensor occupancy
-            def occupancy = message.state as Boolean
-            sendEvent(name: "radarZone2Occupanncy", value: occupancy ? 'active' : 'inactive', descriptionText: "Millimeter wave radar sensor is ${occupancy ? 'active' : 'inactive'}")
+            boolean occupancy = message.state as Boolean
+            sendEvent(name: "radarZone2Occupanncy", value: occupancy ? 'active' : 'inactive', descriptionText: "Zone 2 Occupanncy is ${occupancy ? 'active' : 'inactive'}")
             if (txtEnable) { log.info "Zone 2 Occupanncy is ${occupancy ? 'active' : 'inactive'}" }
             break
         case 'radar_zone_3_occupancy':
             // Millimeter wave radar sensor occupancy
-            def occupancy = message.state as Boolean
-            sendEvent(name: "radarZone3Occupanncy", value: occupancy ? 'active' : 'inactive', descriptionText: "Millimeter wave radar sensor is ${occupancy ? 'active' : 'inactive'}")
+            boolean occupancy = message.state as Boolean
+            sendEvent(name: "radarZone3Occupanncy", value: occupancy ? 'active' : 'inactive', descriptionText: "Zone 3 Occupanncy is ${occupancy ? 'active' : 'inactive'}")
             if (txtEnable) { log.info "Zone 3 Occupanncy is ${occupancy ? 'active' : 'inactive'}" }
             break
 
