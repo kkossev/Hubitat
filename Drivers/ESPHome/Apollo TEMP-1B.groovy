@@ -66,6 +66,7 @@ metadata {
         input name: 'ipAddress', type: 'text', title: 'Device IP Address', required: true    // required setting for API library
         input name: 'password', type: 'text', title: 'Device Password <i>(if required)</i>', required: false     // optional setting for API library
         input name: 'selectedProbe', type: 'enum', title: 'Temperature Sensor Selection', required: false, options: ['Temperature', 'Food'], defaultValue: 'Temperature', description: 'Select which sensor to use for main temperature attribute'    // allows the user to select which sensor to use for temperature
+        input name: 'diagnosticsReporting', type: 'bool', title: 'Enable Diagnostic Attributes', required: false, defaultValue: false, description: 'Enable reporting of technical diagnostic attributes (advanced users only)'
         input name: 'logEnable', type: 'bool', title: 'Enable Debug Logging', required: false, defaultValue: false    // if enabled the library will log debug details
         input name: 'txtEnable', type: 'bool', title: 'Enable descriptionText logging', required: false, defaultValue: true
         input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: 'Flip to see or hide the advanced options', defaultValue: false
@@ -73,6 +74,263 @@ metadata {
             input name: 'logWarnEnable', type: 'bool', title: 'Enable warning logging', required: false, defaultValue: true, description: '<i>Enables API Library warnings and info logging.</i>'
         }
     }
+}
+
+@Field static final Map<String, Map<String, Object>> ALL_ENTITIES = [
+    'alarm_outside_temp_range': [
+        attr: 'alarmOutsideTempRange',
+        isDiag: true,
+        type: 'switch',
+        description: 'Temperature range alarm switch'
+        // No unit needed for switches
+    ],
+    'battery_level': [
+        attr: 'battery',
+        isDiag: false,
+        type: 'sensor',
+        description: 'Battery charge level percentage'
+        // Unit "%" provided by state.entities
+    ],
+    'battery_voltage': [
+        attr: 'batteryVoltage',
+        isDiag: false,
+        type: 'sensor',
+        description: 'Battery voltage measurement'
+        // Unit "V" provided by state.entities
+    ],
+    'board_humidity': [
+        attr: 'humidity',
+        isDiag: false,
+        type: 'sensor',
+        description: 'Internal board humidity sensor reading'
+        // Unit "%" provided by state.entities
+    ],
+    'board_humidity_offset': [
+        attr: 'boardHumidityOffset', 
+        isDiag: true,
+        type: 'offset',
+        description: 'Board humidity sensor calibration offset'
+        // Unit "%" provided by state.entities
+    ],
+    'board_temperature': [
+        attr: 'boardTemperature', 
+        isDiag: true,
+        type: 'temperature',
+        description: 'Internal board temperature sensor reading'
+        // Unit "°C" provided by state.entities
+    ],
+    'board_temperature_offset': [
+        attr: 'boardTemperatureOffset', 
+        isDiag: true,
+        type: 'offset',
+        description: 'Board temperature sensor calibration offset'
+        // Unit "°C" provided by state.entities
+    ],
+    'esp_reboot': [
+        attr: 'espReboot',
+        isDiag: true,
+        type: 'button',
+        description: 'ESP device reboot button'
+        // No unit needed for buttons
+    ],
+    'esp_temperature': [
+        attr: 'espTemperature', 
+        isDiag: true,
+        type: 'temperature',
+        description: 'ESP32 chip internal temperature'
+        // Unit "°C" provided by state.entities
+    ],
+    'factory_reset_esp': [
+        attr: 'factoryResetEsp',
+        isDiag: true,
+        type: 'button',
+        description: 'Factory reset ESP device button'
+        // No unit needed for buttons
+    ],
+    'food_probe': [
+        attr: 'foodProbe', 
+        isDiag: true,
+        type: 'temperature',
+        description: 'External food probe temperature reading'
+        // Unit "°C" provided by state.entities
+    ],
+    'food_probe_offset': [
+        attr: 'foodProbeOffset', 
+        isDiag: true,
+        type: 'offset',
+        description: 'Food probe calibration offset'
+        // Unit "°C" provided by state.entities
+    ],
+    'max_probe_temp': [
+        attr: 'maxProbeTemp', 
+        isDiag: true,
+        type: 'config',
+        description: 'Maximum valid probe temperature threshold'
+        // Unit "°C" provided by state.entities
+    ],
+    'min_probe_temp': [
+        attr: 'minProbeTemp', 
+        isDiag: true,
+        type: 'config',
+        description: 'Minimum valid probe temperature threshold'
+        // Unit "°C" provided by state.entities
+    ],
+    'notify_only_outside_temp_difference': [
+        attr: 'notifyOnlyOutsideTempDifference',
+        isDiag: true,
+        type: 'switch',
+        description: 'Notify only when outside temperature difference threshold'
+        // No unit needed for switches
+    ],
+    'online': [
+        attr: 'networkStatus', 
+        isDiag: true,
+        type: 'status',
+        description: 'Network connection status'
+        // No unit needed for binary sensors
+    ],
+    'prevent_sleep': [
+        attr: 'preventSleep',
+        isDiag: true,
+        type: 'switch',
+        description: 'Prevent device sleep mode switch'
+        // No unit needed for switches
+    ],
+    'probe_temp_difference_threshold': [
+        attr: 'probeTempDifferenceThreshold', 
+        isDiag: true,
+        type: 'config',
+        description: 'Temperature difference threshold for notifications'
+        // Unit "°C" provided by state.entities
+    ],
+    'rgb_light': [
+        attr: 'rgbLight',
+        isDiag: false,
+        type: 'light',
+        description: 'RGB status light control'
+        // No unit needed for lights
+    ],
+    'rssi': [
+        attr: 'rssi', 
+        isDiag: true,
+        type: 'signal',
+        description: 'WiFi signal strength indicator'
+        // Unit "dBm" provided by state.entities
+    ],
+    'select_probe': [
+        attr: 'selectedProbe', 
+        isDiag: true,
+        type: 'selector',
+        description: 'Active temperature probe selection'
+        // No unit needed for selectors
+    ],
+    'sleep_duration': [
+        attr: 'sleepDuration', 
+        isDiag: true,
+        type: 'config',
+        description: 'Device sleep duration between measurements'
+        // Unit "h" provided by state.entities
+    ],
+    'temperature_probe': [
+        attr: 'temperatureProbe', 
+        isDiag: true,
+        type: 'temperature',
+        description: 'Primary external temperature probe reading'
+        // Unit "°C" provided by state.entities
+    ],
+    'temp_probe_offset': [
+        attr: 'tempProbeOffset', 
+        isDiag: true,
+        type: 'offset',
+        description: 'Temperature probe calibration offset'
+        // Unit "°C" provided by state.entities
+    ],
+    'uptime': [
+        attr: 'uptime', 
+        isDiag: true,
+        type: 'status',
+        description: 'Device uptime since last restart'
+        // Unit "s" provided by state.entities
+    ]
+]
+
+/**
+ * Get entity information from the ALL_ENTITIES map
+ * @param objectId ESPHome entity objectId
+ * @return entity information map or null if not found
+ */
+private Map getEntityInfo(String objectId) {
+    return ALL_ENTITIES[objectId]
+}
+
+/**
+ * Get the unit for a specific entity from state.entities, with fallback to ALL_ENTITIES
+ * @param objectId ESPHome entity objectId
+ * @return unit string with temperature scale applied
+ */
+private String getEntityUnit(String objectId) {
+    // First try to get unit from state.entities
+    def entity = state.entities?.values()?.find { it.objectId == objectId }
+    String unit = entity?.unitOfMeasurement as String
+    
+    // If no unit found in state.entities, use fallback from ALL_ENTITIES (if provided)
+    if (!unit) {
+        def entityInfo = ALL_ENTITIES[objectId]
+        unit = entityInfo?.unit as String ?: ''
+    }
+    
+    // Convert temperature units based on hub setting
+    if (unit == '°C' && location.temperatureScale == 'F') {
+        return '°F'
+    }
+    
+    return unit
+}
+
+/**
+ * Get entity type for classification
+ * @param objectId ESPHome entity objectId
+ * @return entity type string
+ */
+private String getEntityType(String objectId) {
+    def entityInfo = getEntityInfo(objectId)
+    return entityInfo?.type as String ?: 'unknown'
+}
+
+/**
+ * Get entity description for logging
+ * @param objectId ESPHome entity objectId
+ * @return entity description string
+ */
+private String getEntityDescription(String objectId) {
+    def entityInfo = getEntityInfo(objectId)
+    return entityInfo?.description as String ?: objectId
+}
+
+/**
+ * Check if diagnostic reporting is enabled for the given entity
+ * @param objectId ESPHome entity objectId
+ * @return true if events should be sent, false if diagnostic reporting is disabled
+ */
+private boolean shouldReportDiagnostic(String objectId) {
+    // If diagnosticsReporting is enabled, always report
+    if (settings.diagnosticsReporting == true) {
+        return true
+    }
+    
+    // If the entity is not in the map, always report
+    if (!ALL_ENTITIES.containsKey(objectId)) {
+        return true
+    }
+    
+    // Check if the entity is marked as diagnostic
+    def entityInfo = ALL_ENTITIES[objectId]
+    if (entityInfo?.isDiag != true) {
+        return true
+    }
+    
+    // Entity is diagnostic and reporting is disabled
+    return false
 }
 
 public void initialize() {
@@ -103,6 +361,17 @@ public void refresh() {
 
 public void updated() {
     log.info "${device} driver configuration updated"
+    
+    // Delete diagnostic attribute states if diagnostics reporting is disabled
+    if (settings.diagnosticsReporting == false) {
+        ALL_ENTITIES.each { entityId, entityInfo ->
+            def attributeName = entityInfo.attr
+            // Skip networkStatus as it's important for connection status
+            if (attributeName != 'networkStatus' && entityInfo.isDiag == true) {
+                device.deleteCurrentState(attributeName)
+            }
+        }
+    }
     
     // Sync temperature preference with ESPHome select_probe entity
     if (settings.selectedProbe) {
@@ -210,85 +479,153 @@ void parseState(final Map message) {
         return 
     }
 
+    // Handle special cases that need custom logic
     switch (objectId) {
-        case 'uptime':
-            handleUptimeState(message)
-            break
-        case 'online':
-            handleOnlineState(message)
-            break
-        case 'rssi':
-            handleRssiState(message)
-            break
         case 'rgb_light':
             handleRgbLightState(message)
             break
         case 'select_probe':
             handleSelectProbeState(message)
             break
-        case 'sleep_duration':
-            handleSleepDurationState(message)
-            break
-        case 'probe_temp_difference_threshold':
-            handleProbeTempDifferenceThresholdState(message)
-            break
-        case 'min_probe_temp':
-            handleMinProbeTempState(message)
-            break
-        case 'max_probe_temp':
-            handleMaxProbeTempState(message)
-            break
-        case 'dps310_temperature':
-        case 'board_temperature':
-            handleBoardTemperatureState(message)
-            break
-        case 'esp_temperature':
-            handleEspTemperatureState(message)
-            break
         case 'food_probe':
-            handleFoodProbeState(message)
-            break
-        case 'board_humidity':
-            handleBoardHumidityState(message)
+            handleFoodProbeState(message, entity)
             break
         case 'temperature_probe':
-            handleTemperatureProbeState(message)
+            handleTemperatureProbeState(message, entity)
             break
-        case 'temp_probe_offset':
-            handleTempProbeOffsetState(message)
-            break
-        case 'food_probe_offset':
-            handleFoodProbeOffsetState(message)
-            break
-        case 'board_temperature_offset':
-            handleBoardTemperatureOffsetState(message)
-            break
-        case 'board_humidity_offset':
-            handleBoardHumidityOffsetState(message)
-            break
-        case 'battery_voltage':
-            handleBatteryVoltageState(message)
-            break
-        case 'battery_level':
-            handleBatteryLevelState(message)
-            break
-        case 'alarm_outside_temp_range':
-            handleAlarmOutsideTempRangeState(message)
-            break
-        case 'notify_only_outside_temp_difference':
-            handleNotifyOnlyOutsideTempDifferenceState(message)
-            break
-        case 'prevent_sleep':
-            handlePreventSleepState(message)
+        case 'online':
+            handleOnlineState(message)
             break
         default:
-            if (logEnable) {
-                log.warn "Unhandled objectId: ${objectId} (key=${key}, state=${message.state})"
-            }
+            // Use common handler for most entities
+            handleGenericEntityState(message, entity)
             break
     }
 }
 
+
+/**
+ * Common handler for most entity state updates
+ * @param message state message from ESPHome
+ * @param entity entity information from state.entities
+ */
+private void handleGenericEntityState(Map message, Map entity) {
+    if (!message.hasState) {
+        return
+    }
+    
+    String objectId = entity.objectId
+    def entityInfo = getEntityInfo(objectId)
+    if (!entityInfo) {
+        if (logEnable) { log.warn "No entity info found for objectId: ${objectId}" }
+        return
+    }
+    
+    String attributeName = entityInfo.attr
+    String description = entityInfo.description
+    String unit = getEntityUnit(objectId)
+    def rawValue = message.state
+    def processedValue = rawValue
+    String formattedValue = ""
+    
+    // Process value based on entity type
+    switch (entityInfo.type) {
+        case 'temperature':
+            Float tempC = rawValue as Float
+            Float temp = convertTemperature(tempC)
+            processedValue = temp
+            formattedValue = String.format("%.1f", temp)
+            break
+            
+        case 'offset':
+            if (unit.contains('°')) {  // Temperature offset
+                Float offsetC = rawValue as Float
+                Float offset = convertTemperature(offsetC) - convertTemperature(0)
+                processedValue = offset
+                formattedValue = String.format("%.1f", offset)
+            } else {  // Other offsets (humidity, etc.)
+                processedValue = rawValue as Float
+                formattedValue = String.format("%.1f", processedValue)
+            }
+            break
+            
+        case 'switch':
+            boolean switchState = rawValue as Boolean
+            processedValue = switchState ? "on" : "off"
+            formattedValue = processedValue
+            break
+            
+        case 'sensor':
+            if (rawValue instanceof Float) {
+                processedValue = rawValue as Float
+                formattedValue = String.format("%.1f", processedValue)
+            } else {
+                processedValue = rawValue as Integer
+                formattedValue = processedValue.toString()
+            }
+            break
+            
+        case 'config':
+            if (unit.contains('°')) {  // Temperature config
+                Float tempC = rawValue as Float
+                Float temp = convertTemperature(tempC)
+                processedValue = temp
+                formattedValue = String.format("%.1f", temp)
+            } else if (rawValue instanceof Float) {
+                processedValue = rawValue as Float
+                formattedValue = String.format("%.1f", processedValue)
+            } else {
+                processedValue = rawValue as Integer
+                formattedValue = processedValue.toString()
+            }
+            break
+            
+        case 'signal':
+            processedValue = rawValue as Integer
+            formattedValue = processedValue.toString()
+            break
+            
+        case 'status':
+            if (objectId == 'uptime') {
+                Long uptime = rawValue as Long
+                int days = uptime / 86400
+                int hours = (uptime % 86400) / 3600
+                int minutes = (uptime % 3600) / 60
+                int seconds = uptime % 60
+                processedValue = "${days}d ${hours}h ${minutes}m ${seconds}s"
+                formattedValue = processedValue
+            } else {
+                processedValue = rawValue
+                formattedValue = processedValue.toString()
+            }
+            break
+            
+        default:
+            processedValue = rawValue
+            formattedValue = processedValue.toString()
+            break
+    }
+    
+    // Send event if diagnostic reporting allows it
+    if (shouldReportDiagnostic(objectId)) {
+        Map eventData = [
+            name: attributeName,
+            value: (formattedValue ?: processedValue),
+            descriptionText: "${description} is ${formattedValue} ${unit}".trim()
+        ]
+        
+        if (unit) {
+            eventData.unit = unit
+        }
+        
+        sendEvent(eventData)
+    }
+    
+    // Always log if text logging is enabled
+    if (txtEnable) {
+        log.info "${description}: ${formattedValue} ${unit}".trim()
+    }
+}
 
 /**
  * Check if the specified value is null or empty
@@ -327,7 +664,10 @@ private void handleUptimeState(Map message) {
         int minutes = (uptime % 3600) / 60
         int seconds = uptime % 60
         String uptimeString = "${days}d ${hours}h ${minutes}m ${seconds}s"
-        sendEvent(name: "uptime", value: uptimeString, descriptionText: "Uptime is ${uptimeString}")
+        
+        if (shouldReportDiagnostic('uptime')) {
+            sendEvent(name: "uptime", value: uptimeString, descriptionText: "Uptime is ${uptimeString}")
+        }
         if (txtEnable) { log.info "Uptime is ${uptimeString}" }
     }
 }
@@ -343,8 +683,13 @@ private void handleOnlineState(Map message) {
 private void handleRssiState(Map message) {
     if (message.hasState) {
         def rssi = message.state as Integer
-        sendEvent(name: "rssi", value: rssi, unit: "dBm", descriptionText: "Signal Strength is ${rssi} dBm")
-        if (txtEnable) { log.info "Signal Strength is ${rssi} dBm" }
+        String unit = getEntityUnit('rssi')
+        String description = getEntityDescription('rssi')
+        
+        if (shouldReportDiagnostic('rssi')) {
+            sendEvent(name: "rssi", value: rssi, unit: unit, descriptionText: "Signal Strength is ${rssi} ${unit}")
+        }
+        if (txtEnable) { log.info "${description}: ${rssi} ${unit}" }
     }
 }
 
@@ -365,9 +710,10 @@ private void handleBoardTemperatureState(Map message) {
         Float temp = convertTemperature(tempC)
         String unit = getTemperatureUnit()
         String tempStr = String.format("%.1f", temp)
-        sendEvent(name: "boardTemperature", value: tempStr, unit: unit, descriptionText: "Board Temperature is ${tempStr} ${unit}")
         
-        // Board temperature is always just an attribute, not selectable for main temperature
+        if (shouldReportDiagnostic('board_temperature')) {
+            sendEvent(name: "boardTemperature", value: tempStr, unit: unit, descriptionText: "Board Temperature is ${tempStr} ${unit}")
+        }
         
         if (txtEnable) { log.info "Board Temperature is ${tempStr} ${unit}" }
     }
@@ -379,21 +725,24 @@ private void handleEspTemperatureState(Map message) {
         Float temp = convertTemperature(tempC)
         String unit = getTemperatureUnit()
         String tempStr = String.format("%.1f", temp)
-        sendEvent(name: "espTemperature", value: tempStr, unit: unit, descriptionText: "ESP Temperature is ${tempStr} ${unit}")
         
-        // ESP temperature is always just an attribute, not selectable for main temperature
-        
+        if (shouldReportDiagnostic('esp_temperature')) {
+            sendEvent(name: "espTemperature", value: tempStr, unit: unit, descriptionText: "ESP Temperature is ${tempStr} ${unit}")
+        }
         if (txtEnable) { log.info "ESP Temperature is ${tempStr} ${unit}" }
     }
 }
 
-private void handleFoodProbeState(Map message) {
+private void handleFoodProbeState(Map message, Map entity) {
     if (message.hasState) {
         Float tempC = message.state as Float
         Float temp = convertTemperature(tempC)
         String unit = getTemperatureUnit()
         String tempStr = String.format("%.1f", temp)
-        sendEvent(name: "foodProbe", value: tempStr, unit: unit, descriptionText: "Food Probe Temperature is ${tempStr} ${unit}")
+        
+        if (shouldReportDiagnostic('food_probe')) {
+            sendEvent(name: "foodProbe", value: tempStr, unit: unit, descriptionText: "Food Probe Temperature is ${tempStr} ${unit}")
+        }
         
         // Update main temperature if this sensor is selected
         if (settings.selectedProbe == 'Food') {
@@ -404,13 +753,16 @@ private void handleFoodProbeState(Map message) {
     }
 }
 
-private void handleTemperatureProbeState(Map message) {
+private void handleTemperatureProbeState(Map message, Map entity) {
     if (message.hasState) {
         Float tempC = message.state as Float
         Float temp = convertTemperature(tempC)
         String unit = getTemperatureUnit()
         String tempStr = String.format("%.1f", temp)
-        sendEvent(name: "temperatureProbe", value: tempStr, unit: unit, descriptionText: "Temperature Probe is ${tempStr} ${unit}")
+        
+        if (shouldReportDiagnostic('temperature_probe')) {
+            sendEvent(name: "temperatureProbe", value: tempStr, unit: unit, descriptionText: "Temperature Probe is ${tempStr} ${unit}")
+        }
         
         // Update main temperature if this sensor is selected
         if (settings.selectedProbe == 'Temperature') {
@@ -424,9 +776,12 @@ private void handleTemperatureProbeState(Map message) {
 private void handleTempProbeOffsetState(Map message) {
     if (message.hasState) {
         Float offsetC = message.state as Float
-        Float offset = convertTemperature(offsetC) - convertTemperature(0) // Convert offset correctly
+        Float offset = convertTemperature(offsetC) - convertTemperature(0)
         String unit = getTemperatureUnit()
-        sendEvent(name: "tempProbeOffset", value: offset, unit: unit, descriptionText: "Temperature probe offset is ${offset} ${unit}")
+        
+        if (shouldReportDiagnostic('temp_probe_offset')) {
+            sendEvent(name: "tempProbeOffset", value: offset, unit: unit, descriptionText: "Temperature probe offset is ${offset} ${unit}")
+        }
         if (txtEnable) { log.info "Temperature probe offset is ${offset} ${unit}" }
     }
 }
@@ -434,9 +789,12 @@ private void handleTempProbeOffsetState(Map message) {
 private void handleFoodProbeOffsetState(Map message) {
     if (message.hasState) {
         Float offsetC = message.state as Float
-        Float offset = convertTemperature(offsetC) - convertTemperature(0) // Convert offset correctly
+        Float offset = convertTemperature(offsetC) - convertTemperature(0)
         String unit = getTemperatureUnit()
-        sendEvent(name: "foodProbeOffset", value: offset, unit: unit, descriptionText: "Food probe offset is ${offset} ${unit}")
+        
+        if (shouldReportDiagnostic('food_probe_offset')) {
+            sendEvent(name: "foodProbeOffset", value: offset, unit: unit, descriptionText: "Food probe offset is ${offset} ${unit}")
+        }
         if (txtEnable) { log.info "Food probe offset is ${offset} ${unit}" }
     }
 }
@@ -444,9 +802,12 @@ private void handleFoodProbeOffsetState(Map message) {
 private void handleBoardTemperatureOffsetState(Map message) {
     if (message.hasState) {
         Float offsetC = message.state as Float
-        Float offset = convertTemperature(offsetC) - convertTemperature(0) // Convert offset correctly
+        Float offset = convertTemperature(offsetC) - convertTemperature(0)
         String unit = getTemperatureUnit()
-        sendEvent(name: "boardTemperatureOffset", value: offset, unit: unit, descriptionText: "Board temperature offset is ${offset} ${unit}")
+        
+        if (shouldReportDiagnostic('board_temperature_offset')) {
+            sendEvent(name: "boardTemperatureOffset", value: offset, unit: unit, descriptionText: "Board temperature offset is ${offset} ${unit}")
+        }
         if (txtEnable) { log.info "Board temperature offset is ${offset} ${unit}" }
     }
 }
@@ -454,7 +815,10 @@ private void handleBoardTemperatureOffsetState(Map message) {
 private void handleBoardHumidityOffsetState(Map message) {
     if (message.hasState) {
         def offset = message.state as Float
-        sendEvent(name: "boardHumidityOffset", value: offset, unit: "%", descriptionText: "Board humidity offset is ${offset} %")
+        
+        if (shouldReportDiagnostic('board_humidity_offset')) {
+            sendEvent(name: "boardHumidityOffset", value: offset, unit: "%", descriptionText: "Board humidity offset is ${offset} %")
+        }
         if (txtEnable) { log.info "Board humidity offset is ${offset} %" }
     }
 }
@@ -462,9 +826,12 @@ private void handleBoardHumidityOffsetState(Map message) {
 private void handleProbeTempDifferenceThresholdState(Map message) {
     if (message.hasState) {
         Float thresholdC = message.state as Float
-        Float threshold = convertTemperature(thresholdC) - convertTemperature(0) // Convert threshold correctly
+        Float threshold = convertTemperature(thresholdC) - convertTemperature(0)
         String unit = getTemperatureUnit()
-        sendEvent(name: "probeTempDifferenceThreshold", value: threshold, unit: unit, descriptionText: "Probe temperature difference threshold is ${threshold} ${unit}")
+        
+        if (shouldReportDiagnostic('probe_temp_difference_threshold')) {
+            sendEvent(name: "probeTempDifferenceThreshold", value: threshold, unit: unit, descriptionText: "Probe temperature difference threshold is ${threshold} ${unit}")
+        }
         if (txtEnable) { log.info "Probe temperature difference threshold is ${threshold} ${unit}" }
     }
 }
@@ -474,8 +841,11 @@ private void handleMinProbeTempState(Map message) {
         Float minTempC = message.state as Float
         Float minTemp = convertTemperature(minTempC)
         String unit = getTemperatureUnit()
-        sendEvent(name: "minProbeTemp", value: minTemp, unit: unit, descriptionText: "Minimum probe temperature is ${minTemp} ${unit}")
-        if (txtEnable) { log.info "Minimum probe temperature is ${minProbeTemp} ${unit}" }
+        
+        if (shouldReportDiagnostic('min_probe_temp')) {
+            sendEvent(name: "minProbeTemp", value: minTemp, unit: unit, descriptionText: "Minimum probe temperature is ${minTemp} ${unit}")
+        }
+        if (txtEnable) { log.info "Minimum probe temperature is ${minTemp} ${unit}" }
     }
 }
 
@@ -484,7 +854,10 @@ private void handleMaxProbeTempState(Map message) {
         Float maxTempC = message.state as Float
         Float maxTemp = convertTemperature(maxTempC)
         String unit = getTemperatureUnit()
-        sendEvent(name: "maxProbeTemp", value: maxTemp, unit: unit, descriptionText: "Maximum probe temperature is ${maxTemp} ${unit}")
+        
+        if (shouldReportDiagnostic('max_probe_temp')) {
+            sendEvent(name: "maxProbeTemp", value: maxTemp, unit: unit, descriptionText: "Maximum probe temperature is ${maxTemp} ${unit}")
+        }
         if (txtEnable) { log.info "Maximum probe temperature is ${maxTemp} ${unit}" }
     }
 }
@@ -493,7 +866,10 @@ private void handleSelectProbeState(Map message) {
     log.trace "handleSelectProbeState: ${message}"
     if (message.hasState) {
         def selectedProbe = message.state as String
-        sendEvent(name: "selectedProbe", value: selectedProbe, descriptionText: "Selected probe is ${selectedProbe}")
+        
+        if (shouldReportDiagnostic('select_probe')) {
+            sendEvent(name: "selectedProbe", value: selectedProbe, descriptionText: "Selected probe is ${selectedProbe}")
+        }
         
         if (txtEnable) { log.info "ESPHome selected probe changed to: ${selectedProbe}" }
         
@@ -512,8 +888,13 @@ private void handleSelectProbeState(Map message) {
 private void handleSleepDurationState(Map message) {
     if (message.hasState) {
         def duration = message.state as Integer
-        sendEvent(name: "sleepDuration", value: duration, unit: "s", descriptionText: "Sleep duration is ${duration} seconds")
-        if (txtEnable) { log.info "Sleep duration is ${duration} seconds" }
+        String unit = getEntityUnit('sleep_duration')
+        String description = getEntityDescription('sleep_duration')
+        
+        if (shouldReportDiagnostic('sleep_duration')) {
+            sendEvent(name: "sleepDuration", value: duration, unit: unit, descriptionText: "Sleep duration is ${duration} ${unit}")
+        }
+        if (txtEnable) { log.info "${description}: ${duration} ${unit}" }
     }
 }
 
@@ -564,6 +945,16 @@ private void handlePreventSleepState(Map message) {
         sendEvent(name: "preventSleep", value: preventState ? "on" : "off", descriptionText: "Prevent sleep is ${preventState ? 'on' : 'off'}")
         if (txtEnable) { log.info "Prevent sleep is ${preventState ? 'on' : 'off'}" }
     }
+}
+
+private void handleEspRebootState(Map message) {
+    // Button entities typically don't have state changes to handle
+    if (txtEnable) { log.info "ESP reboot button entity available" }
+}
+
+private void handleFactoryResetEspState(Map message) {
+    // Button entities typically don't have state changes to handle
+    if (txtEnable) { log.info "Factory reset ESP button entity available" }
 }
 
 /**
