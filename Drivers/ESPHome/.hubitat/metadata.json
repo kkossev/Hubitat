@@ -16,7 +16,7 @@
       "filepath": "/c:/Work/Hubitat/Drivers/ESPHome/Apollo TEMP-1B.groovy",
       "codeType": "driver",
       "id": 4061,
-      "version": 113
+      "version": 125
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/ESPHome/Libraries/ESPHome-API-Library.groovy",

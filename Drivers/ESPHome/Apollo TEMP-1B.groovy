@@ -20,7 +20,7 @@
  *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  *  SOFTWARE.
  *
- *  ver. 1.0.0  2022-06-28 kkossev  - first beta version
+ *  ver. 1.0.0  2022-06-29 kkossev  - first beta version
  * 
  *                         TODO: add driver version
 */
@@ -29,7 +29,7 @@ import groovy.transform.Field
 
 @Field static final Boolean _DEBUG = true
 @Field static final String DRIVER_VERSION =  '1.0.0'
-@Field static final String DATE_TIME_STAMP = '06/28/2025 11:51 PM'
+@Field static final String DATE_TIME_STAMP = '06/29/2025 5:24 PM'
 
 metadata {
     definition(
@@ -91,7 +91,7 @@ metadata {
     'alarm_outside_temp_range':            [attr: 'alarmOutsideTempRange',          isDiag: true,  type: 'switch',      description: 'Temperature range alarm switch'],
     'battery_level':                       [attr: 'battery',                        isDiag: false, type: 'sensor',      description: 'Battery charge level percentage'],
     'battery_voltage':                     [attr: 'batteryVoltage',                 isDiag: false, type: 'sensor',      description: 'Battery voltage measurement'],
-    'board_humidity':                      [attr: 'humidity',                       isDiag: false, type: 'sensor',      description: 'Internal board humidity sensor reading'],
+    'board_humidity':                      [attr: 'humidity',                       isDiag: false, type: 'sensor',      description: 'Humidity'],                                   // Internal board humidity sensor reading
     'board_humidity_offset':               [attr: 'boardHumidityOffset',            isDiag: true,  type: 'offset',      description: 'Board humidity sensor calibration offset'],
     'board_temperature':                   [attr: 'boardTemperature',               isDiag: true,  type: 'temperature', description: 'Internal board temperature sensor reading'],
     'board_temperature_offset':            [attr: 'boardTemperatureOffset',         isDiag: true,  type: 'offset',      description: 'Board temperature sensor calibration offset'],
@@ -380,10 +380,11 @@ void parseState(final Map message) {
             handleSelectProbeState(message)
             break
         case 'food_probe':
-            handleFoodProbeState(message, entity)
-            break
         case 'temperature_probe':
-            handleTemperatureProbeState(message, entity)
+            handleTemperatureState(message, entity)
+            break
+        case 'board_humidity':
+            handleHumidityState(message, entity)
             break
         default:
             // Use common handler for most entities
@@ -569,55 +570,62 @@ private void handleRgbLightState(Map message) {
     }
 }
 
-
-
-private void handleFoodProbeState(Map message, Map entity) {
-    if (message.hasState) {
-        Float tempC = message.state as Float
-        Float temp = convertTemperature(tempC)
-        String unit = getTemperatureUnit()
-        String tempStr = String.format("%.1f", temp)
+/**
+ * Handle temperature probe entities (food_probe and temperature_probe)
+ * @param message state message from ESPHome
+ * @param entity entity information from state.entities
+ */
+private void handleTemperatureState(Map message, Map entity) {
+    if (!message.hasState) {
+        return
+    }
+    
+    String objectId = entity.objectId
+    def entityInfo = getEntityInfo(objectId)
+    if (!entityInfo) {
+        if (logEnable) { log.warn "No entity info found for objectId: ${objectId}" }
+        return
+    }
+    
+    Float tempC = message.state as Float
+    Float temp = convertTemperature(tempC)
+    String unit = getTemperatureUnit()
+    String tempStr = String.format("%.1f", temp)
+    String attributeName = entityInfo.attr
+    String description = entityInfo.description
+    
+    // Get the previous individual probe temperature value
+    def currentProbeState = device.currentState(attributeName)
+    String previousProbeValue = currentProbeState?.value
+    
+    // Send individual probe events only when Debug logging is enabled AND value has changed
+    if (settings.logEnable && previousProbeValue != tempStr) {
+        sendEvent(name: attributeName, value: tempStr, unit: unit, descriptionText: "${description} is ${tempStr} ${unit}")
+        log.info "${description} is ${tempStr} ${unit}"
+    }
+    
+    // Update main temperature attribute based on selected probe
+    String selectedProbeType = (objectId == 'food_probe') ? 'Food' : 'Temperature'
+    if (settings.selectedProbe == selectedProbeType) {
+        // Get the previous main temperature value
+        def currentMainTempState = device.currentState("temperature")
+        String previousMainValue = currentMainTempState?.value
         
-        if (shouldReportDiagnostic('food_probe')) {
-            sendEvent(name: "foodProbe", value: tempStr, unit: unit, descriptionText: "Food Probe Temperature is ${tempStr} ${unit}")
+        // Only update main temperature if the value has changed
+        if (previousMainValue != tempStr) {
+            String mainDescription = "Temperature is ${tempStr} ${unit}"  // Create new variable instead of reassigning
+            sendEvent(name: "temperature", value: tempStr, unit: unit, descriptionText: mainDescription)
+            if (txtEnable) { 
+                log.info "${mainDescription}" 
+            }
         }
-        
-        // Update main temperature if this sensor is selected
-        if (settings.selectedProbe == 'Food') {
-            sendEvent(name: "temperature", value: tempStr, unit: unit, descriptionText: "Temperature is ${tempStr} ${unit}")
-        }
-        
-        // Only log if diagnostic reporting allows it
-        if (txtEnable && shouldReportDiagnostic('food_probe')) { 
-            log.info "Food Probe Temperature is ${tempStr} ${unit}" 
+        else {
+            if (logEnable) { 
+                log.debug "Main temperature already at ${tempStr} ${unit}, no update needed" 
+            }
         }
     }
 }
-
-private void handleTemperatureProbeState(Map message, Map entity) {
-    if (message.hasState) {
-        Float tempC = message.state as Float
-        Float temp = convertTemperature(tempC)
-        String unit = getTemperatureUnit()
-        String tempStr = String.format("%.1f", temp)
-        
-        if (shouldReportDiagnostic('temperature_probe')) {
-            sendEvent(name: "temperatureProbe", value: tempStr, unit: unit, descriptionText: "Temperature Probe is ${tempStr} ${unit}")
-        }
-        
-        // Update main temperature if this sensor is selected
-        if (settings.selectedProbe == 'Temperature') {
-            sendEvent(name: "temperature", value: tempStr, unit: unit, descriptionText: "Temperature is ${tempStr} ${unit}")
-        }
-        
-        // Only log if diagnostic reporting allows it
-        if (txtEnable && shouldReportDiagnostic('temperature_probe')) { 
-            log.info "Temperature Probe is ${tempStr} ${unit}" 
-        }
-    }
-}
-
-
 
 private void handleSelectProbeState(Map message) {
     if (message.hasState) {
@@ -648,6 +656,44 @@ private void handleSelectProbeState(Map message) {
     }
 }
 
+/**
+ * Handle humidity sensor entity (board_humidity)
+ * @param message state message from ESPHome
+ * @param entity entity information from state.entities
+ */
+private void handleHumidityState(Map message, Map entity) {
+    if (!message.hasState) {
+        return
+    }
+    
+    String objectId = entity.objectId
+    def entityInfo = getEntityInfo(objectId)
+    if (!entityInfo) {
+        if (logEnable) { log.warn "No entity info found for objectId: ${objectId}" }
+        return
+    }
+    
+    Float humidity = message.state as Float
+    String humidityStr = String.format("%.1f", humidity)
+    String attributeName = entityInfo.attr
+    String description = entityInfo.description
+    String unit = "%rh"  // Hubitat standard unit for relative humidity
+    
+    // Get the previous humidity value from current state
+    def currentHumidityState = device.currentState(attributeName)
+    String previousValue = currentHumidityState?.value
+    
+    // Only send event and log if the value has changed
+    if (previousValue != humidityStr) {
+        // Always send humidity event (board_humidity is isDiag: false)
+        sendEvent(name: attributeName, value: humidityStr, unit: unit, descriptionText: "${description} is ${humidityStr} ${unit}")
+        
+        // Always log humidity (it's not a diagnostic attribute)
+        if (txtEnable) { 
+            log.info "${description} is ${humidityStr} ${unit}" 
+        }
+    }
+}
 
 /**
  * Convert temperature based on hub's temperature scale setting
