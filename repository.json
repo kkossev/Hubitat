@@ -357,7 +357,7 @@
       "id":"9df87cc8-f25f-4437-969c-e225c338dd30",
       "name":"ESPHome Apollo Automation Drivers",
       "category":"Integrations",
-      "location":"https://github.com/kkossev/Hubitat-ESPHome-Apollo/blob/main/apolloManifest.json",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat-ESPHome-Apollo/refs/heads/main/apolloManifest.json",
       "description":"ESPHome Apollo Automation Drivers",
       "tags":[
         "Climate Control",
