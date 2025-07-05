@@ -352,7 +352,22 @@
         "Temperature & Humidity",
         "Zigbee"
        ]
-    }	
+    },
+    {
+      "id":"724a143a-35d6-4c23-afb0-20d2a0e36565",
+      "name":"ESPHome Apollo Automation Drivers",
+      "category":"Integrations",
+      "location":"https://github.com/kkossev/Hubitat-ESPHome-Apollo/blob/main/apolloManifest.json",
+      "description":"ESPHome Apollo Automation Drivers",
+      "tags":[
+        "Climate Control",
+        "LAN",
+        "Monitoring",
+        "Motion Control",
+        "Multi Sensors",
+        "Temperature & Humidity"
+       ]
+    }	  
   ]
 }
 
