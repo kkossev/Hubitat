@@ -11,6 +11,12 @@
       "id": 142,
       "codeType": "library",
       "version": 606
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/batteryLib.groovy",
+      "id": 171,
+      "codeType": "library",
+      "version": 26
     }
   ]
 }

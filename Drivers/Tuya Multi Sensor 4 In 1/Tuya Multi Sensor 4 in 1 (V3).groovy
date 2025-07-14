@@ -29,16 +29,17 @@
  * ver. 3.4.1  2025-03-29 kkossev  - added custom configuration function for Espressif @ilkeraktuna
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  * ver. 3.5.1  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
+ * ver. 3.5.2  2025-07-14 kkossev  - bug fix: 'sendDelayedBatteryEvent' exception
  *                                   
  *                                   TODO: update documentation : https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1 
  */
 
-static String version() { "3.5.1" }
-static String timeStamp() {"2025/04/25 11:13 PM"}
+static String version() { "3.5.2" }
+static String timeStamp() {"2025/07/14 7:56 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
-@Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for the production release !
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = false    // disable it for the production release !
 
 
 import groovy.transform.Field
