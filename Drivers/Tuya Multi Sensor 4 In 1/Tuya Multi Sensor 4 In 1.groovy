@@ -29,16 +29,17 @@
  * ver. 3.4.1  2025-03-29 kkossev  - added custom configuration function for Espressif @ilkeraktuna
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  * ver. 3.5.1  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
+ * ver. 3.5.2  2025-07-14 kkossev  - bug fix: 'sendDelayedBatteryEvent' exception
  *                                   
  *                                   TODO: update documentation : https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1 
  */
 
-static String version() { "3.5.1" }
-static String timeStamp() {"2025/04/25 11:13 PM"}
+static String version() { "3.5.2" }
+static String timeStamp() {"2025/07/14 7:56 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
-@Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for the production release !
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = false    // disable it for the production release !
 
 
 import groovy.transform.Field
@@ -4268,11 +4269,11 @@ static String timeToHMS(final int time) { // library marker kkossev.commonLib, l
 /* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoJavaUtilDate, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */ // library marker kkossev.batteryLib, line 1
 library( // library marker kkossev.batteryLib, line 2
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Battery Library', name: 'batteryLib', namespace: 'kkossev', // library marker kkossev.batteryLib, line 3
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/batteryLib.groovy', documentationLink: '', // library marker kkossev.batteryLib, line 4
-    version: '3.2.2' // library marker kkossev.batteryLib, line 5
+    importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/batteryLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-batteryLib', // library marker kkossev.batteryLib, line 4
+    version: '3.2.3' // library marker kkossev.batteryLib, line 5
 ) // library marker kkossev.batteryLib, line 6
 /* // library marker kkossev.batteryLib, line 7
- *  Zigbee Level Library // library marker kkossev.batteryLib, line 8
+ *  Zigbee Battery Library // library marker kkossev.batteryLib, line 8
  * // library marker kkossev.batteryLib, line 9
  *  Licensed Virtual the Apache License, Version 2.0 // library marker kkossev.batteryLib, line 10
  * // library marker kkossev.batteryLib, line 11
@@ -4282,175 +4283,176 @@ library( // library marker kkossev.batteryLib, line 2
  * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment; added lastBattery; added handleTuyaBatteryLevel // library marker kkossev.batteryLib, line 15
  * ver. 3.2.1  2024-07-06 kkossev  - added tuyaToBatteryLevel and handleTuyaBatteryLevel; added batteryInitializeVars // library marker kkossev.batteryLib, line 16
  * ver. 3.2.2  2024-07-18 kkossev  - added BatteryVoltage and BatteryDelay device capability checks // library marker kkossev.batteryLib, line 17
- * // library marker kkossev.batteryLib, line 18
- *                                   TODO:  // library marker kkossev.batteryLib, line 19
- *                                   TODO: battery voltage low/high limits configuration // library marker kkossev.batteryLib, line 20
-*/ // library marker kkossev.batteryLib, line 21
+ * ver. 3.2.3  2025-07-13 kkossev  - bug fix: corrected runIn method name from 'sendDelayedBatteryEvent' to 'sendDelayedBatteryPercentageEvent' // library marker kkossev.batteryLib, line 18
+ * // library marker kkossev.batteryLib, line 19
+ *                                   TODO: add an Advanced Option resetBatteryToZeroWhenOffline // library marker kkossev.batteryLib, line 20
+ *                                   TODO: battery voltage low/high limits configuration // library marker kkossev.batteryLib, line 21
+*/ // library marker kkossev.batteryLib, line 22
 
-static String batteryLibVersion()   { '3.2.2' } // library marker kkossev.batteryLib, line 23
-static String batteryLibStamp() { '2024/07/18 2:34 PM' } // library marker kkossev.batteryLib, line 24
+static String batteryLibVersion()   { '3.2.3' } // library marker kkossev.batteryLib, line 24
+static String batteryLibStamp() { '2025/07/13 7:45 PM' } // library marker kkossev.batteryLib, line 25
 
-metadata { // library marker kkossev.batteryLib, line 26
-    capability 'Battery' // library marker kkossev.batteryLib, line 27
-    attribute  'batteryVoltage', 'number' // library marker kkossev.batteryLib, line 28
-    attribute  'lastBattery', 'date'         // last battery event time - added in 3.2.0 05/21/2024 // library marker kkossev.batteryLib, line 29
-    // no commands // library marker kkossev.batteryLib, line 30
-    preferences { // library marker kkossev.batteryLib, line 31
-        if (device && advancedOptions == true) { // library marker kkossev.batteryLib, line 32
-            if ('BatteryVoltage' in DEVICE?.capabilities) { // library marker kkossev.batteryLib, line 33
-                input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: 'Convert battery voltage to battery Percentage remaining.' // library marker kkossev.batteryLib, line 34
-            } // library marker kkossev.batteryLib, line 35
-            if ('BatteryDelay' in DEVICE?.capabilities) { // library marker kkossev.batteryLib, line 36
-                input(name: 'batteryDelay', type: 'enum', title: '<b>Battery Events Delay</b>', description:'Select the Battery Events Delay<br>(default is <b>no delay</b>)', options: DelayBatteryOpts.options, defaultValue: DelayBatteryOpts.defaultValue) // library marker kkossev.batteryLib, line 37
-            } // library marker kkossev.batteryLib, line 38
-        } // library marker kkossev.batteryLib, line 39
-    } // library marker kkossev.batteryLib, line 40
-} // library marker kkossev.batteryLib, line 41
+metadata { // library marker kkossev.batteryLib, line 27
+    capability 'Battery' // library marker kkossev.batteryLib, line 28
+    attribute  'batteryVoltage', 'number' // library marker kkossev.batteryLib, line 29
+    attribute  'lastBattery', 'date'         // last battery event time - added in 3.2.0 05/21/2024 // library marker kkossev.batteryLib, line 30
+    // no commands // library marker kkossev.batteryLib, line 31
+    preferences { // library marker kkossev.batteryLib, line 32
+        if (device && advancedOptions == true) { // library marker kkossev.batteryLib, line 33
+            if ('BatteryVoltage' in DEVICE?.capabilities) { // library marker kkossev.batteryLib, line 34
+                input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: 'Convert battery voltage to battery Percentage remaining.' // library marker kkossev.batteryLib, line 35
+            } // library marker kkossev.batteryLib, line 36
+            if ('BatteryDelay' in DEVICE?.capabilities) { // library marker kkossev.batteryLib, line 37
+                input(name: 'batteryDelay', type: 'enum', title: '<b>Battery Events Delay</b>', description:'Select the Battery Events Delay<br>(default is <b>no delay</b>)', options: DelayBatteryOpts.options, defaultValue: DelayBatteryOpts.defaultValue) // library marker kkossev.batteryLib, line 38
+            } // library marker kkossev.batteryLib, line 39
+        } // library marker kkossev.batteryLib, line 40
+    } // library marker kkossev.batteryLib, line 41
+} // library marker kkossev.batteryLib, line 42
 
-@Field static final Map DelayBatteryOpts = [ defaultValue: 0, options: [0: 'No delay', 30: '30 seconds', 3600: '1 hour', 14400: '4 hours', 28800: '8 hours', 43200: '12 hours']] // library marker kkossev.batteryLib, line 43
+@Field static final Map DelayBatteryOpts = [ defaultValue: 0, options: [0: 'No delay', 30: '30 seconds', 3600: '1 hour', 14400: '4 hours', 28800: '8 hours', 43200: '12 hours']] // library marker kkossev.batteryLib, line 44
 
-public void standardParsePowerCluster(final Map descMap) { // library marker kkossev.batteryLib, line 45
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.batteryLib, line 46
-    final int rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.batteryLib, line 47
-    if (descMap.attrId == '0020') { // battery voltage // library marker kkossev.batteryLib, line 48
-        state.lastRx['batteryTime'] = new Date().getTime() // library marker kkossev.batteryLib, line 49
-        state.stats['bVoltCtr'] = (state.stats['bVoltCtr'] ?: 0) + 1 // library marker kkossev.batteryLib, line 50
-        sendBatteryVoltageEvent(rawValue) // library marker kkossev.batteryLib, line 51
-        if ((settings.voltageToPercent ?: false) == true) { // library marker kkossev.batteryLib, line 52
-            sendBatteryVoltageEvent(rawValue, convertToPercent = true) // library marker kkossev.batteryLib, line 53
-        } // library marker kkossev.batteryLib, line 54
-    } // library marker kkossev.batteryLib, line 55
-    else if (descMap.attrId == '0021') { // battery percentage // library marker kkossev.batteryLib, line 56
-        state.lastRx['batteryTime'] = new Date().getTime() // library marker kkossev.batteryLib, line 57
-        state.stats['battCtr'] = (state.stats['battCtr'] ?: 0) + 1 // library marker kkossev.batteryLib, line 58
-        if (isTuya()) { // library marker kkossev.batteryLib, line 59
-            sendBatteryPercentageEvent(rawValue) // library marker kkossev.batteryLib, line 60
-        } // library marker kkossev.batteryLib, line 61
-        else { // library marker kkossev.batteryLib, line 62
-            sendBatteryPercentageEvent((rawValue / 2) as int) // library marker kkossev.batteryLib, line 63
-        } // library marker kkossev.batteryLib, line 64
-    } // library marker kkossev.batteryLib, line 65
-    else { // library marker kkossev.batteryLib, line 66
-        logWarn "customParsePowerCluster: zigbee received unknown Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.batteryLib, line 67
-    } // library marker kkossev.batteryLib, line 68
-} // library marker kkossev.batteryLib, line 69
+public void standardParsePowerCluster(final Map descMap) { // library marker kkossev.batteryLib, line 46
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.batteryLib, line 47
+    final int rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.batteryLib, line 48
+    if (descMap.attrId == '0020') { // battery voltage // library marker kkossev.batteryLib, line 49
+        state.lastRx['batteryTime'] = new Date().getTime() // library marker kkossev.batteryLib, line 50
+        state.stats['bVoltCtr'] = (state.stats['bVoltCtr'] ?: 0) + 1 // library marker kkossev.batteryLib, line 51
+        sendBatteryVoltageEvent(rawValue) // library marker kkossev.batteryLib, line 52
+        if ((settings.voltageToPercent ?: false) == true) { // library marker kkossev.batteryLib, line 53
+            sendBatteryVoltageEvent(rawValue, convertToPercent = true) // library marker kkossev.batteryLib, line 54
+        } // library marker kkossev.batteryLib, line 55
+    } // library marker kkossev.batteryLib, line 56
+    else if (descMap.attrId == '0021') { // battery percentage // library marker kkossev.batteryLib, line 57
+        state.lastRx['batteryTime'] = new Date().getTime() // library marker kkossev.batteryLib, line 58
+        state.stats['battCtr'] = (state.stats['battCtr'] ?: 0) + 1 // library marker kkossev.batteryLib, line 59
+        if (isTuya()) { // library marker kkossev.batteryLib, line 60
+            sendBatteryPercentageEvent(rawValue) // library marker kkossev.batteryLib, line 61
+        } // library marker kkossev.batteryLib, line 62
+        else { // library marker kkossev.batteryLib, line 63
+            sendBatteryPercentageEvent((rawValue / 2) as int) // library marker kkossev.batteryLib, line 64
+        } // library marker kkossev.batteryLib, line 65
+    } // library marker kkossev.batteryLib, line 66
+    else { // library marker kkossev.batteryLib, line 67
+        logWarn "customParsePowerCluster: zigbee received unknown Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.batteryLib, line 68
+    } // library marker kkossev.batteryLib, line 69
+} // library marker kkossev.batteryLib, line 70
 
-public void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false) { // library marker kkossev.batteryLib, line 71
-    logDebug "batteryVoltage = ${(double)rawValue / 10.0} V" // library marker kkossev.batteryLib, line 72
-    final Date lastBattery = new Date() // library marker kkossev.batteryLib, line 73
-    Map result = [:] // library marker kkossev.batteryLib, line 74
-    BigDecimal volts = safeToBigDecimal(rawValue) / 10G // library marker kkossev.batteryLib, line 75
-    if (rawValue != 0 && rawValue != 255) { // library marker kkossev.batteryLib, line 76
-        BigDecimal minVolts = 2.2 // library marker kkossev.batteryLib, line 77
-        BigDecimal maxVolts = 3.2 // library marker kkossev.batteryLib, line 78
-        BigDecimal pct = (volts - minVolts) / (maxVolts - minVolts) // library marker kkossev.batteryLib, line 79
-        int roundedPct = Math.round(pct * 100) // library marker kkossev.batteryLib, line 80
-        if (roundedPct <= 0) { roundedPct = 1 } // library marker kkossev.batteryLib, line 81
-        if (roundedPct > 100) { roundedPct = 100 } // library marker kkossev.batteryLib, line 82
-        if (convertToPercent == true) { // library marker kkossev.batteryLib, line 83
-            result.value = Math.min(100, roundedPct) // library marker kkossev.batteryLib, line 84
-            result.name = 'battery' // library marker kkossev.batteryLib, line 85
-            result.unit  = '%' // library marker kkossev.batteryLib, line 86
-            result.descriptionText = "battery is ${roundedPct} %" // library marker kkossev.batteryLib, line 87
-        } // library marker kkossev.batteryLib, line 88
-        else { // library marker kkossev.batteryLib, line 89
-            result.value = volts // library marker kkossev.batteryLib, line 90
-            result.name = 'batteryVoltage' // library marker kkossev.batteryLib, line 91
-            result.unit  = 'V' // library marker kkossev.batteryLib, line 92
-            result.descriptionText = "battery is ${volts} Volts" // library marker kkossev.batteryLib, line 93
-        } // library marker kkossev.batteryLib, line 94
-        result.type = 'physical' // library marker kkossev.batteryLib, line 95
-        result.isStateChange = true // library marker kkossev.batteryLib, line 96
-        logInfo "${result.descriptionText}" // library marker kkossev.batteryLib, line 97
-        sendEvent(result) // library marker kkossev.batteryLib, line 98
-        sendEvent(name: 'lastBattery', value: lastBattery) // library marker kkossev.batteryLib, line 99
-    } // library marker kkossev.batteryLib, line 100
-    else { // library marker kkossev.batteryLib, line 101
-        logWarn "ignoring BatteryResult(${rawValue})" // library marker kkossev.batteryLib, line 102
-    } // library marker kkossev.batteryLib, line 103
-} // library marker kkossev.batteryLib, line 104
+public void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false) { // library marker kkossev.batteryLib, line 72
+    logDebug "batteryVoltage = ${(double)rawValue / 10.0} V" // library marker kkossev.batteryLib, line 73
+    final Date lastBattery = new Date() // library marker kkossev.batteryLib, line 74
+    Map result = [:] // library marker kkossev.batteryLib, line 75
+    BigDecimal volts = safeToBigDecimal(rawValue) / 10G // library marker kkossev.batteryLib, line 76
+    if (rawValue != 0 && rawValue != 255) { // library marker kkossev.batteryLib, line 77
+        BigDecimal minVolts = 2.2 // library marker kkossev.batteryLib, line 78
+        BigDecimal maxVolts = 3.2 // library marker kkossev.batteryLib, line 79
+        BigDecimal pct = (volts - minVolts) / (maxVolts - minVolts) // library marker kkossev.batteryLib, line 80
+        int roundedPct = Math.round(pct * 100) // library marker kkossev.batteryLib, line 81
+        if (roundedPct <= 0) { roundedPct = 1 } // library marker kkossev.batteryLib, line 82
+        if (roundedPct > 100) { roundedPct = 100 } // library marker kkossev.batteryLib, line 83
+        if (convertToPercent == true) { // library marker kkossev.batteryLib, line 84
+            result.value = Math.min(100, roundedPct) // library marker kkossev.batteryLib, line 85
+            result.name = 'battery' // library marker kkossev.batteryLib, line 86
+            result.unit  = '%' // library marker kkossev.batteryLib, line 87
+            result.descriptionText = "battery is ${roundedPct} %" // library marker kkossev.batteryLib, line 88
+        } // library marker kkossev.batteryLib, line 89
+        else { // library marker kkossev.batteryLib, line 90
+            result.value = volts // library marker kkossev.batteryLib, line 91
+            result.name = 'batteryVoltage' // library marker kkossev.batteryLib, line 92
+            result.unit  = 'V' // library marker kkossev.batteryLib, line 93
+            result.descriptionText = "battery is ${volts} Volts" // library marker kkossev.batteryLib, line 94
+        } // library marker kkossev.batteryLib, line 95
+        result.type = 'physical' // library marker kkossev.batteryLib, line 96
+        result.isStateChange = true // library marker kkossev.batteryLib, line 97
+        logInfo "${result.descriptionText}" // library marker kkossev.batteryLib, line 98
+        sendEvent(result) // library marker kkossev.batteryLib, line 99
+        sendEvent(name: 'lastBattery', value: lastBattery) // library marker kkossev.batteryLib, line 100
+    } // library marker kkossev.batteryLib, line 101
+    else { // library marker kkossev.batteryLib, line 102
+        logWarn "ignoring BatteryResult(${rawValue})" // library marker kkossev.batteryLib, line 103
+    } // library marker kkossev.batteryLib, line 104
+} // library marker kkossev.batteryLib, line 105
 
-public void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=false) { // library marker kkossev.batteryLib, line 106
-    if ((batteryPercent as int) == 255) { // library marker kkossev.batteryLib, line 107
-        logWarn "ignoring battery report raw=${batteryPercent}" // library marker kkossev.batteryLib, line 108
-        return // library marker kkossev.batteryLib, line 109
-    } // library marker kkossev.batteryLib, line 110
-    final Date lastBattery = new Date() // library marker kkossev.batteryLib, line 111
-    Map map = [:] // library marker kkossev.batteryLib, line 112
-    map.name = 'battery' // library marker kkossev.batteryLib, line 113
-    map.timeStamp = now() // library marker kkossev.batteryLib, line 114
-    map.value = batteryPercent < 0 ? 0 : batteryPercent > 100 ? 100 : (batteryPercent as int) // library marker kkossev.batteryLib, line 115
-    map.unit  = '%' // library marker kkossev.batteryLib, line 116
-    map.type = isDigital ? 'digital' : 'physical' // library marker kkossev.batteryLib, line 117
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}" // library marker kkossev.batteryLib, line 118
-    map.isStateChange = true // library marker kkossev.batteryLib, line 119
-    // // library marker kkossev.batteryLib, line 120
-    Object latestBatteryEvent = device.currentState('battery') // library marker kkossev.batteryLib, line 121
-    Long latestBatteryEventTime = latestBatteryEvent != null ? latestBatteryEvent.getDate().getTime() : now() // library marker kkossev.batteryLib, line 122
-    //log.debug "battery latest state timeStamp is ${latestBatteryTime} now is ${now()}" // library marker kkossev.batteryLib, line 123
-    int timeDiff = ((now() - latestBatteryEventTime) / 1000) as int // library marker kkossev.batteryLib, line 124
-    if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) { // library marker kkossev.batteryLib, line 125
-        // send it now! // library marker kkossev.batteryLib, line 126
-        sendDelayedBatteryPercentageEvent(map) // library marker kkossev.batteryLib, line 127
-        sendEvent(name: 'lastBattery', value: lastBattery) // library marker kkossev.batteryLib, line 128
-    } // library marker kkossev.batteryLib, line 129
-    else { // library marker kkossev.batteryLib, line 130
-        int delayedTime = (settings?.batteryDelay as int) - timeDiff // library marker kkossev.batteryLib, line 131
-        map.delayed = delayedTime // library marker kkossev.batteryLib, line 132
-        map.descriptionText += " [delayed ${map.delayed} seconds]" // library marker kkossev.batteryLib, line 133
-        map.lastBattery = lastBattery // library marker kkossev.batteryLib, line 134
-        logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds" // library marker kkossev.batteryLib, line 135
-        runIn(delayedTime, 'sendDelayedBatteryEvent', [overwrite: true, data: map]) // library marker kkossev.batteryLib, line 136
-    } // library marker kkossev.batteryLib, line 137
-} // library marker kkossev.batteryLib, line 138
+public void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=false) { // library marker kkossev.batteryLib, line 107
+    if ((batteryPercent as int) == 255) { // library marker kkossev.batteryLib, line 108
+        logWarn "ignoring battery report raw=${batteryPercent}" // library marker kkossev.batteryLib, line 109
+        return // library marker kkossev.batteryLib, line 110
+    } // library marker kkossev.batteryLib, line 111
+    final Date lastBattery = new Date() // library marker kkossev.batteryLib, line 112
+    Map map = [:] // library marker kkossev.batteryLib, line 113
+    map.name = 'battery' // library marker kkossev.batteryLib, line 114
+    map.timeStamp = now() // library marker kkossev.batteryLib, line 115
+    map.value = batteryPercent < 0 ? 0 : batteryPercent > 100 ? 100 : (batteryPercent as int) // library marker kkossev.batteryLib, line 116
+    map.unit  = '%' // library marker kkossev.batteryLib, line 117
+    map.type = isDigital ? 'digital' : 'physical' // library marker kkossev.batteryLib, line 118
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}" // library marker kkossev.batteryLib, line 119
+    map.isStateChange = true // library marker kkossev.batteryLib, line 120
+    // // library marker kkossev.batteryLib, line 121
+    Object latestBatteryEvent = device.currentState('battery') // library marker kkossev.batteryLib, line 122
+    Long latestBatteryEventTime = latestBatteryEvent != null ? latestBatteryEvent.getDate().getTime() : now() // library marker kkossev.batteryLib, line 123
+    //log.debug "battery latest state timeStamp is ${latestBatteryTime} now is ${now()}" // library marker kkossev.batteryLib, line 124
+    int timeDiff = ((now() - latestBatteryEventTime) / 1000) as int // library marker kkossev.batteryLib, line 125
+    if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) { // library marker kkossev.batteryLib, line 126
+        // send it now! // library marker kkossev.batteryLib, line 127
+        sendDelayedBatteryPercentageEvent(map) // library marker kkossev.batteryLib, line 128
+        sendEvent(name: 'lastBattery', value: lastBattery) // library marker kkossev.batteryLib, line 129
+    } // library marker kkossev.batteryLib, line 130
+    else { // library marker kkossev.batteryLib, line 131
+        int delayedTime = (settings?.batteryDelay as int) - timeDiff // library marker kkossev.batteryLib, line 132
+        map.delayed = delayedTime // library marker kkossev.batteryLib, line 133
+        map.descriptionText += " [delayed ${map.delayed} seconds]" // library marker kkossev.batteryLib, line 134
+        map.lastBattery = lastBattery // library marker kkossev.batteryLib, line 135
+        logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds" // library marker kkossev.batteryLib, line 136
+        runIn(delayedTime, 'sendDelayedBatteryPercentageEvent', [overwrite: true, data: map]) // library marker kkossev.batteryLib, line 137
+    } // library marker kkossev.batteryLib, line 138
+} // library marker kkossev.batteryLib, line 139
 
-private void sendDelayedBatteryPercentageEvent(Map map) { // library marker kkossev.batteryLib, line 140
-    logInfo "${map.descriptionText}" // library marker kkossev.batteryLib, line 141
-    //map.each {log.trace "$it"} // library marker kkossev.batteryLib, line 142
-    sendEvent(map) // library marker kkossev.batteryLib, line 143
-    sendEvent(name: 'lastBattery', value: map.lastBattery) // library marker kkossev.batteryLib, line 144
-} // library marker kkossev.batteryLib, line 145
+private void sendDelayedBatteryPercentageEvent(Map map) { // library marker kkossev.batteryLib, line 141
+    logInfo "${map.descriptionText}" // library marker kkossev.batteryLib, line 142
+    //map.each {log.trace "$it"} // library marker kkossev.batteryLib, line 143
+    sendEvent(map) // library marker kkossev.batteryLib, line 144
+    sendEvent(name: 'lastBattery', value: map.lastBattery) // library marker kkossev.batteryLib, line 145
+} // library marker kkossev.batteryLib, line 146
 
-/* groovylint-disable-next-line UnusedPrivateMethod */ // library marker kkossev.batteryLib, line 147
-private void sendDelayedBatteryVoltageEvent(Map map) { // library marker kkossev.batteryLib, line 148
-    logInfo "${map.descriptionText}" // library marker kkossev.batteryLib, line 149
-    //map.each {log.trace "$it"} // library marker kkossev.batteryLib, line 150
-    sendEvent(map) // library marker kkossev.batteryLib, line 151
-    sendEvent(name: 'lastBattery', value: map.lastBattery) // library marker kkossev.batteryLib, line 152
-} // library marker kkossev.batteryLib, line 153
+/* groovylint-disable-next-line UnusedPrivateMethod */ // library marker kkossev.batteryLib, line 148
+private void sendDelayedBatteryVoltageEvent(Map map) { // library marker kkossev.batteryLib, line 149
+    logInfo "${map.descriptionText}" // library marker kkossev.batteryLib, line 150
+    //map.each {log.trace "$it"} // library marker kkossev.batteryLib, line 151
+    sendEvent(map) // library marker kkossev.batteryLib, line 152
+    sendEvent(name: 'lastBattery', value: map.lastBattery) // library marker kkossev.batteryLib, line 153
+} // library marker kkossev.batteryLib, line 154
 
-public int tuyaToBatteryLevel(int fncmd) { // library marker kkossev.batteryLib, line 155
-    int rawValue = fncmd // library marker kkossev.batteryLib, line 156
-    switch (fncmd) { // library marker kkossev.batteryLib, line 157
-        case 0: rawValue = 100; break // Battery Full // library marker kkossev.batteryLib, line 158
-        case 1: rawValue = 75;  break // Battery High // library marker kkossev.batteryLib, line 159
-        case 2: rawValue = 50;  break // Battery Medium // library marker kkossev.batteryLib, line 160
-        case 3: rawValue = 25;  break // Battery Low // library marker kkossev.batteryLib, line 161
-        case 4: rawValue = 100; break // Tuya 3 in 1 -> USB powered // library marker kkossev.batteryLib, line 162
-        // for all other values >4 we will use the raw value, expected to be the real battery level 4..100% // library marker kkossev.batteryLib, line 163
-    } // library marker kkossev.batteryLib, line 164
-    return rawValue // library marker kkossev.batteryLib, line 165
-} // library marker kkossev.batteryLib, line 166
+public int tuyaToBatteryLevel(int fncmd) { // library marker kkossev.batteryLib, line 156
+    int rawValue = fncmd // library marker kkossev.batteryLib, line 157
+    switch (fncmd) { // library marker kkossev.batteryLib, line 158
+        case 0: rawValue = 100; break // Battery Full // library marker kkossev.batteryLib, line 159
+        case 1: rawValue = 75;  break // Battery High // library marker kkossev.batteryLib, line 160
+        case 2: rawValue = 50;  break // Battery Medium // library marker kkossev.batteryLib, line 161
+        case 3: rawValue = 25;  break // Battery Low // library marker kkossev.batteryLib, line 162
+        case 4: rawValue = 100; break // Tuya 3 in 1 -> USB powered // library marker kkossev.batteryLib, line 163
+        // for all other values >4 we will use the raw value, expected to be the real battery level 4..100% // library marker kkossev.batteryLib, line 164
+    } // library marker kkossev.batteryLib, line 165
+    return rawValue // library marker kkossev.batteryLib, line 166
+} // library marker kkossev.batteryLib, line 167
 
-public void handleTuyaBatteryLevel(int fncmd) { // library marker kkossev.batteryLib, line 168
-    int rawValue = tuyaToBatteryLevel(fncmd) // library marker kkossev.batteryLib, line 169
-    sendBatteryPercentageEvent(rawValue) // library marker kkossev.batteryLib, line 170
-} // library marker kkossev.batteryLib, line 171
+public void handleTuyaBatteryLevel(int fncmd) { // library marker kkossev.batteryLib, line 169
+    int rawValue = tuyaToBatteryLevel(fncmd) // library marker kkossev.batteryLib, line 170
+    sendBatteryPercentageEvent(rawValue) // library marker kkossev.batteryLib, line 171
+} // library marker kkossev.batteryLib, line 172
 
-public void batteryInitializeVars( boolean fullInit = false ) { // library marker kkossev.batteryLib, line 173
-    logDebug "batteryInitializeVars()... fullInit = ${fullInit}" // library marker kkossev.batteryLib, line 174
-    if (device.hasCapability('Battery')) { // library marker kkossev.batteryLib, line 175
-        if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) } // library marker kkossev.batteryLib, line 176
-        if (fullInit || settings?.batteryDelay == null) { device.updateSetting('batteryDelay', [value: DelayBatteryOpts.defaultValue.toString(), type: 'enum']) } // library marker kkossev.batteryLib, line 177
-    } // library marker kkossev.batteryLib, line 178
-} // library marker kkossev.batteryLib, line 179
+public void batteryInitializeVars( boolean fullInit = false ) { // library marker kkossev.batteryLib, line 174
+    logDebug "batteryInitializeVars()... fullInit = ${fullInit}" // library marker kkossev.batteryLib, line 175
+    if (device.hasCapability('Battery')) { // library marker kkossev.batteryLib, line 176
+        if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) } // library marker kkossev.batteryLib, line 177
+        if (fullInit || settings?.batteryDelay == null) { device.updateSetting('batteryDelay', [value: DelayBatteryOpts.defaultValue.toString(), type: 'enum']) } // library marker kkossev.batteryLib, line 178
+    } // library marker kkossev.batteryLib, line 179
+} // library marker kkossev.batteryLib, line 180
 
-public List<String> batteryRefresh() { // library marker kkossev.batteryLib, line 181
-    List<String> cmds = [] // library marker kkossev.batteryLib, line 182
-    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 100)         // battery voltage // library marker kkossev.batteryLib, line 183
-    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 100)         // battery percentage // library marker kkossev.batteryLib, line 184
-    return cmds // library marker kkossev.batteryLib, line 185
-} // library marker kkossev.batteryLib, line 186
+public List<String> batteryRefresh() { // library marker kkossev.batteryLib, line 182
+    List<String> cmds = [] // library marker kkossev.batteryLib, line 183
+    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 100)         // battery voltage // library marker kkossev.batteryLib, line 184
+    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 100)         // battery percentage // library marker kkossev.batteryLib, line 185
+    return cmds // library marker kkossev.batteryLib, line 186
+} // library marker kkossev.batteryLib, line 187
 
 // ~~~~~ end include (171) kkossev.batteryLib ~~~~~
 
