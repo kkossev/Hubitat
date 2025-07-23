@@ -18,7 +18,7 @@
  */
 
 static String version() { '1.0.0' }
-static String timeStamp() { '2025/07/23 3:00 PM' }
+static String timeStamp() { '2025/07/23 8:36 PM' }
 
 @Field static final Boolean _DEBUG = true
 
@@ -61,6 +61,13 @@ metadata {
         attribute 'humi_report_mode', 'enum', ['no', 'threshold', 'period', 'threshold_period'] // 0xFCC0:0x016C
         attribute 'humi_period', 'decimal'                         // 0xFCC0:0x016A
         attribute 'humi_threshold', 'decimal'                      // 0xFCC0:0x016B
+        attribute 'sensor', 'enum', ['internal', 'external']       // 0xFCC0:0x0172
+        attribute 'external_temperature', 'decimal'                // Virtual attribute for external temperature
+        attribute 'external_humidity', 'decimal'                   // Virtual attribute for external humidity
+        
+        command 'setExternalTemperature', [[name: 'temperature', type: 'DECIMAL', description: 'External temperature value (-100 to 100°C)', range: '-100..100']]
+        command 'setExternalHumidity', [[name: 'humidity', type: 'DECIMAL', description: 'External humidity value (0 to 100%)', range: '0..100']]
+        //command 'setSensorMode', [[name: 'mode', type: 'ENUM', constraints: ['internal', 'external'], description: 'Set sensor mode: internal or external']]
         
         if (_DEBUG) { command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  }
 
@@ -92,7 +99,7 @@ metadata {
             device        : [manufacturers: ['Aqara'], type: 'Sensor', powerSource: 'battery', isSleepy:false],
             //capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode': true],
             capabilities  : ['ReportingConfiguration': false, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'Battery': true, 'Configuration': true, 'Refresh': true, 'HealthCheck': true],
-            preferences   : ['display_off':'0xFCC0:0x0173', 'high_temperature':'0xFCC0:0x0167', 'low_temperature':'0xFCC0:0x0166', 'high_humidity':'0xFCC0:0x016E', 'low_humidity':'0xFCC0:0x016D', 'sampling':'0xFCC0:0x0170', 'period':'0xFCC0:0x0162', 'temp_report_mode':'0xFCC0:0x0165', 'temp_period':'0xFCC0:0x0163', 'temp_threshold':'0xFCC0:0x0164', 'humi_report_mode':'0xFCC0:0x016C', 'humi_period':'0xFCC0:0x016A', 'humi_threshold':'0xFCC0:0x016B'],
+            preferences   : ['display_off':'0xFCC0:0x0173', 'high_temperature':'0xFCC0:0x0167', 'low_temperature':'0xFCC0:0x0166', 'high_humidity':'0xFCC0:0x016E', 'low_humidity':'0xFCC0:0x016D', 'sampling':'0xFCC0:0x0170', 'period':'0xFCC0:0x0162', 'temp_report_mode':'0xFCC0:0x0165', 'temp_period':'0xFCC0:0x0163', 'temp_threshold':'0xFCC0:0x0164', 'humi_report_mode':'0xFCC0:0x016C', 'humi_period':'0xFCC0:0x016A', 'humi_threshold':'0xFCC0:0x016B', 'sensor':'0xFCC0:0x0172'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0012,0405,0402,00001,0003,0x0000,FD20', outClusters:'0019', model:'lumi.sensor_ht.agl001', manufacturer:'Aqara', deviceJoinName: 'Aqara Climate Sensor W100'],      //  "TH-S04D"
                 [profileId:'0104', endpointId:'03', inClusters:'0012', model:'lumi.sensor_ht.agl001', manufacturer:'Aqara', deviceJoinName: 'Aqara Climate Sensor W100']      //  workaround for Hubitat bug with multiple endpoints
@@ -114,6 +121,7 @@ metadata {
                 [at:'0xFCC0:0x016C',  name:'humi_report_mode',  ep:'0x01', type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:0,     max:3,     step:1,   scale:1,    map:[0: 'no', 1: 'threshold', 2: 'period', 3: 'threshold_period'], unit:'', title: '<b>Humidity Report Mode</b>', description:'Humidity reporting mode'],
                 [at:'0xFCC0:0x016A',  name:'humi_period',       ep:'0x01', type:'decimal', dt:'0x23', mfgCode:'0x115f',  rw: 'rw', min:1.0,   max:10.0,  step:1.0, scale:1000, unit:'sec', title: '<b>Humidity Period</b>', description:'Humidity reporting period'],
                 [at:'0xFCC0:0x016B',  name:'humi_threshold',    ep:'0x01', type:'decimal', dt:'0x21', mfgCode:'0x115f',  rw: 'rw', min:2.0,   max:10.0,  step:0.5, scale:100,  unit:'%', title: '<b>Humidity Threshold</b>', description:'Humidity reporting threshold'],
+                [at:'0xFCC0:0x0172',  name:'sensor',            ep:'0x01', type:'enum',    dt:'0x23', mfgCode:'0x115f',  rw: 'ro', min:0,     max:255,   step:1,   scale:1,    map:[0: 'internal', 1: 'internal', 2: 'external', 3: 'external', 255: 'unknown'], unit:'', title: '<b>Sensor Mode</b>', description:'Select sensor mode: internal or external'],
             ],
             //supportedThermostatModes: ['off', 'auto', 'heat', 'away'/*, "emergency heat"*/],
             //refresh: ['refreshAqaraE1'],
@@ -131,6 +139,14 @@ void customParseXiaomiFCC0Cluster(final Map descMap) {
         customParseXiaomiClusterTags(tags)
         return
     }
+    
+    // Handle external sensor response attribute 0xFFF2
+    if ((descMap.attrInt as Integer) == 0xFFF2 ) {
+        logDebug "customParseXiaomiFCC0Cluster: received external sensor response attribute 0xFFF2"
+        parseExternalSensorResponse(descMap.value)
+        return
+    }
+    
     Boolean result = processClusterAttributeFromDeviceProfile(descMap)
     if ( result == false ) {
         logWarn "customParseXiaomiFCC0Cluster: received unknown Thermostat cluster (0xFCC0) attribute 0x${descMap.attrId} (value ${descMap.value})"
@@ -205,6 +221,44 @@ void customParseXiaomiClusterTags(final Map<Integer, Object> tags) {
     }
 }
 
+// Parse external sensor response from attribute 0xFFF2
+void parseExternalSensorResponse(String value) {
+    logDebug "parseExternalSensorResponse: parsing response value: ${value}"
+    
+    try {
+        // The response should contain sensor mode information
+        // Based on the GitHub implementation, we need to decode the response
+        if (value?.length() >= 2) {
+            // Convert hex string to integer for basic parsing
+            Integer responseValue = Integer.parseInt(value.substring(0, 2), 16)
+            
+            // Parse sensor mode from response (based on GitHub lookup: {2: "external", 0: "internal", 1: "internal", 3: "external"})
+            String sensorMode = null
+            switch (responseValue) {
+                case 0:
+                case 1:
+                    sensorMode = 'internal'
+                    break
+                case 2:
+                case 3:
+                    sensorMode = 'external'
+                    break
+                default:
+                    logWarn "parseExternalSensorResponse: unknown sensor mode value: ${responseValue}"
+                    return
+            }
+            
+            // Update the sensor attribute if it changed
+            if (device.currentValue('sensor') != sensorMode) {
+                sendEvent(name: 'sensor', value: sensorMode, descriptionText: "Sensor mode changed to ${sensorMode}", type: 'physical')
+                logInfo "Sensor mode updated to: ${sensorMode}"
+            }
+        }
+    } catch (Exception e) {
+        logWarn "parseExternalSensorResponse: error parsing response: ${e.message}"
+    }
+}
+
 
 //
 // called from updated() in the main code
@@ -256,6 +310,7 @@ List<String> customRefresh() {
     cmds += zigbee.readAttribute(0xFCC0, [0x0170, 0x0162], [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // sampling, period
     cmds += zigbee.readAttribute(0xFCC0, [0x0165, 0x0163, 0x0164], [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // temp_report_mode, temp_period, temp_threshold
     cmds += zigbee.readAttribute(0xFCC0, [0x016C, 0x016A, 0x016B], [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // humi_report_mode, humi_period, humi_threshold
+    cmds += zigbee.readAttribute(0xFCC0, 0x0172, [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // sensor
 
     logDebug "customRefresh: ${cmds} "
     return cmds
@@ -411,6 +466,16 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
             }
             break
             */
+        case 'sensor' :    // Sensor mode selection
+            sendEvent(eventMap)
+            logInfo "${descText}"
+            
+            // When switching to internal mode, we might want to trigger a refresh of internal sensor readings
+            if (valueScaled == 'internal') {
+                logDebug "Sensor mode switched to internal - refreshing internal sensor readings"
+                runInMillis(1000, customRefresh)
+            }
+            break
         default :
             sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
                 //if (!doNotTrace) {
@@ -419,6 +484,255 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
             //}
             break
     }
+}
+
+// Command to set external temperature using GitHub-compliant protocol
+void setExternalTemperature(BigDecimal temperature) {
+    logDebug "setExternalTemperature(${temperature})"
+    
+    String currentSensorMode = device.currentValue('sensor')
+    if (currentSensorMode != 'external') {
+        logWarn "setExternalTemperature: sensor mode is '${currentSensorMode}', must be 'external' to set external temperature"
+        return
+    }
+    
+    if (temperature < -100 || temperature > 100) {
+        logWarn "setExternalTemperature: temperature ${temperature} is out of range (-100 to 100°C)"
+        return
+    }
+    
+    List<String> cmds = []
+    
+    // Fixed fictive sensor IEEE address from GitHub implementation
+    byte[] fictiveSensor = hubitat.helper.HexUtils.hexStringToByteArray("00158d00019d1b98")
+    
+    // Build temperature buffer using writeFloatBE like GitHub implementation
+    byte[] temperatureBuf = new byte[4]
+    Integer tempValue = Math.round(temperature * 100) as Integer
+    
+    // Write as big-endian float representation (GitHub uses writeFloatBE)
+    temperatureBuf[0] = (byte)((tempValue >> 24) & 0xFF)
+    temperatureBuf[1] = (byte)((tempValue >> 16) & 0xFF)
+    temperatureBuf[2] = (byte)((tempValue >> 8) & 0xFF)
+    temperatureBuf[3] = (byte)(tempValue & 0xFF)
+    
+    // Build params array exactly like GitHub: [...fictiveSensor, 0x00, 0x01, 0x00, 0x55, ...temperatureBuf]
+    List<Integer> params = []
+    params.addAll(fictiveSensor.collect { it & 0xFF })
+    params.addAll([0x00, 0x01, 0x00, 0x55])
+    params.addAll(temperatureBuf.collect { it & 0xFF })
+    
+    // Build complete message using GitHub's lumiHeader function
+    List<Integer> data = buildLumiHeader(0x12, params.size(), 0x05)
+    data.addAll(params)
+    
+    String hexString = data.collect { String.format('%02X', it) }.join('')
+    
+    cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString}} {0x115F}"]
+    
+    logDebug "setExternalTemperature: sending GitHub-compliant command: ${hexString}"
+    sendZigbeeCommands(cmds)
+    
+    // Update the state
+    sendEvent(name: 'external_temperature', value: temperature, unit: '°C', descriptionText: "External temperature set to ${temperature}°C", type: 'digital')
+}
+
+// Command to set external humidity using GitHub-compliant protocol
+void setExternalHumidity(BigDecimal humidity) {
+    logDebug "setExternalHumidity(${humidity})"
+    
+    String currentSensorMode = device.currentValue('sensor')
+    if (currentSensorMode != 'external') {
+        logWarn "setExternalHumidity: sensor mode is '${currentSensorMode}', must be 'external' to set external humidity"
+        return
+    }
+    
+    if (humidity < 0 || humidity > 100) {
+        logWarn "setExternalHumidity: humidity ${humidity} is out of range (0 to 100%)"
+        return
+    }
+    
+    List<String> cmds = []
+    
+    // Fixed fictive sensor IEEE address from GitHub implementation
+    byte[] fictiveSensor = hubitat.helper.HexUtils.hexStringToByteArray("00158d00019d1b98")
+    
+    // Build humidity buffer using writeFloatBE like GitHub implementation
+    byte[] humidityBuf = new byte[4]
+    Integer humiValue = Math.round(humidity * 100) as Integer
+    
+    // Write as big-endian float representation (GitHub uses writeFloatBE)
+    humidityBuf[0] = (byte)((humiValue >> 24) & 0xFF)
+    humidityBuf[1] = (byte)((humiValue >> 16) & 0xFF)
+    humidityBuf[2] = (byte)((humiValue >> 8) & 0xFF)
+    humidityBuf[3] = (byte)(humiValue & 0xFF)
+    
+    // Build params array exactly like GitHub: [...fictiveSensor, 0x00, 0x02, 0x00, 0x55, ...humidityBuf]
+    List<Integer> params = []
+    params.addAll(fictiveSensor.collect { it & 0xFF })
+    params.addAll([0x00, 0x02, 0x00, 0x55])  // 0x02 indicates humidity
+    params.addAll(humidityBuf.collect { it & 0xFF })
+    
+    // Build complete message using GitHub's lumiHeader function
+    List<Integer> data = buildLumiHeader(0x12, params.size(), 0x05)
+    data.addAll(params)
+    
+    String hexString = data.collect { String.format('%02X', it) }.join('')
+    
+    cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString}} {0x115F}"]
+    
+    logDebug "setExternalHumidity: sending GitHub-compliant command: ${hexString}"
+    sendZigbeeCommands(cmds)
+    
+    // Update the state
+    sendEvent(name: 'external_humidity', value: humidity, unit: '%', descriptionText: "External humidity set to ${humidity}%", type: 'digital')
+}
+
+// Build Lumi header based on GitHub implementation
+private List<Integer> buildLumiHeader(Integer counter, Integer length, Integer action) {
+    List<Integer> header = [0xaa, 0x71, length + 3, 0x44, counter]
+    Integer integrity = 512 - header.sum()
+    List<Integer> result = []
+    result.addAll(header)
+    result.addAll([integrity, action, 0x41, length])
+    return result
+}
+
+// Command to set sensor mode (internal/external) using GitHub implementation
+void setSensorMode(String mode) {
+    logDebug "setSensorMode(${mode})"
+    
+    if (mode != 'internal' && mode != 'external') {
+        logWarn "setSensorMode: invalid mode '${mode}', must be 'internal' or 'external'"
+        return
+    }
+    
+    List<String> cmds = []
+    
+    if (mode == 'external') {
+        // GitHub implementation for external mode - complex multi-step process
+        String deviceIeee = device.zigbeeId
+        log.trace "${deviceIeee} - deviceIeee"
+        // Remove 0x prefix if present and ensure proper format
+        String hexString = deviceIeee.startsWith('0x') ? deviceIeee.substring(2) : deviceIeee
+        hexString = hexString.padLeft(16, '0')
+        byte[] deviceBytes = hubitat.helper.HexUtils.hexStringToByteArray(hexString)
+        log.trace "deviceBytes: ${deviceBytes.collect { String.format('%02X', it & 0xFF) }.join('')}"
+        byte[] fictiveSensor = hubitat.helper.HexUtils.hexStringToByteArray("00158d00019d1b98")
+        
+        // Create timestamp
+        byte[] timestamp = new byte[4]
+        Long currentTime = (now() / 1000) as Long
+        timestamp[0] = (byte)((currentTime >> 24) & 0xFF)
+        timestamp[1] = (byte)((currentTime >> 16) & 0xFF)
+        timestamp[2] = (byte)((currentTime >> 8) & 0xFF)
+        timestamp[3] = (byte)(currentTime & 0xFF)
+        
+        // First command - params1 from GitHub
+        List<Integer> params1 = []
+        params1.addAll(timestamp.collect { it & 0xFF })
+        params1.addAll([0x15])
+        params1.addAll(deviceBytes.collect { it & 0xFF })
+        params1.addAll(fictiveSensor.collect { it & 0xFF })
+        params1.addAll([0x00, 0x02, 0x00, 0x55, 0x15, 0x0a, 0x01, 0x00, 0x00, 0x01, 0x06, 0xe6, 0xb9, 0xbf, 0xe5, 0xba, 0xa6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x08, 0x65])
+        
+        List<Integer> val1 = buildLumiHeader(0x12, params1.size(), 0x04)
+        val1.addAll(params1)
+        
+        // Second command - params2 from GitHub  
+        List<Integer> params2 = []
+        params2.addAll(timestamp.collect { it & 0xFF })
+        params2.addAll([0x14])
+        params2.addAll(deviceBytes.collect { it & 0xFF })
+        params2.addAll(fictiveSensor.collect { it & 0xFF })
+        params2.addAll([0x00, 0x01, 0x00, 0x55, 0x15, 0x0a, 0x01, 0x00, 0x00, 0x01, 0x06, 0xe6, 0xb8, 0xa9, 0xe5, 0xba, 0xa6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x07, 0x63])
+        
+        List<Integer> val2 = buildLumiHeader(0x13, params2.size(), 0x04)
+        val2.addAll(params2)
+        
+        String hexString1 = val1.collect { String.format('%02X', it) }.join('')
+        String hexString2 = val2.collect { String.format('%02X', it) }.join('')
+        
+        cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString1}} {0x115F}"]
+        cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString2}} {0x115F}"]
+        
+        logDebug "setSensorMode: sending external mode setup commands"
+        sendZigbeeCommands(cmds)
+        
+        // Read sensor mode after setup
+       // runInMillis(3000, 'readSensorModeAfterSetup')
+        
+    } else {
+        // Internal mode - GitHub implementation for internal mode
+        String deviceIeee = device.zigbeeId
+        log.trace "${deviceIeee} - deviceIeee for internal mode"
+        // Remove 0x prefix if present and ensure proper format
+        String hexString = deviceIeee.startsWith('0x') ? deviceIeee.substring(2) : deviceIeee
+        hexString = hexString.padLeft(16, '0')
+        byte[] deviceBytes = hubitat.helper.HexUtils.hexStringToByteArray(hexString)
+        log.trace "deviceBytes: ${deviceBytes.collect { String.format('%02X', it & 0xFF) }.join('')}"
+        
+        // Create timestamp
+        byte[] timestamp = new byte[4]
+        Long currentTime = (now() / 1000) as Long
+        timestamp[0] = (byte)((currentTime >> 24) & 0xFF)
+        timestamp[1] = (byte)((currentTime >> 16) & 0xFF)
+        timestamp[2] = (byte)((currentTime >> 8) & 0xFF)
+        timestamp[3] = (byte)(currentTime & 0xFF)
+        
+        // First command - params1 for internal mode (based on GitHub lines 2488-2533)
+        List<Integer> params1 = []
+        params1.addAll(timestamp.collect { it & 0xFF })
+        params1.addAll([0x3d])
+        params1.addAll([0x05])
+        params1.addAll(deviceBytes.collect { it & 0xFF })
+        params1.addAll([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        
+        List<Integer> val1 = buildLumiHeader(0x12, params1.size(), 0x04)
+        val1.addAll(params1)
+        
+        // Second command - params2 for internal mode
+        List<Integer> params2 = []
+        params2.addAll(timestamp.collect { it & 0xFF })
+        params2.addAll([0x3d])
+        params2.addAll([0x04])
+        params2.addAll(deviceBytes.collect { it & 0xFF })
+        params2.addAll([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        
+        List<Integer> val2 = buildLumiHeader(0x13, params2.size(), 0x04)
+        val2.addAll(params2)
+        
+        String hexString1 = val1.collect { String.format('%02X', it) }.join('')
+        String hexString2 = val2.collect { String.format('%02X', it) }.join('')
+        
+        cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString1}} {0x115F}"]
+        cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString2}} {0x115F}"]
+        
+        logDebug "setSensorMode: sending internal mode setup commands"
+        sendZigbeeCommands(cmds)
+        
+        // Read sensor mode after switching to internal mode
+        runInMillis(5000, 'readSensorModeAfterSetup')
+    }
+    
+    // Update the state immediately for UI responsiveness
+    sendEvent(name: 'sensor', value: mode, descriptionText: "Sensor mode set to ${mode}", type: 'digital')
+}
+
+// Helper to read sensor mode after external setup
+void readSensorModeAfterSetup() {
+    logDebug "readSensorModeAfterSetup: reading sensor mode attribute"
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0xFCC0, 0x0172, [destEndpoint: 0x01, mfgCode: 0x115F])
+    sendZigbeeCommands(cmds)
+}
+
+// Helper to read local temperature after switching to internal mode
+void readLocalTemperature() {
+    logDebug "readLocalTemperature: reading local temperature from hvacThermostat cluster"
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0x0201, 0x0000, [destEndpoint: 0x01])  // localTemp from hvacThermostat
+    sendZigbeeCommands(cmds)
 }
 
 void testT(String par) {
