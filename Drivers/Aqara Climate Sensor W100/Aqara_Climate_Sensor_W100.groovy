@@ -65,6 +65,18 @@ metadata {
         attribute 'external_temperature', 'decimal'                // Virtual attribute for external temperature
         attribute 'external_humidity', 'decimal'                   // Virtual attribute for external humidity
         
+        // Button capabilities
+        capability 'PushableButton'
+        capability 'HoldableButton'
+        capability 'ReleasableButton'
+        capability 'DoubleTapableButton'
+        
+        attribute 'numberOfButtons', 'number'
+        attribute 'pushed', 'number'
+        attribute 'held', 'number'
+        attribute 'released', 'number'
+        attribute 'doubleTapped', 'number'
+        
         //command 'setExternalTemperature', [[name: 'temperature', type: 'NUMBER', description: 'External temperature value (-100 to 100°C)', range: '-100..100', required: true]]
         //command 'setExternalHumidity', [[name: 'humidity', type: 'NUMBER', description: 'External humidity value (0 to 100%)', range: '0..100', required: true]]
         //command 'setSensorMode', [[name: 'mode', type: 'ENUM', constraints: ['internal', 'external'], description: 'Set sensor mode: internal or external']]
@@ -101,8 +113,9 @@ metadata {
             capabilities  : ['ReportingConfiguration': false, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'Battery': true, 'Configuration': true, 'Refresh': true, 'HealthCheck': true],
             preferences   : ['display_off':'0xFCC0:0x0173', 'high_temperature':'0xFCC0:0x0167', 'low_temperature':'0xFCC0:0x0166', 'high_humidity':'0xFCC0:0x016E', 'low_humidity':'0xFCC0:0x016D', 'sampling':'0xFCC0:0x0170', 'period':'0xFCC0:0x0162', 'temp_report_mode':'0xFCC0:0x0165', 'temp_period':'0xFCC0:0x0163', 'temp_threshold':'0xFCC0:0x0164', 'humi_report_mode':'0xFCC0:0x016C', 'humi_period':'0xFCC0:0x016A', 'humi_threshold':'0xFCC0:0x016B', 'sensor':'0xFCC0:0x0172'],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0012,0405,0402,00001,0003,0x0000,FD20', outClusters:'0019', model:'lumi.sensor_ht.agl001', manufacturer:'Aqara', deviceJoinName: 'Aqara Climate Sensor W100'],      //  "TH-S04D"
-                [profileId:'0104', endpointId:'03', inClusters:'0012', model:'lumi.sensor_ht.agl001', manufacturer:'Aqara', deviceJoinName: 'Aqara Climate Sensor W100']      //  workaround for Hubitat bug with multiple endpoints
+                [profileId:'0104', endpointId:'01', inClusters:'0012,0405,0402,00001,0003,0x0000,FD20', outClusters:'0019', model:'lumi.sensor_ht.agl001', manufacturer:'Aqara', deviceJoinName: 'Aqara Climate Sensor W100'],      //  "TH-S04D" - main endpoint
+                [profileId:'0104', endpointId:'02', inClusters:'0012', model:'lumi.sensor_ht.agl001', manufacturer:'Aqara', deviceJoinName: 'Aqara Climate Sensor W100'],      //  center button endpoint
+                [profileId:'0104', endpointId:'03', inClusters:'0012', model:'lumi.sensor_ht.agl001', manufacturer:'Aqara', deviceJoinName: 'Aqara Climate Sensor W100']      //  minus button endpoint
 
             ],
             commands      : ['sendSupportedThermostatModes':'sendSupportedThermostatModes', 'autoPollThermostat':'autoPollThermostat', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
@@ -221,6 +234,87 @@ void customParseXiaomiClusterTags(final Map<Integer, Object> tags) {
     }
 }
 
+// Initialize button functionality
+void initializeButtons() {
+    logDebug "initializeButtons: setting up 3 buttons (plus, center, minus)"
+    sendEvent(name: 'numberOfButtons', value: 3, descriptionText: 'Number of buttons set to 3', type: 'digital')
+}
+
+// Button parsing for W100 - based on GitHub zigbee2mqtt implementation
+void parseButtonAction(final Map descMap) {
+    // From GitHub: actionLookup: {hold: 0, single: 1, double: 2, release: 255}
+    // endpointNames: ["plus", "center", "minus"] - endpoints 1, 2, 3
+    
+    logDebug "parseButtonAction: endpoint ${descMap.endpoint}, cluster ${descMap.cluster ?: descMap.clusterId}, attr ${descMap.attrId}, value ${descMap.value}"
+    
+    Integer endpoint = Integer.parseInt(descMap.endpoint ?: "01", 16)
+    String buttonName = getButtonName(endpoint)
+    
+    if (buttonName == 'unknown') {
+        logWarn "parseButtonAction: unknown button endpoint ${endpoint}"
+        return
+    }
+    
+    // Parse the action value - looking for cluster 0x0012 multistate input reports
+    String cluster = descMap.cluster ?: descMap.clusterId
+    if (cluster == '0012' && descMap.attrId == '0055') {
+        Integer actionValue = Integer.parseInt(descMap.value, 16)
+        String action = getButtonAction(actionValue)
+        
+        if (action != 'unknown') {
+            logInfo "Button ${buttonName} (${endpoint}) ${action}"
+            
+            Map buttonEvent = [
+                name: action,
+                value: endpoint,
+                descriptionText: "Button ${buttonName} (${endpoint}) ${action}",
+                isStateChange: true,
+                type: 'physical'
+            ]
+            
+            sendEvent(buttonEvent)
+        } else {
+            logWarn "parseButtonAction: unknown action value ${actionValue} for button ${buttonName}"
+        }
+    } else {
+        logDebug "parseButtonAction: skipping - cluster=${cluster}, attrId=${descMap.attrId}"
+    }
+}
+
+// Get button name from endpoint number
+String getButtonName(Integer endpoint) {
+    switch (endpoint) {
+        case 1: return 'plus'
+        case 2: return 'center' 
+        case 3: return 'minus'
+        default: return 'unknown'
+    }
+}
+
+// Get button action from value
+String getButtonAction(Integer value) {
+    // From GitHub actionLookup: {hold: 0, single: 1, double: 2, release: 255}
+    switch (value) {
+        case 0: return 'held'
+        case 1: return 'pushed'
+        case 2: return 'doubleTapped'
+        case 255: return 'released'
+        default: return 'unknown'
+    }
+}
+
+// Custom parsing for multistate input cluster (0x0012) - button events
+void customParseMultistateInputCluster(final Map descMap) {
+    logDebug "customParseMultistateInputCluster: cluster 0x0012 endpoint ${descMap.endpoint} attribute 0x${descMap.attrId} value ${descMap.value}"
+    
+    // W100 buttons send multistate input events on cluster 0x0012, attribute 0x0055
+    if (descMap.attrId == '0055') {
+        parseButtonAction(descMap)
+    } else {
+        logDebug "customParseMultistateInputCluster: unhandled attribute 0x${descMap.attrId}"
+    }
+}
+
 // Parse external sensor response from attribute 0xFFF2
 void parseExternalSensorResponse(String value) {
     logDebug "parseExternalSensorResponse: parsing response value: ${value}"
@@ -333,6 +427,10 @@ List<String> customInitializeDevice() {
     List<String> cmds = []
     logDebug 'customInitializeDevice() ...'
     cmds = initializeAqara()
+    
+    // Initialize button functionality
+    initializeButtons()
+    
     logDebug "initializeThermostat() : ${cmds}"
     return cmds
 }
@@ -696,6 +794,30 @@ void testT(String par) {
         }
     }
     */
+    
+    if (par == 'button') {
+        // Test button functionality
+        logInfo "Testing button functionality..."
+        initializeButtons()
+        
+        // Simulate button events for testing
+        logInfo "Simulating button events..."
+        
+        // Test plus button single press
+        Map testDescMap1 = [endpoint: '01', clusterId: '0012', attrId: '0055', value: '01']
+        parseButtonAction(testDescMap1)
+        
+        // Test center button double tap  
+        Map testDescMap2 = [endpoint: '02', clusterId: '0012', attrId: '0055', value: '02']
+        parseButtonAction(testDescMap2)
+        
+        // Test minus button hold
+        Map testDescMap3 = [endpoint: '03', clusterId: '0012', attrId: '0055', value: '00']
+        parseButtonAction(testDescMap3)
+        
+        return
+    }
+    
     List<String> cmds = []
     cmds += zigbee.readAttribute(0xFCC0, 0x0173, [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // display_off
     logDebug "testT: ${cmds} "
