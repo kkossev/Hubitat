@@ -44,6 +44,7 @@ library(
   * ver. 3.3.5  2025-03-05 kkossev  - getTuyaAttributeValue made public; fixed checkDriverVersion bug on hub reboot.
   * ver. 3.4.0  2025-03-23 kkossev  - healthCheck by pinging the device; updateRxStats() replaced with inline code; added state.lastRx.timeStamp; added activeEndpoints() handler call; documentation improvements
   * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
+  * ver. 3.5.1  2025-07-23 kkossev  - Aqara W100 destEndpoint: 0x01 patch
   *
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
   *                                   TODO: make the configure() without parameter smart - analyze the State variables and call delete states.... call ActiveAndpoints() or/amd initialize() or/and configure()
@@ -59,8 +60,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.5.0' }
-String commonLibStamp() { '2025/04/08 8:36 PM' }
+String commonLibVersion() { '3.5.1' }
+String commonLibStamp() { '2025/07/23 12:47 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -1010,6 +1011,10 @@ public void ping() {
     scheduleCommandTimeoutCheck()
     int  pingAttr = (device.getDataValue('manufacturer') == 'SONOFF') ? 0x05 : PING_ATTR_ID
     if (isVirtual()) { runInMillis(10, 'virtualPong') }
+    else if (device.getDataValue('manufacturer') == 'Aqara') {
+        logDebug 'Aqara device ping...'
+        sendZigbeeCommands(zigbee.readAttribute(zigbee.BASIC_CLUSTER, pingAttr, [destEndpoint: 0x01], 0) )
+    }
     else { sendZigbeeCommands(zigbee.readAttribute(zigbee.BASIC_CLUSTER, pingAttr, [:], 0) ) }
     logDebug 'ping...'
 }

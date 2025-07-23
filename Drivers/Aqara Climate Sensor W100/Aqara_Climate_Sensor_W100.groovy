@@ -13,14 +13,14 @@
  *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *     for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.5.0  2025-05-09 kkossev  - Initial version
+ * ver. 1.0.0  2025-07-23 kkossev  - Initial version
  *
  */
 
-static String version() { '3.5.0' }
-static String timeStamp() { '2025/05/09 6:44 PM' }
+static String version() { '1.0.0' }
+static String timeStamp() { '2025/07/23 3:00 PM' }
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -31,15 +31,16 @@ import groovy.json.JsonOutput
 import java.math.RoundingMode
 
 #include kkossev.commonLib
-#include kkossev.onOffLib
+//#include kkossev.onOffLib
 #include kkossev.batteryLib
 #include kkossev.temperatureLib
+#include kkossev.humidityLib
 #include kkossev.xiaomiLib
 #include kkossev.deviceProfileLib
-#include kkossev.thermostatLib
+//#include kkossev.thermostatLib
 
-deviceType = 'Thermostat'
-@Field static final String DEVICE_TYPE = 'Thermostat'
+deviceType = 'Sensor' // Aqara Climate Sensor W100 is a Thermostat, but it is also a Temperature and Humidity Sensor
+@Field static final String DEVICE_TYPE = 'Sensor'
 
 metadata {
     definition(
@@ -47,40 +48,14 @@ metadata {
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20Climate%20Sensor%20W100/Aqara_Climate_Sensor_W100.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
-        // capbilities are defined in the thermostatLib
-        // TODO - add all other models attributes possible values
-        /*
-        attribute 'antiFreeze', 'enum', ['off', 'on']               // Tuya Saswell, AVATTO
-        attribute 'batteryVoltage', 'number'
-        attribute 'boostTime', 'number'                             // BRT-100
-        attribute 'calibrated', 'enum', ['false', 'true']           // Aqara E1
-        attribute 'calibrationTemp', 'number'                       // BRT-100, Sonoff
-        attribute 'childLock', 'enum', ['off', 'on']                // BRT-100, Aqara E1, Sonoff, AVATTO
-        attribute 'ecoMode', 'enum', ['off', 'on']                  // BRT-100
-        attribute 'ecoTemp', 'number'                               // BRT-100
-        attribute 'emergencyHeating', 'enum', ['off', 'on']         // BRT-100
-        attribute 'emergencyHeatingTime', 'number'                  // BRT-100
-        attribute 'floorTemperature', 'number'                      // AVATTO/MOES floor thermostats
-        attribute 'frostProtectionTemperature', 'number'            // Sonoff
-        attribute 'hysteresis', 'number'                            // AVATTO, Virtual thermostat
-        attribute 'level', 'number'                                 // BRT-100
-        attribute 'maxHeatingSetpoint', 'number'                    // BRT-100, Sonoff, AVATTO
-        attribute 'minHeatingSetpoint', 'number'                    // BRT-100, Sonoff, AVATTO
-        attribute 'sensor', 'enum', ['internal', 'external', 'both']         // Aqara E1, AVATTO
-        attribute 'systemMode', 'enum', ['off', 'on']               // Aqara E1, AVATTO
-        attribute 'valveAlarm', 'enum',  ['false', 'true']          // Aqara E1
-        attribute 'valveDetection', 'enum', ['off', 'on']           // Aqara E1
-        attribute 'weeklyProgram', 'number'                         // BRT-100
-        attribute 'windowOpenDetection', 'enum', ['off', 'on']      // BRT-100, Aqara E1, Sonoff
-        attribute 'windowsState', 'enum', ['open', 'closed']        // BRT-100, Aqara E1
-        attribute 'batteryLowAlarm', 'enum', ['batteryOK', 'batteryLow']        // TUYA_SASWELL
-        //attribute 'workingState', "enum", ["open", "closed"]        // BRT-100
-
-        // Aqaura E1 attributes     TODO - consolidate a common set of attributes
-        attribute 'preset', 'enum', ['manual', 'auto', 'away']      // TODO - remove?
-        attribute 'awayPresetTemperature', 'number'
-        */
-
+        attribute 'display_off', 'enum', ['disabled', 'enabled']   // 0xFCC0:0x0173
+        attribute 'high_temperature', 'decimal'                    // 0xFCC0:0x0167
+        attribute 'low_temperature', 'decimal'                     // 0xFCC0:0x0166
+        attribute 'high_humidity', 'decimal'                       // 0xFCC0:0x0169
+        attribute 'low_humidity', 'decimal'                        // 0xFCC0:0x016A
+        attribute 'sampling', 'enum', ['low', 'standard', 'high', 'custom'] // 0xFCC0:0x0170
+        attribute 'period', 'decimal'                              // 0xFCC0:0x016D
+        
         if (_DEBUG) { command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  }
 
         // itterate through all the figerprints and add them on the fly
@@ -102,139 +77,65 @@ metadata {
 
 @Field static final Map deviceProfilesV3 = [
     // https://www.aqara.com/en/product/climate-sensor-w100/
+    // https://www.zigbee2mqtt.io/devices/TH-S04D.html
     // https://github.com/Koenkk/zigbee2mqtt/issues/27262
-    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/a19bc8c4652496998f32ac777963379f9c7c24cf/src/devices/lumi.ts#L4568
-    'AQARA_CLIMATE_SENSOR_W00'   : [
+    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/lumi.ts#L4571 
+    // https://github.com/rohankapoorcom/zigbee-herdsman-converters/blob/753c114f428d36e8164837922ea0ac89039f0bf6/src/devices/lumi.ts#L4569 
+    'AQARA_CLIMATE_SENSOR_W100'   : [
             description   : 'Aqara Climate Sensor W100',
-            device        : [manufacturers: ['LUMI'], type: 'TRV', powerSource: 'battery', isSleepy:false],
-            capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode': true],
-
-            preferences   : ['windowOpenDetection':'0xFCC0:0x0273', 'valveDetection':'0xFCC0:0x0274', 'childLock':'0xFCC0:0x0277', 'awayPresetTemperature':'0xFCC0:0x0279'],
+            device        : [manufacturers: ['Aqara'], type: 'Sensor', powerSource: 'battery', isSleepy:false],
+            //capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode': true],
+            capabilities  : ['ReportingConfiguration': false, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'Battery': true, 'Configuration': true, 'Refresh': true, 'HealthCheck': true],
+            preferences   : ['display_off':'0xFCC0:0x0173', 'high_temperature':'0xFCC0:0x0167', 'low_temperature':'0xFCC0:0x0166', 'high_humidity':'0xFCC0:0x016E', 'low_humidity':'0xFCC0:0x016D', 'sampling':'0xFCC0:0x0170', 'period':'0xFCC0:0x0162'],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0012,0405,0402,00001,0003,0x0000,FD20', outClusters:'0019', model:'lumi.sensor_ht.agl001', manufacturer:'LUMI', deviceJoinName: 'Aqara Climate Sensor W100']      //  "TH-S04D"
+                [profileId:'0104', endpointId:'01', inClusters:'0012,0405,0402,00001,0003,0x0000,FD20', outClusters:'0019', model:'lumi.sensor_ht.agl001', manufacturer:'Aqara', deviceJoinName: 'Aqara Climate Sensor W100'],      //  "TH-S04D"
+                [profileId:'0104', endpointId:'03', inClusters:'0012', model:'lumi.sensor_ht.agl001', manufacturer:'Aqara', deviceJoinName: 'Aqara Climate Sensor W100']      //  workaround for Hubitat bug with multiple endpoints
+
             ],
             commands      : ['sendSupportedThermostatModes':'sendSupportedThermostatModes', 'autoPollThermostat':'autoPollThermostat', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             tuyaDPs       : [:],
             attributes    : [
-
-                [at:'0xFCC0:0x040A',  name:'battery',               type:'number',  dt:'0x20', mfgCode:'0x115f',  rw: 'ro', min:0,    max:100,  step:1,  scale:1,    unit:'%',  description:'Battery percentage remaining'],
-                //                 name: "display_off",
-                cluster: "manuSpecificLumi",
-                attribute: {ID: 0x0173, type: Zcl.DataType.BOOLEAN},
-                valueOn: [true, 1],
-                valueOff: [false, 0],
-                description: "Enables/disables auto display off",
-                access: "ALL",
-                entityCategory: "config",
-                zigbeeCommandOptions: {manufacturerCode},
-                reporting: false,
-                //
-                [at:'0xFCC0:0x0173',  name:'display_off',           type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'on'], unit:'',     title: '<b>Display Off</b>',      description:'Display off'],             // result['display_off'] = {1: 'ON', 0: 'OFF'}[value]; - rw	
-                /*
-                display_offdisplay_off         m.numeric({
-                name: "high_temperature",
-                valueMin: 26,
-                valueMax: 60,
-                valueStep: 0.5,
-                scale: 100,
-                unit: "°C",
-                cluster: "manuSpecificLumi",
-                attribute: {ID: 0x0167, type: Zcl.DataType.INT16},
-                description: "High temperature alert",
-                zigbeeCommandOptions: {manufacturerCode},
-            }),
-                */
-                [at:'0xFCC0:0x0167',  name:'high_temperature',       type:'decimal', dt:'0x23', mfgCode:'0x115f',  rw: 'rw', min:26.0, max:60.0, step:0.5, scale:100, unit:'°C', title: '<b>High Temperature</b>', description:'High temperature alert'], // result['high_temperature'] = (value / 100).toFixed(1); - rw
-                [at:'0xFCC0:0x0168',  name:'low_temperature',        type:'decimal', dt:'0x23', mfgCode:'0x115f',  rw: 'rw', min:-20.0, max:26.0, step:0.5, scale:100, unit:'°C', title: '<b>Low Temperature</b>', description:'Low temperature alert'], // result['low_temperature'] = (value / 100).toFixed(1); - rw
-                [at:'0xFCC0:0x0169',  name:'high_humidity',          type:'decimal', dt:'0x23', mfgCode:'0x115f',  rw: 'rw', min:0.0,  max:100.0, step:1.0, scale:100, unit:'%',   title: '<b>High Humidity</b>',   description:'High humidity alert'],   // result['high_humidity'] = (value / 100).toFixed(1); - rw
-                [at:'0xFCC0:0x016A',  name:'low_humidity',           type:'decimal', dt:'0x23', mfgCode:'0x115f',  rw: 'rw', min:0.0,  max:100.0, step:1.0, scale:100, unit:'%',   title: '<b>Low Humidity</b>',    description:'Low humidity alert'],    // result['low_humidity'] = (value / 100).toFixed(1); - rw
-                /* *
-                            m.enumLookup({
-                name: "sampling",
-                lookup: {low: 1, standard: 2, high: 3, custom: 4},
-                cluster: "manuSpecificLumi",
-                attribute: {ID: 0x0170, type: Zcl.DataType.UINT8},
-                description: "Temperature and Humidity sampling settings",
-                zigbeeCommandOptions: {manufacturerCode},
-            }), */
-                [at:'0xFCC0:0x0170',  name:'sampling',              type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:1,    max:4,    step:1,  scale:1,    map:[1: 'low', 2: 'standard', 3: 'high', 4: 'custom'], unit:'', title: '<b>Sampling</b>', description:'Temperature and Humidity sampling settings'], // result['sampling'] = {4: 'custom', 3: 'high', 2: 'standard', 1: 'low'}[value]; - rw
-                /*             m.numeric({
-                name: "period",
-                valueMin: 0.5,
-                valueMax: 600,
-                valueStep: 0.5,
-                scale: 1000,
-                unit: "sec",
-                cluster: "manuSpecificLumi",
-                attribute: {ID: 0x016d, type: Zcl.DataType.INT16},
-                description: "Sampling period",
-                zigbeeCommandOptions: {manufacturerCode},
-            }),,*/
-                [at:'0xFCC0:0x016D',  name:'period',               type:'decimal', dt:'0x23', mfgCode:'0x115f',  rw: 'rw', min:0.5,  max:600.0, step:0.5, scale:1000, unit:'sec', title: '<b>Sampling Period</b>', description:'Sampling period'], // result['period'] = (value / 1000).toFixed(1); - rw
+                [at:'0xFCC0:0x0173',  name:'display_off',       ep:'0x01', type:'enum',    dt:'0x10', mfgCode:'0x115f',  rw: 'rw', min:0,     max:1,     step:1,   scale:1,    map:[0: 'disabled', 1: 'enabled'], unit:'',     title: '<b>Display Off</b>',      description:'Enables/disables auto display off'],
+                [at:'0xFCC0:0x0167',  name:'high_temperature',  ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:26.0,  max:60.0,  step:0.5, scale:100,  unit:'°C', title: '<b>High Temperature</b>', description:'High temperature alert'],
+                [at:'0xFCC0:0x0166',  name:'low_temperature',   ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:-20.0, max:20.0,  step:0.5, scale:100,  unit:'°C', title: '<b>Low Temperature</b>', description:'Low temperature alert'],
+                [at:'0xFCC0:0x016E',  name:'high_humidity',     ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:65.0,  max:100.0, step:1.0, scale:100,  unit:'%',   title: '<b>High Humidity</b>',   description:'High humidity alert'],
+                [at:'0xFCC0:0x016D',  name:'low_humidity',      ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:0.0,   max:30.0,  step:1.0, scale:100,  unit:'%',   title: '<b>Low Humidity</b>',    description:'Low humidity alert'],
+                [at:'0xFCC0:0x0170',  name:'sampling',          ep:'0x01', type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:1,     max:4,     step:1,   scale:1,    map:[1: 'low', 2: 'standard', 3: 'high', 4: 'custom'], unit:'', title: '<b>Sampling</b>', description:'Temperature and Humidity sampling settings'],
+                [at:'0xFCC0:0x0162',  name:'period',            ep:'0x01', type:'decimal', dt:'0x23', mfgCode:'0x115f',  rw: 'rw', min:0.5,   max:600.0, step:0.5, scale:1000, unit:'sec', title: '<b>Sampling Period</b>', description:'Sampling period'], // result['period'] = (value / 1000).toFixed(1); - rw
             
                 /*
                 [at:'0xFCC0:0x040A',  name:'battery',               type:'number',  dt:'0x20', mfgCode:'0x115f',  rw: 'ro', min:0,    max:100,  step:1,  scale:1,    unit:'%',  description:'Battery percentage remaining'],
                 [at:'0xFCC0:0x0270',  name:'unknown1',              type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'false', 1: 'true'], unit:'',   title: '<b>Unknown 0x0270</b>',   description:'Unknown 0x0270'],
-                [at:'0xFCC0:0x0271',  name:'systemMode',            type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'on'], unit:'',     title: '<b>System Mode</b>',      description:'Switch the TRV OFF or in operation (on)'],             // result['system_mode'] = {1: 'heat', 0: 'off'}[value]; (heating state) - rw
-                [at:'0xFCC0:0x0272',  name:'thermostatMode',        type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:0,    max:2,    step:1,  scale:1,    map:[0: 'heat', 1: 'auto', 2: 'away'], unit:'',                   title: '<b>Preset</b>',           description:'Preset'],                  // result['preset'] = {2: 'away', 1: 'auto', 0: 'manual'}[value]; - rw  ['manual', 'auto', 'holiday']
-                [at:'0xFCC0:0x0273',  name:'windowOpenDetection',   type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'off', 1: 'on'], unit:'',             title: '<b>Window Detection</b>', description:'Window detection'],       // result['window_detection'] = {1: 'ON', 0: 'OFF'}[value]; - rw
-                [at:'0xFCC0:0x0274',  name:'valveDetection',        type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'off', 1: 'on'], unit:'',             title: '<b>Valve Detection</b>',  description:'Valve detection'],        // result['valve_detection'] = {1: 'ON', 0: 'OFF'}[value]; -rw
-                [at:'0xFCC0:0x0275',  name:'valveAlarm',            type:'enum',    dt:'0x23', mfgCode:'0x115f',  rw: 'ro', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'false', 1: 'true'], unit:'',         title: '<b>Valve Alarm</b>',      description:'Valve alarm'],            // result['valve_alarm'] = {1: true, 0: false}[value]; - read only!
-                [at:'0xFCC0:0x0276',  name:'unknown2',              type:'enum',    dt:'0x41', mfgCode:'0x115f',  rw: 'ro', min:0,    max:1,    step:1,  scale:1,    map:[0: 'false', 1: 'true'], unit:'',         title: '<b>Unknown 0x0270</b>',                        description:'Unknown 0x0270'],
-                [at:'0xFCC0:0x0277',  name:'childLock',             type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'unlock', 1: 'lock'], unit:'',        title: '<b>Child Lock</b>',       description:'Child lock'],             // result['child_lock'] = {1: 'LOCK', 0: 'UNLOCK'}[value]; - rw
-                [at:'0xFCC0:0x0278',  name:'unknown3',              type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ow', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'false', 1: 'true'], unit:'',         title: '<b>Unknown 3</b>',        description:'Unknown 3'],              // WRITE ONLY !
                 [at:'0xFCC0:0x0279',  name:'awayPresetTemperature', type:'decimal', dt:'0x23', mfgCode:'0x115f',  rw: 'rw', min:5.0,  max:35.0, defVal:5.0,    step:0.5, scale:100,  unit:'°C', title: '<b>Away Preset Temperature</b>',       description:'Away preset temperature'],                     // result['away_preset_temperature'] = (value / 100).toFixed(1); - rw
-                [at:'0xFCC0:0x027A',  name:'windowsState',          type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'open', 1: 'closed'], unit:'',        title: '<b>Window Open</b>',      description:'Window open'],            // result['window_open'] = {1: true, 0: false}[value]; - read only
-                [at:'0xFCC0:0x027B',  name:'calibrated',            type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'false', 1: 'true'], unit:'',         title: '<b>Calibrated</b>',       description:'Calibrated'],             // result['calibrated'] = {1: true, 0: false}[value]; - read only
-                [at:'0xFCC0:0x027C',  name:'unknown4',              type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'false', 1: 'true'], unit:'',         title: '<b>Unknown 4</b>',        description:'Unknown 4'],
-                [at:'0xFCC0:0x027D',  name:'schedule',              type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'off', 1: 'on'], unit:'',             title: '<b>Schedule</b>',        description:'Schedule'],
-                [at:'0xFCC0:0x027E',  name:'sensor',                type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'ro', min:0,    max:1,    defVal:'0',    step:1,  scale:1,    map:[0: 'internal', 1: 'external'], unit:'',  title: '<b>Sensor</b>',           description:'Sensor'],                 // result['sensor'] = {1: 'EXTERNAL', 0: 'INTERNAL'}[value]; - read only
-                //   0xFCC0:0x027F ... 0xFCC0:0x0284 - unknown
-                [at:'0x0201:0x0000',  name:'temperature',           type:'decimal', dt:'0x29', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Temperature</b>',                   description:'Measured temperature'],
-                [at:'0x0201:0x0011',  name:'coolingSetpoint',       type:'decimal', dt:'0x29', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Cooling Setpoint</b>',              description:'cooling setpoint'],
-                [at:'0x0201:0x0012',  name:'heatingSetpoint',       type:'decimal', dt:'0x29', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
                 [at:'0x0201:0x001B',  name:'thermostatOperatingState', type:'enum',    dt:'0x30', rw:'rw',  min:0,    max:4,    step:1,  scale:1,    map:[0: 'off', 1: 'heating', 2: 'unknown', 3: 'unknown3', 4: 'idle'], unit:'',  description:'thermostatOperatingState (relay on/off status)'],      //  nothing happens when WRITING ????
-                //                      ^^^^                                reporting only ?
-                [at:'0x0201:0x001C',  name:'mode',                  type:'enum',    dt:'0x30', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b> Mode</b>',                   description:'System Mode ?'],
-                //                      ^^^^ TODO - check if this is the same as system_mode
-                [at:'0x0201:0x001E',  name:'thermostatRunMode',     type:'enum',    dt:'0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatRunMode</b>',                   description:'thermostatRunMode'],
-                //                          ^^ unsupported attribute?  or reporting only ?
-                [at:'0x0201:0x0020',  name:'battery2',              type:'number',  dt:'0x20', rw: 'ro', min:0,    max:100,  step:1,  scale:1,    unit:'%',  description:'Battery percentage remaining'],
-                //                          ^^ unsupported attribute?  or reporting only ?
-                [at:'0x0201:0x0023',  name:'thermostatHoldMode',    type:'enum',    dt:'0x20', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatHoldMode</b>',                   description:'thermostatHoldMode'],
-                //                          ^^ unsupported attribute?  or reporting only ?
-                [at:'0x0201:0x0029',  name:'thermostatOperatingState', type:'enum', dt:'0x20', rw: 'ow', min:0,    max:1,    step:1,  scale:1,    map:[0: 'idle', 1: 'heating'], unit:'',         title: '<b>thermostatOperatingState</b>',                   description:'thermostatOperatingState'],
-                //                          ^^ unsupported attribute?  or reporting only ?   encoding - 0x29 ?? ^^
-                [at:'0x0201:0xFFF2',  name:'unknown',                type:'number', dt:'0x21', rw: 'ro', min:0,    max:100,  step:1,  scale:1,    unit:'%',  description:'Battery percentage remaining'],
-            //                          ^^ unsupported attribute?  or reporting only ?
             */
             ],
-            supportedThermostatModes: ['off', 'auto', 'heat', 'away'/*, "emergency heat"*/],
-            refresh: ['refreshAqaraE1'],
-            deviceJoinName: 'Aqara E1 Thermostat',
+            //supportedThermostatModes: ['off', 'auto', 'heat', 'away'/*, "emergency heat"*/],
+            //refresh: ['refreshAqaraE1'],
+            deviceJoinName: 'Aqara Climate Sensor W100',
             configuration : [:]
     ]
 ]
 
-// called from parseXiaomiClusterLib in xiaomiLib.groovy (xiaomi cluster 0xFCC0 )
+// called from commonLib (Xiaomi cluster 0xFCC0 )
 //
-void parseXiaomiClusterThermostatLib(final Map descMap) {
-    logTrace "zigbee received Thermostat 0xFCC0 attribute 0x${descMap.attrId} (raw value = ${descMap.value})"
+void customParseXiaomiFCC0Cluster(final Map descMap) {
+    logDebug "customParseXiaomiFCC0Cluster: zigbee received Thermostat 0xFCC0 attribute 0x${descMap.attrId} (raw value = ${descMap.value})"
     if ((descMap.attrInt as Integer) == 0x00F7 ) {      // XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes
         final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value)
-        parseXiaomiClusterThermostatTags(tags)
+        customParseXiaomiClusterTags(tags)
         return
     }
     Boolean result = processClusterAttributeFromDeviceProfile(descMap)
     if ( result == false ) {
-        logWarn "parseXiaomiClusterThermostatLib: received unknown Thermostat cluster (0xFCC0) attribute 0x${descMap.attrId} (value ${descMap.value})"
+        logWarn "customParseXiaomiFCC0Cluster: received unknown Thermostat cluster (0xFCC0) attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
 }
 
 // XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes
-// called from parseXiaomiClusterThermostatLib
+// called from customParseXiaomiFCC0Cluster
 //
-void parseXiaomiClusterThermostatTags(final Map<Integer, Object> tags) {
+void customParseXiaomiClusterTags(final Map<Integer, Object> tags) {
     tags.each { final Integer tag, final Object value ->
         switch (tag) {
             case 0x01:    // battery voltage
@@ -340,6 +241,7 @@ void customUpdated() {
     else {
         logDebug 'forcedProfile is not set'
     }
+    /*
     final int pollingInterval = (settings.temperaturePollingInterval as Integer) ?: 0
     if (pollingInterval > 0) {
         logInfo "updatedThermostat: scheduling temperature polling every ${pollingInterval} seconds"
@@ -349,11 +251,13 @@ void customUpdated() {
         unScheduleThermostatPolling()
         logInfo 'updatedThermostat: thermostat polling is disabled!'
     }
+    */
     // Itterates through all settings
-    logDebug 'updatedThermostat: updateAllPreferences()...'
+    logDebug 'customUpdated: updateAllPreferences()...'
     updateAllPreferences()
 }
 
+/*
 // binding and reporting configuration for this Aqara E1 thermostat does nothing... We need polling mechanism for faster updates of the internal temperature readings.
 List<String> refreshAqaraE1() {
     List<String> cmds = []
@@ -362,9 +266,29 @@ List<String> refreshAqaraE1() {
     cmds += zigbee.readAttribute(0xFCC0, 0x040a, [mfgCode: 0x115F], delay = 500)
     return cmds
 }
+*/
 
 List<String> customRefresh() {
+    // TODO - use the refreshFromDeviceProfileList() !
+    /*
     List<String> cmds = refreshFromDeviceProfileList()
+    */
+    List<String> cmds = []
+    // Unsupported Attribute !!
+    //cmds += zigbee.readAttribute(0x0001, [0x0020, 0x0021], [destEndpoint: 0x01], delay = 200)    // battery voltage and battery percentage remaining
+    cmds += zigbee.readAttribute(0x0402, 0x0000, [destEndpoint: 0x01], 200)    // temperature
+    cmds += zigbee.readAttribute(0x0405, 0x0000, [destEndpoint: 0x01], 200)    // humidity
+    cmds += zigbee.readAttribute(0xFCC0, 0x0173, [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // display_off
+    cmds += zigbee.readAttribute(0xFCC0, [0x0167, 0x0166, 0x016E, 0x016D], [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // high_temperature, low_temperature, high_humidity, low_humidity
+    cmds += zigbee.readAttribute(0xFCC0, [0x0170, 0x0162], [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // sampling, period
+    /*
+    cmds += zigbee.readAttribute(0xFCC0, 0x0165, [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // temp_report_mode
+    cmds += zigbee.readAttribute(0xFCC0, 0x0163, [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // temp_period
+    cmds += zigbee.readAttribute(0xFCC0, 0x0164, [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // temp_threshold
+    cmds += zigbee.readAttribute(0xFCC0, 0x016C, [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // humi_report_mode
+    cmds += zigbee.readAttribute(0xFCC0, 0x016B, [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // humi_period
+*/
+
     logDebug "customRefresh: ${cmds} "
     return cmds
 }
@@ -524,6 +448,7 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
 }
 
 void testT(String par) {
+    /*
     log.trace "testT(${par}) : DEVICE.preferences = ${DEVICE.preferences}"
     log.trace "testT: ${settings}"
     Map result
@@ -534,6 +459,11 @@ void testT(String par) {
             logDebug "inputIt: ${result}"
         }
     }
+    */
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0xFCC0, 0x0173, [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // display_off
+    logDebug "testT: ${cmds} "
+    sendZigbeeCommands(cmds)    
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////

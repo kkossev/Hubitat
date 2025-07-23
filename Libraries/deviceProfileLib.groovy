@@ -36,6 +36,7 @@ library(
  * ver. 3.4.1  2025-02-02 kkossev  - setPar help improvements;
  * ver. 3.4.2  2025-03-24 kkossev  - added refreshFromConfigureReadList() method; documentation update; getDeviceNameAndProfile uses DEVICE.description instead of deviceJoinName
  * ver. 3.4.3  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
+ * ver. 3.5.0  2025-07-23 kkossev  - zclWriteAttribute() support for forced destinationEndpoint in the attributes map
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
@@ -47,8 +48,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.4.3' }
-static String deviceProfileLibStamp() { '2025/04/25 12:43 PM' }
+static String deviceProfileLibVersion()   { '3.5.0' }
+static String deviceProfileLibStamp() { '2025/07/23 2:21 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -327,6 +328,7 @@ private List<String> zclWriteAttribute(Map attributesMap, int scaledValue) {
         map['attribute'] = hubitat.helper.HexUtils.hexStringToInt((attributesMap.at).split(':')[1]) as Integer
         map['dt']  = (attributesMap.dt != null && attributesMap.dt != '') ? hubitat.helper.HexUtils.hexStringToInt(attributesMap.dt) as Integer : null
         map['mfgCode'] = attributesMap.mfgCode ? attributesMap.mfgCode as String : null
+        map['ep'] = (attributesMap.ep != null && attributesMap.ep != '') ? hubitat.helper.HexUtils.hexStringToInt(attributesMap.ep) as Integer : null
     }
     catch (e) { logWarn "setPar: Exception caught while splitting cluser and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val})) :  '${e}' " ; return [] }
     // dt (data type) is obligatory when writing to a cluster...
@@ -334,9 +336,14 @@ private List<String> zclWriteAttribute(Map attributesMap, int scaledValue) {
         map.dt = attributesMap.type in ['number', 'decimal'] ? DataType.INT16 : DataType.ENUM8
         logDebug "cluster:attribute ${attributesMap.at} is read-write, but no data type (dt) is defined! Assuming 0x${zigbee.convertToHexString(map.dt, 2)}"
     }
-    if (map.mfgCode != null && map.mfgCode != '') {
+    if ((map.mfgCode != null && map.mfgCode != '') || (map.ep != null && map.ep != '')) {
         Map mfgCode = map.mfgCode != null ? ['mfgCode':map.mfgCode] : [:]
-        cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, mfgCode, delay = 50)
+        Map ep = map.ep != null ? ['destEndpoint':map.ep] : [:]
+        Map mapOptions = [:]
+        if (mfgCode) mapOptions.putAll(mfgCode)
+        if (ep) mapOptions.putAll(ep)
+        log.trace "$mapOptions"
+        cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, mapOptions, delay = 50)
     }
     else {
         cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, [:], delay = 50)
