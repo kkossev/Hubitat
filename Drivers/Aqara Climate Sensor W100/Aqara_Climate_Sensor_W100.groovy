@@ -18,7 +18,7 @@
  */
 
 static String version() { '1.0.0' }
-static String timeStamp() { '2025/07/23 8:36 PM' }
+static String timeStamp() { '2025/07/23 11:00 PM' }
 
 @Field static final Boolean _DEBUG = true
 
@@ -65,8 +65,8 @@ metadata {
         attribute 'external_temperature', 'decimal'                // Virtual attribute for external temperature
         attribute 'external_humidity', 'decimal'                   // Virtual attribute for external humidity
         
-        command 'setExternalTemperature', [[name: 'temperature', type: 'DECIMAL', description: 'External temperature value (-100 to 100°C)', range: '-100..100']]
-        command 'setExternalHumidity', [[name: 'humidity', type: 'DECIMAL', description: 'External humidity value (0 to 100%)', range: '0..100']]
+        //command 'setExternalTemperature', [[name: 'temperature', type: 'NUMBER', description: 'External temperature value (-100 to 100°C)', range: '-100..100', required: true]]
+        //command 'setExternalHumidity', [[name: 'humidity', type: 'NUMBER', description: 'External humidity value (0 to 100%)', range: '0..100', required: true]]
         //command 'setSensorMode', [[name: 'mode', type: 'ENUM', constraints: ['internal', 'external'], description: 'Set sensor mode: internal or external']]
         
         if (_DEBUG) { command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  }
@@ -325,20 +325,6 @@ List<String> customConfigure() {
 List<String> initializeAqara() {
     List<String> cmds = []
     logDebug 'initializeAqara() ...'
-    /*
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0201 {${device.zigbeeId}} {}", 'delay 251', ]
-    //cmds += zigbee.configureReporting(0x0201, 0x0012, 0x29, intMinTime as int, intMaxTime as int, 0x01, [:], delay=541)
-    //cmds += zigbee.configureReporting(0x0201, 0x0000, 0x29, 20, 120, 0x01, [:], delay=542)
-
-    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0012 0x29 1 600 {}", 'delay 551', ]
-    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0000 0x29 20 300 {}", 'delay 551', ]
-    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x001C 0x30 1 600 {}", 'delay 551', ]
-
-    cmds +=  zigbee.reportingConfiguration(0x0201, 0x0012, [:], 551)    // read it back - doesn't work
-    cmds +=  zigbee.reportingConfiguration(0x0201, 0x0000, [:], 552)    // read it back - doesn't work
-    cmds +=  zigbee.reportingConfiguration(0x0201, 0x001C, [:], 552)    // read it back - doesn't work
-*/
-
     return cmds
 }
 
@@ -371,15 +357,6 @@ void customInitEvents(final boolean fullInit=false) {
 List<String> customAqaraBlackMagic() {
     logDebug 'customAqaraBlackMagic() - not needed...'
     List<String> cmds = []
-/*    
-    if (isAqaraTRV_OLD()) {
-        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", 'delay 200',]
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
-        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 200)    // TODO: check - battery voltage
-        logDebug 'customAqaraBlackMagic()'
-    }
-    */
     return cmds
 }
 
@@ -395,77 +372,6 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
         case 'temperature' :
             handleTemperatureEvent(valueScaled as Float)
             break
-        case 'heatingSetpoint' :
-            sendHeatingSetpointEvent(valueScaled)
-            break
-        case 'systemMode' : // Aqara E1 and AVATTO thermostat (off/on)
-            sendEvent(eventMap)
-            logInfo "${descText}"
-            if (valueScaled == 'on') {  // should be initialized with 'unknown' value
-                String lastThermostatMode = state.lastThermostatMode
-                sendEvent(name: 'thermostatMode', value: lastThermostatMode, isStateChange: true, description: 'TRV systemMode is on', type: 'digital')
-            }
-            else {
-                sendEvent(name: 'thermostatMode', value: 'off', isStateChange: true, description: 'TRV systemMode is off', type: 'digital')
-            }
-            break
-        case 'thermostatMode' :  // AVATTO send the thermostat mode a second after being switched off - ignore it !
-            if (device.currentValue('systemMode') == 'off' ) {
-                logWarn "customProcessDeviceProfileEvent: ignoring the thermostatMode <b>${valueScaled}</b> event, because the systemMode is off"
-            }
-            else {
-                sendEvent(eventMap)
-                logInfo "${descText}"
-                state.lastThermostatMode = valueScaled
-            }
-            break
-        case 'ecoMode' :    // BRT-100 - simulate OFF mode ?? or keep the ecoMode on ?
-            sendEvent(eventMap)
-            logInfo "${descText}"
-            if (valueScaled == 'on') {  // ecoMode is on
-                sendEvent(name: 'thermostatMode', value: 'eco', isStateChange: true, description: 'BRT-100 ecoMode is on', type: 'digital')
-                sendEvent(name: 'thermostatOperatingState', value: 'idle', isStateChange: true, description: 'BRT-100 ecoMode is on', type: 'digital')
-                state.lastThermostatMode = 'eco'
-            }
-            else {
-                sendEvent(name: 'thermostatMode', value: 'heat', isStateChange: true, description: 'BRT-100 ecoMode is off')
-                state.lastThermostatMode = 'heat'
-            }
-            break
-
-        case 'emergencyHeating' :   // BRT-100
-            sendEvent(eventMap)
-            logInfo "${descText}"
-            if (valueScaled == 'on') {  // the valve shoud be completely open, however the level and the working states are NOT updated! :(
-                sendEvent(name: 'thermostatMode', value: 'emergency heat', isStateChange: true, description: 'BRT-100 emergencyHeating is on')
-                sendEvent(name: 'thermostatOperatingState', value: 'heating', isStateChange: true, description: 'BRT-100 emergencyHeating is on')
-            }
-            else {
-                sendEvent(name: 'thermostatMode', value: 'heat', isStateChange: true, description: 'BRT-100 emergencyHeating is off')
-            }
-            break
-        case 'level' :      // BRT-100
-            sendEvent(eventMap)
-            logInfo "${descText}"
-            if (valueScaled == 0) {  // the valve is closed
-                sendEvent(name: 'thermostatOperatingState', value: 'idle', isStateChange: true, description: 'BRT-100 valve is closed')
-            }
-            else {
-                sendEvent(name: 'thermostatOperatingState', value: 'heating', isStateChange: true, description: 'BRT-100 valve is open %{valueScaled} %')
-            }
-            break
-            /*
-        case "workingState" :      // BRT-100   replaced with thermostatOperatingState
-            sendEvent(eventMap)
-            logInfo "${descText}"
-            if (valueScaled == "closed") {  // the valve is closed
-                sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: "BRT-100 workingState is closed")
-            }
-            else {
-                sendEvent(name: "thermostatOperatingState", value: "heating", isStateChange: true, description: "BRT-100 workingState is open")
-            }
-            break
-            */
         case 'sensor' :    // Sensor mode selection
             sendEvent(eventMap)
             logInfo "${descText}"
@@ -487,54 +393,71 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
 }
 
 // Command to set external temperature using GitHub-compliant protocol
+// https://github.com/13717033460/zigbee-herdsman-converters/blob/4ac6b66c7dd37e7b90a7487f3aa796f491dd24af/src/lib/lumi.ts#L2534
 void setExternalTemperature(BigDecimal temperature) {
-    logDebug "setExternalTemperature(${temperature})"
+    logDebug "setExternalTemperature(${temperature}) - START"
     
     String currentSensorMode = device.currentValue('sensor')
+    logDebug "setExternalTemperature: current sensor mode = '${currentSensorMode}'"
     if (currentSensorMode != 'external') {
         logWarn "setExternalTemperature: sensor mode is '${currentSensorMode}', must be 'external' to set external temperature"
-        return
+        //return
     }
     
     if (temperature < -100 || temperature > 100) {
         logWarn "setExternalTemperature: temperature ${temperature} is out of range (-100 to 100°C)"
-        return
+        //return
     }
     
     List<String> cmds = []
     
     // Fixed fictive sensor IEEE address from GitHub implementation
     byte[] fictiveSensor = hubitat.helper.HexUtils.hexStringToByteArray("00158d00019d1b98")
+    logDebug "setExternalTemperature: fictiveSensor = ${fictiveSensor.collect { String.format('%02X', it & 0xFF) }.join('')}"
     
     // Build temperature buffer using writeFloatBE like GitHub implementation
     byte[] temperatureBuf = new byte[4]
-    Integer tempValue = Math.round(temperature * 100) as Integer
+    Float tempValue = Math.round(temperature * 100) as Float
+    logDebug "setExternalTemperature: tempValue (Float) = ${tempValue}"
     
-    // Write as big-endian float representation (GitHub uses writeFloatBE)
-    temperatureBuf[0] = (byte)((tempValue >> 24) & 0xFF)
-    temperatureBuf[1] = (byte)((tempValue >> 16) & 0xFF)
-    temperatureBuf[2] = (byte)((tempValue >> 8) & 0xFF)
-    temperatureBuf[3] = (byte)(tempValue & 0xFF)
+    // Convert to IEEE 754 32-bit float and write as big-endian (GitHub uses writeFloatBE)
+    int floatBits = Float.floatToIntBits(tempValue)
+    logDebug "setExternalTemperature: IEEE 754 floatBits = 0x${String.format('%08X', floatBits)} (${floatBits})"
+    temperatureBuf[0] = (byte)((floatBits >> 24) & 0xFF)
+    temperatureBuf[1] = (byte)((floatBits >> 16) & 0xFF)
+    temperatureBuf[2] = (byte)((floatBits >> 8) & 0xFF)
+    temperatureBuf[3] = (byte)(floatBits & 0xFF)
+    logDebug "setExternalTemperature: temperatureBuf bytes = ${temperatureBuf.collect { String.format('%02X', it & 0xFF) }.join('')}"
     
     // Build params array exactly like GitHub: [...fictiveSensor, 0x00, 0x01, 0x00, 0x55, ...temperatureBuf]
     List<Integer> params = []
     params.addAll(fictiveSensor.collect { it & 0xFF })
+    logDebug "setExternalTemperature: params after fictiveSensor = ${params.collect { String.format('%02X', it) }.join('')}"
     params.addAll([0x00, 0x01, 0x00, 0x55])
+    logDebug "setExternalTemperature: params after temp identifier = ${params.collect { String.format('%02X', it) }.join('')}"
     params.addAll(temperatureBuf.collect { it & 0xFF })
+    logDebug "setExternalTemperature: final params (${params.size()} bytes) = ${params.collect { String.format('%02X', it) }.join('')}"
     
     // Build complete message using GitHub's lumiHeader function
     List<Integer> data = buildLumiHeader(0x12, params.size(), 0x05)
+    logDebug "setExternalTemperature: lumiHeader = ${data.collect { String.format('%02X', it) }.join('')}"
     data.addAll(params)
+    logDebug "setExternalTemperature: complete data (${data.size()} bytes) = ${data.collect { String.format('%02X', it) }.join('')}"
     
     String hexString = data.collect { String.format('%02X', it) }.join('')
+    logDebug "setExternalTemperature: final hexString length = ${hexString.length()} chars"
     
-    cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString}} {0x115F}"]
+    //String command = "he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString}} {0x115F}"
+    String command = zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, 0x41, hexString, [mfgCode: 0x115F])
+    cmds += [command]
+    logDebug "setExternalTemperature: Zigbee command = ${command}"
     
     logDebug "setExternalTemperature: sending GitHub-compliant command: ${hexString}"
     sendZigbeeCommands(cmds)
     
     // Update the state
-    sendEvent(name: 'external_temperature', value: temperature, unit: '°C', descriptionText: "External temperature set to ${temperature}°C", type: 'digital')
+    //sendEvent(name: 'external_temperature', value: temperature, unit: '°C', descriptionText: "External temperature set to ${temperature}°C", type: 'digital')
+    logDebug "setExternalTemperature(${temperature}) - COMPLETED"
 }
 
 // Command to set external humidity using GitHub-compliant protocol
@@ -559,13 +482,14 @@ void setExternalHumidity(BigDecimal humidity) {
     
     // Build humidity buffer using writeFloatBE like GitHub implementation
     byte[] humidityBuf = new byte[4]
-    Integer humiValue = Math.round(humidity * 100) as Integer
+    Float humiValue = humidity as Float
     
-    // Write as big-endian float representation (GitHub uses writeFloatBE)
-    humidityBuf[0] = (byte)((humiValue >> 24) & 0xFF)
-    humidityBuf[1] = (byte)((humiValue >> 16) & 0xFF)
-    humidityBuf[2] = (byte)((humiValue >> 8) & 0xFF)
-    humidityBuf[3] = (byte)(humiValue & 0xFF)
+    // Convert to IEEE 754 32-bit float and write as big-endian (GitHub uses writeFloatBE)
+    int floatBits = Float.floatToIntBits(humiValue)
+    humidityBuf[0] = (byte)((floatBits >> 24) & 0xFF)
+    humidityBuf[1] = (byte)((floatBits >> 16) & 0xFF)
+    humidityBuf[2] = (byte)((floatBits >> 8) & 0xFF)
+    humidityBuf[3] = (byte)(floatBits & 0xFF)
     
     // Build params array exactly like GitHub: [...fictiveSensor, 0x00, 0x02, 0x00, 0x55, ...humidityBuf]
     List<Integer> params = []
@@ -589,13 +513,35 @@ void setExternalHumidity(BigDecimal humidity) {
 }
 
 // Build Lumi header based on GitHub implementation
-private List<Integer> buildLumiHeader(Integer counter, Integer length, Integer action) {
-    List<Integer> header = [0xaa, 0x71, length + 3, 0x44, counter]
+// https://github.com/13717033460/zigbee-herdsman-converters/blob/4ac6b66c7dd37e7b90a7487f3aa796f491dd24af/src/lib/lumi.ts#L2403
+private List<Integer> buildLumiHeader(Integer counter, Integer paramsLength, Integer action) {
+    // const lumiHeader = (counter: number, length: number, action: number) => {
+    //     const header = [0xaa, 0x71, length + 3, 0x44, counter];
+    //     const integrity = 512 - header.reduce((sum, elem) => sum + elem, 0);
+    //     return [...header, integrity, action, 0x41, length];
+    // };
+    
+    List<Integer> header = [0xaa, 0x71, paramsLength + 3, 0x44, counter]
     Integer integrity = 512 - header.sum()
     List<Integer> result = []
     result.addAll(header)
-    result.addAll([integrity, action, 0x41, length])
+    result.addAll([integrity, action, 0x41, paramsLength])
     return result
+}
+
+ArrayList zigbeeWriteLongAttribute(Integer cluster, Integer attributeId, Integer dataType, String value, Map additionalParams = [:], int delay = 2000) {
+    String mfgCode = ""
+    if (additionalParams.containsKey("mfgCode")) {
+        Integer code = additionalParams.get("mfgCode") as Integer
+        mfgCode = " {${HexUtils.integerToHexString(code, 2)}}"
+    }
+    String wattrArgs = "0x${device.deviceNetworkId} 0x01 0x${HexUtils.integerToHexString(cluster, 2)} " + 
+                       "0x${HexUtils.integerToHexString(attributeId, 2)} " + 
+                       "0x${HexUtils.integerToHexString(dataType, 1)} " + 
+                       "{${value}}" + 
+                       "$mfgCode"
+    ArrayList cmdList = ["he wattr $wattrArgs", "delay $delay"]
+    return cmdList
 }
 
 // Command to set sensor mode (internal/external) using GitHub implementation
@@ -653,14 +599,16 @@ void setSensorMode(String mode) {
         String hexString1 = val1.collect { String.format('%02X', it) }.join('')
         String hexString2 = val2.collect { String.format('%02X', it) }.join('')
         
-        cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString1}} {0x115F}"]
-        cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString2}} {0x115F}"]
+        //cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString1}} {0x115F}"]
+        //cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString2}} {0x115F}"]
+        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, 0x41, hexString1, [mfgCode: 0x115F])
+        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, 0x41, hexString2, [mfgCode: 0x115F])
         
         logDebug "setSensorMode: sending external mode setup commands"
         sendZigbeeCommands(cmds)
         
         // Read sensor mode after setup
-       // runInMillis(3000, 'readSensorModeAfterSetup')
+       //runInMillis(3000, 'readSensorModeAfterSetup')
         
     } else {
         // Internal mode - GitHub implementation for internal mode
@@ -705,8 +653,8 @@ void setSensorMode(String mode) {
         String hexString1 = val1.collect { String.format('%02X', it) }.join('')
         String hexString2 = val2.collect { String.format('%02X', it) }.join('')
         
-        cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString1}} {0x115F}"]
-        cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString2}} {0x115F}"]
+        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, 0x41, hexString1, [mfgCode: 0x115F])
+        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, 0x41, hexString2, [mfgCode: 0x115F])
         
         logDebug "setSensorMode: sending internal mode setup commands"
         sendZigbeeCommands(cmds)
