@@ -62,6 +62,7 @@ The Aqara Climate Sensor W100 Zigbee driver is a work in progress. The basic fun
 
 **Button Interface:**
 • `numberOfButtons`: Button count (3 buttons available)  
+• `supportedButtonValues`: JSON array of supported button actions  
 • `pushed`: Last pushed button number  
 • `held`: Last held button number  
 • `doubleTapped`: Last double-tapped button number  
@@ -99,6 +100,7 @@ These additional attributes provide specialized functionality and can be configu
 • `ping()` - Test network connectivity and measure round-trip time  
 
 **Button Commands:**
+• `push()` - Momentary push (simulates center button press)  
 • `push(buttonNumber)` - Simulate a button push event (button number 1-3)  
 • `hold(buttonNumber)` - Simulate a button hold event (button number 1-3)  
 • `doubleTap(buttonNumber)` - Simulate a button double-tap event (button number 1-3)  
@@ -185,7 +187,7 @@ These additional attributes provide specialized functionality and can be configu
 The driver provides direct access to all Aqara proprietary cluster (0xFCC0) attributes, allowing fine-grained control over device behavior including reporting modes, thresholds, and sampling rates.
 
 **Button Capabilities:**
-Full support for all three physical buttons with push, hold, double-tap, and release actions. Perfect for scene control and automation triggers.
+Full support for all three physical buttons with push, hold, double-tap, and release actions using the integrated buttonLib library. The driver provides comprehensive button capabilities including PushableButton, HoldableButton, DoubleTapableButton, ReleasableButton, and Momentary capabilities. Perfect for scene control and automation triggers with both physical button presses and programmatic button simulation.
 
 ~~**External Sensor Support:**
 The W100 can work with external temperature and humidity sensors, with the driver automatically detecting and reporting readings from both internal and external sources.~~ (NOT working yet!)

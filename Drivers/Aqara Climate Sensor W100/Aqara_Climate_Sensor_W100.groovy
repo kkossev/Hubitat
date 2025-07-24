@@ -22,7 +22,7 @@
  */
 
 static String version() { '1.0.0' }
-static String timeStamp() { '2025/07/24 11:14 PM' }
+static String timeStamp() { '2025/07/24 11:45 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -38,6 +38,7 @@ import java.math.RoundingMode
 #include kkossev.batteryLib
 #include kkossev.temperatureLib
 #include kkossev.humidityLib
+#include kkossev.buttonLib
 #include kkossev.xiaomiLib
 #include kkossev.deviceProfileLib
 //#include kkossev.thermostatLib
@@ -76,6 +77,7 @@ metadata {
         capability 'DoubleTapableButton'
         
         attribute 'numberOfButtons', 'number'
+        attribute 'supportedButtonValues', 'JSON_OBJECT'
         attribute 'pushed', 'number'
         attribute 'held', 'number'
         attribute 'released', 'number'
@@ -277,7 +279,25 @@ void customParseXiaomiClusterTags(final Map<Integer, Object> tags) {
 // Initialize button functionality
 void initializeButtons() {
     logDebug "initializeButtons: setting up 3 buttons (plus, center, minus)"
-    sendEvent(name: 'numberOfButtons', value: 3, descriptionText: 'Number of buttons set to 3', type: 'digital')
+    sendNumberOfButtonsEvent(3)
+    sendSupportedButtonValuesEvent(['pushed', 'held', 'doubleTapped', 'released'])
+}
+
+// Custom push implementation for buttonLib Momentary capability
+void customPush() {
+    logDebug "customPush: momentary push for W100"
+    // For W100, we can simulate pushing the center button (button 2)
+    sendButtonEvent(2, 'pushed', isDigital = true)
+}
+
+// Custom push implementation for buttonLib PushableButton capability
+void customPush(Integer buttonNumber) {
+    logDebug "customPush: simulating push for button ${buttonNumber}"
+    if (buttonNumber >= 1 && buttonNumber <= 3) {
+        sendButtonEvent(buttonNumber, 'pushed', isDigital = true)
+    } else {
+        logWarn "customPush: invalid button number ${buttonNumber}, valid range is 1-3"
+    }
 }
 
 // Button parsing for W100 - based on GitHub zigbee2mqtt implementation
@@ -304,15 +324,8 @@ void parseButtonAction(final Map descMap) {
         if (action != 'unknown') {
             logInfo "Button ${buttonName} (${endpoint}) ${action}"
             
-            Map buttonEvent = [
-                name: action,
-                value: endpoint,
-                descriptionText: "Button ${buttonName} (${endpoint}) ${action}",
-                isStateChange: true,
-                type: 'physical'
-            ]
-            
-            sendEvent(buttonEvent)
+            // Use buttonLib's sendButtonEvent function
+            sendButtonEvent(endpoint, action, isDigital = false)
         } else {
             logWarn "parseButtonAction: unknown action value ${actionValue} for button ${buttonName}"
         }

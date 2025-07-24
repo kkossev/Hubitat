@@ -22,7 +22,7 @@
  */
 
 static String version() { '1.0.0' }
-static String timeStamp() { '2025/07/24 9:03 PM' }
+static String timeStamp() { '2025/07/24 11:14 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -40,6 +40,7 @@ import java.math.RoundingMode
 
 
 
+
 //#include kkossev.thermostatLib
 
 deviceType = 'Sensor' // Aqara Climate Sensor W100 is not a Thermostat, but a Temperature and Humidity Sensor
@@ -48,7 +49,7 @@ deviceType = 'Sensor' // Aqara Climate Sensor W100 is not a Thermostat, but a Te
 metadata {
     definition(
         name: 'Aqara Climate Sensor W100',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20Climate%20Sensor%20W100/Aqara_Climate_Sensor_W100.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Drivers/Aqara%20Climate%20Sensor%20W100/Aqara_Climate_Sensor_W100_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
         attribute 'displayOff', 'enum', ['disabled', 'enabled']   // 0xFCC0:0x0173
@@ -76,6 +77,7 @@ metadata {
         capability 'DoubleTapableButton'
         
         attribute 'numberOfButtons', 'number'
+        attribute 'supportedButtonValues', 'JSON_OBJECT'
         attribute 'pushed', 'number'
         attribute 'held', 'number'
         attribute 'released', 'number'
@@ -277,7 +279,25 @@ void customParseXiaomiClusterTags(final Map<Integer, Object> tags) {
 // Initialize button functionality
 void initializeButtons() {
     logDebug "initializeButtons: setting up 3 buttons (plus, center, minus)"
-    sendEvent(name: 'numberOfButtons', value: 3, descriptionText: 'Number of buttons set to 3', type: 'digital')
+    sendNumberOfButtonsEvent(3)
+    sendSupportedButtonValuesEvent(['pushed', 'held', 'doubleTapped', 'released'])
+}
+
+// Custom push implementation for buttonLib Momentary capability
+void customPush() {
+    logDebug "customPush: momentary push for W100"
+    // For W100, we can simulate pushing the center button (button 2)
+    sendButtonEvent(2, 'pushed', isDigital = true)
+}
+
+// Custom push implementation for buttonLib PushableButton capability
+void customPush(Integer buttonNumber) {
+    logDebug "customPush: simulating push for button ${buttonNumber}"
+    if (buttonNumber >= 1 && buttonNumber <= 3) {
+        sendButtonEvent(buttonNumber, 'pushed', isDigital = true)
+    } else {
+        logWarn "customPush: invalid button number ${buttonNumber}, valid range is 1-3"
+    }
 }
 
 // Button parsing for W100 - based on GitHub zigbee2mqtt implementation
@@ -304,15 +324,8 @@ void parseButtonAction(final Map descMap) {
         if (action != 'unknown') {
             logInfo "Button ${buttonName} (${endpoint}) ${action}"
             
-            Map buttonEvent = [
-                name: action,
-                value: endpoint,
-                descriptionText: "Button ${buttonName} (${endpoint}) ${action}",
-                isStateChange: true,
-                type: 'physical'
-            ]
-            
-            sendEvent(buttonEvent)
+            // Use buttonLib's sendButtonEvent function
+            sendButtonEvent(endpoint, action, isDigital = false)
         } else {
             logWarn "parseButtonAction: unknown action value ${actionValue} for button ${buttonName}"
         }
@@ -2876,6 +2889,111 @@ List<String> humidityRefresh() { // library marker kkossev.humidityLib, line 92
 } // library marker kkossev.humidityLib, line 96
 
 // ~~~~~ end include (173) kkossev.humidityLib ~~~~~
+
+// ~~~~~ start include (167) kkossev.buttonLib ~~~~~
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */ // library marker kkossev.buttonLib, line 1
+library( // library marker kkossev.buttonLib, line 2
+    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Button Library', name: 'buttonLib', namespace: 'kkossev', // library marker kkossev.buttonLib, line 3
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/buttonLib.groovy', documentationLink: '', // library marker kkossev.buttonLib, line 4
+    version: '3.2.0' // library marker kkossev.buttonLib, line 5
+) // library marker kkossev.buttonLib, line 6
+/* // library marker kkossev.buttonLib, line 7
+ *  Zigbee Button Library // library marker kkossev.buttonLib, line 8
+ * // library marker kkossev.buttonLib, line 9
+ *  Licensed Virtual the Apache License, Version 2.0 (the "License"); you may not use this file except // library marker kkossev.buttonLib, line 10
+ *  in compliance with the License. You may obtain a copy of the License at: // library marker kkossev.buttonLib, line 11
+ * // library marker kkossev.buttonLib, line 12
+ *      http://www.apache.org/licenses/LICENSE-2.0 // library marker kkossev.buttonLib, line 13
+ * // library marker kkossev.buttonLib, line 14
+ *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed // library marker kkossev.buttonLib, line 15
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License // library marker kkossev.buttonLib, line 16
+ *  for the specific language governing permissions and limitations under the License. // library marker kkossev.buttonLib, line 17
+ * // library marker kkossev.buttonLib, line 18
+ * ver. 3.0.0  2024-04-06 kkossev  - added energyLib.groovy // library marker kkossev.buttonLib, line 19
+ * ver. 3.2.0  2024-05-24 kkossev  - commonLib 3.2.0 allignment; added capability 'PushableButton' and 'Momentary' // library marker kkossev.buttonLib, line 20
+ * // library marker kkossev.buttonLib, line 21
+ *                                   TODO: // library marker kkossev.buttonLib, line 22
+*/ // library marker kkossev.buttonLib, line 23
+
+static String buttonLibVersion()   { '3.2.0' } // library marker kkossev.buttonLib, line 25
+static String buttonLibStamp() { '2024/05/24 12:48 PM' } // library marker kkossev.buttonLib, line 26
+
+metadata { // library marker kkossev.buttonLib, line 28
+    capability 'PushableButton' // library marker kkossev.buttonLib, line 29
+    capability 'Momentary' // library marker kkossev.buttonLib, line 30
+    // the other capabilities must be declared in the custom driver, if applicable for the particular device! // library marker kkossev.buttonLib, line 31
+    // the custom driver must allso call sendNumberOfButtonsEvent() and sendSupportedButtonValuesEvent()! // library marker kkossev.buttonLib, line 32
+    // capability 'DoubleTapableButton' // library marker kkossev.buttonLib, line 33
+    // capability 'HoldableButton' // library marker kkossev.buttonLib, line 34
+    // capability 'ReleasableButton' // library marker kkossev.buttonLib, line 35
+
+    // no attributes // library marker kkossev.buttonLib, line 37
+    // no commands // library marker kkossev.buttonLib, line 38
+    preferences { // library marker kkossev.buttonLib, line 39
+        // no prefrences // library marker kkossev.buttonLib, line 40
+    } // library marker kkossev.buttonLib, line 41
+} // library marker kkossev.buttonLib, line 42
+
+void sendButtonEvent(int buttonNumber, String buttonState, boolean isDigital=false) { // library marker kkossev.buttonLib, line 44
+    if (buttonState != 'unknown' && buttonNumber != 0) { // library marker kkossev.buttonLib, line 45
+        String descriptionText = "button $buttonNumber was $buttonState" // library marker kkossev.buttonLib, line 46
+        if (isDigital) { descriptionText += ' [digital]' } // library marker kkossev.buttonLib, line 47
+        Map event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: isDigital == true ? 'digital' : 'physical'] // library marker kkossev.buttonLib, line 48
+        logInfo "$descriptionText" // library marker kkossev.buttonLib, line 49
+        sendEvent(event) // library marker kkossev.buttonLib, line 50
+    } // library marker kkossev.buttonLib, line 51
+    else { // library marker kkossev.buttonLib, line 52
+        logWarn "sendButtonEvent: UNHANDLED event for button ${buttonNumber}, buttonState=${buttonState}" // library marker kkossev.buttonLib, line 53
+    } // library marker kkossev.buttonLib, line 54
+} // library marker kkossev.buttonLib, line 55
+
+void push() {                // Momentary capability // library marker kkossev.buttonLib, line 57
+    logDebug 'push momentary' // library marker kkossev.buttonLib, line 58
+    if (this.respondsTo('customPush')) { customPush(); return } // library marker kkossev.buttonLib, line 59
+    logWarn "push() not implemented for ${(DEVICE_TYPE)}" // library marker kkossev.buttonLib, line 60
+} // library marker kkossev.buttonLib, line 61
+
+/* // library marker kkossev.buttonLib, line 63
+void push(BigDecimal buttonNumber) {    //pushableButton capability // library marker kkossev.buttonLib, line 64
+    logDebug "push button $buttonNumber" // library marker kkossev.buttonLib, line 65
+    if (this.respondsTo('customPush')) { customPush(buttonNumber); return } // library marker kkossev.buttonLib, line 66
+    sendButtonEvent(buttonNumber as int, 'pushed', isDigital = true) // library marker kkossev.buttonLib, line 67
+} // library marker kkossev.buttonLib, line 68
+*/ // library marker kkossev.buttonLib, line 69
+
+void push(Object bn) {    //pushableButton capability // library marker kkossev.buttonLib, line 71
+    Integer buttonNumber = bn.toInteger() // library marker kkossev.buttonLib, line 72
+    logDebug "push button $buttonNumber" // library marker kkossev.buttonLib, line 73
+    if (this.respondsTo('customPush')) { customPush(buttonNumber); return } // library marker kkossev.buttonLib, line 74
+    sendButtonEvent(buttonNumber as int, 'pushed', isDigital = true) // library marker kkossev.buttonLib, line 75
+} // library marker kkossev.buttonLib, line 76
+
+void doubleTap(Object bn) { // library marker kkossev.buttonLib, line 78
+    Integer buttonNumber = bn.toInteger() // library marker kkossev.buttonLib, line 79
+    sendButtonEvent(buttonNumber as int, 'doubleTapped', isDigital = true) // library marker kkossev.buttonLib, line 80
+} // library marker kkossev.buttonLib, line 81
+
+void hold(Object bn) { // library marker kkossev.buttonLib, line 83
+    Integer buttonNumber = bn.toInteger() // library marker kkossev.buttonLib, line 84
+    sendButtonEvent(buttonNumber as int, 'held', isDigital = true) // library marker kkossev.buttonLib, line 85
+} // library marker kkossev.buttonLib, line 86
+
+void release(Object bn) { // library marker kkossev.buttonLib, line 88
+    Integer buttonNumber = bn.toInteger() // library marker kkossev.buttonLib, line 89
+    sendButtonEvent(buttonNumber as int, 'released', isDigital = true) // library marker kkossev.buttonLib, line 90
+} // library marker kkossev.buttonLib, line 91
+
+// must be called from the custom driver! // library marker kkossev.buttonLib, line 93
+void sendNumberOfButtonsEvent(int numberOfButtons) { // library marker kkossev.buttonLib, line 94
+    sendEvent(name: 'numberOfButtons', value: numberOfButtons, isStateChange: true, type: 'digital') // library marker kkossev.buttonLib, line 95
+} // library marker kkossev.buttonLib, line 96
+// must be called from the custom driver! // library marker kkossev.buttonLib, line 97
+void sendSupportedButtonValuesEvent(List<String> supportedValues) { // library marker kkossev.buttonLib, line 98
+    sendEvent(name: 'supportedButtonValues', value: JsonOutput.toJson(supportedValues), isStateChange: true, type: 'digital') // library marker kkossev.buttonLib, line 99
+} // library marker kkossev.buttonLib, line 100
+
+
+// ~~~~~ end include (167) kkossev.buttonLib ~~~~~
 
 // ~~~~~ start include (165) kkossev.xiaomiLib ~~~~~
 /* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitReturnStatement, LineLength, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter, UnnecessaryPublicModifier */ // library marker kkossev.xiaomiLib, line 1
