@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Humidity Library', name: 'humidityLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/humidityLib.groovy', documentationLink: '',
-    version: '3.2.2'
+    version: '3.2.3'
 )
 /*
  *  Zigbee Humidity Library
@@ -12,12 +12,13 @@ library(
  * ver. 3.0.0  2024-04-06 kkossev  - added humidityLib.groovy
  * ver. 3.2.0  2024-05-29 kkossev  - commonLib 3.2.0 allignment; added humidityRefresh()
  * ver. 3.2.2  2024-07-02 kkossev  - fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
+ * ver. 3.2.3  2024-07-24 kkossev  - added humidity delta filtering to prevent duplicate events for unchanged values
  *
  *                                   TODO: add humidityOffset
 */
 
-static String humidityLibVersion()   { '3.2.2' }
-static String humidityLibStamp() { '2024/07/02 11:17 PM' }
+static String humidityLibVersion()   { '3.2.3' }
+static String humidityLibStamp() { '2024/07/24 7:45 PM' }
 
 metadata {
     capability 'RelativeHumidityMeasurement'
@@ -47,7 +48,14 @@ void handleHumidityEvent(BigDecimal humidityPar, Boolean isDigital=false) {
         logWarn "ignored invalid humidity ${humidity} (${humidityPar})"
         return
     }
-    eventMap.value = humidity.setScale(0, BigDecimal.ROUND_HALF_UP)
+    BigDecimal humidityRounded = humidity.setScale(0, BigDecimal.ROUND_HALF_UP)
+    BigDecimal lastHumi = device.currentValue('humidity') ?: 0
+    logTrace "lastHumi=${lastHumi} humidityRounded=${humidityRounded} delta=${Math.abs(lastHumi - humidityRounded)}"
+    if (Math.abs(lastHumi - humidityRounded) < 1.0) {
+        logDebug "skipped humidity ${humidityRounded}, less than delta 1.0 (lastHumi=${lastHumi})"
+        return
+    }
+    eventMap.value = humidityRounded
     eventMap.name = 'humidity'
     eventMap.unit = '% RH'
     eventMap.type = isDigital == true ? 'digital' : 'physical'

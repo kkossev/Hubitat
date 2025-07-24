@@ -18,7 +18,7 @@
  */
 
 static String version() { '1.0.0' }
-static String timeStamp() { '2025/07/23 11:00 PM' }
+static String timeStamp() { '2025/07/24 8:22 PM' }
 
 @Field static final Boolean _DEBUG = true
 
@@ -31,7 +31,6 @@ import groovy.json.JsonOutput
 import java.math.RoundingMode
 
 #include kkossev.commonLib
-//#include kkossev.onOffLib
 #include kkossev.batteryLib
 #include kkossev.temperatureLib
 #include kkossev.humidityLib
@@ -39,7 +38,7 @@ import java.math.RoundingMode
 #include kkossev.deviceProfileLib
 //#include kkossev.thermostatLib
 
-deviceType = 'Sensor' // Aqara Climate Sensor W100 is a Thermostat, but it is also a Temperature and Humidity Sensor
+deviceType = 'Sensor' // Aqara Climate Sensor W100 is not a Thermostat, but a Temperature and Humidity Sensor
 @Field static final String DEVICE_TYPE = 'Sensor'
 
 metadata {
@@ -48,22 +47,23 @@ metadata {
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20Climate%20Sensor%20W100/Aqara_Climate_Sensor_W100.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
-        attribute 'display_off', 'enum', ['disabled', 'enabled']   // 0xFCC0:0x0173
-        attribute 'high_temperature', 'decimal'                    // 0xFCC0:0x0167
-        attribute 'low_temperature', 'decimal'                     // 0xFCC0:0x0166
-        attribute 'high_humidity', 'decimal'                       // 0xFCC0:0x0169
-        attribute 'low_humidity', 'decimal'                        // 0xFCC0:0x016A
+        attribute 'displayOff', 'enum', ['disabled', 'enabled']   // 0xFCC0:0x0173
+        attribute 'highTemperature', 'decimal'                    // 0xFCC0:0x0167
+        attribute 'lowTemperature', 'decimal'                     // 0xFCC0:0x0166
+        attribute 'highHumidity', 'decimal'                       // 0xFCC0:0x0169
+        attribute 'lowHumidity', 'decimal'                        // 0xFCC0:0x016A
         attribute 'sampling', 'enum', ['low', 'standard', 'high', 'custom'] // 0xFCC0:0x0170
-        attribute 'period', 'decimal'                              // 0xFCC0:0x016D
-        attribute 'temp_report_mode', 'enum', ['no', 'threshold', 'period', 'threshold_period'] // 0xFCC0:0x0165
-        attribute 'temp_period', 'decimal'                         // 0xFCC0:0x0163
-        attribute 'temp_threshold', 'decimal'                      // 0xFCC0:0x0164
-        attribute 'humi_report_mode', 'enum', ['no', 'threshold', 'period', 'threshold_period'] // 0xFCC0:0x016C
-        attribute 'humi_period', 'decimal'                         // 0xFCC0:0x016A
-        attribute 'humi_threshold', 'decimal'                      // 0xFCC0:0x016B
+        attribute 'period', 'decimal'                             // 0xFCC0:0x016D
+        attribute 'tempReportMode', 'enum', ['no', 'threshold', 'period', 'threshold_period'] // 0xFCC0:0x0165
+        attribute 'tempPeriod', 'decimal'                         // 0xFCC0:0x0163
+        attribute 'tempThreshold', 'decimal'                      // 0xFCC0:0x0164
+        attribute 'humiReportMode', 'enum', ['no', 'threshold', 'period', 'threshold_period'] // 0xFCC0:0x016C
+        attribute 'humiPeriod', 'decimal'                         // 0xFCC0:0x016A
+        attribute 'humiThreshold', 'decimal'                      // 0xFCC0:0x016B
         attribute 'sensor', 'enum', ['internal', 'external']       // 0xFCC0:0x0172
-        attribute 'external_temperature', 'decimal'                // Virtual attribute for external temperature
-        attribute 'external_humidity', 'decimal'                   // Virtual attribute for external humidity
+        attribute 'externalTemperature', 'decimal'                // Virtual attribute for external temperature
+        attribute 'externalHumidity', 'decimal'                   // Virtual attribute for external humidity
+        attribute 'powerOutageCount', 'number'                     // Power outage counter from 0x00F7 reports
         
         // Button capabilities
         capability 'PushableButton'
@@ -110,8 +110,8 @@ metadata {
             description   : 'Aqara Climate Sensor W100',
             device        : [manufacturers: ['Aqara'], type: 'Sensor', powerSource: 'battery', isSleepy:false],
             //capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode': true],
-            capabilities  : ['ReportingConfiguration': false, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'Battery': true, 'Configuration': true, 'Refresh': true, 'HealthCheck': true],
-            preferences   : ['display_off':'0xFCC0:0x0173', 'high_temperature':'0xFCC0:0x0167', 'low_temperature':'0xFCC0:0x0166', 'high_humidity':'0xFCC0:0x016E', 'low_humidity':'0xFCC0:0x016D', 'sampling':'0xFCC0:0x0170', 'period':'0xFCC0:0x0162', 'temp_report_mode':'0xFCC0:0x0165', 'temp_period':'0xFCC0:0x0163', 'temp_threshold':'0xFCC0:0x0164', 'humi_report_mode':'0xFCC0:0x016C', 'humi_period':'0xFCC0:0x016A', 'humi_threshold':'0xFCC0:0x016B', 'sensor':'0xFCC0:0x0172'],
+            capabilities  : ['ReportingConfiguration': false, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'Battery': true, 'BatteryVoltage': true, 'Configuration': true, 'Refresh': true, 'HealthCheck': true],
+            preferences   : ['displayOff':'0xFCC0:0x0173', 'highTemperature':'0xFCC0:0x0167', 'lowTemperature':'0xFCC0:0x0166', 'highHumidity':'0xFCC0:0x016E', 'lowHumidity':'0xFCC0:0x016D', 'sampling':'0xFCC0:0x0170', 'period':'0xFCC0:0x0162', 'tempReportMode':'0xFCC0:0x0165', 'tempPeriod':'0xFCC0:0x0163', 'tempThreshold':'0xFCC0:0x0164', 'humiReportMode':'0xFCC0:0x016C', 'humiPeriod':'0xFCC0:0x016A', 'humiThreshold':'0xFCC0:0x016B', 'sensor':'0xFCC0:0x0172'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0012,0405,0402,00001,0003,0x0000,FD20', outClusters:'0019', model:'lumi.sensor_ht.agl001', manufacturer:'Aqara', deviceJoinName: 'Aqara Climate Sensor W100'],      //  "TH-S04D" - main endpoint
                 [profileId:'0104', endpointId:'02', inClusters:'0012', model:'lumi.sensor_ht.agl001', manufacturer:'Aqara', deviceJoinName: 'Aqara Climate Sensor W100'],      //  center button endpoint
@@ -121,19 +121,19 @@ metadata {
             commands      : ['sendSupportedThermostatModes':'sendSupportedThermostatModes', 'autoPollThermostat':'autoPollThermostat', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             tuyaDPs       : [:],
             attributes    : [
-                [at:'0xFCC0:0x0173',  name:'display_off',       ep:'0x01', type:'enum',    dt:'0x10', mfgCode:'0x115f',  rw: 'rw', min:0,     max:1,     step:1,   scale:1,    map:[0: 'disabled', 1: 'enabled'], unit:'',     title: '<b>Display Off</b>',      description:'Enables/disables auto display off'],
-                [at:'0xFCC0:0x0167',  name:'high_temperature',  ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:26.0,  max:60.0,  step:0.5, scale:100,  unit:'°C', title: '<b>High Temperature</b>', description:'High temperature alert'],
-                [at:'0xFCC0:0x0166',  name:'low_temperature',   ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:-20.0, max:20.0,  step:0.5, scale:100,  unit:'°C', title: '<b>Low Temperature</b>', description:'Low temperature alert'],
-                [at:'0xFCC0:0x016E',  name:'high_humidity',     ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:65.0,  max:100.0, step:1.0, scale:100,  unit:'%',   title: '<b>High Humidity</b>',   description:'High humidity alert'],
-                [at:'0xFCC0:0x016D',  name:'low_humidity',      ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:0.0,   max:30.0,  step:1.0, scale:100,  unit:'%',   title: '<b>Low Humidity</b>',    description:'Low humidity alert'],
+                [at:'0xFCC0:0x0173',  name:'displayOff',       ep:'0x01', type:'enum',    dt:'0x10', mfgCode:'0x115f',  rw: 'rw', min:0,     max:1,     step:1,   scale:1,    map:[0: 'disabled', 1: 'enabled'], unit:'',     title: '<b>Display Off</b>',      description:'Enables/disables auto display off'],
+                [at:'0xFCC0:0x0167',  name:'highTemperature',  ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:26.0,  max:60.0,  step:0.5, scale:100,  unit:'°C', title: '<b>High Temperature</b>', description:'High temperature alert'],
+                [at:'0xFCC0:0x0166',  name:'lowTemperature',   ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:-20.0, max:20.0,  step:0.5, scale:100,  unit:'°C', title: '<b>Low Temperature</b>', description:'Low temperature alert'],
+                [at:'0xFCC0:0x016E',  name:'highHumidity',     ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:65.0,  max:100.0, step:1.0, scale:100,  unit:'%',   title: '<b>High Humidity</b>',   description:'High humidity alert'],
+                [at:'0xFCC0:0x016D',  name:'lowHumidity',      ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:0.0,   max:30.0,  step:1.0, scale:100,  unit:'%',   title: '<b>Low Humidity</b>',    description:'Low humidity alert'],
                 [at:'0xFCC0:0x0170',  name:'sampling',          ep:'0x01', type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:1,     max:4,     step:1,   scale:1,    map:[1: 'low', 2: 'standard', 3: 'high', 4: 'custom'], unit:'', title: '<b>Sampling</b>', description:'Temperature and Humidity sampling settings'],
                 [at:'0xFCC0:0x0162',  name:'period',            ep:'0x01', type:'decimal', dt:'0x23', mfgCode:'0x115f',  rw: 'rw', min:0.5,   max:600.0, step:0.5, scale:1000, unit:'sec', title: '<b>Sampling Period</b>', description:'Sampling period'], // result['period'] = (value / 1000).toFixed(1); - rw
-                [at:'0xFCC0:0x0165',  name:'temp_report_mode',  ep:'0x01', type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:0,     max:3,     step:1,   scale:1,    map:[0: 'no', 1: 'threshold', 2: 'period', 3: 'threshold_period'], unit:'', title: '<b>Temperature Report Mode</b>', description:'Temperature reporting mode'],
-                [at:'0xFCC0:0x0163',  name:'temp_period',       ep:'0x01', type:'decimal', dt:'0x23', mfgCode:'0x115f',  rw: 'rw', min:1.0,   max:10.0,  step:1.0, scale:1000, unit:'sec', title: '<b>Temperature Period</b>', description:'Temperature reporting period'],
-                [at:'0xFCC0:0x0164',  name:'temp_threshold',    ep:'0x01', type:'decimal', dt:'0x21', mfgCode:'0x115f',  rw: 'rw', min:0,     max:3,     step:0.1, scale:100,  unit:'°C', title: '<b>Temperature Threshold</b>', description:'Temperature reporting threshold'],
-                [at:'0xFCC0:0x016C',  name:'humi_report_mode',  ep:'0x01', type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:0,     max:3,     step:1,   scale:1,    map:[0: 'no', 1: 'threshold', 2: 'period', 3: 'threshold_period'], unit:'', title: '<b>Humidity Report Mode</b>', description:'Humidity reporting mode'],
-                [at:'0xFCC0:0x016A',  name:'humi_period',       ep:'0x01', type:'decimal', dt:'0x23', mfgCode:'0x115f',  rw: 'rw', min:1.0,   max:10.0,  step:1.0, scale:1000, unit:'sec', title: '<b>Humidity Period</b>', description:'Humidity reporting period'],
-                [at:'0xFCC0:0x016B',  name:'humi_threshold',    ep:'0x01', type:'decimal', dt:'0x21', mfgCode:'0x115f',  rw: 'rw', min:2.0,   max:10.0,  step:0.5, scale:100,  unit:'%', title: '<b>Humidity Threshold</b>', description:'Humidity reporting threshold'],
+                [at:'0xFCC0:0x0165',  name:'tempReportMode',  ep:'0x01', type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:0,     max:3,     step:1,   scale:1,    map:[0: 'no', 1: 'threshold', 2: 'period', 3: 'threshold_period'], unit:'', title: '<b>Temperature Report Mode</b>', description:'Temperature reporting mode'],
+                [at:'0xFCC0:0x0163',  name:'tempPeriod',       ep:'0x01', type:'decimal', dt:'0x23', mfgCode:'0x115f',  rw: 'rw', min:1.0,   max:10.0,  step:1.0, scale:1000, unit:'sec', title: '<b>Temperature Period</b>', description:'Temperature reporting period'],
+                [at:'0xFCC0:0x0164',  name:'tempThreshold',    ep:'0x01', type:'decimal', dt:'0x21', mfgCode:'0x115f',  rw: 'rw', min:0,     max:3,     step:0.1, scale:100,  unit:'°C', title: '<b>Temperature Threshold</b>', description:'Temperature reporting threshold'],
+                [at:'0xFCC0:0x016C',  name:'humiReportMode',  ep:'0x01', type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:0,     max:3,     step:1,   scale:1,    map:[0: 'no', 1: 'threshold', 2: 'period', 3: 'threshold_period'], unit:'', title: '<b>Humidity Report Mode</b>', description:'Humidity reporting mode'],
+                [at:'0xFCC0:0x016A',  name:'humiPeriod',       ep:'0x01', type:'decimal', dt:'0x23', mfgCode:'0x115f',  rw: 'rw', min:1.0,   max:10.0,  step:1.0, scale:1000, unit:'sec', title: '<b>Humidity Period</b>', description:'Humidity reporting period'],
+                [at:'0xFCC0:0x016B',  name:'humiThreshold',    ep:'0x01', type:'decimal', dt:'0x21', mfgCode:'0x115f',  rw: 'rw', min:2.0,   max:10.0,  step:0.5, scale:100,  unit:'%', title: '<b>Humidity Threshold</b>', description:'Humidity reporting threshold'],
                 [at:'0xFCC0:0x0172',  name:'sensor',            ep:'0x01', type:'enum',    dt:'0x23', mfgCode:'0x115f',  rw: 'ro', min:0,     max:255,   step:1,   scale:1,    map:[0: 'internal', 1: 'internal', 2: 'external', 3: 'external', 255: 'unknown'], unit:'', title: '<b>Sensor Mode</b>', description:'Select sensor mode: internal or external'],
             ],
             //supportedThermostatModes: ['off', 'auto', 'heat', 'away'/*, "emergency heat"*/],
@@ -146,7 +146,7 @@ metadata {
 // called from commonLib (Xiaomi cluster 0xFCC0 )
 //
 void customParseXiaomiFCC0Cluster(final Map descMap) {
-    logDebug "customParseXiaomiFCC0Cluster: zigbee received Thermostat 0xFCC0 attribute 0x${descMap.attrId} (raw value = ${descMap.value})"
+    logDebug "customParseXiaomiFCC0Cluster: zigbee received 0xFCC0 attribute 0x${descMap.attrId} (raw value = ${descMap.value})"
     if ((descMap.attrInt as Integer) == 0x00F7 ) {      // XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes
         final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value)
         customParseXiaomiClusterTags(tags)
@@ -171,9 +171,15 @@ void customParseXiaomiFCC0Cluster(final Map descMap) {
 //
 void customParseXiaomiClusterTags(final Map<Integer, Object> tags) {
     tags.each { final Integer tag, final Object value ->
+        log.trace "xiaomi decode tag: 0x${intToHexStr(tag, 1)} value=${value}"
         switch (tag) {
             case 0x01:    // battery voltage
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value / 1000}V (raw=${value})"
+                // Send battery voltage event using the battery library
+                sendBatteryVoltageEvent(value as Integer)
+                if ((settings.voltageToPercent ?: false) == true) {
+                    sendBatteryVoltageEvent(value as Integer, convertToPercent = true)
+                }
                 break
             case 0x03:
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device internal chip temperature is ${value}&deg; (ignore it!)"
@@ -201,32 +207,62 @@ void customParseXiaomiClusterTags(final Map<Integer, Object> tags) {
                 }
                 break
             case 0x0d:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} sensor mode/state is ${value}"
+                // May indicate sensor mode or operational state
                 break
             case 0x11:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} trigger count is ${value}"
+                // Button press or sensor trigger count
+                if (state.health == null) { state.health = [:] }
+                state.health['triggerCount'] = value
                 break
-            case 0x64:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value / 100} (raw ${value})" / Aqara TVOC
+            case 0x64:  // (100)
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value / 100}°C (raw ${value})"
+                // W100 main temperature sensor reading
+                //handleTemperatureEvent(value / 100.0)
                 break
-            case 0x65:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
+            case 0x65:  // (101)
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} humidity is ${value / 100}% (raw ${value})"
+                // W100 humidity sensor reading
+                //handleHumidityEvent(value / 100.0)
                 break
-            case 0x66:
-                logDebug "xiaomi decode E1 thermostat temperature tag: 0x${intToHexStr(tag, 1)}=${value}"
-                handleTemperatureEvent(value / 100.0)
+            case 0x66:  // (102)    TODO - check if this is an alternative battery percentage reading ?
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature (alternate) is ${value / 100}°C (raw ${value})"
+                // Alternative temperature reading - may be external sensor
+                if (device.currentValue('sensor') == 'external') {
+                    sendEvent(name: 'externalTemperature', value: value / 100.0, unit: '°C', 
+                             descriptionText: "External temperature: ${value / 100.0}°C", type: 'physical')
+                    logInfo "External temperature updated: ${value / 100.0}°C"
+                }
                 break
-            case 0x67:
-                logDebug "xiaomi decode E1 thermostat heatingSetpoint tag: 0x${intToHexStr(tag, 1)}=${value}"
+            case 0x67:  // (103)
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} humidity (alternate) is ${value / 100}% (raw ${value})"
+                // Alternative humidity reading - may be external sensor
+                if (device.currentValue('sensor') == 'external') {
+                    sendEvent(name: 'externalHumidity', value: value / 100.0, unit: '%', 
+                             descriptionText: "External humidity: ${value / 100.0}%", type: 'physical')
+                    logInfo "External humidity updated: ${value / 100.0}%"
+                }
                 break
-            case 0x68:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
+            case 0x68:  // (104)
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} power outage count is ${value}"
+                // Power outage counter - useful for device health monitoring
+                if (state.health == null) { state.health = [:] }
+                state.health['powerOutageCount'] = value
+                sendEvent(name: 'powerOutageCount', value: value, descriptionText: "Power outage count: ${value}", type: 'physical')
                 break
-            case 0x69:
-                logDebug "xiaomi decode E1 thermostat battery tag: 0x${intToHexStr(tag, 1)}=${value}"
+            case 0x69:  // (105)
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery percentage is ${value}% (raw ${value})"
+                // Battery percentage from device (if available)
+                if (value > 0 && value <= 100) {
+                    sendBatteryPercentageEvent(value as Integer)
+                }
                 break
-            case 0x6a:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
+            case 0x6a:  // (106)
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device uptime is ${value} (raw ${value})"
+                // Device uptime information
+                if (state.health == null) { state.health = [:] }
+                state.health['uptime'] = value
                 break
             default:
                 logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
@@ -397,15 +433,19 @@ List<String> customRefresh() {
     List<String> cmds = refreshFromDeviceProfileList()
     */
     List<String> cmds = []
+    
+    // Standard Zigbee clusters
     cmds += zigbee.readAttribute(0x0402, 0x0000, [destEndpoint: 0x01], 200)    // temperature
     cmds += zigbee.readAttribute(0x0405, 0x0000, [destEndpoint: 0x01], 200)    // humidity
-    cmds += zigbee.readAttribute(0xFCC0, 0x0173, [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // display_off
-    cmds += zigbee.readAttribute(0xFCC0, [0x0167, 0x0166, 0x016E, 0x016D], [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // high_temperature, low_temperature, high_humidity, low_humidity
+    
+    // Aqara proprietary cluster attributes - grouped reads
+    cmds += zigbee.readAttribute(0xFCC0, [0x0172, 0x0173], [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // sensor, displayOff
+    cmds += zigbee.readAttribute(0xFCC0, [0x0167, 0x0166], [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // highTemperature, lowTemperature
+    cmds += zigbee.readAttribute(0xFCC0, [0x016E, 0x016D], [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // highHumidity, lowHumidity
     cmds += zigbee.readAttribute(0xFCC0, [0x0170, 0x0162], [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // sampling, period
-    cmds += zigbee.readAttribute(0xFCC0, [0x0165, 0x0163, 0x0164], [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // temp_report_mode, temp_period, temp_threshold
-    cmds += zigbee.readAttribute(0xFCC0, [0x016C, 0x016A, 0x016B], [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // humi_report_mode, humi_period, humi_threshold
-    cmds += zigbee.readAttribute(0xFCC0, 0x0172, [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // sensor
-
+    cmds += zigbee.readAttribute(0xFCC0, [0x0165, 0x0163, 0x0164], [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // tempReportMode, tempPeriod, tempThreshold
+    cmds += zigbee.readAttribute(0xFCC0, [0x016C, 0x016A, 0x016B], [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // humiReportMode, humiPeriod, humiThreshold
+    cmds += zigbee.readAttribute(0xFCC0, 0x00F7, [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes
     logDebug "customRefresh: ${cmds} "
     return cmds
 }
@@ -440,7 +480,6 @@ void customInitializeVars(final boolean fullInit=false) {
     if (state.deviceProfile == null) {
         setDeviceNameAndProfile()               // in deviceProfileiLib.groovy
     }
-    thermostatInitializeVars(fullInit)
     if (fullInit == true) {
         resetPreferencesToDefaults()
     }
@@ -449,7 +488,6 @@ void customInitializeVars(final boolean fullInit=false) {
 // called from initializeVars() in the main code ...
 void customInitEvents(final boolean fullInit=false) {
     logDebug "customInitEvents(${fullInit})"
-    thermostatInitEvents(fullInit)
 }
 
 List<String> customAqaraBlackMagic() {
@@ -459,8 +497,6 @@ List<String> customAqaraBlackMagic() {
 }
 
 // called from processFoundItem  (processTuyaDPfromDeviceProfile and ) processClusterAttributeFromDeviceProfile in deviceProfileLib when a Zigbee message was found defined in the device profile map
-//
-// (works for BRT-100, Sonoff TRVZV)
 //
 /* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
 void customProcessDeviceProfileEvent(final Map descMap, final String name, final valueScaled, final String unitText, final String descText) {
@@ -607,7 +643,7 @@ void setExternalHumidity(BigDecimal humidity) {
     sendZigbeeCommands(cmds)
     
     // Update the state
-    sendEvent(name: 'external_humidity', value: humidity, unit: '%', descriptionText: "External humidity set to ${humidity}%", type: 'digital')
+    sendEvent(name: 'externalHumidity', value: humidity, unit: '%', descriptionText: "External humidity set to ${humidity}%", type: 'digital')
 }
 
 // Build Lumi header based on GitHub implementation
@@ -782,46 +818,13 @@ void readLocalTemperature() {
 }
 
 void testT(String par) {
-    /*
-    log.trace "testT(${par}) : DEVICE.preferences = ${DEVICE.preferences}"
-    log.trace "testT: ${settings}"
-    Map result
-    if (DEVICE != null && DEVICE.preferences != null && DEVICE.preferences != [:]) {
-        (DEVICE.preferences).each { key, value ->
-            log.trace "testT: ${key} = ${value}"
-            result = inputIt(key, debug = true)
-            logDebug "inputIt: ${result}"
-        }
-    }
-    */
+
+    logInfo "Test function called with parameter: ${par}"
+    String xx = "read attr - raw: 80E901FCC05AF700412903281E04210000052105000A213BE00C200A0D23250E00001320006429B80B6521110C662064672000, dni: 80E9, endpoint: 01, cluster: FCC0, size: 5A, attrId: 00F7, encoding: 41, command: 0A, value: 2903281E04210000052105000A213BE00C200A0D23250E00001320006429B80B6521110C662064672000"
     
-    if (par == 'button') {
-        // Test button functionality
-        logInfo "Testing button functionality..."
-        initializeButtons()
-        
-        // Simulate button events for testing
-        logInfo "Simulating button events..."
-        
-        // Test plus button single press
-        Map testDescMap1 = [endpoint: '01', clusterId: '0012', attrId: '0055', value: '01']
-        parseButtonAction(testDescMap1)
-        
-        // Test center button double tap  
-        Map testDescMap2 = [endpoint: '02', clusterId: '0012', attrId: '0055', value: '02']
-        parseButtonAction(testDescMap2)
-        
-        // Test minus button hold
-        Map testDescMap3 = [endpoint: '03', clusterId: '0012', attrId: '0055', value: '00']
-        parseButtonAction(testDescMap3)
-        
-        return
-    }
+    parse(xx)
     
-    List<String> cmds = []
-    cmds += zigbee.readAttribute(0xFCC0, 0x0173, [destEndpoint: 0x01, mfgCode: 0x115F], 200)    // display_off
-    logDebug "testT: ${cmds} "
-    sendZigbeeCommands(cmds)    
+    logDebug "testT(${par}) - COMPLETED"   
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////

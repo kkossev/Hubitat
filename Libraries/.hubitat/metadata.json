@@ -17,6 +17,12 @@
       "id": 171,
       "codeType": "library",
       "version": 26
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/humidityLib.groovy",
+      "id": 173,
+      "codeType": "library",
+      "version": 18
     }
   ]
 }
