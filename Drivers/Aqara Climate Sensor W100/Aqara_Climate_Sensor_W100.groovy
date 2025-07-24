@@ -15,12 +15,16 @@
  *
  * ver. 1.0.0  2025-07-23 kkossev  - Initial version
  *
+ *                        TODO: 0x0168 and 0x016F attributes (alarms)
+ *                        TODO: add support for external temperature and humidity sensors
+ *                        TODO: add support for battery level reporting
+ *                        TODO: foundMap.advanced == true && settings.advancedOptions != true
  */
 
 static String version() { '1.0.0' }
-static String timeStamp() { '2025/07/24 8:22 PM' }
+static String timeStamp() { '2025/07/24 9:03 PM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
