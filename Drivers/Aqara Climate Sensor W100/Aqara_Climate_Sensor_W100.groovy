@@ -22,7 +22,7 @@
  */
 
 static String version() { '1.0.0' }
-static String timeStamp() { '2025/07/24 9:03 PM' }
+static String timeStamp() { '2025/07/24 11:14 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -48,7 +48,7 @@ deviceType = 'Sensor' // Aqara Climate Sensor W100 is not a Thermostat, but a Te
 metadata {
     definition(
         name: 'Aqara Climate Sensor W100',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20Climate%20Sensor%20W100/Aqara_Climate_Sensor_W100.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Drivers/Aqara%20Climate%20Sensor%20W100/Aqara_Climate_Sensor_W100_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
         attribute 'displayOff', 'enum', ['disabled', 'enabled']   // 0xFCC0:0x0173
