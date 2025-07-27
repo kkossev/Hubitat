@@ -1,4 +1,4 @@
-/* groovylint-disable NglParseError, ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnusedImport, VariableName *//**
+/* groovylint-disable NglParseError, ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnusedImport, VariableName
  *  Tuya Zigbee Tank Level Monitor - driver for Hubitat Elevation
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
@@ -18,12 +18,13 @@
  * ver. 3.3.3  2024-08-30 kkossev  - updated _TZE284_kyyu8rbj fingerprint for Morayelec ME201WZ; changeed battery from percentage to voltage; queryAllTuyaDP on refresh
  * ver. 3.3.4  2024-09-06 kkossev  - default Debig option is off; installationHeight is now a in meters;
  * ver. 3.4.0  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
+ * ver. 3.4.1  2025-07-27 kkossev  - Added event suppression for level/liquidDepth (threshold & interval) to reduce Zigbee/report spam.
  *                                   
  *                                   TODO:
  */
 
-static String version() { "3.4.0" }
-static String timeStamp() {"2025/04/25 6:93 PM"}
+static String version() { "3.4.1" }
+static String timeStamp() {"2025/07/27 6:13 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -82,6 +83,9 @@ metadata {
         }
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables events logging.'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_DEBUG_LOGGING, description: 'Turns on debug logging for 24 hours.'
+        input name: 'levelChangeThreshold', type: 'number', title: '<b>Level Change Threshold (%)</b>', defaultValue: 1, description: 'Minimum % change in level to send event.'
+        input name: 'liquidDepthChangeThreshold', type: 'decimal', title: '<b>Liquid Depth Change Threshold (m)</b>', defaultValue: 0.01, description: 'Minimum change in liquid depth (meters) to send event.'
+        input name: 'minEventInterval', type: 'number', title: '<b>Minimum Event Interval (seconds)</b>', defaultValue: 5, description: 'Minimum seconds between events for level/liquidDepth.'
         // the rest of the preferences are inputIt from the deviceProfileLib and from the included libraries
     }
 }
@@ -173,12 +177,38 @@ void localProcessTuyaDP(final Map descMap, final int dp, final int dp_id, final 
 void customProcessDeviceProfileEvent(final Map descMap, final String name, valueScaled, final String unitText, final String descText) {
     logTrace "customProcessDeviceProfileEvent(${name}, ${valueScaled}) called"
     Map eventMap = [name: name, value: valueScaled, unit: unitText, descriptionText: descText, type: 'physical', isStateChange: true]
-    switch (name) {
-        default :
-            sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
-            logTrace "event ${name} sent w/ value ${valueScaled}"
-            logInfo "${descText}"   // TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
-            break
+    boolean shouldSend = true
+
+    if (name == 'level' || name == 'liquidDepth') {
+        def nowTime = now()
+        def lastValue = state["last${name.capitalize()}"]
+        def lastTime = state["last${name.capitalize()}Time"] ?: 0
+        def threshold = (name == 'level') ? (settings.levelChangeThreshold ?: 1) : (settings.liquidDepthChangeThreshold ?: 0.01)
+        def minInterval = (settings.minEventInterval ?: 30) * 1000L
+
+        boolean valueChanged = false
+        if (lastValue != null) {
+            def diff = Math.abs(valueScaled - lastValue)
+            valueChanged = diff >= threshold
+            if (!valueChanged) {
+                logDebug "Suppressed ${name} event: change (${diff}) is below threshold (${threshold})"
+                shouldSend = false
+            }
+        }
+        if (shouldSend && (nowTime - lastTime < minInterval)) {
+            logDebug "Suppressed ${name} event: interval (${(nowTime - lastTime)/1000}s) is below minimum (${minInterval/1000}s)"
+            shouldSend = false
+        }
+        if (shouldSend) {
+            state["last${name.capitalize()}"] = valueScaled
+            state["last${name.capitalize()}Time"] = nowTime
+        }
+    }
+
+    if (shouldSend) {
+        sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)
+        logTrace "event ${name} sent w/ value ${valueScaled}"
+        logInfo "${descText}"
     }
 }
 
