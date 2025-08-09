@@ -680,7 +680,7 @@ private List<Integer> buildLumiHeader(Integer counter, Integer paramsLength, Int
     return result
 }
 
-ArrayList zigbeeWriteLongAttribute(Integer cluster, Integer attributeId, Integer dataType, String value, Map additionalParams = [:], int delay = 2000) {
+ArrayList zigbeeWriteLongAttribute(Integer cluster, Integer attributeId, String value, Map additionalParams = [:], int delay = 2000) {
     String mfgCode = ""
     if (additionalParams.containsKey("mfgCode")) {
         Integer code = additionalParams.get("mfgCode") as Integer
@@ -688,7 +688,8 @@ ArrayList zigbeeWriteLongAttribute(Integer cluster, Integer attributeId, Integer
     }
     String wattrArgs = "0x${device.deviceNetworkId} 0x01 0x${HexUtils.integerToHexString(cluster, 2)} " + 
                        "0x${HexUtils.integerToHexString(attributeId, 2)} " + 
-                       "0x${HexUtils.integerToHexString(dataType, 1)} " + 
+                       "0x41 " + 
+                       Integer.toHexString(payload.length() / 2).padLeft(2, '0')
                        "{${value}}" + 
                        "$mfgCode"
     ArrayList cmdList = ["he wattr $wattrArgs", "delay $delay"]

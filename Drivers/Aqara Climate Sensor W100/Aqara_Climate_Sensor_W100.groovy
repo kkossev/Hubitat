@@ -14,6 +14,7 @@
  *     for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2025-07-23 kkossev  - Initial version
+ * ver. 1.0.1  2025-07-26 kkossev  - (dev. branch)
  *
  *                        TODO: 0x0168 and 0x016F attributes (alarms)
  *                        TODO: add support for external temperature and humidity sensors
@@ -21,10 +22,10 @@
  *                        TODO: foundMap.advanced == true && settings.advancedOptions != true
  */
 
-static String version() { '1.0.0' }
-static String timeStamp() { '2025/07/24 11:45 PM' }
+static String version() { '1.0.1' }
+static String timeStamp() { '2025/07/26 3:02 PM' }
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -83,11 +84,16 @@ metadata {
         attribute 'released', 'number'
         attribute 'doubleTapped', 'number'
         
-        //command 'setExternalTemperature', [[name: 'temperature', type: 'NUMBER', description: 'External temperature value (-100 to 100°C)', range: '-100..100', required: true]]
-        //command 'setExternalHumidity', [[name: 'humidity', type: 'NUMBER', description: 'External humidity value (0 to 100%)', range: '0..100', required: true]]
-        //command 'setSensorMode', [[name: 'mode', type: 'ENUM', constraints: ['internal', 'external'], description: 'Set sensor mode: internal or external']]
+        command 'setExternalTemperature', [[name: 'temperature', type: 'NUMBER', description: 'External temperature value (-100 to 100°C)', range: '-100..100', required: true]]
+        command 'setExternalHumidity', [[name: 'humidity', type: 'NUMBER', description: 'External humidity value (0 to 100%)', range: '0..100', required: true]]
+        command 'setSensorMode', [[name: 'mode', type: 'ENUM', constraints: ['internal', 'external'], description: 'Set sensor mode: internal or external']]
+        command 'setExternalThermostat', [[name: 'mode', type: 'ENUM', constraints: ['disabled', 'enabled'], description: 'Enable or disable external thermostat connection']]
         
-        if (_DEBUG) { command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  }
+        if (_DEBUG) { 
+            command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]
+            command 'getCounterCommand', [[name: 'Get current counter value']]
+            command 'resetCounterCommand', [[name: 'value', type: 'NUMBER', description: 'Reset counter to value (default 0x10)', range: '0..255']]
+        }
 
         // itterate through all the figerprints and add them on the fly
         deviceProfilesV3.each { profileName, profileMap ->
@@ -168,7 +174,7 @@ void customParseXiaomiFCC0Cluster(final Map descMap) {
     
     Boolean result = processClusterAttributeFromDeviceProfile(descMap)
     if ( result == false ) {
-        logWarn "customParseXiaomiFCC0Cluster: received unknown Thermostat cluster (0xFCC0) attribute 0x${descMap.attrId} (value ${descMap.value})"
+        logWarn "customParseXiaomiFCC0Cluster: received cluster (0xFCC0) unknown attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
 }
 
@@ -500,6 +506,11 @@ void customInitializeVars(final boolean fullInit=false) {
     if (fullInit == true) {
         resetPreferencesToDefaults()
     }
+    // Initialize counter if not present
+    if (state.counter == null) {
+        state.counter = 0x10  // Start from 0x10 like other functions in the driver
+        logDebug "customInitializeVars: initialized counter to ${state.counter}"
+    }
 }
 
 // called from initializeVars() in the main code ...
@@ -589,9 +600,9 @@ void setExternalTemperature(BigDecimal temperature) {
     params.addAll(temperatureBuf.collect { it & 0xFF })
     logDebug "setExternalTemperature: final params (${params.size()} bytes) = ${params.collect { String.format('%02X', it) }.join('')}"
     
-    // Build complete message using GitHub's lumiHeader function
+    // Build complete message using GitHub's lumiHeader function - use hardcoded 0x12 counter like GitHub
     List<Integer> data = buildLumiHeader(0x12, params.size(), 0x05)
-    logDebug "setExternalTemperature: lumiHeader = ${data.collect { String.format('%02X', it) }.join('')}"
+    logDebug "setExternalTemperature: lumiHeader with counter 0x12 = ${data.collect { String.format('%02X', it) }.join('')}"
     data.addAll(params)
     logDebug "setExternalTemperature: complete data (${data.size()} bytes) = ${data.collect { String.format('%02X', it) }.join('')}"
     
@@ -599,15 +610,15 @@ void setExternalTemperature(BigDecimal temperature) {
     logDebug "setExternalTemperature: final hexString length = ${hexString.length()} chars"
     
     //String command = "he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString}} {0x115F}"
-    String command = zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, 0x41, hexString, [mfgCode: 0x115F])
-    cmds += [command]
-    logDebug "setExternalTemperature: Zigbee command = ${command}"
+    cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString, [mfgCode: 0x115F])
+    //cmds += [command]
+    logDebug "setExternalTemperature: Zigbee command = ${cmds}"
     
     logDebug "setExternalTemperature: sending GitHub-compliant command: ${hexString}"
     sendZigbeeCommands(cmds)
     
     // Update the state
-    //sendEvent(name: 'external_temperature', value: temperature, unit: '°C', descriptionText: "External temperature set to ${temperature}°C", type: 'digital')
+    sendEvent(name: 'external_temperature', value: temperature, unit: '°C', descriptionText: "External temperature set to ${temperature}°C", type: 'digital')
     logDebug "setExternalTemperature(${temperature}) - COMPLETED"
 }
 
@@ -618,12 +629,12 @@ void setExternalHumidity(BigDecimal humidity) {
     String currentSensorMode = device.currentValue('sensor')
     if (currentSensorMode != 'external') {
         logWarn "setExternalHumidity: sensor mode is '${currentSensorMode}', must be 'external' to set external humidity"
-        return
+       // return
     }
     
     if (humidity < 0 || humidity > 100) {
         logWarn "setExternalHumidity: humidity ${humidity} is out of range (0 to 100%)"
-        return
+       // return
     }
     
     List<String> cmds = []
@@ -633,7 +644,7 @@ void setExternalHumidity(BigDecimal humidity) {
     
     // Build humidity buffer using writeFloatBE like GitHub implementation
     byte[] humidityBuf = new byte[4]
-    Float humiValue = humidity as Float
+    Float humiValue = (humidity * 100) as Float
     
     // Convert to IEEE 754 32-bit float and write as big-endian (GitHub uses writeFloatBE)
     int floatBits = Float.floatToIntBits(humiValue)
@@ -648,13 +659,13 @@ void setExternalHumidity(BigDecimal humidity) {
     params.addAll([0x00, 0x02, 0x00, 0x55])  // 0x02 indicates humidity
     params.addAll(humidityBuf.collect { it & 0xFF })
     
-    // Build complete message using GitHub's lumiHeader function
+    // Build complete message using GitHub's lumiHeader function - use hardcoded 0x12 counter like GitHub
     List<Integer> data = buildLumiHeader(0x12, params.size(), 0x05)
     data.addAll(params)
     
     String hexString = data.collect { String.format('%02X', it) }.join('')
     
-    cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString}} {0x115F}"]
+    cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString, [mfgCode: 0x115F])
     
     logDebug "setExternalHumidity: sending GitHub-compliant command: ${hexString}"
     sendZigbeeCommands(cmds)
@@ -680,16 +691,40 @@ private List<Integer> buildLumiHeader(Integer counter, Integer paramsLength, Int
     return result
 }
 
-ArrayList zigbeeWriteLongAttribute(Integer cluster, Integer attributeId, Integer dataType, String value, Map additionalParams = [:], int delay = 2000) {
+// Get the current counter value from state
+private Integer getCounter() {
+    if (state.counter == null) {
+        state.counter = 0x10  // Initialize if not present
+        logDebug "getCounter: initialized counter to ${state.counter}"
+    }
+    return state.counter as Integer
+}
+
+// Get the next counter value and increment for future use
+private Integer getNextCounter() {
+    Integer currentCounter = getCounter()
+    state.counter = (currentCounter + 1) & 0xFF  // Wrap at 255 to stay within byte range
+    logDebug "getNextCounter: returning ${currentCounter}, next will be ${state.counter}"
+    return currentCounter
+}
+
+// Reset counter to a specific value (useful for testing or synchronization)
+private void resetCounterValue(Integer value = 0x10) {
+    state.counter = value & 0xFF
+    logDebug "resetCounterValue: counter reset to ${state.counter}"
+}
+
+ArrayList zigbeeWriteLongAttribute(Integer cluster, Integer attributeId, String payload, Map additionalParams = [:], int delay = 200) {
     String mfgCode = ""
+    def lengthByte = HexUtils.integerToHexString((payload.length() / 2) as Integer, 1)
     if (additionalParams.containsKey("mfgCode")) {
         Integer code = additionalParams.get("mfgCode") as Integer
         mfgCode = " {${HexUtils.integerToHexString(code, 2)}}"
     }
     String wattrArgs = "0x${device.deviceNetworkId} 0x01 0x${HexUtils.integerToHexString(cluster, 2)} " + 
                        "0x${HexUtils.integerToHexString(attributeId, 2)} " + 
-                       "0x${HexUtils.integerToHexString(dataType, 1)} " + 
-                       "{${value}}" + 
+                       "0x41 " + 
+                       "{${lengthByte + payload}}" + 
                        "$mfgCode"
     ArrayList cmdList = ["he wattr $wattrArgs", "delay $delay"]
     return cmdList
@@ -733,7 +768,7 @@ void setSensorMode(String mode) {
         params1.addAll(fictiveSensor.collect { it & 0xFF })
         params1.addAll([0x00, 0x02, 0x00, 0x55, 0x15, 0x0a, 0x01, 0x00, 0x00, 0x01, 0x06, 0xe6, 0xb9, 0xbf, 0xe5, 0xba, 0xa6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x08, 0x65])
         
-        List<Integer> val1 = buildLumiHeader(0x12, params1.size(), 0x04)
+        List<Integer> val1 = buildLumiHeader(getNextCounter(), params1.size(), 0x02)
         val1.addAll(params1)
         
         // Second command - params2 from GitHub  
@@ -744,16 +779,14 @@ void setSensorMode(String mode) {
         params2.addAll(fictiveSensor.collect { it & 0xFF })
         params2.addAll([0x00, 0x01, 0x00, 0x55, 0x15, 0x0a, 0x01, 0x00, 0x00, 0x01, 0x06, 0xe6, 0xb8, 0xa9, 0xe5, 0xba, 0xa6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x07, 0x63])
         
-        List<Integer> val2 = buildLumiHeader(0x13, params2.size(), 0x04)
+        List<Integer> val2 = buildLumiHeader(getNextCounter(), params2.size(), 0x02)
         val2.addAll(params2)
         
         String hexString1 = val1.collect { String.format('%02X', it) }.join('')
         String hexString2 = val2.collect { String.format('%02X', it) }.join('')
         
-        //cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString1}} {0x115F}"]
-        //cmds += ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0xFFF2 0x41 {${hexString2}} {0x115F}"]
-        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, 0x41, hexString1, [mfgCode: 0x115F])
-        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, 0x41, hexString2, [mfgCode: 0x115F])
+        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString1, [mfgCode: 0x115F])
+        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString2, [mfgCode: 0x115F])
         
         logDebug "setSensorMode: sending external mode setup commands"
         sendZigbeeCommands(cmds)
@@ -787,7 +820,7 @@ void setSensorMode(String mode) {
         params1.addAll(deviceBytes.collect { it & 0xFF })
         params1.addAll([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         
-        List<Integer> val1 = buildLumiHeader(0x12, params1.size(), 0x04)
+        List<Integer> val1 = buildLumiHeader(getNextCounter(), params1.size(), 0x04)
         val1.addAll(params1)
         
         // Second command - params2 for internal mode
@@ -798,14 +831,14 @@ void setSensorMode(String mode) {
         params2.addAll(deviceBytes.collect { it & 0xFF })
         params2.addAll([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         
-        List<Integer> val2 = buildLumiHeader(0x13, params2.size(), 0x04)
+        List<Integer> val2 = buildLumiHeader(getNextCounter(), params2.size(), 0x04)
         val2.addAll(params2)
         
         String hexString1 = val1.collect { String.format('%02X', it) }.join('')
         String hexString2 = val2.collect { String.format('%02X', it) }.join('')
         
-        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, 0x41, hexString1, [mfgCode: 0x115F])
-        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, 0x41, hexString2, [mfgCode: 0x115F])
+        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString1, [mfgCode: 0x115F])
+        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString2, [mfgCode: 0x115F])
         
         logDebug "setSensorMode: sending internal mode setup commands"
         sendZigbeeCommands(cmds)
@@ -834,14 +867,117 @@ void readLocalTemperature() {
     sendZigbeeCommands(cmds)
 }
 
+// Command to enable/disable external thermostat connection using dynamic buildLumiHeader
+void setExternalThermostat(String mode) {
+    logDebug "setExternalThermostat(${mode})"
+    
+    if (mode != 'disabled' && mode != 'enabled') {
+        logWarn "setExternalThermostat: invalid mode '${mode}', must be 'disabled' or 'enabled'"
+        return
+    }
+    
+    List<String> cmds = []
+    
+    if (mode == 'enabled') {
+        // Extract common parameters from Wireshark analysis for external thermostat enable
+        // Device information and thermostat connection data
+        List<Integer> enableParams1 = [
+            0x41, 0x19, 0x68, 0x83, 0x0f, 0x72, 0xc1, 0x85, 0x4e, 0xf4, 0x41, 0x00, 0x12, 0x39, 0x92, 0x50,
+            0x00, 0x00, 0x54, 0xef, 0x44, 0x61, 0x53, 0x5f, 0x08, 0x00, 0x08, 0x44, 0x15, 0x0a, 0x01, 0x09,
+            0xe7, 0xa9, 0xba, 0xe8, 0xb0, 0x83, 0xe5, 0x8a, 0x9f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x2a, 0x40
+        ]
+        
+        List<Integer> enableParams2 = [
+            0x41, 0x2f, 0x68, 0x83, 0xf8, 0x2c, 0x18, 0x54, 0xef, 0x44, 0x10, 0x01, 0x23, 0x99, 0x25, 0x00,
+            0x00, 0x54, 0xef, 0x44, 0x61, 0x53, 0x5f, 0x08, 0x00, 0x08, 0x44, 0x15, 0x0a, 0x01, 0x09, 0xe7,
+            0xa9, 0xba, 0xe8, 0xb0, 0x83, 0xe5, 0x8a, 0x9f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x2a, 0x40
+        ]
+        
+        // Build first enable command using dynamic counter and action 0x04
+        List<Integer> data1 = buildLumiHeader(getNextCounter(), enableParams1.size(), 0x04)
+        data1.addAll(enableParams1)
+        String hexString1 = data1.collect { String.format('%02X', it) }.join('')
+        logDebug "setExternalThermostat: enable command 1 with dynamic counter: ${hexString1}"
+        
+        // Build second enable command using dynamic counter and action 0x02  
+        List<Integer> data2 = buildLumiHeader(getNextCounter(), enableParams2.size(), 0x02)
+        data2.addAll(enableParams2)
+        String hexString2 = data2.collect { String.format('%02X', it) }.join('')
+        logDebug "setExternalThermostat: enable command 2 with dynamic counter: ${hexString2}"
+        
+        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString1, [mfgCode: 0x115F])
+        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString2, [mfgCode: 0x115F])
+        
+        logDebug "setExternalThermostat: sending dynamic enable commands"
+        sendZigbeeCommands(cmds)
+        
+        logInfo "External thermostat connection enabled"
+        
+    } else {
+        // Extract parameters from Wireshark analysis for external thermostat disable
+        // Original payload: aa711c44bbca0441196884714c1454ef4410012399250000000000000000000000
+        // Total Wireshark message length: 0x38 (56 bytes)
+        // buildLumiHeader adds 9 bytes, so parameters should be: 56 - 9 = 47 bytes
+        List<Integer> disableParams = [
+            0x41, 0x19, 0x68, 0x84, 0x71, 0x4c, 0x14, 0x54, 0xef, 0x44, 0x10, 0x01, 0x23, 0x99, 0x25, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00  // 47 bytes total
+        ]
+        
+        logDebug "setExternalThermostat: disable params length = ${disableParams.size()} bytes (for total message length 0x38)"
+        
+        // Build disable command using dynamic counter and action 0x04
+        List<Integer> data = buildLumiHeader(getNextCounter(), disableParams.size(), 0x04)
+        data.addAll(disableParams)
+        String hexString = data.collect { String.format('%02X', it) }.join('')
+        logDebug "setExternalThermostat: disable command total length = ${hexString.length()/2} bytes (0x${String.format('%02X', hexString.length()/2)}): ${hexString}"
+        
+        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString, [mfgCode: 0x115F])
+        
+        logDebug "setExternalThermostat: sending dynamic disable command"
+        sendZigbeeCommands(cmds)
+        
+        logInfo "External thermostat connection disabled"
+    }
+    
+    // Update virtual attribute if needed
+    sendEvent(name: 'externalThermostatMode', value: mode, descriptionText: "External thermostat ${mode}", type: 'digital')
+}
+
+
 void testT(String par) {
 
     logInfo "Test function called with parameter: ${par}"
-    String xx = "read attr - raw: 80E901FCC05AF700412903281E04210000052105000A213BE00C200A0D23250E00001320006429B80B6521110C662064672000, dni: 80E9, endpoint: 01, cluster: FCC0, size: 5A, attrId: 00F7, encoding: 41, command: 0A, value: 2903281E04210000052105000A213BE00C200A0D23250E00001320006429B80B6521110C662064672000"
     
-    parse(xx)
+    def cmds = []
+    def payload = "aa713244254a02412f6883f82c1854ef441001239925000054ef4461535f08000844150a0109e7a9bae8b083e58a9f000000000001012a40"
+
+    cmds = zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, payload, [mfgCode: 0x115F])
+    sendZigbeeCommands(cmds)
+    
     
     logDebug "testT(${par}) - COMPLETED"   
+}
+
+// Debug command to get current counter value
+void getCounterCommand() {
+    Integer currentCounter = getCounter()
+    logInfo "Current counter value: 0x${String.format('%02X', currentCounter)} (${currentCounter})"
+    sendEvent(name: 'info', value: "Counter: 0x${String.format('%02X', currentCounter)}", descriptionText: "Current counter value: 0x${String.format('%02X', currentCounter)}", type: 'digital')
+}
+
+// Debug command to reset counter to a specific value
+void resetCounterCommand(Integer value = null) {
+    if (value == null) {
+        value = 0x10  // Default starting value
+    }
+    if (value < 0 || value > 255) {
+        logWarn "resetCounterCommand: value ${value} is out of range (0-255), using 0x10"
+        value = 0x10
+    }
+    resetCounterValue(value)
+    logInfo "Counter reset to: 0x${String.format('%02X', value)} (${value})"
+    sendEvent(name: 'info', value: "Counter reset to: 0x${String.format('%02X', value)}", descriptionText: "Counter reset to: 0x${String.format('%02X', value)}", type: 'digital')
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
