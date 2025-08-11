@@ -14,7 +14,7 @@
  *     for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2025-07-23 kkossev  - Initial version
- * ver. 1.0.1  2025-07-26 kkossev  - (dev. branch)
+ * ver. 1.1.0  2025-07-26 kkossev  - added external temperature and humidity sensor support
  *
  *                        TODO: 0x0168 and 0x016F attributes (alarms)
  *                        TODO: add support for external temperature and humidity sensors
@@ -22,10 +22,10 @@
  *                        TODO: foundMap.advanced == true && settings.advancedOptions != true
  */
 
-static String version() { '1.0.1' }
+static String version() { '1.1.0' }
 static String timeStamp() { '2025/07/26 3:02 PM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
