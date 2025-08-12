@@ -15,6 +15,7 @@
  *
  * ver. 1.0.0  2025-07-23 kkossev  - Initial version
  * ver. 1.1.0  2025-07-26 kkossev  - added external temperature and humidity sensor support
+ * ver. 1.2.0  2025-08-12 kkossev  - (dev. branch)
  *
  *                        TODO: 0x0168 and 0x016F attributes (alarms)
  *                        TODO: add support for external temperature and humidity sensors
@@ -22,10 +23,10 @@
  *                        TODO: foundMap.advanced == true && settings.advancedOptions != true
  */
 
-static String version() { '1.1.0' }
-static String timeStamp() { '2025/07/26 3:02 PM' }
+static String version() { '1.2.0' }
+static String timeStamp() { '2025/08/12 2:06 PM' }
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -71,6 +72,26 @@ metadata {
         attribute 'externalHumidity', 'decimal'                   // Virtual attribute for external humidity
         attribute 'powerOutageCount', 'number'                     // Power outage counter from 0x00F7 reports
         
+        // HVAC Thermostat capabilities and attributes
+        capability 'Thermostat'
+        capability 'ThermostatHeatingSetpoint'
+        capability 'ThermostatCoolingSetpoint'
+        capability 'ThermostatMode'
+        capability 'ThermostatOperatingState'
+        capability 'ThermostatSetpoint'
+        capability 'FanControl'
+        
+        attribute 'hvacMode', 'enum', ['disabled', 'enabled']
+        attribute 'thermostatMode', 'enum', ['off', 'heat', 'cool', 'auto']
+        attribute 'thermostatOperatingState', 'enum', ['idle', 'heating', 'cooling', 'fan only']
+        attribute 'heatingSetpoint', 'number'
+        attribute 'coolingSetpoint', 'number'
+        attribute 'thermostatSetpoint', 'number'
+        attribute 'fanMode', 'enum', ['auto', 'low', 'medium', 'high']
+        attribute 'hvacDisplayMode', 'enum', ['normal', 'auto_off']
+        attribute 'supportedThermostatModes', 'JSON_OBJECT'
+        attribute 'supportedThermostatFanModes', 'JSON_OBJECT'
+        
         // Button capabilities
         capability 'PushableButton'
         capability 'HoldableButton'
@@ -89,10 +110,23 @@ metadata {
         command 'setSensorMode', [[name: 'mode', type: 'ENUM', constraints: ['internal', 'external'], description: 'Set sensor mode: internal or external']]
         command 'setExternalThermostat', [[name: 'mode', type: 'ENUM', constraints: ['disabled', 'enabled'], description: 'Enable or disable external thermostat connection']]
         
+        // HVAC Thermostat commands
+        command 'enableHVAC', [[name: 'Enable HVAC thermostat mode']]
+        command 'disableHVAC', [[name: 'Disable HVAC thermostat mode']]
+        command 'setThermostatMode', [[name: 'mode', type: 'ENUM', constraints: ['off', 'heat', 'cool', 'auto'], description: 'Set thermostat mode']]
+        command 'setHeatingSetpoint', [[name: 'temperature', type: 'NUMBER', description: 'Set heating setpoint (10-35°C)', range: '10..35', required: true]]
+        command 'setCoolingSetpoint', [[name: 'temperature', type: 'NUMBER', description: 'Set cooling setpoint (10-35°C)', range: '10..35', required: true]]
+        command 'setThermostatSetpoint', [[name: 'temperature', type: 'NUMBER', description: 'Set thermostat setpoint (10-35°C)', range: '10..35', required: true]]
+        command 'setFanMode', [[name: 'mode', type: 'ENUM', constraints: ['auto', 'low', 'medium', 'high'], description: 'Set fan mode']]
+        command 'sendPMTSDCommand', [[name: 'power', type: 'NUMBER', description: 'Power (0=On, 1=Off)', range: '0..1'], [name: 'mode', type: 'NUMBER', description: 'Mode (0=Cool, 1=Heat, 2=Auto)', range: '0..2'], [name: 'temp', type: 'NUMBER', description: 'Temperature (10-35°C)', range: '10..35'], [name: 'speed', type: 'NUMBER', description: 'Fan Speed (0=Auto, 1=Low, 2=Med, 3=High)', range: '0..3'], [name: 'display', type: 'NUMBER', description: 'Display mode (0/1)', range: '0..1']]
+        
         if (_DEBUG) { 
             command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]
             command 'getCounterCommand', [[name: 'Get current counter value']]
             command 'resetCounterCommand', [[name: 'value', type: 'NUMBER', description: 'Reset counter to value (default 0x10)', range: '0..255']]
+            command 'testHVACEnable', [[name: 'Test HVAC enable command']]
+            command 'testPMTSDSend', [[name: 'pmtsdString', type: 'STRING', description: 'Test PMTSD string (e.g., P0_M1_T22_S0_D0)', defaultValue: 'P0_M1_T22_S0_D0']]
+            command 'parseTestPMTSD', [[name: 'hexData', type: 'STRING', description: 'Parse test PMTSD hex data']]
         }
 
         // itterate through all the figerprints and add them on the fly
@@ -121,8 +155,7 @@ metadata {
     'AQARA_CLIMATE_SENSOR_W100'   : [
             description   : 'Aqara Climate Sensor W100',
             device        : [manufacturers: ['Aqara'], type: 'Sensor', powerSource: 'battery', isSleepy:false],
-            //capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode': true],
-            capabilities  : ['ReportingConfiguration': false, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'Battery': true, 'BatteryVoltage': true, 'Configuration': true, 'Refresh': true, 'HealthCheck': true],
+            capabilities  : ['ReportingConfiguration': false, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'Battery': true, 'BatteryVoltage': true, 'Configuration': true, 'Refresh': true, 'HealthCheck': true, 'Thermostat': true, 'ThermostatMode': true, 'ThermostatSetpoint': true, 'FanControl': true],
             preferences   : ['displayOff':'0xFCC0:0x0173', 'highTemperature':'0xFCC0:0x0167', 'lowTemperature':'0xFCC0:0x0166', 'highHumidity':'0xFCC0:0x016E', 'lowHumidity':'0xFCC0:0x016D', 'sampling':'0xFCC0:0x0170', 'period':'0xFCC0:0x0162', 'tempReportMode':'0xFCC0:0x0165', 'tempPeriod':'0xFCC0:0x0163', 'tempThreshold':'0xFCC0:0x0164', 'humiReportMode':'0xFCC0:0x016C', 'humiPeriod':'0xFCC0:0x016A', 'humiThreshold':'0xFCC0:0x016B', 'sensor':'0xFCC0:0x0172'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0012,0405,0402,00001,0003,0x0000,FD20', outClusters:'0019', model:'lumi.sensor_ht.agl001', manufacturer:'Aqara', deviceJoinName: 'Aqara Climate Sensor W100'],      //  "TH-S04D" - main endpoint
@@ -147,8 +180,17 @@ metadata {
                 [at:'0xFCC0:0x016A',  name:'humiPeriod',       ep:'0x01', type:'decimal', dt:'0x23', mfgCode:'0x115f',  rw: 'rw', min:1.0,   max:10.0,  step:1.0, scale:1000, unit:'sec', title: '<b>Humidity Period</b>', description:'Humidity reporting period'],
                 [at:'0xFCC0:0x016B',  name:'humiThreshold',    ep:'0x01', type:'decimal', dt:'0x21', mfgCode:'0x115f',  rw: 'rw', min:2.0,   max:10.0,  step:0.5, scale:100,  unit:'%', title: '<b>Humidity Threshold</b>', description:'Humidity reporting threshold'],
                 [at:'0xFCC0:0x0172',  name:'sensor',            ep:'0x01', type:'enum',    dt:'0x23', mfgCode:'0x115f',  rw: 'ro', min:0,     max:255,   step:1,   scale:1,    map:[0: 'internal', 1: 'internal', 2: 'external', 3: 'external', 255: 'unknown'], unit:'', title: '<b>Sensor Mode</b>', description:'Select sensor mode: internal or external'],
+                // HVAC Thermostat attributes
+                [at:'virtual',        name:'hvacMode',          ep:'0x01', type:'enum',    dt:'0x10', mfgCode:'0x115f',  rw: 'rw', min:0,     max:1,     step:1,   scale:1,    map:[0: 'disabled', 1: 'enabled'], unit:'', title: '<b>HVAC Mode</b>', description:'Enable/disable HVAC thermostat mode'],
+                [at:'virtual',        name:'thermostatMode',    ep:'0x01', type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:0,     max:3,     step:1,   scale:1,    map:[0: 'off', 1: 'heat', 2: 'cool', 3: 'auto'], unit:'', title: '<b>Thermostat Mode</b>', description:'Thermostat operating mode'],
+                [at:'virtual',        name:'heatingSetpoint',   ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:10.0,  max:35.0,  step:0.5, scale:100,  unit:'°C', title: '<b>Heating Setpoint</b>', description:'Heating temperature setpoint'],
+                [at:'virtual',        name:'coolingSetpoint',   ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:10.0,  max:35.0,  step:0.5, scale:100,  unit:'°C', title: '<b>Cooling Setpoint</b>', description:'Cooling temperature setpoint'],
+                [at:'virtual',        name:'thermostatSetpoint', ep:'0x01', type:'decimal', dt:'0x29', mfgCode:'0x115f',  rw: 'rw', min:10.0,  max:35.0,  step:0.5, scale:100,  unit:'°C', title: '<b>Thermostat Setpoint</b>', description:'Current temperature setpoint'],
+                [at:'virtual',        name:'fanMode',           ep:'0x01', type:'enum',    dt:'0x20', mfgCode:'0x115f',  rw: 'rw', min:0,     max:3,     step:1,   scale:1,    map:[0: 'auto', 1: 'low', 2: 'medium', 3: 'high'], unit:'', title: '<b>Fan Mode</b>', description:'Fan speed mode'],
+                [at:'virtual',        name:'thermostatOperatingState', ep:'0x01', type:'enum', dt:'0x20', mfgCode:'0x115f', rw: 'ro', min:0, max:3, step:1, scale:1, map:[0: 'idle', 1: 'heating', 2: 'cooling', 3: 'fan only'], unit:'', title: '<b>Operating State</b>', description:'Current thermostat operating state'],
             ],
-            //supportedThermostatModes: ['off', 'auto', 'heat', 'away'/*, "emergency heat"*/],
+            supportedThermostatModes: ['off', 'heat', 'cool', 'auto'],
+            supportedThermostatFanModes: ['auto', 'low', 'medium', 'high'],
             //refresh: ['refreshAqaraE1'],
             deviceJoinName: 'Aqara Climate Sensor W100',
             configuration : [:]
@@ -183,7 +225,7 @@ void customParseXiaomiFCC0Cluster(final Map descMap) {
 //
 void customParseXiaomiClusterTags(final Map<Integer, Object> tags) {
     tags.each { final Integer tag, final Object value ->
-        log.trace "xiaomi decode tag: 0x${intToHexStr(tag, 1)} value=${value}"
+        //log.trace "xiaomi decode tag: 0x${intToHexStr(tag, 1)} value=${value}"
         switch (tag) {
             case 0x01:    // battery voltage
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value / 1000}V (raw=${value})"
@@ -242,18 +284,20 @@ void customParseXiaomiClusterTags(final Map<Integer, Object> tags) {
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature (alternate) is ${value / 100}°C (raw ${value})"
                 // Alternative temperature reading - may be external sensor
                 if (device.currentValue('sensor') == 'external') {
-                    sendEvent(name: 'externalTemperature', value: value / 100.0, unit: '°C', 
-                             descriptionText: "External temperature: ${value / 100.0}°C", type: 'physical')
-                    logInfo "External temperature updated: ${value / 100.0}°C"
+                    BigDecimal tempValue = (value / 100.0).setScale(1, RoundingMode.HALF_UP)
+                    sendEvent(name: 'externalTemperature', value: tempValue, unit: '°C', 
+                             descriptionText: "External temperature: ${tempValue}°C", type: 'physical')
+                    logInfo "External temperature updated: ${tempValue}°C"
                 }
                 break
             case 0x67:  // (103)
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} humidity (alternate) is ${value / 100}% (raw ${value})"
                 // Alternative humidity reading - may be external sensor
                 if (device.currentValue('sensor') == 'external') {
-                    sendEvent(name: 'externalHumidity', value: value / 100.0, unit: '%', 
-                             descriptionText: "External humidity: ${value / 100.0}%", type: 'physical')
-                    logInfo "External humidity updated: ${value / 100.0}%"
+                    BigDecimal humidityValue = (value / 100.0).setScale(1, RoundingMode.HALF_UP)
+                    sendEvent(name: 'externalHumidity', value: humidityValue, unit: '%', 
+                             descriptionText: "External humidity: ${humidityValue}%", type: 'physical')
+                    logInfo "External humidity updated: ${humidityValue}%"
                 }
                 break
             case 0x68:  // (104)
@@ -379,33 +423,43 @@ void parseExternalSensorResponse(String value) {
     logDebug "parseExternalSensorResponse: parsing response value: ${value}"
     
     try {
-        // The response should contain sensor mode information
-        // Based on the GitHub implementation, we need to decode the response
-        if (value?.length() >= 2) {
-            // Convert hex string to integer for basic parsing
-            Integer responseValue = Integer.parseInt(value.substring(0, 2), 16)
+        if (!value || value.length() < 2) {
+            logWarn "parseExternalSensorResponse: invalid response value length"
+            return
+        }
+        
+        // Check if this is an HVAC PMTSD response by looking for ASCII payload markers
+        // HVAC responses contain 0x08, 0x44 sequence followed by ASCII data
+        if (value.contains('0844') || value.toUpperCase().contains('0844')) {
+            logDebug "parseExternalSensorResponse: detected HVAC PMTSD response"
+            parsePMTSDResponse(value)
+            return
+        }
+        
+        // Handle external sensor mode response (original functionality)
+        // Convert hex string to integer for basic parsing
+        Integer responseValue = Integer.parseInt(value.substring(0, 2), 16)
+        
+        // Parse sensor mode from response (based on GitHub lookup: {2: "external", 0: "internal", 1: "internal", 3: "external"})
+        String sensorMode = null
+        switch (responseValue) {
+            case 0:
+            case 1:
+                sensorMode = 'internal'
+                break
+            case 2:
+            case 3:
+                sensorMode = 'external'
+                break
+            default:
+                logWarn "parseExternalSensorResponse: unknown sensor mode value: ${responseValue}"
+                return
+        }
             
-            // Parse sensor mode from response (based on GitHub lookup: {2: "external", 0: "internal", 1: "internal", 3: "external"})
-            String sensorMode = null
-            switch (responseValue) {
-                case 0:
-                case 1:
-                    sensorMode = 'internal'
-                    break
-                case 2:
-                case 3:
-                    sensorMode = 'external'
-                    break
-                default:
-                    logWarn "parseExternalSensorResponse: unknown sensor mode value: ${responseValue}"
-                    return
-            }
-            
-            // Update the sensor attribute if it changed
-            if (device.currentValue('sensor') != sensorMode) {
-                sendEvent(name: 'sensor', value: sensorMode, descriptionText: "Sensor mode changed to ${sensorMode}", type: 'physical')
-                logInfo "Sensor mode updated to: ${sensorMode}"
-            }
+        // Update the sensor attribute if it changed
+        if (device.currentValue('sensor') != sensorMode) {
+            sendEvent(name: 'sensor', value: sensorMode, descriptionText: "Sensor mode changed to ${sensorMode}", type: 'physical')
+            logInfo "Sensor mode updated to: ${sensorMode}"
         }
     } catch (Exception e) {
         logWarn "parseExternalSensorResponse: error parsing response: ${e.message}"
@@ -510,6 +564,29 @@ void customInitializeVars(final boolean fullInit=false) {
     if (state.counter == null) {
         state.counter = 0x10  // Start from 0x10 like other functions in the driver
         logDebug "customInitializeVars: initialized counter to ${state.counter}"
+    }
+    
+    // Initialize HVAC state variables
+    if (state.hvac == null) {
+        state.hvac = [:]
+        state.hvac.enabled = false
+        state.hvac.mode = 'off'  // off, heat, cool, auto
+        state.hvac.heatingSetpoint = 22.0
+        state.hvac.coolingSetpoint = 24.0
+        state.hvac.fanMode = 'auto'  // auto, low, medium, high
+        state.hvac.operatingState = 'idle'  // idle, heating, cooling, fan only
+        state.hvac.displayMode = 'normal'  // normal, auto_off
+        logDebug "customInitializeVars: initialized HVAC state variables"
+    }
+    
+    // Initialize device MAC addresses for HVAC commands (will be updated when needed)
+    if (state.deviceMAC == null) {
+        state.deviceMAC = device.zigbeeId ?: 'unknown'
+        logDebug "customInitializeVars: device MAC = ${state.deviceMAC}"
+    }
+    if (state.hubMAC == null) {
+        state.hubMAC = 'unknown'  // Will be set when HVAC is enabled
+        logDebug "customInitializeVars: hub MAC placeholder set"
     }
 }
 
@@ -618,7 +695,7 @@ void setExternalTemperature(BigDecimal temperature) {
     sendZigbeeCommands(cmds)
     
     // Update the state
-    sendEvent(name: 'external_temperature', value: temperature, unit: '°C', descriptionText: "External temperature set to ${temperature}°C", type: 'digital')
+    sendEvent(name: 'externalTemperature', value: temperature, unit: '°C', descriptionText: "External temperature set to ${temperature}°C", type: 'digital')
     logDebug "setExternalTemperature(${temperature}) - COMPLETED"
 }
 
@@ -944,21 +1021,6 @@ void setExternalThermostat(String mode) {
     sendEvent(name: 'externalThermostatMode', value: mode, descriptionText: "External thermostat ${mode}", type: 'digital')
 }
 
-
-void testT(String par) {
-
-    logInfo "Test function called with parameter: ${par}"
-    
-    def cmds = []
-    def payload = "aa713244254a02412f6883f82c1854ef441001239925000054ef4461535f08000844150a0109e7a9bae8b083e58a9f000000000001012a40"
-
-    cmds = zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, payload, [mfgCode: 0x115F])
-    sendZigbeeCommands(cmds)
-    
-    
-    logDebug "testT(${par}) - COMPLETED"   
-}
-
 // Debug command to get current counter value
 void getCounterCommand() {
     Integer currentCounter = getCounter()
@@ -979,5 +1041,583 @@ void resetCounterCommand(Integer value = null) {
     logInfo "Counter reset to: 0x${String.format('%02X', value)} (${value})"
     sendEvent(name: 'info', value: "Counter reset to: 0x${String.format('%02X', value)}", descriptionText: "Counter reset to: 0x${String.format('%02X', value)}", type: 'digital')
 }
+
+// =============================================================================================================
+// HVAC Thermostat Functions - Based on PMTSD Protocol
+// =============================================================================================================
+
+// PMTSD Helper Functions
+private String buildPMTSDString(Integer power, Integer mode, Integer temp, Integer speed, Integer display) {
+    return "P${power}_M${mode}_T${temp}_S${speed}_D${display}"
+}
+
+private List<Integer> encodePMTSDString(String pmtsd) {
+    return pmtsd.getBytes('ASCII').collect { it & 0xFF }
+}
+
+private Integer calculateChecksum(List<Integer> packetBytes) {
+    return packetBytes.sum() & 0xFF
+}
+
+// Parse PMTSD from incoming hex data
+private void parsePMTSDResponse(String hexValue) {
+    logDebug "parsePMTSDResponse: parsing hex value: ${hexValue}"
+    
+    try {
+        // Find ASCII payload in hex data using pattern from DecodePMTSD_FD.py
+        byte[] data = hubitat.helper.HexUtils.hexStringToByteArray(hexValue)
+        
+        // Look for 0x08, 0x44 sequence to find payload start
+        Integer payloadStart = -1
+        for (int i = 0; i < data.length - 1; i++) {
+            if (data[i] == 0x08 && data[i + 1] == 0x44) {
+                payloadStart = i + 2  // Skip 0x08, 0x44
+                break
+            }
+        }
+        
+        if (payloadStart == -1 || payloadStart >= data.length) {
+            logDebug "parsePMTSDResponse: could not find PMTSD payload markers (0x08, 0x44) in hex data"
+            // Check if this is an HVAC enable/disable response
+            if (hexValue.contains('08440101') || hexValue.contains('08440100')) {
+                logInfo "HVAC command response received: ${hexValue.contains('08440101') ? 'Enable confirmed' : 'Disable confirmed'}"
+            }
+            return
+        }
+        
+        // Check if there's a length byte
+        if (payloadStart >= data.length) {
+            logDebug "parsePMTSDResponse: no payload length byte available"
+            return
+        }
+        
+        // Extract payload length
+        Integer payloadLength = data[payloadStart] & 0xFF
+        Integer asciiStart = payloadStart + 1
+        
+        // Calculate actual remaining bytes vs claimed length
+        Integer remainingBytes = data.length - asciiStart
+        Integer actualLength = Math.min(payloadLength, remainingBytes)
+        
+        logDebug "parsePMTSDResponse: claimed length=${payloadLength}, remaining bytes=${remainingBytes}, using length=${actualLength}"
+        
+        if (actualLength <= 0) {
+            logDebug "parsePMTSDResponse: no ASCII data available"
+            // Check for simple HVAC responses (just 0x01 for enable, 0x00 for disable)
+            if (payloadLength == 1 && asciiStart < data.length) {
+                Integer responseValue = data[asciiStart] & 0xFF
+                logInfo "HVAC simple response: ${responseValue == 1 ? 'Enabled' : 'Disabled'}"
+            }
+            return
+        }
+        
+        // Convert available payload to ASCII string
+        byte[] payloadBytes = new byte[actualLength]
+        for (int i = 0; i < actualLength; i++) {
+            payloadBytes[i] = data[asciiStart + i]
+        }
+        String payloadAscii = new String(payloadBytes, 'ASCII')
+        logDebug "parsePMTSDResponse: extracted ASCII payload: '${payloadAscii}' (${actualLength} bytes)"
+        
+        // Try to extract readable ASCII characters only
+        String cleanAscii = payloadAscii.replaceAll(/[^\x20-\x7E]/, '')  // Keep only printable ASCII
+        logDebug "parsePMTSDResponse: clean ASCII: '${cleanAscii}'"
+        
+        // Parse PMTSD using regex pattern P([01])_M([012])_T(\d+)_S([0-3])_D([01])
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(/P([01])_M([012])_T(\d+)_S([0-3])_D([01])/)
+        java.util.regex.Matcher matcher = pattern.matcher(cleanAscii)
+        
+        if (matcher.find()) {
+            Integer power = Integer.parseInt(matcher.group(1))
+            Integer mode = Integer.parseInt(matcher.group(2))
+            Integer temp = Integer.parseInt(matcher.group(3))
+            Integer speed = Integer.parseInt(matcher.group(4))
+            Integer display = Integer.parseInt(matcher.group(5))
+            
+            logInfo "PMTSD received: Power=${power} (${power == 0 ? 'On' : 'Off'}), Mode=${mode} (${['Cool', 'Heat', 'Auto'][mode]}), Temp=${temp}°C, Speed=${speed} (${['Auto', 'Low', 'Med', 'High'][speed]}), Display=${display}"
+            
+            // Update device state
+            updateHVACFromPMTSD(power, mode, temp, speed, display)
+        } else {
+            logDebug "parsePMTSDResponse: no valid PMTSD pattern found in clean ASCII: '${cleanAscii}'"
+            // Log what we received for debugging
+            if (cleanAscii.length() > 0) {
+                logInfo "PMTSD partial response: '${cleanAscii}' - likely device acknowledgment"
+            }
+        }
+        
+    } catch (Exception e) {
+        logWarn "parsePMTSDResponse: error parsing PMTSD data: ${e.message}"
+    }
+}
+
+// Update device attributes from received PMTSD data
+private void updateHVACFromPMTSD(Integer power, Integer mode, Integer temp, Integer speed, Integer display) {
+    // Update state
+    state.hvac.mode = (power == 1) ? 'off' : ['cool', 'heat', 'auto'][mode]
+    state.hvac.heatingSetpoint = (mode == 1) ? temp : state.hvac.heatingSetpoint
+    state.hvac.coolingSetpoint = (mode == 0) ? temp : state.hvac.coolingSetpoint
+    state.hvac.fanMode = ['auto', 'low', 'medium', 'high'][speed]
+    state.hvac.operatingState = (power == 1) ? 'idle' : (['cooling', 'heating', 'idle'][mode] ?: 'idle')
+    
+    // Send events
+    sendEvent(name: 'thermostatMode', value: state.hvac.mode, descriptionText: "Thermostat mode: ${state.hvac.mode}", type: 'physical')
+    sendEvent(name: 'thermostatSetpoint', value: temp, unit: '°C', descriptionText: "Thermostat setpoint: ${temp}°C", type: 'physical')
+    sendEvent(name: 'fanMode', value: state.hvac.fanMode, descriptionText: "Fan mode: ${state.hvac.fanMode}", type: 'physical')
+    sendEvent(name: 'thermostatOperatingState', value: state.hvac.operatingState, descriptionText: "Operating state: ${state.hvac.operatingState}", type: 'physical')
+    
+    if (mode == 1) {  // Heating mode
+        sendEvent(name: 'heatingSetpoint', value: temp, unit: '°C', descriptionText: "Heating setpoint: ${temp}°C", type: 'physical')
+    } else if (mode == 0) {  // Cooling mode
+        sendEvent(name: 'coolingSetpoint', value: temp, unit: '°C', descriptionText: "Cooling setpoint: ${temp}°C", type: 'physical')
+    }
+}
+
+// Core HVAC Enable/Disable Commands
+void enableHVAC() {
+    logDebug "enableHVAC: enabling HVAC thermostat mode"
+    
+    try {
+        // Initialize HVAC state if null
+        if (state.hvac == null) {
+            state.hvac = [:]
+            state.hvac.enabled = false
+            state.hvac.mode = 'off'
+            state.hvac.heatingSetpoint = 22.0
+            state.hvac.coolingSetpoint = 24.0
+            state.hvac.fanMode = 'auto'
+            state.hvac.operatingState = 'idle'
+            state.hvac.displayMode = 'normal'
+            logDebug "enableHVAC: initialized HVAC state variables"
+        }
+        
+        // Build HVAC enable packet based on GenerateHVACOn_TD.py
+        List<Integer> packet = buildHVACEnablePacket()
+        String hexString = packet.collect { String.format('%02X', it) }.join('')
+        
+        List<String> cmds = []
+        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString, [mfgCode: 0x115F])
+        
+        logDebug "enableHVAC: sending enable command: ${hexString}"
+        sendZigbeeCommands(cmds)
+        
+        // Update state
+        state.hvac.enabled = true
+        sendEvent(name: 'hvacMode', value: 'enabled', descriptionText: "HVAC mode enabled", type: 'digital')
+        
+        // Initialize with default PMTSD values
+        runInMillis(2000, 'initializeHVACDefaults')
+        
+        logInfo "HVAC thermostat mode enabled"
+        
+    } catch (Exception e) {
+        logWarn "enableHVAC: error enabling HVAC: ${e.message}"
+    }
+}
+
+void disableHVAC() {
+    logDebug "disableHVAC: disabling HVAC thermostat mode"
+    
+    try {
+        // Build HVAC disable packet based on GenerateHVACOff_TD.py
+        List<Integer> packet = buildHVACDisablePacket()
+        String hexString = packet.collect { String.format('%02X', it) }.join('')
+        
+        List<String> cmds = []
+        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString, [mfgCode: 0x115F])
+        
+        logDebug "disableHVAC: sending disable command: ${hexString}"
+        sendZigbeeCommands(cmds)
+        
+        // Update state
+        state.hvac.enabled = false
+        state.hvac.mode = 'off'
+        state.hvac.operatingState = 'idle'
+        
+        sendEvent(name: 'hvacMode', value: 'disabled', descriptionText: "HVAC mode disabled", type: 'digital')
+        sendEvent(name: 'thermostatMode', value: 'off', descriptionText: "Thermostat mode: off", type: 'digital')
+        sendEvent(name: 'thermostatOperatingState', value: 'idle', descriptionText: "Operating state: idle", type: 'digital')
+        
+        logInfo "HVAC thermostat mode disabled"
+        
+    } catch (Exception e) {
+        logWarn "disableHVAC: error disabling HVAC: ${e.message}"
+    }
+}
+
+// Initialize HVAC with default values after enabling
+void initializeHVACDefaults() {
+    logDebug "initializeHVACDefaults: setting default thermostat values"
+    
+    // Send default PMTSD command: P0_M2_T22_S0_D0 (On, Auto mode, 22°C, Auto fan, Display normal)
+    sendPMTSDCommand(0, 2, 22, 0, 0)
+    
+    // Initialize supported modes
+    sendEvent(name: 'supportedThermostatModes', value: JsonOutput.toJson(['off', 'heat', 'cool', 'auto']), descriptionText: "Supported thermostat modes", type: 'digital')
+    sendEvent(name: 'supportedThermostatFanModes', value: JsonOutput.toJson(['auto', 'low', 'medium', 'high']), descriptionText: "Supported fan modes", type: 'digital')
+}
+
+// High-Level Thermostat Commands
+void setThermostatMode(String mode) {
+    logDebug "setThermostatMode(${mode})"
+    
+    if (!state.hvac?.enabled) {
+        logWarn "setThermostatMode: HVAC mode is not enabled"
+        return
+    }
+    
+    if (!(mode in ['off', 'heat', 'cool', 'auto'])) {
+        logWarn "setThermostatMode: invalid mode '${mode}', must be off/heat/cool/auto"
+        return
+    }
+    
+    Integer powerValue = (mode == 'off') ? 1 : 0
+    Integer modeValue = ['off': 0, 'cool': 0, 'heat': 1, 'auto': 2][mode]
+    Integer currentTemp = getCurrentSetpoint(mode)
+    Integer currentSpeed = getCurrentFanSpeed()
+    Integer currentDisplay = getCurrentDisplayMode()
+    
+    sendPMTSDCommand(powerValue, modeValue, currentTemp, currentSpeed, currentDisplay)
+    
+    // Update state immediately for UI responsiveness
+    state.hvac.mode = mode
+    sendEvent(name: 'thermostatMode', value: mode, descriptionText: "Thermostat mode set to ${mode}", type: 'digital')
+    
+    logInfo "Thermostat mode set to: ${mode}"
+}
+
+void setHeatingSetpoint(BigDecimal temperature) {
+    logDebug "setHeatingSetpoint(${temperature})"
+    
+    if (!state.hvac?.enabled) {
+        logWarn "setHeatingSetpoint: HVAC mode is not enabled"
+        return
+    }
+    
+    if (temperature < 10 || temperature > 35) {
+        logWarn "setHeatingSetpoint: temperature ${temperature} is out of range (10-35°C)"
+        return
+    }
+    
+    Integer tempValue = temperature as Integer
+    state.hvac.heatingSetpoint = tempValue
+    
+    // If currently in heating mode, send PMTSD command
+    if (state.hvac.mode == 'heat') {
+        sendPMTSDCommand(0, 1, tempValue, getCurrentFanSpeed(), getCurrentDisplayMode())
+    }
+    
+    sendEvent(name: 'heatingSetpoint', value: tempValue, unit: '°C', descriptionText: "Heating setpoint set to ${tempValue}°C", type: 'digital')
+    sendEvent(name: 'thermostatSetpoint', value: tempValue, unit: '°C', descriptionText: "Thermostat setpoint: ${tempValue}°C", type: 'digital')
+    
+    logInfo "Heating setpoint set to: ${tempValue}°C"
+}
+
+void setCoolingSetpoint(BigDecimal temperature) {
+    logDebug "setCoolingSetpoint(${temperature})"
+    
+    if (!state.hvac?.enabled) {
+        logWarn "setCoolingSetpoint: HVAC mode is not enabled"
+        return
+    }
+    
+    if (temperature < 10 || temperature > 35) {
+        logWarn "setCoolingSetpoint: temperature ${temperature} is out of range (10-35°C)"
+        return
+    }
+    
+    Integer tempValue = temperature as Integer
+    state.hvac.coolingSetpoint = tempValue
+    
+    // If currently in cooling mode, send PMTSD command
+    if (state.hvac.mode == 'cool') {
+        sendPMTSDCommand(0, 0, tempValue, getCurrentFanSpeed(), getCurrentDisplayMode())
+    }
+    
+    sendEvent(name: 'coolingSetpoint', value: tempValue, unit: '°C', descriptionText: "Cooling setpoint set to ${tempValue}°C", type: 'digital')
+    sendEvent(name: 'thermostatSetpoint', value: tempValue, unit: '°C', descriptionText: "Thermostat setpoint: ${tempValue}°C", type: 'digital')
+    
+    logInfo "Cooling setpoint set to: ${tempValue}°C"
+}
+
+void setThermostatSetpoint(BigDecimal temperature) {
+    logDebug "setThermostatSetpoint(${temperature})"
+    
+    // Set both heating and cooling setpoints, and update current mode
+    setHeatingSetpoint(temperature)
+    setCoolingSetpoint(temperature)
+    
+    // If in a specific mode, send the appropriate command
+    if (state.hvac.mode in ['heat', 'cool', 'auto']) {
+        Integer tempValue = temperature as Integer
+        Integer modeValue = ['cool': 0, 'heat': 1, 'auto': 2][state.hvac.mode]
+        sendPMTSDCommand(0, modeValue, tempValue, getCurrentFanSpeed(), getCurrentDisplayMode())
+    }
+}
+
+void setFanMode(String mode) {
+    logDebug "setFanMode(${mode})"
+    
+    if (!state.hvac?.enabled) {
+        logWarn "setFanMode: HVAC mode is not enabled"
+        return
+    }
+    
+    if (!(mode in ['auto', 'low', 'medium', 'high'])) {
+        logWarn "setFanMode: invalid mode '${mode}', must be auto/low/medium/high"
+        return
+    }
+    
+    Integer speedValue = ['auto': 0, 'low': 1, 'medium': 2, 'high': 3][mode]
+    state.hvac.fanMode = mode
+    
+    // Send PMTSD command with current settings
+    if (state.hvac.mode != 'off') {
+        Integer powerValue = 0
+        Integer modeValue = ['cool': 0, 'heat': 1, 'auto': 2][state.hvac.mode] ?: 2
+        Integer currentTemp = getCurrentSetpoint(state.hvac.mode)
+        
+        sendPMTSDCommand(powerValue, modeValue, currentTemp, speedValue, getCurrentDisplayMode())
+    }
+    
+    sendEvent(name: 'fanMode', value: mode, descriptionText: "Fan mode set to ${mode}", type: 'digital')
+    
+    logInfo "Fan mode set to: ${mode}"
+}
+
+// Core PMTSD Command Function
+void sendPMTSDCommand(Integer power, Integer mode, Integer temp, Integer speed, Integer display) {
+    logDebug "sendPMTSDCommand: P=${power}, M=${mode}, T=${temp}, S=${speed}, D=${display}"
+    
+    try {
+        // Build PMTSD string
+        String pmtsdString = buildPMTSDString(power, mode, temp, speed, display)
+        logDebug "sendPMTSDCommand: PMTSD string = '${pmtsdString}'"
+        
+        // Build packet based on GeneratePMTSD_TD.py
+        List<Integer> packet = buildPMTSDPacket(pmtsdString)
+        String hexString = packet.collect { String.format('%02X', it) }.join('')
+        
+        List<String> cmds = []
+        cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString, [mfgCode: 0x115F])
+        
+        logDebug "sendPMTSDCommand: sending command: ${hexString}"
+        sendZigbeeCommands(cmds)
+        
+        logInfo "PMTSD command sent: ${pmtsdString}"
+        
+    } catch (Exception e) {
+        logWarn "sendPMTSDCommand: error sending PMTSD command: ${e.message}"
+    }
+}
+
+// Helper Functions for Current State Values
+private Integer getCurrentSetpoint(String mode) {
+    switch (mode) {
+        case 'heat':
+            return state.hvac?.heatingSetpoint ?: 22
+        case 'cool':
+            return state.hvac?.coolingSetpoint ?: 22
+        case 'auto':
+        default:
+            return state.hvac?.heatingSetpoint ?: 22
+    }
+}
+
+private Integer getCurrentFanSpeed() {
+    String fanMode = state.hvac?.fanMode ?: 'auto'
+    return ['auto': 0, 'low': 1, 'medium': 2, 'high': 3][fanMode] ?: 0
+}
+
+private Integer getCurrentDisplayMode() {
+    return 0  // Normal display mode (could be configurable in future)
+}
+
+// Packet Building Functions - Based on Python Scripts from GitHub Issue #27262
+private List<Integer> buildHVACEnablePacket() {
+    // Based on GenerateHVACOn_TD.py
+    List<Integer> packet = []
+    
+    // Lumi header using buildLumiHeader() - it returns a List<Integer>, not a Map
+    List<Integer> lumiHeader = buildLumiHeader(getNextCounter(), 4, 0x05)  // counter, payloadLength, action
+    packet.addAll(lumiHeader)
+    
+    // HVAC enable payload
+    packet.addAll([0x08, 0x44, 0x01, 0x01])  // Enable HVAC mode
+    
+    logDebug "buildHVACEnablePacket: packet = ${packet.collect { String.format('0x%02X', it) }.join(' ')}"
+    return packet
+}
+
+private List<Integer> buildHVACDisablePacket() {
+    // Based on GenerateHVACOff_TD.py
+    List<Integer> packet = []
+    
+    // Lumi header using buildLumiHeader() - it returns a List<Integer>, not a Map
+    List<Integer> lumiHeader = buildLumiHeader(getNextCounter(), 4, 0x05)  // counter, payloadLength, action
+    packet.addAll(lumiHeader)
+    
+    // HVAC disable payload
+    packet.addAll([0x08, 0x44, 0x01, 0x00])  // Disable HVAC mode
+    
+    logDebug "buildHVACDisablePacket: packet = ${packet.collect { String.format('0x%02X', it) }.join(' ')}"
+    return packet
+}
+
+private List<Integer> buildPMTSDPacket(String pmtsdString) {
+    // Based on GeneratePMTSD_TD.py
+    List<Integer> packet = []
+    
+    // ASCII payload
+    List<Integer> asciiBytes = encodePMTSDString(pmtsdString)
+    Integer payloadLength = 2 + 1 + asciiBytes.size()  // 0x08, 0x44, length byte, ASCII data
+    
+    // Lumi header using buildLumiHeader() - it returns a List<Integer>, not a Map
+    List<Integer> lumiHeader = buildLumiHeader(getNextCounter(), payloadLength, 0x05)
+    packet.addAll(lumiHeader)
+    
+    // PMTSD payload header
+    packet.addAll([0x08, 0x44])  // Payload type
+    
+    // ASCII payload
+    packet.add(asciiBytes.size())  // Payload length
+    packet.addAll(asciiBytes)      // ASCII data
+    
+    logDebug "buildPMTSDPacket: packet = ${packet.collect { String.format('0x%02X', it) }.join(' ')}"
+    return packet
+}
+
+// Convenience Methods for Thermostat Capability Compatibility
+void heat() { setThermostatMode('heat') }
+void cool() { setThermostatMode('cool') }
+void auto() { setThermostatMode('auto') }
+void off() { setThermostatMode('off') }
+void emergencyHeat() { 
+    logWarn "emergencyHeat: Emergency heat mode not supported by W100 HVAC"
+    setThermostatMode('heat')  // Fallback to heat mode
+}
+void eco() { 
+    logWarn "eco: Eco mode not supported by W100 HVAC" 
+    setThermostatMode('off')   // Fallback to off mode
+}
+
+// Debug Commands for HVAC Testing
+void debugSendPMTSD(String pmtsdString) {
+    logDebug "debugSendPMTSD(${pmtsdString})"
+    
+    try {
+        // Validate PMTSD format
+        if (!pmtsdString.matches(/^P[01]_M[012]_T\d+_S[0-3]_D[01]$/)) {
+            logWarn "debugSendPMTSD: invalid PMTSD format '${pmtsdString}'"
+            return
+        }
+        
+        // Parse and send
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(/P([01])_M([012])_T(\d+)_S([0-3])_D([01])/)
+        java.util.regex.Matcher matcher = pattern.matcher(pmtsdString)
+        
+        if (matcher.find()) {
+            Integer power = Integer.parseInt(matcher.group(1))
+            Integer mode = Integer.parseInt(matcher.group(2))
+            Integer temp = Integer.parseInt(matcher.group(3))
+            Integer speed = Integer.parseInt(matcher.group(4))
+            Integer display = Integer.parseInt(matcher.group(5))
+            
+            sendPMTSDCommand(power, mode, temp, speed, display)
+        }
+        
+    } catch (Exception e) {
+        logWarn "debugSendPMTSD: error parsing PMTSD string: ${e.message}"
+    }
+}
+
+void debugHVACStatus() {
+    logInfo "=== HVAC Status Debug ==="
+    logInfo "HVAC Enabled: ${state.hvac?.enabled ?: false}"
+    logInfo "Current Mode: ${state.hvac?.mode ?: 'unknown'}"
+    logInfo "Heating Setpoint: ${state.hvac?.heatingSetpoint ?: 'not set'}°C"
+    logInfo "Cooling Setpoint: ${state.hvac?.coolingSetpoint ?: 'not set'}°C"
+    logInfo "Fan Mode: ${state.hvac?.fanMode ?: 'unknown'}"
+    logInfo "Operating State: ${state.hvac?.operatingState ?: 'unknown'}"
+    logInfo "========================"
+}
+
+void debugToggleHVAC() {
+    logDebug "debugToggleHVAC: toggling HVAC state"
+    
+    if (state.hvac?.enabled) {
+        disableHVAC()
+    } else {
+        enableHVAC()
+    }
+}
+
+// Comprehensive HVAC Test Function
+void debugHVACTest() {
+    logInfo "=== HVAC Comprehensive Test ==="
+    
+    // Test 1: Enable HVAC
+    logInfo "Test 1: Enabling HVAC mode"
+    enableHVAC()
+    
+    // Test 2: Set thermostat mode to heat
+    runInMillis(3000, 'debugHVACTestStep2')
+}
+
+void debugHVACTestStep2() {
+    logInfo "Test 2: Setting thermostat mode to heat"
+    setThermostatMode('heat')
+    setHeatingSetpoint(24)
+    
+    runInMillis(3000, 'debugHVACTestStep3')
+}
+
+void debugHVACTestStep3() {
+    logInfo "Test 3: Setting thermostat mode to cool"
+    setThermostatMode('cool')
+    setCoolingSetpoint(20)
+    
+    runInMillis(3000, 'debugHVACTestStep4')
+}
+
+void debugHVACTestStep4() {
+    logInfo "Test 4: Setting fan mode to medium"
+    setFanMode('medium')
+    
+    runInMillis(3000, 'debugHVACTestStep5')
+}
+
+void debugHVACTestStep5() {
+    logInfo "Test 5: Sending raw PMTSD command"
+    debugSendPMTSD('P0_M2_T22_S1_D0')  // Auto mode, 22°C, Low fan
+    
+    runInMillis(3000, 'debugHVACTestStep6')
+}
+
+void debugHVACTestStep6() {
+    logInfo "Test 6: Final status check"
+    debugHVACStatus()
+    
+    logInfo "=== HVAC Test Complete ==="
+    logInfo "All HVAC functions have been tested. Check device events and logs for responses."
+}
+
+
+void testT(String par) {
+
+    logInfo "Test function called with parameter: ${par}"
+
+    debugHVACStatus()
+/*    
+    def cmds = []
+    def payload = "aa713244254a02412f6883f82c1854ef441001239925000054ef4461535f08000844150a0109e7a9bae8b083e58a9f000000000001012a40"
+
+    cmds = zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, payload, [mfgCode: 0x115F])
+    sendZigbeeCommands(cmds)
+*/    
+    
+    logDebug "testT(${par}) - COMPLETED"   
+}
+
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
