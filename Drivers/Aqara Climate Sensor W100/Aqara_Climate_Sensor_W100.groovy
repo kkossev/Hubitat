@@ -15,7 +15,7 @@
  *
  * ver. 1.0.0  2025-07-23 kkossev  - Initial version
  * ver. 1.1.0  2025-07-26 kkossev  - added external temperature and humidity sensor support
- * ver. 1.2.0  2025-08-12 kkossev  - (dev. branch)
+ * ver. 1.2.0  2025-08-12 kkossev  - (dev. branch) HVAC Thermostat support - work-in-progress
  *
  *                        TODO: 0x0168 and 0x016F attributes (alarms)
  *                        TODO: add support for external temperature and humidity sensors
@@ -24,9 +24,9 @@
  */
 
 static String version() { '1.2.0' }
-static String timeStamp() { '2025/08/12 2:06 PM' }
+static String timeStamp() { '2025/08/12 4:41 PM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -821,12 +821,12 @@ void setSensorMode(String mode) {
     if (mode == 'external') {
         // GitHub implementation for external mode - complex multi-step process
         String deviceIeee = device.zigbeeId
-        log.trace "${deviceIeee} - deviceIeee"
+        //log.trace "${deviceIeee} - deviceIeee"
         // Remove 0x prefix if present and ensure proper format
         String hexString = deviceIeee.startsWith('0x') ? deviceIeee.substring(2) : deviceIeee
         hexString = hexString.padLeft(16, '0')
         byte[] deviceBytes = hubitat.helper.HexUtils.hexStringToByteArray(hexString)
-        log.trace "deviceBytes: ${deviceBytes.collect { String.format('%02X', it & 0xFF) }.join('')}"
+        //log.trace "deviceBytes: ${deviceBytes.collect { String.format('%02X', it & 0xFF) }.join('')}"
         byte[] fictiveSensor = hubitat.helper.HexUtils.hexStringToByteArray("00158d00019d1b98")
         
         // Create timestamp
@@ -874,12 +874,12 @@ void setSensorMode(String mode) {
     } else {
         // Internal mode - GitHub implementation for internal mode
         String deviceIeee = device.zigbeeId
-        log.trace "${deviceIeee} - deviceIeee for internal mode"
+        //log.trace "${deviceIeee} - deviceIeee for internal mode"
         // Remove 0x prefix if present and ensure proper format
         String hexString = deviceIeee.startsWith('0x') ? deviceIeee.substring(2) : deviceIeee
         hexString = hexString.padLeft(16, '0')
         byte[] deviceBytes = hubitat.helper.HexUtils.hexStringToByteArray(hexString)
-        log.trace "deviceBytes: ${deviceBytes.collect { String.format('%02X', it & 0xFF) }.join('')}"
+        //log.trace "deviceBytes: ${deviceBytes.collect { String.format('%02X', it & 0xFF) }.join('')}"
         
         // Create timestamp
         byte[] timestamp = new byte[4]
@@ -1386,12 +1386,12 @@ void setFanMode(String mode) {
 }
 
 // Core PMTSD Command Function
-void sendPMTSDCommand(Integer power, Integer mode, Integer temp, Integer speed, Integer display) {
+void sendPMTSDCommand(BigDecimal power, BigDecimal mode, BigDecimal temp, BigDecimal speed, BigDecimal display) {
     logDebug "sendPMTSDCommand: P=${power}, M=${mode}, T=${temp}, S=${speed}, D=${display}"
     
     try {
         // Build PMTSD string
-        String pmtsdString = buildPMTSDString(power, mode, temp, speed, display)
+        String pmtsdString = buildPMTSDString(power as int, mode as int, temp as int, speed as int, display as int)
         logDebug "sendPMTSDCommand: PMTSD string = '${pmtsdString}'"
         
         // Build packet based on GeneratePMTSD_TD.py
@@ -1435,54 +1435,119 @@ private Integer getCurrentDisplayMode() {
 
 // Packet Building Functions - Based on Python Scripts from GitHub Issue #27262
 private List<Integer> buildHVACEnablePacket() {
-    // Based on GenerateHVACOn_TD.py
-    List<Integer> packet = []
+    // Based on GenerateHVACOn_TD.py - exact implementation
+    logDebug "buildHVACEnablePacket: generating HVAC enable message using Python script format"
     
-    // Lumi header using buildLumiHeader() - it returns a List<Integer>, not a Map
-    List<Integer> lumiHeader = buildLumiHeader(getNextCounter(), 4, 0x05)  // counter, payloadLength, action
-    packet.addAll(lumiHeader)
+    // Default device MAC from Python script: "54:EF:44:10:01:2D:D6:31"
+    List<Integer> deviceMac = [0x54, 0xEF, 0x44, 0x10, 0x01, 0x2D, 0xD6, 0x31]
     
-    // HVAC enable payload
-    packet.addAll([0x08, 0x44, 0x01, 0x01])  // Enable HVAC mode
+    // Default hub MAC from Python script: "54:EF:44:80:71:1A" (6 bytes)
+    List<Integer> hubMac = [0x54, 0xEF, 0x44, 0x80, 0x71, 0x1A]
     
-    logDebug "buildHVACEnablePacket: packet = ${packet.collect { String.format('0x%02X', it) }.join(' ')}"
-    return packet
+    // Fixed Zigbee prefix + 2 random bytes (use counter values instead of random)
+    List<Integer> prefix = [0xaa, 0x71, 0x32, 0x44]
+    prefix.addAll([getNextCounter() & 0xFF, getNextCounter() & 0xFF])  // 2 random bytes
+    
+    // Static Zigbee middle (do not touch)
+    List<Integer> zigbeeHeader = [0x02, 0x41, 0x2f, 0x68, 0x91]
+    
+    // 2-byte message ID (use counter values) + static 0x18
+    List<Integer> messageId = [getNextCounter() & 0xFF, getNextCounter() & 0xFF]
+    List<Integer> messageControl = [0x18]
+    
+    // Device and hub MACs
+    List<Integer> payloadMacs = []
+    payloadMacs.addAll(deviceMac)
+    payloadMacs.addAll([0x00, 0x00])  // 2 zero bytes
+    payloadMacs.addAll(hubMac)
+    
+    // Static tail
+    List<Integer> payloadTail = [
+        0x08, 0x00, 0x08, 0x44, 0x15, 0x0a, 0x01, 0x09, 0xe7, 0xa9, 0xba, 0xe8, 
+        0xb0, 0x83, 0xe5, 0x8a, 0x9f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x2a, 0x40
+    ]
+    
+    // Build final frame
+    List<Integer> frame = []
+    frame.addAll(prefix)
+    frame.addAll(zigbeeHeader)
+    frame.addAll(messageId)
+    frame.addAll(messageControl)
+    frame.addAll(payloadMacs)
+    frame.addAll(payloadTail)
+    
+    logDebug "buildHVACEnablePacket: frame length = ${frame.size()} bytes"
+    logDebug "buildHVACEnablePacket: packet = ${frame.collect { String.format('0x%02X', it) }.join(' ')}"
+    return frame
 }
 
 private List<Integer> buildHVACDisablePacket() {
-    // Based on GenerateHVACOff_TD.py
-    List<Integer> packet = []
+    // Based on GenerateHVACOff_TD.py - exact implementation
+    logDebug "buildHVACDisablePacket: generating HVAC disable message using Python script format"
     
-    // Lumi header using buildLumiHeader() - it returns a List<Integer>, not a Map
-    List<Integer> lumiHeader = buildLumiHeader(getNextCounter(), 4, 0x05)  // counter, payloadLength, action
-    packet.addAll(lumiHeader)
+    // Default target MAC from Python script: "54:ef:44:10:01:2d:d6:31"
+    List<Integer> targetMac = [0x54, 0xef, 0x44, 0x10, 0x01, 0x2d, 0xd6, 0x31]
     
-    // HVAC disable payload
-    packet.addAll([0x08, 0x44, 0x01, 0x00])  // Disable HVAC mode
+    // Get frame ID and sequence (use counter for both)
+    Integer frameId = getNextCounter()
+    Integer seq = getNextCounter()
     
-    logDebug "buildHVACDisablePacket: packet = ${packet.collect { String.format('0x%02X', it) }.join(' ')}"
-    return packet
+    // Build base message exactly like Python script
+    List<Integer> base = [
+        0xaa, 0x71, 0x1c, 0x44, 0x69, 0x1c, 0x04, 0x41,
+        0x19, 0x68, 0x91,
+        frameId & 0xFF,
+        seq & 0xFF,
+        0x18
+    ]
+    
+    // Add target MAC
+    base.addAll(targetMac)
+    
+    // Pad to 34 bytes total (like Python script)
+    while (base.size() < 34) {
+        base.add(0x00)
+    }
+    
+    logDebug "buildHVACDisablePacket: base message length = ${base.size()}, frameId = 0x${String.format('%02X', frameId)}, seq = 0x${String.format('%02X', seq)}"
+    logDebug "buildHVACDisablePacket: packet = ${base.collect { String.format('0x%02X', it) }.join(' ')}"
+    return base
 }
 
 private List<Integer> buildPMTSDPacket(String pmtsdString) {
-    // Based on GeneratePMTSD_TD.py
-    List<Integer> packet = []
+    // Based on GeneratePMTSD_TD.py - exact implementation
+    logDebug "buildPMTSDPacket: generating PMTSD message using Python script format"
     
-    // ASCII payload
-    List<Integer> asciiBytes = encodePMTSDString(pmtsdString)
-    Integer payloadLength = 2 + 1 + asciiBytes.size()  // 0x08, 0x44, length byte, ASCII data
+    // Default hub MAC from Python script: "54:EF:44:80:71:1A" (6 bytes)
+    List<Integer> hubMac = [0x54, 0xEF, 0x44, 0x80, 0x71, 0x1A]
     
-    // Lumi header using buildLumiHeader() - it returns a List<Integer>, not a Map
-    List<Integer> lumiHeader = buildLumiHeader(getNextCounter(), payloadLength, 0x05)
-    packet.addAll(lumiHeader)
+    // Encode PMTSD string to ASCII bytes
+    List<Integer> pmtsdBytes = encodePMTSDString(pmtsdString)
+    Integer pmtsdLen = pmtsdBytes.size()
     
-    // PMTSD payload header
-    packet.addAll([0x08, 0x44])  // Payload type
+    // Build packet exactly like Python script
+    List<Integer> packet = [
+        0xAA, 0x71, 0x1F, 0x44,
+        0x00, 0x00, 0x05, 0x41, 0x1C,  // counter and checksum will be set below
+        0x00, 0x00
+    ]
     
-    // ASCII payload
-    packet.add(asciiBytes.size())  // Payload length
-    packet.addAll(asciiBytes)      // ASCII data
+    // Add MAC bytes
+    packet.addAll(hubMac)
     
+    // Add PMTSD payload header and data
+    packet.addAll([0x08, 0x00, 0x08, 0x44, pmtsdLen])
+    packet.addAll(pmtsdBytes)
+    
+    // Set counter (random value like Python script)
+    Integer counter = getNextCounter()
+    packet[4] = counter
+    
+    // Calculate checksum (sum of all bytes & 0xFF like Python script)
+    Integer checksum = packet.sum() & 0xFF
+    packet[5] = checksum
+    
+    logDebug "buildPMTSDPacket: PMTSD='${pmtsdString}', counter=0x${String.format('%02X', counter)}, checksum=0x${String.format('%02X', checksum)}"
     logDebug "buildPMTSDPacket: packet = ${packet.collect { String.format('0x%02X', it) }.join(' ')}"
     return packet
 }
@@ -1602,12 +1667,50 @@ void debugHVACTestStep6() {
     logInfo "All HVAC functions have been tested. Check device events and logs for responses."
 }
 
+// Test Functions for HVAC Commands
+void testHVACEnable() {
+    logInfo "=== Testing HVAC Enable Command ==="
+    logInfo "Calling enableHVAC() using new Python script format..."
+    enableHVAC()
+    logInfo "HVAC Enable test completed - check logs for packet details"
+}
+
+void testHVACDisable() {
+    logInfo "=== Testing HVAC Disable Command ==="  
+    logInfo "Calling disableHVAC() using new Python script format..."
+    disableHVAC()
+    logInfo "HVAC Disable test completed - check logs for packet details"
+}
+
+void testPMTSDSend(String pmtsdString = 'P0_M1_T22_S0_D0') {
+    logInfo "=== Testing PMTSD Send Command ==="
+    logInfo "Sending PMTSD: ${pmtsdString} using new Python script format..."
+    
+    // Validate PMTSD format
+    if (!pmtsdString.matches(/^P[01]_M[012]_T\d+_S[0-3]_D[01]$/)) {
+        logWarn "testPMTSDSend: invalid PMTSD format '${pmtsdString}'"
+        logInfo "Expected format: P0_M1_T22_S0_D0 (Power_Mode_Temp_Speed_Display)"
+        return
+    }
+    
+    // Parse and send using debugSendPMTSD
+    debugSendPMTSD(pmtsdString)
+    logInfo "PMTSD Send test completed - check logs for packet details"
+}
+
+void parseTestPMTSD(String hexData) {
+    logInfo "=== Testing PMTSD Parse Function ==="
+    logInfo "Parsing hex data: ${hexData}"
+    parsePMTSDResponse(hexData)
+    logInfo "PMTSD Parse test completed - check logs for results"
+}
+
 
 void testT(String par) {
 
     logInfo "Test function called with parameter: ${par}"
 
-    debugHVACStatus()
+    debugHVACTest()
 /*    
     def cmds = []
     def payload = "aa713244254a02412f6883f82c1854ef441001239925000054ef4461535f08000844150a0109e7a9bae8b083e58a9f000000000001012a40"
