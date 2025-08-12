@@ -1484,21 +1484,43 @@ private void parseAA72StateChange(String value) {
         String asciiPayload = new String(asciiBytes, 'ASCII')
         logDebug "parseAA72StateChange: extracted ASCII payload: '${asciiPayload}'"
         
-        // Parse the ASCII payload for mode and temperature (format: "M1_T33" or similar)
-        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(/M([012])(?:_T(\d+))?/)
-        java.util.regex.Matcher matcher = pattern.matcher(asciiPayload)
+        // Parse the ASCII payload for mode, temperature, and fan speed changes
+        // Patterns: "M1_T33", "P0_S2", "M2_T25_S1", etc.
         
-        if (matcher.find()) {
-            Integer mode = Integer.parseInt(matcher.group(1))
-            Integer temp = matcher.group(2) ? Integer.parseInt(matcher.group(2)) : null
+        // Check for mode changes (M0/M1/M2)
+        java.util.regex.Pattern modePattern = java.util.regex.Pattern.compile(/M([012])(?:_T(\d+))?/)
+        java.util.regex.Matcher modeMatcher = modePattern.matcher(asciiPayload)
+        
+        // Check for fan speed changes (S0/S1/S2/S3)
+        java.util.regex.Pattern fanPattern = java.util.regex.Pattern.compile(/S([0-3])/)
+        java.util.regex.Matcher fanMatcher = fanPattern.matcher(asciiPayload)
+        
+        boolean foundChanges = false
+        
+        if (modeMatcher.find()) {
+            Integer mode = Integer.parseInt(modeMatcher.group(1))
+            Integer temp = modeMatcher.group(2) ? Integer.parseInt(modeMatcher.group(2)) : null
             
             String modeName = ['Cool', 'Heat', 'Auto'][mode]
             logInfo "W100 state change detected: Mode=${modeName} (${mode})" + (temp ? ", Temperature=${temp}°C" : "")
             
             // Update the Hubitat device state
-            updateDeviceStateFromW100(mode, temp)
-        } else {
-            logDebug "parseAA72StateChange: no mode pattern found in ASCII payload: '${asciiPayload}'"
+            updateDeviceStateFromW100(mode, temp, null)
+            foundChanges = true
+        }
+        
+        if (fanMatcher.find()) {
+            Integer fanSpeed = Integer.parseInt(fanMatcher.group(1))
+            String fanSpeedName = ['Auto', 'Low', 'Medium', 'High'][fanSpeed]
+            logInfo "W100 fan speed change detected: Speed=${fanSpeedName} (${fanSpeed})"
+            
+            // Update the Hubitat device fan mode
+            updateFanModeFromW100(fanSpeed)
+            foundChanges = true
+        }
+        
+        if (!foundChanges) {
+            logDebug "parseAA72StateChange: no recognized pattern found in ASCII payload: '${asciiPayload}'"
         }
         
     } catch (Exception e) {
@@ -1507,8 +1529,8 @@ private void parseAA72StateChange(String value) {
 }
 
 // Update device state when W100 reports mode/temperature changes
-private void updateDeviceStateFromW100(Integer mode, Integer temp) {
-    logDebug "updateDeviceStateFromW100: mode=${mode}, temp=${temp}"
+private void updateDeviceStateFromW100(Integer mode, Integer temp, Integer fanSpeed) {
+    logDebug "updateDeviceStateFromW100: mode=${mode}, temp=${temp}, fanSpeed=${fanSpeed}"
     
     // Initialize state if needed
     if (!state.hvac) state.hvac = [:]
@@ -1571,6 +1593,27 @@ private void updateDeviceStateFromW100(Integer mode, Integer temp) {
                 logInfo "${setpointName.capitalize()} setpoint updated to: ${tempDouble}°C"
             }
         }
+    }
+}
+
+// Update fan mode when W100 reports fan speed changes
+private void updateFanModeFromW100(Integer fanSpeed) {
+    logDebug "updateFanModeFromW100: fanSpeed=${fanSpeed}"
+    
+    // Initialize state if needed
+    if (!state.hvac) state.hvac = [:]
+    
+    // Map W100 fan speed to Hubitat fan mode
+    String newFanMode = ['auto', 'low', 'medium', 'high'][fanSpeed]
+    String oldFanMode = device.currentValue('thermostatFanMode')
+    
+    // Update fan mode if changed
+    if (oldFanMode != newFanMode) {
+        state.hvac.fanMode = newFanMode
+        sendEvent(name: 'thermostatFanMode', value: newFanMode,
+                 descriptionText: "Fan mode changed to ${newFanMode} via W100",
+                 type: 'physical')
+        logInfo "Fan mode updated to: ${newFanMode}"
     }
 }
 
