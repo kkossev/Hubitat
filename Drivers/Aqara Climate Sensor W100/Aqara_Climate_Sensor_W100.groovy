@@ -24,7 +24,7 @@
  */
 
 static String version() { '1.2.0' }
-static String timeStamp() { '2025/08/12 10:43 PM' }
+static String timeStamp() { '2025/08/12 11:10 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -117,6 +117,7 @@ metadata {
         command 'setHeatingSetpoint', [[name: 'temperature', type: 'NUMBER', description: 'Set heating setpoint (10-35°C)', range: '10..35', required: true]]
         command 'setCoolingSetpoint', [[name: 'temperature', type: 'NUMBER', description: 'Set cooling setpoint (10-35°C)', range: '10..35', required: true]]
         command 'setThermostatSetpoint', [[name: 'temperature', type: 'NUMBER', description: 'Set thermostat setpoint (10-35°C)', range: '10..35', required: true]]
+        command 'setThermostatFanMode', [[name: 'mode', type: 'ENUM', constraints: ['auto', 'low', 'medium', 'high'], description: 'Set thermostat fan mode']]
         command 'setFanMode', [[name: 'mode', type: 'ENUM', constraints: ['auto', 'low', 'medium', 'high'], description: 'Set fan mode']]
         command 'sendPMTSDCommand', [[name: 'power', type: 'NUMBER', description: 'Power (0=On, 1=Off)', range: '0..1'], [name: 'mode', type: 'NUMBER', description: 'Mode (0=Cool, 1=Heat, 2=Auto)', range: '0..2'], [name: 'temp', type: 'NUMBER', description: 'Temperature (10-35°C)', range: '10..35'], [name: 'speed', type: 'NUMBER', description: 'Fan Speed (0=Auto, 1=Low, 2=Med, 3=High)', range: '0..3'], [name: 'display', type: 'NUMBER', description: 'Display mode (0/1)', range: '0..1']]
         
@@ -152,6 +153,9 @@ metadata {
     // https://github.com/Koenkk/zigbee2mqtt/issues/27262
     // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/lumi.ts#L4571 
     // https://github.com/rohankapoorcom/zigbee-herdsman-converters/blob/753c114f428d36e8164837922ea0ac89039f0bf6/src/devices/lumi.ts#L4569 
+    // https://cdn.shopify.com/s/files/1/0710/9220/7830/files/Climate_Sensor_W100_User_Manual_EN.pdf
+    // https://github.com/Koenkk/zigbee2mqtt/issues/27262#issuecomment-3157214339
+    // https://github.com/greenspeedracer/W100-Scripts
     'AQARA_CLIMATE_SENSOR_W100'   : [
             description   : 'Aqara Climate Sensor W100',
             device        : [manufacturers: ['Aqara'], type: 'Sensor', powerSource: 'battery', isSleepy:false],
@@ -1900,9 +1904,15 @@ void setFanMode(String mode) {
         sendPMTSDCommand(powerValue, modeValue, currentTemp, speedValue, getCurrentDisplayMode())
     }
     
-    sendEvent(name: 'fanMode', value: mode, descriptionText: "Fan mode set to ${mode}", type: 'digital')
+    sendEvent(name: 'thermostatFanMode', value: mode, descriptionText: "Fan mode set to ${mode}", type: 'digital')
     
     logInfo "Fan mode set to: ${mode}"
+}
+
+// Set thermostat fan mode (standard Hubitat method)
+void setThermostatFanMode(String mode) {
+    logDebug "setThermostatFanMode(${mode})"
+    setFanMode(mode)  // Delegate to the main setFanMode implementation
 }
 
 // Core PMTSD Command Function
@@ -2077,6 +2087,13 @@ void heat() { setThermostatMode('heat') }
 void cool() { setThermostatMode('cool') }
 void auto() { setThermostatMode('auto') }
 void off() { setThermostatMode('off') }
+
+// Fan Mode Convenience Methods
+void fanAuto() { setThermostatFanMode('auto') }
+void fanLow() { setThermostatFanMode('low') }
+void fanMedium() { setThermostatFanMode('medium') }
+void fanHigh() { setThermostatFanMode('high') }
+
 void emergencyHeat() { 
     logWarn "emergencyHeat: Emergency heat mode not supported by W100 HVAC"
     setThermostatMode('heat')  // Fallback to heat mode
