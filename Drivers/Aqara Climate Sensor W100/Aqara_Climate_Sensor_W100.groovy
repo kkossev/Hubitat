@@ -374,13 +374,151 @@ void parseButtonAction(final Map descMap) {
         if (action != 'unknown') {
             logInfo "Button ${buttonName} (${endpoint}) ${action}"
             
-            // Use buttonLib's sendButtonEvent function
-            sendButtonEvent(endpoint, action, isDigital = false)
+            // Check button mode - if HVAC enabled, buttons control thermostat, else send action events
+            if (state.hvac?.enabled && state.hvac?.buttonMode == 'thermostat') {
+                handleThermostatButtonControl(endpoint, action, buttonName)
+            } else {
+                // Use buttonLib's sendButtonEvent function for normal action events
+                sendButtonEvent(endpoint, action, isDigital = false)
+            }
         } else {
             logWarn "parseButtonAction: unknown action value ${actionValue} for button ${buttonName}"
         }
     } else {
         logDebug "parseButtonAction: skipping - cluster=${cluster}, attrId=${descMap.attrId}"
+    }
+}
+
+// Handle button control when in thermostat mode
+private void handleThermostatButtonControl(Integer endpoint, String action, String buttonName) {
+    logDebug "handleThermostatButtonControl: button ${buttonName} (${endpoint}) ${action} - controlling thermostat"
+    
+    // Map button actions to thermostat controls based on W100 interactive mode
+    switch (endpoint) {
+        case 1: // Up button
+            if (action == 'pushed') {
+                adjustThermostatSetpoint(true)  // Increase setpoint
+            } else if (action == 'held') {
+                cycleThermostatMode()  // Change mode on hold
+            }
+            break
+            
+        case 2: // Down button  
+            if (action == 'pushed') {
+                adjustThermostatSetpoint(false)  // Decrease setpoint
+            } else if (action == 'held') {
+                cycleFanMode()  // Change fan mode on hold
+            }
+            break
+            
+        case 3: // Function button
+            if (action == 'pushed') {
+                toggleThermostatOperatingState()  // Toggle heating/cooling
+            } else if (action == 'held') {
+                // Reserved for future use - maybe switch back to action mode
+                logInfo "Function button held - feature reserved"
+            }
+            break
+            
+        default:
+            logDebug "handleThermostatButtonControl: unmapped button ${endpoint}"
+    }
+}
+
+// Helper functions for thermostat button control
+private void adjustThermostatSetpoint(Boolean increase) {
+    if (!state.hvac?.enabled) return
+    
+    String mode = state.hvac.mode ?: 'off'
+    if (mode == 'off') return
+    
+    // Determine which setpoint to adjust based on current mode
+    String setpointType = (mode == 'heat') ? 'heatingSetpoint' : 'coolingSetpoint'
+    Double currentSetpoint = state.hvac[setpointType] ?: 22.0
+    Double newSetpoint = increase ? currentSetpoint + 0.5 : currentSetpoint - 0.5
+    
+    // Clamp to reasonable limits
+    newSetpoint = Math.max(10.0, Math.min(35.0, newSetpoint))
+    
+    logInfo "Adjusting ${setpointType} from ${currentSetpoint}°C to ${newSetpoint}°C"
+    state.hvac[setpointType] = newSetpoint
+    
+    // Send event and update W100
+    sendEvent(name: setpointType, value: newSetpoint, unit: '°C', descriptionText: "Button adjusted ${setpointType} to ${newSetpoint}°C", type: 'physical')
+    
+    // Update W100 display with new setpoint
+    runInMillis(500, 'sendPMTSDUpdate')
+}
+
+private void cycleThermostatMode() {
+    if (!state.hvac?.enabled) return
+    
+    String currentMode = state.hvac.mode ?: 'off'
+    String newMode
+    
+    switch (currentMode) {
+        case 'off': newMode = 'heat'; break
+        case 'heat': newMode = 'cool'; break
+        case 'cool': newMode = 'auto'; break
+        case 'auto': newMode = 'off'; break
+        default: newMode = 'off'
+    }
+    
+    logInfo "Cycling thermostat mode from ${currentMode} to ${newMode}"
+    state.hvac.mode = newMode
+    
+    // Send event and update W100
+    sendEvent(name: 'thermostatMode', value: newMode, descriptionText: "Button changed mode to ${newMode}", type: 'physical')
+    
+    // Update W100 display with new mode
+    runInMillis(500, 'sendPMTSDUpdate')
+}
+
+private void cycleFanMode() {
+    if (!state.hvac?.enabled) return
+    
+    String currentFan = state.hvac.fanMode ?: 'auto'
+    String newFan
+    
+    switch (currentFan) {
+        case 'auto': newFan = 'low'; break
+        case 'low': newFan = 'medium'; break  
+        case 'medium': newFan = 'high'; break
+        case 'high': newFan = 'auto'; break
+        default: newFan = 'auto'
+    }
+    
+    logInfo "Cycling fan mode from ${currentFan} to ${newFan}"
+    state.hvac.fanMode = newFan
+    
+    // Send event and update W100
+    sendEvent(name: 'thermostatFanMode', value: newFan, descriptionText: "Button changed fan mode to ${newFan}", type: 'physical')
+    
+    // Update W100 display with new fan mode
+    runInMillis(500, 'sendPMTSDUpdate')
+}
+
+private void toggleThermostatOperatingState() {
+    if (!state.hvac?.enabled) return
+    
+    String currentState = state.hvac.operatingState ?: 'idle'
+    String newState = (currentState == 'idle') ? 'heating' : 'idle'  // Simple toggle for demo
+    
+    logInfo "Toggling operating state from ${currentState} to ${newState}"
+    state.hvac.operatingState = newState
+    
+    // Send event
+    sendEvent(name: 'thermostatOperatingState', value: newState, descriptionText: "Button changed operating state to ${newState}", type: 'physical')
+}
+
+// Send updated PMTSD command to reflect current thermostat state
+void sendPMTSDUpdate() {
+    if (!state.hvac?.enabled) return
+    
+    String pmtsdString = getCurrentThermostatState()
+    if (pmtsdString) {
+        logDebug "sendPMTSDUpdate: updating W100 with current state: ${pmtsdString}"
+        sendPMTSDCommand(pmtsdString)
     }
 }
 
@@ -428,12 +566,59 @@ void parseExternalSensorResponse(String value) {
             return
         }
         
-        // Check if this is an HVAC PMTSD response by looking for ASCII payload markers
-        // HVAC responses contain 0x08, 0x44 sequence followed by ASCII data
-        if (value.contains('0844') || value.toUpperCase().contains('0844')) {
-            logDebug "parseExternalSensorResponse: detected HVAC PMTSD response"
-            parsePMTSDResponse(value)
-            return
+        // Check if this is a Lumi header response (starts with AA71 or AA72)
+        if (value.toUpperCase().startsWith('AA71') || value.toUpperCase().startsWith('AA72')) {
+            String headerType = value.toUpperCase().startsWith('AA71') ? "AA71" : "AA72"
+            logDebug "parseExternalSensorResponse: detected Lumi header response (${headerType})"
+            
+            // Handle AA72 packets (temperature/mode change reports from W100)
+            if (headerType == "AA72") {
+                logDebug "parseExternalSensorResponse: processing AA72 packet - W100 state change"
+                parseAA72StateChange(value)
+                return
+            }
+            
+            // Handle AA71 packets (button requests and responses)
+            // Check for PMTSD request from W100 (ends with 08:00:08:44)
+            if (value.toUpperCase().endsWith('08000844')) {
+                logInfo "W100 requesting current PMTSD state - sending automatic response"
+                handlePMTSDRequest(value)
+                return
+            }
+            
+            // Check if this is an HVAC PMTSD response by looking for ASCII payload markers
+            // HVAC responses contain 0x08, 0x44 sequence followed by ASCII data
+            if (value.contains('0844') || value.toUpperCase().contains('0844')) {
+                logDebug "parseExternalSensorResponse: detected HVAC PMTSD response with ASCII payload"
+                parsePMTSDResponse(value)
+                return
+            } else {
+                // This is likely an HVAC enable/disable acknowledgment without ASCII payload
+                logInfo "HVAC command acknowledgment received: ${value}"
+                
+                // Try to extract meaningful information from the Lumi header
+                if (value.length() >= 18) { // Minimum Lumi header length
+                    byte[] data = hubitat.helper.HexUtils.hexStringToByteArray(value)
+                    if (data.length >= 9) {
+                        Integer msgType = data[1] & 0xFF
+                        Integer length = data[2] & 0xFF
+                        Integer counter = data[4] & 0xFF
+                        Integer action = data[5] & 0xFF
+                        
+                        logDebug "parseExternalSensorResponse: Lumi header - msgType=0x${String.format('%02X', msgType)}, length=0x${String.format('%02X', length)}, counter=0x${String.format('%02X', counter)}, action=0x${String.format('%02X', action)}"
+                        
+                        // Check for specific HVAC response patterns
+                        if (action == 0x04) {
+                            logInfo "HVAC disable command acknowledged by device"
+                        } else if (action == 0x05) {
+                            logInfo "HVAC enable command acknowledged by device"
+                        } else {
+                            logInfo "HVAC command acknowledged (action=0x${String.format('%02X', action)})"
+                        }
+                    }
+                }
+                return
+            }
         }
         
         // Handle external sensor mode response (original functionality)
@@ -1151,19 +1336,306 @@ private void parsePMTSDResponse(String hexValue) {
     }
 }
 
-// Update device attributes from received PMTSD data
-private void updateHVACFromPMTSD(Integer power, Integer mode, Integer temp, Integer speed, Integer display) {
-    // Update state
-    state.hvac.mode = (power == 1) ? 'off' : ['cool', 'heat', 'auto'][mode]
-    state.hvac.heatingSetpoint = (mode == 1) ? temp : state.hvac.heatingSetpoint
-    state.hvac.coolingSetpoint = (mode == 0) ? temp : state.hvac.coolingSetpoint
-    state.hvac.fanMode = ['auto', 'low', 'medium', 'high'][speed]
-    state.hvac.operatingState = (power == 1) ? 'idle' : (['cooling', 'heating', 'idle'][mode] ?: 'idle')
+// Handle PMTSD request from W100 - automatically respond with current thermostat state
+private void handlePMTSDRequest(String hexValue) {
+    logDebug "handlePMTSDRequest: W100 requesting current PMTSD state"
     
-    // Send events
-    sendEvent(name: 'thermostatMode', value: state.hvac.mode, descriptionText: "Thermostat mode: ${state.hvac.mode}", type: 'physical')
+    // Extract coordinator IEEE from the request (should match our hub MAC)
+    try {
+        byte[] data = hubitat.helper.HexUtils.hexStringToByteArray(hexValue)
+        if (data.length >= 17) {
+            // Extract the IEEE address from positions 11-16 (6 bytes)
+            List<Integer> coordinatorMac = []
+            for (int i = 11; i < 17; i++) {
+                coordinatorMac.add(data[i] & 0xFF)
+            }
+            String macStr = coordinatorMac.collect { String.format('%02X', it) }.join(':')
+            logDebug "handlePMTSDRequest: coordinator MAC in request: ${macStr}"
+        }
+    } catch (Exception e) {
+        logWarn "handlePMTSDRequest: error parsing request: ${e.message}"
+    }
+    
+    // Get current thermostat state
+    Map currentState = getCurrentThermostatState()
+    
+    // Send current PMTSD state back to W100 to confirm the link
+    logInfo "Responding to W100 PMTSD request with current state: P=${currentState.power}, M=${currentState.mode}, T=${currentState.temperature}, S=${currentState.speed}, D=${currentState.display}"
+    
+    // Use sendPMTSDCommand to respond
+    sendPMTSDCommand(currentState.power, currentState.mode, currentState.temperature, currentState.speed, currentState.display)
+}
+
+// Get current thermostat state in PMTSD format
+private Map getCurrentThermostatState() {
+    Map hvacState = state.hvac ?: [:]
+    
+    // Default values if not set
+    Integer power = (hvacState.enabled != false) ? 0 : 1  // 0 = On, 1 = Off
+    Integer mode = 2  // Default to Auto
+    Integer temperature = 22  // Default temperature
+    Integer speed = 0  // Default to Auto fan
+    Integer display = 0  // Unknown display setting
+    
+    // Map Hubitat thermostat mode to PMTSD mode
+    String currentMode = hvacState.mode ?: 'auto'
+    switch (currentMode.toLowerCase()) {
+        case 'cool':
+        case 'cooling':
+            mode = 0
+            break
+        case 'heat': 
+        case 'heating':
+            mode = 1
+            break
+        case 'auto':
+        default:
+            mode = 2
+            break
+    }
+    
+    // Get current setpoint temperature
+    if (hvacState.heatingSetpoint != null) {
+        temperature = Math.round(hvacState.heatingSetpoint as Double) as Integer
+    } else if (hvacState.coolingSetpoint != null) {
+        temperature = Math.round(hvacState.coolingSetpoint as Double) as Integer
+    }
+    
+    // Get fan mode
+    String fanMode = hvacState.fanMode ?: 'auto'
+    switch (fanMode.toLowerCase()) {
+        case 'auto':
+            speed = 0
+            break
+        case 'low':
+            speed = 1
+            break
+        case 'medium':
+            speed = 2
+            break
+        case 'high':
+            speed = 3
+            break
+        default:
+            speed = 0
+            break
+    }
+    
+    logDebug "getCurrentThermostatState: power=${power}, mode=${mode}, temp=${temperature}, speed=${speed}, display=${display}"
+    
+    return [
+        power: power,
+        mode: mode, 
+        temperature: temperature,
+        speed: speed,
+        display: display
+    ]
+}
+
+// Update device attributes from received PMTSD data
+// Parse AA72 packets containing temperature and mode changes from W100
+private void parseAA72StateChange(String value) {
+    logDebug "parseAA72StateChange: parsing AA72 packet: ${value}"
+    
+    try {
+        // Convert hex string to byte array
+        byte[] data = hubitat.helper.HexUtils.hexStringToByteArray(value)
+        
+        if (data.length < 20) {
+            logDebug "parseAA72StateChange: packet too short (${data.length} bytes)"
+            return
+        }
+        
+        // Look for PMTSD data pattern: find 08000844 followed by ASCII payload length
+        String hexValue = value.toUpperCase()
+        int pmtsdIndex = hexValue.indexOf('08000844')
+        
+        if (pmtsdIndex == -1) {
+            logDebug "parseAA72StateChange: no PMTSD marker (08000844) found"
+            return
+        }
+        
+        // Calculate byte position of PMTSD data
+        int pmtsdByteIndex = pmtsdIndex / 2
+        
+        // Check if there's enough data after PMTSD marker for length byte
+        if (pmtsdByteIndex + 4 >= data.length) {
+            logDebug "parseAA72StateChange: insufficient data after PMTSD marker"
+            return
+        }
+        
+        // Get ASCII payload length (byte after 08000844)
+        int asciiLengthIndex = pmtsdByteIndex + 4
+        Integer asciiLength = data[asciiLengthIndex] & 0xFF
+        
+        logDebug "parseAA72StateChange: ASCII payload length: ${asciiLength}"
+        
+        if (asciiLength <= 0 || asciiLengthIndex + 1 + asciiLength > data.length) {
+            logDebug "parseAA72StateChange: invalid ASCII length or insufficient data"
+            return
+        }
+        
+        // Extract ASCII payload
+        byte[] asciiBytes = new byte[asciiLength]
+        for (int i = 0; i < asciiLength; i++) {
+            asciiBytes[i] = data[asciiLengthIndex + 1 + i]
+        }
+        
+        String asciiPayload = new String(asciiBytes, 'ASCII')
+        logDebug "parseAA72StateChange: extracted ASCII payload: '${asciiPayload}'"
+        
+        // Parse the ASCII payload for mode and temperature (format: "M1_T33" or similar)
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(/M([012])(?:_T(\d+))?/)
+        java.util.regex.Matcher matcher = pattern.matcher(asciiPayload)
+        
+        if (matcher.find()) {
+            Integer mode = Integer.parseInt(matcher.group(1))
+            Integer temp = matcher.group(2) ? Integer.parseInt(matcher.group(2)) : null
+            
+            String modeName = ['Cool', 'Heat', 'Auto'][mode]
+            logInfo "W100 state change detected: Mode=${modeName} (${mode})" + (temp ? ", Temperature=${temp}°C" : "")
+            
+            // Update the Hubitat device state
+            updateDeviceStateFromW100(mode, temp)
+        } else {
+            logDebug "parseAA72StateChange: no mode pattern found in ASCII payload: '${asciiPayload}'"
+        }
+        
+    } catch (Exception e) {
+        logWarn "parseAA72StateChange: error parsing AA72 packet: ${e.message}"
+    }
+}
+
+// Update device state when W100 reports mode/temperature changes
+private void updateDeviceStateFromW100(Integer mode, Integer temp) {
+    logDebug "updateDeviceStateFromW100: mode=${mode}, temp=${temp}"
+    
+    // Initialize state if needed
+    if (!state.hvac) state.hvac = [:]
+    
+    // Map W100 mode to Hubitat thermostat mode
+    String newThermostatMode = ['cool', 'heat', 'auto'][mode]
+    String oldThermostatMode = device.currentValue('thermostatMode')
+    
+    // Update thermostat mode if changed
+    if (oldThermostatMode != newThermostatMode) {
+        state.hvac.mode = newThermostatMode
+        sendEvent(name: 'thermostatMode', value: newThermostatMode, 
+                 descriptionText: "Thermostat mode changed to ${newThermostatMode} via W100", 
+                 type: 'physical')
+        logInfo "Thermostat mode updated to: ${newThermostatMode}"
+    }
+    
+    // Update setpoint temperature if provided
+    if (temp != null) {
+        Double tempDouble = temp as Double
+        String setpointAttribute = null
+        String setpointName = null
+        
+        if (mode == 0) { // Cool mode
+            setpointAttribute = 'coolingSetpoint'
+            setpointName = 'cooling'
+            state.hvac.coolingSetpoint = tempDouble
+        } else if (mode == 1) { // Heat mode
+            setpointAttribute = 'heatingSetpoint'
+            setpointName = 'heating'
+            state.hvac.heatingSetpoint = tempDouble
+        } else if (mode == 2) { // Auto mode - update both
+            // For auto mode, update the setpoint that makes most sense
+            // or update both to the same value
+            Double currentTemp = device.currentValue('temperature') as Double
+            if (currentTemp != null) {
+                if (tempDouble > currentTemp) {
+                    setpointAttribute = 'coolingSetpoint'
+                    setpointName = 'cooling'
+                    state.hvac.coolingSetpoint = tempDouble
+                } else {
+                    setpointAttribute = 'heatingSetpoint'
+                    setpointName = 'heating'
+                    state.hvac.heatingSetpoint = tempDouble
+                }
+            } else {
+                // Default to heating setpoint if we don't know current temp
+                setpointAttribute = 'heatingSetpoint'
+                setpointName = 'heating'
+                state.hvac.heatingSetpoint = tempDouble
+            }
+        }
+        
+        if (setpointAttribute && setpointName) {
+            Double oldSetpoint = device.currentValue(setpointAttribute) as Double
+            if (oldSetpoint != tempDouble) {
+                sendEvent(name: setpointAttribute, value: tempDouble, unit: '°C',
+                         descriptionText: "${setpointName.capitalize()} setpoint changed to ${tempDouble}°C via W100",
+                         type: 'physical')
+                logInfo "${setpointName.capitalize()} setpoint updated to: ${tempDouble}°C"
+            }
+        }
+    }
+}
+
+private void updateHVACFromPMTSD(Integer power, Integer mode, Integer temp, Integer speed, Integer display) {
+    logInfo "updateHVACFromPMTSD: W100 updated thermostat - Power=${power == 0 ? 'On' : 'Off'}, Mode=${['Cool', 'Heat', 'Auto'][mode]}, Temp=${temp}°C, Speed=${['Auto', 'Low', 'Med', 'High'][speed]}"
+    
+    // Initialize state if needed
+    if (!state.hvac) state.hvac = [:]
+    
+    // Update thermostat power state
+    boolean wasEnabled = state.hvac.enabled != false
+    boolean nowEnabled = (power == 0)
+    state.hvac.enabled = nowEnabled
+    
+    // Update thermostat mode
+    String newMode = (power == 1) ? 'off' : ['cool', 'heat', 'auto'][mode]
+    String oldMode = state.hvac.mode
+    state.hvac.mode = newMode
+    
+    // Update setpoint temperatures based on mode
+    Double oldHeatingSetpoint = state.hvac.heatingSetpoint as Double
+    Double oldCoolingSetpoint = state.hvac.coolingSetpoint as Double
+    
+    if (mode == 1) { // Heating mode
+        state.hvac.heatingSetpoint = temp as Double
+    } else if (mode == 0) { // Cooling mode  
+        state.hvac.coolingSetpoint = temp as Double
+    } else { // Auto mode - update both
+        state.hvac.heatingSetpoint = temp as Double
+        state.hvac.coolingSetpoint = temp as Double
+    }
+    
+    // Update fan mode
+    String newFanMode = ['auto', 'low', 'medium', 'high'][speed]
+    String oldFanMode = state.hvac.fanMode
+    state.hvac.fanMode = newFanMode
+    
+    // Update operating state
+    String newOperatingState = (power == 1) ? 'idle' : (['cooling', 'heating', 'idle'][mode] ?: 'idle')
+    state.hvac.operatingState = newOperatingState
+    
+    // Send Hubitat events for changed values
+    if (oldMode != newMode) {
+        sendEvent(name: 'thermostatMode', value: newMode, descriptionText: "Thermostat mode changed to ${newMode} via W100", type: 'physical')
+    }
+    
+    if (mode == 1 && oldHeatingSetpoint != temp) {
+        sendEvent(name: 'heatingSetpoint', value: temp, unit: '°C', descriptionText: "Heating setpoint changed to ${temp}°C via W100", type: 'physical')
+    }
+    
+    if (mode == 0 && oldCoolingSetpoint != temp) {
+        sendEvent(name: 'coolingSetpoint', value: temp, unit: '°C', descriptionText: "Cooling setpoint changed to ${temp}°C via W100", type: 'physical')
+    }
+    
+    // Always send general setpoint event
     sendEvent(name: 'thermostatSetpoint', value: temp, unit: '°C', descriptionText: "Thermostat setpoint: ${temp}°C", type: 'physical')
-    sendEvent(name: 'fanMode', value: state.hvac.fanMode, descriptionText: "Fan mode: ${state.hvac.fanMode}", type: 'physical')
+    
+    if (oldFanMode != newFanMode) {
+        sendEvent(name: 'thermostatFanMode', value: newFanMode, descriptionText: "Fan mode changed to ${newFanMode} via W100", type: 'physical')
+    }
+    
+    sendEvent(name: 'thermostatOperatingState', value: newOperatingState, descriptionText: "Operating state: ${newOperatingState}", type: 'physical')
+    
+    // Log the changes
+    logInfo "W100 Control Update: Mode: ${oldMode} → ${newMode}, Setpoint: ${temp}°C, Fan: ${oldFanMode} → ${newFanMode}"
     sendEvent(name: 'thermostatOperatingState', value: state.hvac.operatingState, descriptionText: "Operating state: ${state.hvac.operatingState}", type: 'physical')
     
     if (mode == 1) {  // Heating mode
@@ -1188,8 +1660,13 @@ void enableHVAC() {
             state.hvac.fanMode = 'auto'
             state.hvac.operatingState = 'idle'
             state.hvac.displayMode = 'normal'
+            state.hvac.buttonMode = 'actions'  // Track button behavior
             logDebug "enableHVAC: initialized HVAC state variables"
         }
+        
+        // Enable HVAC state and switch to thermostat mode
+        state.hvac.enabled = true
+        state.hvac.buttonMode = 'thermostat'  // Buttons now control thermostat
         
         // Build HVAC enable packet based on GenerateHVACOn_TD.py
         List<Integer> packet = buildHVACEnablePacket()
@@ -1201,8 +1678,7 @@ void enableHVAC() {
         logDebug "enableHVAC: sending enable command: ${hexString}"
         sendZigbeeCommands(cmds)
         
-        // Update state
-        state.hvac.enabled = true
+        // Update state - Remove duplicate assignment
         sendEvent(name: 'hvacMode', value: 'enabled', descriptionText: "HVAC mode enabled", type: 'digital')
         
         // Initialize with default PMTSD values
@@ -1233,6 +1709,7 @@ void disableHVAC() {
         state.hvac.enabled = false
         state.hvac.mode = 'off'
         state.hvac.operatingState = 'idle'
+        state.hvac.buttonMode = 'actions'  // Buttons now send action events
         
         sendEvent(name: 'hvacMode', value: 'disabled', descriptionText: "HVAC mode disabled", type: 'digital')
         sendEvent(name: 'thermostatMode', value: 'off', descriptionText: "Thermostat mode: off", type: 'digital')
