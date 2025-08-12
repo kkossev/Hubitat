@@ -60,13 +60,13 @@
  * ver. 1.8.3  2025-03-29 kkossev - TS0201 _TZ3210_ncw88jfq change C/F scale @kuzenkohome 
  * ver. 1.8.4  2025-04-01 AlexF4Dev - added TS0210 _TZ3000_1o6x1bl0
  * ver. 1.8.5  2025-06-11 kkossev - added TS0601 _TZE284_myd45weu into 'TS0601 Soil_I' group;
- * ver. 1.8.6  2025-08-12 kkossev - added TS0601 _TZE204_cirvgep4 into 'TS0601_Tuya_2' group;
+ * ver. 1.8.6  2025-08-12 kkossev - added TS0601 _TZE204_cirvgep4 into 'TS0601_Tuya_2' group; added queryAllTuyaDP on device announcements and Tuya command 0x11
  *
  *                                  TODO: update documentation : 
 */
 
 @Field static final String VERSION = '1.8.6'
-@Field static final String TIME_STAMP = '2025/08/12 7:43 AM'
+@Field static final String TIME_STAMP = '2025/08/12 1:18 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -146,7 +146,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0004,0005,0402,0405,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_a8sdabtg', deviceJoinName: 'Tuya Temperature Humidity (no screen)'      // https://community.hubitat.com/t/new-temp-humidity-device-not-working-correctly-generic-zigbee-th-driver/109725?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_znbl8dj5', deviceJoinName: 'Tuya Temperature Humidity'                                 // kk
         //
-        // requre more Tuya Magic -  queryOnDeviceAnnounce !!! https://github.com/Koenkk/zigbee-herdsman-converters/blob/c7e670672eb9c584429fe5462eb835c0ae9b0da0/src/lib/tuya.ts#L45
+        // requre more Tuya Magic -  queryOnDeviceAnnounce : implemnted in version 1.8.6  2025-08-12  https://github.com/Koenkk/zigbee-herdsman-converters/blob/c7e670672eb9c584429fe5462eb835c0ae9b0da0/src/lib/tuya.ts#L45
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_yjjdcqsq', deviceJoinName: 'Tuya Temperature Humidity'                                 // kk
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_yjjdcqsq', deviceJoinName: 'Tuya Temperature Humidity'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_9yapgbuv', deviceJoinName: 'Tuya Temperature Humidity'
@@ -409,7 +409,6 @@ def parse(String description) {
             if (descMap.attrInt == 0x0021) {
                 getBatteryPercentageResult(Integer.parseInt(descMap.value, 16))
             } else if (descMap.attrInt == 0x0020) {
-                //log.trace "descMap.attrInt == 0x0020"
                 getBatteryVoltageResult(Integer.parseInt(descMap.value, 16))
             }
             else {
@@ -478,6 +477,11 @@ def parse(String description) {
             try { statsMap['rejoins']++ } catch (e) { statsMap['rejoins'] = 1 }; state.stats = mapToJsonString(statsMap)
             if (getModelGroup() == 'TS0222') {
                 configure()
+            }
+            if (device.getDataValue('model') == 'TS0601') { // queryAllTuyaDP added 08/12/2025
+                logDebug "quering Tuya DP's"
+                List<String> cmds = zigbee.command(0xEF00, 0x03)
+                sendZigbeeCommands( cmds )
             }
         }
         else if (descMap.isClusterSpecific == false && descMap.command == '01' ) { //global commands read attribute response
@@ -633,17 +637,14 @@ def processTuyaCluster( descMap ) {
         def offset = 0
         try {
             offset = location.getTimeZone().getOffset(new Date().getTime())
-        //if (settings?.logEnable) { log.debug "${device.displayName} timezone offset of current location is ${offset}" }
         }
         catch (e) {
             if (settings?.logEnable) { log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero" }
         }
         def cmds = zigbee.command(CLUSTER_TUYA, SETTIME, '0008' + zigbee.convertToHexString((int)(now() / 1000), 8) + zigbee.convertToHexString((int)((now() + offset) / 1000), 8))
         // TODO : send raw command without 'need confirmation' frame control !
-        //if (settings?.logEnable) { log.trace "${device.displayName} now is: ${now()}" }  // KK TODO - convert to Date/Time string!
         if (settings?.logEnable) { log.debug "${device.displayName} sending time data : ${cmds}" }
         cmds.each { sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
-    //if (state.txCounter != null) state.txCounter = state.txCounter + 1
     }
     else if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '0B') {    // ZCL Command Default Response
         String clusterCmd = descMap?.data[0]
@@ -653,15 +654,18 @@ def processTuyaCluster( descMap ) {
             if (settings?.logEnable) { log.warn "${device.displayName} ATTENTION! manufacturer = ${device.getDataValue('manufacturer')} group = ${getModelGroup()} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!" }
         }
     }
+    else if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '11') {     // Tuya specific command sent after a device reboot
+        logDebug "Tuya cluster device announcement command 0x${descMap?.command} -> quering Tuya DP's"
+        List<String> cmds = zigbee.command(0xEF00, 0x03)
+        sendZigbeeCommands( cmds )
+    }
     else if ((descMap?.clusterInt == CLUSTER_TUYA) && (descMap?.command == '01' || descMap?.command == '02' || descMap?.command == '05' || descMap?.command == '06')) {   // added command 06 - 06/26/2024; added command 05 03/29/2025
         def dataLen = descMap?.data.size()
-        //log.warn "dataLen=${dataLen}"
-        //def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
         for (int i = 0; i < (dataLen - 4); ) {
             def dp = zigbee.convertHexToInt(descMap?.data[2 + i])                // "dp" field describes the action/message of a command frame
-            def dp_id = zigbee.convertHexToInt(descMap?.data[3 + i])               // "dp_identifier" is device dependant
+            def dp_id = zigbee.convertHexToInt(descMap?.data[3 + i])             // "dp_identifier" is device dependant
             def fncmd_len = zigbee.convertHexToInt(descMap?.data[5 + i])
-            def fncmd = getTuyaAttributeValue(descMap?.data, i)                //
+            def fncmd = getTuyaAttributeValue(descMap?.data, i)
             if (settings?.logEnable) { log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})" }
             processTuyaDP( descMap, dp, dp_id, fncmd)
             i = i + fncmd_len + 4
@@ -935,7 +939,6 @@ def getModelGroup() {
     else {
         modelGroup = modelGroupPreference
     }
-    //    if (settings?.logEnable) { log.trace "${device.displayName} manufacturer ${manufacturer} group is ${modelGroup}" }
     return modelGroup
 }
 
