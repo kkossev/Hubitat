@@ -18,9 +18,9 @@
  * ver. 1.2.0  2025-08-12 kkossev  - HVAC Thermostat support - work-in-progress
  * ver. 1.2.1  2025-08-13 kkossev  - (dev. branch) Celsius/Fahrenheit HVAC Thermostat support - work-in-progress; 
  *                                   checked: Auto Cool Heat Off EmergencyHeat setThermostatMode commands; command FanAuto FanCirculate FanOn setThermostatFanMode; 
- *                                   x
+ *                                   checked: setHeatingSetpoint setCoolingSetpoint
  *
- *                        TODO: setCoolingHeatpoint setSensorMode   setThermostatHeatpoint
+ *                        TODO:  setSensorMode
  *                        TODO: simulate thermostatOperatingState changes
  *                        TODO: enableHVAC disableHVAC command
  *                        TODO: Fahrenheit rounding problem
@@ -45,7 +45,7 @@ import java.math.RoundingMode
 deviceType = 'Thermostat' // Aqara Climate Sensor W100 is presented in Hubitat as a Thermostat
 @Field static final String DEVICE_TYPE = 'Thermostat'
 @Field static final Integer MIN_TEMP_CELSIUS = 10
-@Field static final Integer MAX_TEMP_CELSIUS = 35
+@Field static final Integer MAX_TEMP_CELSIUS = 40
 @Field static final Integer DEFAULT_SETPOINT_CELSIUS = 22  // 22°C = 72°F - comfortable default for both scales
 
 metadata {
@@ -115,7 +115,6 @@ metadata {
         command 'setThermostatMode', [[name: 'mode', type: 'ENUM', constraints: ['off', 'heat', 'cool', 'auto'], description: 'Set thermostat mode']]
         command 'setHeatingSetpoint', [[name: 'temperature', type: 'NUMBER', description: 'Set heating setpoint (10-35°C)', range: '10..35', required: true]]
         command 'setCoolingSetpoint', [[name: 'temperature', type: 'NUMBER', description: 'Set cooling setpoint (10-35°C)', range: '10..35', required: true]]
-        command 'setThermostatSetpoint', [[name: 'temperature', type: 'NUMBER', description: 'Set thermostat setpoint (10-35°C)', range: '10..35', required: true]]
         command 'setThermostatFanMode', [[name: 'mode', type: 'ENUM', constraints: ['auto', 'low', 'medium', 'high'], description: 'Set thermostat fan mode']]
         
         if (_DEBUG) { 
@@ -1892,17 +1891,30 @@ void setHeatingSetpoint(BigDecimal temperature) {
     
     // Convert input to Celsius for validation (W100 works in Celsius internally)
     BigDecimal tempCelsius = convertTemperatureFromDisplay(temperature)
-    if (tempCelsius < MIN_TEMP_CELSIUS || tempCelsius > MAX_TEMP_CELSIUS) {
+    
+    // Clamp temperature to valid range instead of aborting
+    BigDecimal clampedTempCelsius = tempCelsius
+    boolean wasClamped = false
+    
+    if (tempCelsius < MIN_TEMP_CELSIUS) {
+        clampedTempCelsius = MIN_TEMP_CELSIUS
+        wasClamped = true
+    } else if (tempCelsius > MAX_TEMP_CELSIUS) {
+        clampedTempCelsius = MAX_TEMP_CELSIUS
+        wasClamped = true
+    }
+    
+    if (wasClamped) {
         String tempUnit = getTemperatureUnit()
         BigDecimal minTemp = convertTemperatureIfNeeded(MIN_TEMP_CELSIUS)
         BigDecimal maxTemp = convertTemperatureIfNeeded(MAX_TEMP_CELSIUS)
-        logWarn "setHeatingSetpoint: temperature ${temperature}${tempUnit} is out of range (${minTemp}-${maxTemp}${tempUnit})"
-        return
+        BigDecimal clampedDisplayTemp = convertTemperatureIfNeeded(clampedTempCelsius)
+        logWarn "setHeatingSetpoint: temperature ${temperature}${tempUnit} is out of range (${minTemp}-${maxTemp}${tempUnit}), clamped to ${clampedDisplayTemp}${tempUnit}"
     }
     
     // Convert input temperature to Celsius for W100 (if needed) and for storage
     Integer currentValue = state.hvac?.heatingSetpoint ?: DEFAULT_SETPOINT_CELSIUS
-    Integer tempValue = smartRoundTemperature(tempCelsius, currentValue)
+    Integer tempValue = smartRoundTemperature(clampedTempCelsius, currentValue)
     state.hvac.heatingSetpoint = tempValue
     
     // If currently in heating mode, send PMTSD command (always in Celsius)
@@ -1929,17 +1941,30 @@ void setCoolingSetpoint(BigDecimal temperature) {
     
     // Convert input to Celsius for validation (W100 works in Celsius internally)  
     BigDecimal tempCelsius = convertTemperatureFromDisplay(temperature)
-    if (tempCelsius < MIN_TEMP_CELSIUS || tempCelsius > MAX_TEMP_CELSIUS) {
+    
+    // Clamp temperature to valid range instead of aborting
+    BigDecimal clampedTempCelsius = tempCelsius
+    boolean wasClamped = false
+    
+    if (tempCelsius < MIN_TEMP_CELSIUS) {
+        clampedTempCelsius = MIN_TEMP_CELSIUS
+        wasClamped = true
+    } else if (tempCelsius > MAX_TEMP_CELSIUS) {
+        clampedTempCelsius = MAX_TEMP_CELSIUS
+        wasClamped = true
+    }
+    
+    if (wasClamped) {
         String tempUnit = getTemperatureUnit()
         BigDecimal minTemp = convertTemperatureIfNeeded(MIN_TEMP_CELSIUS)
         BigDecimal maxTemp = convertTemperatureIfNeeded(MAX_TEMP_CELSIUS)
-        logWarn "setCoolingSetpoint: temperature ${temperature}${tempUnit} is out of range (${minTemp}-${maxTemp}${tempUnit})"
-        return
+        BigDecimal clampedDisplayTemp = convertTemperatureIfNeeded(clampedTempCelsius)
+        logWarn "setCoolingSetpoint: temperature ${temperature}${tempUnit} is out of range (${minTemp}-${maxTemp}${tempUnit}), clamped to ${clampedDisplayTemp}${tempUnit}"
     }
     
     // Convert input temperature to Celsius for W100 (if needed) and for storage
     Integer currentValue = state.hvac?.coolingSetpoint ?: DEFAULT_SETPOINT_CELSIUS
-    Integer tempValue = smartRoundTemperature(tempCelsius, currentValue)
+    Integer tempValue = smartRoundTemperature(clampedTempCelsius, currentValue)
     state.hvac.coolingSetpoint = tempValue
     
     // If currently in cooling mode, send PMTSD command (always in Celsius)
@@ -1954,23 +1979,6 @@ void setCoolingSetpoint(BigDecimal temperature) {
     sendEvent(name: 'thermostatSetpoint', value: displayTemp, unit: tempUnit, descriptionText: "Thermostat setpoint: ${displayTemp}${tempUnit}", type: 'digital')
     
     logInfo "Cooling setpoint set to: ${displayTemp}${tempUnit}"
-}
-
-void setThermostatSetpoint(BigDecimal temperature) {
-    logDebug "setThermostatSetpoint(${temperature})"
-    
-    // Set both heating and cooling setpoints, and update current mode
-    setHeatingSetpoint(temperature)
-    setCoolingSetpoint(temperature)
-    
-    // If in a specific mode, send the appropriate command
-    if (state.hvac.mode in ['heat', 'cool', 'auto']) {
-        BigDecimal tempCelsius = convertTemperatureFromDisplay(temperature)
-        Integer currentValue = getCurrentSetpoint(state.hvac.mode)
-        Integer tempValue = smartRoundTemperature(tempCelsius, currentValue)
-        Integer modeValue = ['cool': 0, 'heat': 1, 'auto': 2][state.hvac.mode]
-        sendPMTSDCommand(0, modeValue, tempValue, getCurrentFanSpeed(), getCurrentDisplayMode())
-    }
 }
 
 // Set thermostat fan mode (standard Hubitat method)
@@ -2043,17 +2051,21 @@ private Integer getCurrentSetpoint(String mode) {
     }
 }
 
-// Smart rounding function to handle 0.5°C increments properly
+// Smart rounding function to handle temperature changes properly
 private Integer smartRoundTemperature(BigDecimal tempCelsius, Integer currentValue) {
     // Apply standard rounding first
     Integer roundedValue = (tempCelsius >= 0) ? (int)(tempCelsius + 0.5) : (int)(tempCelsius - 0.5)
     
-    // If rounded value equals current value but input shows intent to change, force the change
-    if (roundedValue == currentValue && Math.abs(tempCelsius - currentValue) >= 0.25) {
-        if (tempCelsius < currentValue) {
-            return currentValue - 1  // Force decrement
-        } else if (tempCelsius > currentValue) {
-            return currentValue + 1  // Force increment
+    // Only apply smart corrections for Celsius mode
+    // Fahrenheit mode uses natural 1°F increments without forced corrections
+    if (location.temperatureScale == 'C') {
+        // Celsius logic: force change for 0.5°C increments that would otherwise be lost to rounding
+        if (roundedValue == currentValue && Math.abs(tempCelsius - currentValue) >= 0.25) {
+            if (tempCelsius < currentValue) {
+                return currentValue - 1  // Force decrement
+            } else if (tempCelsius > currentValue) {
+                return currentValue + 1  // Force increment
+            }
         }
     }
     
