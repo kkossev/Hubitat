@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/commonLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-commonLib',
-    version: '3.4.0'
+    version: '3.5.1'
 )
 /*
   *  Common ZCL Library
@@ -45,6 +45,7 @@ library(
   * ver. 3.4.0  2025-03-23 kkossev  - healthCheck by pinging the device; updateRxStats() replaced with inline code; added state.lastRx.timeStamp; added activeEndpoints() handler call; documentation improvements
   * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
   * ver. 3.5.1  2025-07-23 kkossev  - Aqara W100 destEndpoint: 0x01 patch
+  * ver. 3.5.2  2025-08-13 kkossev  - (dev.branch) Status attribute renamed to _status_
   *
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
   *                                   TODO: make the configure() without parameter smart - analyze the State variables and call delete states.... call ActiveAndpoints() or/amd initialize() or/and configure()
@@ -60,8 +61,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.5.1' }
-String commonLibStamp() { '2025/07/23 12:47 PM' }
+String commonLibVersion() { '3.5.2' }
+String commonLibStamp() { '2025/08/13 8:18 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -93,7 +94,7 @@ metadata {
         // common attributes for all device types
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute 'rtt', 'number'
-        attribute 'Status', 'string'
+        attribute '_status_', 'string'
 
         // common commands for all device types
         command 'configure', [[name:'normally it is not needed to configure anything', type: 'ENUM', constraints: ConfigureOpts.keySet() as List<String>]]
@@ -107,7 +108,7 @@ metadata {
         //input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: 'Turns on debug logging for 24 hours.'
 
         if (device) {
-            input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: 'These advanced options should be already automatically set in an optimal way for your device...', defaultValue: false
+            input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: 'The advanced options should be already automatically set in an optimal way for your device...Click on the "Save and Close" button when toggling this option!', defaultValue: false
             if (advancedOptions == true) {
                 input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: 'Method to check device online/offline status.'
                 input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: 'How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"'
@@ -996,11 +997,11 @@ public void clearInfoEvent()      { sendInfoEvent('clear') }
 public void sendInfoEvent(String info=null) {
     if (info == null || info == 'clear') {
         logDebug 'clearing the Status event'
-        sendEvent(name: 'Status', value: 'clear', type: 'digital')
+        sendEvent(name: '_status_', value: 'clear', type: 'digital')
     }
     else {
         logInfo "${info}"
-        sendEvent(name: 'Status', value: info, type: 'digital')
+        sendEvent(name: '_status_', value: info, type: 'digital')
         runIn(INFO_AUTO_CLEAR_PERIOD, 'clearInfoEvent')            // automatically clear the Info attribute after 1 minute
     }
 }
