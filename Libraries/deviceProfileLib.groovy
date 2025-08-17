@@ -36,7 +36,7 @@ library(
  * ver. 3.4.1  2025-02-02 kkossev  - setPar help improvements;
  * ver. 3.4.2  2025-03-24 kkossev  - added refreshFromConfigureReadList() method; documentation update; getDeviceNameAndProfile uses DEVICE.description instead of deviceJoinName
  * ver. 3.4.3  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
- * ver. 3.5.0  2025-07-23 kkossev  - zclWriteAttribute() support for forced destinationEndpoint in the attributes map
+ * ver. 3.5.0  2025-08-14 kkossev  - zclWriteAttribute() support for forced destinationEndpoint in the attributes map
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
@@ -49,7 +49,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.5.0' }
-static String deviceProfileLibStamp() { '2025/07/23 2:21 PM' }
+static String deviceProfileLibStamp() { '2025/08/14 11:17 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -342,7 +342,7 @@ private List<String> zclWriteAttribute(Map attributesMap, int scaledValue) {
         Map mapOptions = [:]
         if (mfgCode) mapOptions.putAll(mfgCode)
         if (ep) mapOptions.putAll(ep)
-        log.trace "$mapOptions"
+        //log.trace "$mapOptions"
         cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, mapOptions, delay = 50)
     }
     else {

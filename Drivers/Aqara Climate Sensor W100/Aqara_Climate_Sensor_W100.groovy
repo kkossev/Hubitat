@@ -16,21 +16,18 @@
  * ver. 1.0.0  2025-07-23 kkossev  - Initial version
  * ver. 1.1.0  2025-07-26 kkossev  - added external temperature and humidity sensor support
  * ver. 1.2.0  2025-08-12 kkossev  - HVAC Thermostat support - work-in-progress
- * ver. 1.2.1  2025-08-13 kkossev  - (dev. branch) Celsius/Fahrenheit HVAC Thermostat support - work-in-progress; 
+ * ver. 1.2.1  2025-08-14 kkossev  - (dev. branch) Celsius/Fahrenheit HVAC Thermostat support - work-in-progress; 
  *                                   checked: Auto Cool Heat Off EmergencyHeat setThermostatMode commands; command FanAuto FanCirculate FanOn setThermostatFanMode; 
- *                                   checked: setHeatingSetpoint setCoolingSetpoint
+ *                                   checked: setHeatingSetpoint setCoolingSetpoint; woarkaround for Fahrenheit rounding problem
  *
- *                        TODO:  setSensorMode
  *                        TODO: simulate thermostatOperatingState changes
  *                        TODO: enableHVAC disableHVAC command
- *                        TODO: Fahrenheit rounding problem
+ *                        TODO: 
  *                        TODO: 0x0168 and 0x016F attributes (alarms) ; initializeHVACDefaults() should be called just once;
- *                        TODO: add support for battery level reporting
- *                        TODO: foundMap.advanced == true && settings.advancedOptions != true
  */
 
 static String version() { '1.2.1' }
-static String timeStamp() { '2025/08/13 10:03 AM' }
+static String timeStamp() { '2025/08/14 11:17 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -106,7 +103,6 @@ metadata {
         
         command 'setExternalTemperature', [[name: 'temperature', type: 'NUMBER', description: 'External temperature value (-100 to 100°C)', range: '-100..100', required: true]]
         command 'setExternalHumidity', [[name: 'humidity', type: 'NUMBER', description: 'External humidity value (0 to 100%)', range: '0..100', required: true]]
-        command 'setSensorMode', [[name: 'mode', type: 'ENUM', constraints: ['internal', 'external'], description: 'Set sensor mode: internal or external']]
         command 'setExternalThermostat', [[name: 'mode', type: 'ENUM', constraints: ['disabled', 'enabled'], description: 'Enable or disable external thermostat connection']]
         
         // HVAC Thermostat commands
@@ -135,6 +131,7 @@ metadata {
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables command logging.'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: 'Turns on debug logging for 24 hours.'
+        input name: 'sensorMode', type: 'enum', title: '<b>Sensor Mode</b>', options: ['internal', 'external'], defaultValue: 'internal', description: 'Select sensor mode: internal (use built-in sensor) or external (use external sensor data)'
         // the rest of the preferences are inputed from the deviceProfile maps in the deviceProfileLib
     }
 }
@@ -706,6 +703,14 @@ void customUpdated() {
     // Itterates through all settings
     logDebug 'customUpdated: updateAllPreferences()...'
     updateAllPreferences()
+    
+    // Handle sensor mode preference change
+    String newSensorMode = settings?.sensorMode ?: 'internal'
+    String currentSensorMode = device.currentValue('sensor')
+    if (currentSensorMode != newSensorMode) {
+        logInfo "Sensor mode preference changed from '${currentSensorMode}' to '${newSensorMode}'"
+        applySensorMode(newSensorMode)
+    }
 }
 
 
@@ -904,7 +909,7 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
 void setExternalTemperature(BigDecimal temperature) {
     logDebug "setExternalTemperature(${temperature}) - START"
     
-    String currentSensorMode = device.currentValue('sensor')
+    String currentSensorMode = settings?.sensorMode ?: 'internal'
     logDebug "setExternalTemperature: current sensor mode = '${currentSensorMode}'"
     if (currentSensorMode != 'external') {
         logWarn "setExternalTemperature: sensor mode is '${currentSensorMode}', must be 'external' to set external temperature"
@@ -971,7 +976,7 @@ void setExternalTemperature(BigDecimal temperature) {
 void setExternalHumidity(BigDecimal humidity) {
     logDebug "setExternalHumidity(${humidity})"
     
-    String currentSensorMode = device.currentValue('sensor')
+    String currentSensorMode = settings?.sensorMode ?: 'internal'
     if (currentSensorMode != 'external') {
         logWarn "setExternalHumidity: sensor mode is '${currentSensorMode}', must be 'external' to set external humidity"
        // return
@@ -1075,12 +1080,12 @@ ArrayList zigbeeWriteLongAttribute(Integer cluster, Integer attributeId, String 
     return cmdList
 }
 
-// Command to set sensor mode (internal/external) using GitHub implementation
-void setSensorMode(String mode) {
-    logDebug "setSensorMode(${mode})"
+// Internal method to apply sensor mode (internal/external) using GitHub implementation
+private void applySensorMode(String mode) {
+    logDebug "applySensorMode(${mode})"
     
     if (mode != 'internal' && mode != 'external') {
-        logWarn "setSensorMode: invalid mode '${mode}', must be 'internal' or 'external'"
+        logWarn "applySensorMode: invalid mode '${mode}', must be 'internal' or 'external'"
         return
     }
     
@@ -1133,7 +1138,7 @@ void setSensorMode(String mode) {
         cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString1, [mfgCode: 0x115F])
         cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString2, [mfgCode: 0x115F])
         
-        logDebug "setSensorMode: sending external mode setup commands"
+        logDebug "applySensorMode: sending external mode setup commands"
         sendZigbeeCommands(cmds)
         
         // Read sensor mode after setup
@@ -1185,7 +1190,7 @@ void setSensorMode(String mode) {
         cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString1, [mfgCode: 0x115F])
         cmds += zigbeeWriteLongAttribute(0xFCC0, 0xFFF2, hexString2, [mfgCode: 0x115F])
         
-        logDebug "setSensorMode: sending internal mode setup commands"
+        logDebug "applySensorMode: sending internal mode setup commands"
         sendZigbeeCommands(cmds)
         
         // Read sensor mode after switching to internal mode

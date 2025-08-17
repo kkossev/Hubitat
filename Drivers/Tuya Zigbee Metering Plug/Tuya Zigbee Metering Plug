@@ -67,7 +67,8 @@
  *  ver. 1.9.7 2024-07-05 kkossev - added SPM01 TS0601 _TZE200_qhlxve78 and _TZE200_bcusnqt8
  *  ver. 1.9.8 2024-11-22 kkossev - added TS011F _TZ3000_xzhnra8x _TZ3000_rdfh8cfs _TZ3000_fgwhjm9j _TZ3000_waho4jtj
  *  ver. 2.0.0 2024-11-30 kkossev - HE platform ver 2.4.0.x improved compatibility; added rtt measurement in ping(); added TS011F _TZ3000_ww6drja5; ThirdReality 3RSP02028BZ Energy divisor set to 3600000
- *  ver. 2.0.1 2025-04-12 kkossev - (dev. branch) added Shelly 1PM (Gen 4); added  Frient Monitor 2 EMIZB-141;
+ *  ver. 2.0.1 2025-04-12 kkossev - added Shelly 1PM (Gen 4); added  Frient Monitor 2 EMIZB-141;
+ *  ver. 2.0.2 2025-08-17 kkossev - (dev. branch) Frient Monitor 2 EMIZB-141 bug fix
  *
  *                                 TODO: change the ping() command to cluster 0x0000 attribute 0x0000 (ZCL Version)
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
@@ -90,8 +91,8 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
-static String version() { '2.0.1' }
-static String timeStamp() { '2025/04/12 4:05 PM' }
+static String version() { '2.0.2' }
+static String timeStamp() { '2025/08/17 5:30 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -212,7 +213,8 @@ metadata {
         */
         // NON-Tuya plugs
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006', outClusters:'0000', model:'BASICZBR3', manufacturer:'SONOFF', deviceJoinName: 'SONOFF BASICZBR3'
-        fingerprint profileId:'0104', endpointId:'02', inClusters:'0000,0003,0702', outClusters:'000A', model:'ZHEMI101', manufacturer:'Develco', deviceJoinName: 'Frient Energy Monitor'                    // https://community.hubitat.com/t/frient-energy-monitor-driver/89327/28?u=kkossev
+        fingerprint profileId:'0104', endpointId:'02', inClusters:'0000,0003,0702', outClusters:'000A', model:'ZHEMI101', manufacturer:'Develco', deviceJoinName: 'Frient Energy Monitor'                                                      // https://community.hubitat.com/t/frient-energy-monitor-driver/89327/28?u=kkossev
+        fingerprint profileId:'0104', endpointId:'02', inClusters:'0000,0001,0003,0020,0702,0B01,0B05', outClusters:'0003,000A,0019', model:'EMIZB-141', manufacturer:'frient A/S', deviceJoinName: 'Frient Energy Monitor 2'                  // https://community.hubitat.com/t/release-tuya-zigbee-metering-plug-w-healthstatus/86465/445?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0006,0020,0B04,0702', outClusters:'0003,0004,0019', model:'CCM-300Z', manufacturer:'ShinaSystem', deviceJoinName: 'SiHAS Outlet CCM-300Z'                    // SIHAS Smart Plug with on/off button
 
         // As these metering plugs are (most probably) already supported in the stock HE drivers or other community drivers, the fingerprints are commented out to prevent this driver being automatically selected when paired to HE.
@@ -398,12 +400,12 @@ private boolean isSPM01()               { device.getDataValue('manufacturer') in
 private boolean isSmartThingsOutlet() { (device.getDataValue('manufacturer') in ['SmartThings']) || (device.getDataValue('model') in ['outletv4']) }
 private boolean isSengledOutlet() { device.getDataValue('model') == 'E1C-NB7' }
 private boolean isJascoProductsOutlet() { device.getDataValue('manufacturer') == 'Jasco Products' }
-private boolean isFrientOutlet() { device.getDataValue('manufacturer') in ['frient A/S', 'Develco Products A/S'] }
-private boolean isFrientEnergyMonitor() { state.model in ['ZHEMI101'/* , "SPLZB-131"*/] }
+private boolean isFrientOutlet() { (device.getDataValue('manufacturer') in ['frient A/S', 'Develco Products A/S']) && !isFrientEnergyMonitor() }
+private boolean isFrientEnergyMonitor() { state.model in ['ZHEMI101', 'EMIZB-141'] }
 private boolean isCCM300() { device.getDataValue('model') == 'CCM-300Z' }
 private boolean isSercomm() { device.getDataValue('manufacturer') in ['Sercomm Corp.', ' Sercomm Corp.'] || device.getDataValue('model') == 'SZ-ESW01-AU' }
 private boolean isHeiman() { device.getDataValue('manufacturer') == 'HEIMAN' }
-private boolean isDevelco() { device.getDataValue('model') in ['EMIZB-132', 'EMIZB-141'] }
+private boolean isDevelco() { device.getDataValue('model') in ['EMIZB-132'] }
 private boolean isOsramPlug01() { (device.getDataValue('model') == 'Plug 01' && device.getDataValue('manufacturer') == 'OSRAM') }
 private boolean isSiHAS() { device.getDataValue('manufacturer') == 'ShinaSystem' }
 private boolean isThirdRealityUS() { device.getDataValue('model') == '3RSP02028BZ' }
