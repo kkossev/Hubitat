@@ -5,9 +5,13 @@ The **Thermostats Sync** app is a Hubitat automation app that synchronizes the m
 
 You can install the App manually from GitHub : https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Apps/Thermostats%20Sync/Thermostats_Sync.groovy
 
-Please note, that this is an **App** (not a driver!)
+Please note, that this is an **App** (not a driver!). Whipped up a quick solution with some help from Claude Sonnet 4. The UI’s a bit rough, but it gets the job done.
 
-Threw together a quick solution with a hand from Claude Sonnet 4. The UI’s rough, but it does the job.
+### Example Use Case
+
+![Aqara W100 Virtual Sync Example](https://github.com/kkossev/Hubitat/blob/development/Apps/Thermostats%20Sync/Images/aqara-w100-virtual-sync.png?raw=true)
+
+This image demonstrates a practical use case of the **Thermostats Sync** app, showcasing how virtual synchronization can be applied effectively in a real-world scenario.
 
 ## Features
 
@@ -21,10 +25,6 @@ Threw together a quick solution with a hand from Claude Sonnet 4. The UI’s rou
 - **Real-time Status Display**: Shows current AutoSync state (Enabled/Disabled)
 - **Dynamic Control**: Enable or disable automatic synchronization without reinstalling the app
 - **Independent Operation**: Manual sync buttons work regardless of AutoSync status
-
-### Version Information
-- **Version Display**: Shows current app version for easy reference
-- **Compile Time**: Displays when the app was last compiled for troubleshooting
 
 ### Synchronization Options
 - **Thermostat Mode**: Synchronizes mode changes (off/heat/cool/auto)
