@@ -7,11 +7,11 @@ You can install the App manually from GitHub : https://raw.githubusercontent.com
 
 Please note, that this is an **App** (not a driver!). Whipped up a quick solution with some help from Claude Sonnet 4. The UI’s a bit rough, but it gets the job done.
 
-### Example Use Case
+
 
 ![Aqara W100 Virtual Sync Example](https://github.com/kkossev/Hubitat/blob/development/Apps/Thermostats%20Sync/Images/aqara-w100-virtual-sync.png?raw=true)
 
-This image demonstrates a practical use case of the **Thermostats Sync** app, showcasing how virtual synchronization can be applied effectively in a real-world scenario.
+
 
 ## Features
 
