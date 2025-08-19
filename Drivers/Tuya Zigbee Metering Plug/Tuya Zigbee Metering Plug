@@ -68,7 +68,7 @@
  *  ver. 1.9.8 2024-11-22 kkossev - added TS011F _TZ3000_xzhnra8x _TZ3000_rdfh8cfs _TZ3000_fgwhjm9j _TZ3000_waho4jtj
  *  ver. 2.0.0 2024-11-30 kkossev - HE platform ver 2.4.0.x improved compatibility; added rtt measurement in ping(); added TS011F _TZ3000_ww6drja5; ThirdReality 3RSP02028BZ Energy divisor set to 3600000
  *  ver. 2.0.1 2025-04-12 kkossev - added Shelly 1PM (Gen 4); added  Frient Monitor 2 EMIZB-141;
- *  ver. 2.0.2 2025-08-17 kkossev - (dev. branch) Frient Monitor 2 EMIZB-141 bug fix
+ *  ver. 2.0.2 2025-08-19 kkossev - (dev. branch) Fixed EMIZB-141 power scaling: implemented 2.5x multiplier based on Zigbee2MQTT findings; skips pulse configuration for EMIZB-141
  *
  *                                 TODO: change the ping() command to cluster 0x0000 attribute 0x0000 (ZCL Version)
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
@@ -92,7 +92,7 @@ import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
 static String version() { '2.0.2' }
-static String timeStamp() { '2025/08/17 5:30 PM' }
+static String timeStamp() { '2025/08/19 7:59 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -328,8 +328,12 @@ metadata {
             }
         }
         if (isFrientEnergyMonitor() == true) {
-            command 'pulseConfiguration', [[name: 'PulseConfiguration', type: 'NUMBER', description: 'test', defaultValue : 1000]]
-            input(name: 'pulseConfiguration', type: 'number', title: '<b>Frient Energy Monitor Pulse Configuration</b>', description: 'Frient Energy Monitor Pulse Configuration', range: '10..100000', defaultValue: 1000)
+            if (!isFrientMonitor2()) {
+                command 'pulseConfiguration', [[name: 'PulseConfiguration', type: 'NUMBER', description: 'test', defaultValue : 1000]]
+                input(name: 'pulseConfiguration', type: 'number', title: '<b>Frient Energy Monitor Pulse Configuration</b>', description: 'Frient Energy Monitor Pulse Configuration', range: '10..100000', defaultValue: 1000)
+            } else {
+                paragraph '<b>Frient EMIZB-141 Monitor 2:</b> Uses fixed 2.5x scaling factor (pulse configuration not applicable)'
+            }
             input(name: 'frientEnergyMeterMode', type: 'enum', title: '<b>Energy Reporting Mode</b>', description:'Select Frient Energy Reporting Mode', defaultValue: '0', options: develcoInterfaceMode)
         }
         input(name: 'attribEnable', type:  'bool', title: '<b>Enable HTML Attribute Creation?</b>',  description: 'html attribute for use in HE dashboards', defaultValue: false)
@@ -402,6 +406,7 @@ private boolean isSengledOutlet() { device.getDataValue('model') == 'E1C-NB7' }
 private boolean isJascoProductsOutlet() { device.getDataValue('manufacturer') == 'Jasco Products' }
 private boolean isFrientOutlet() { (device.getDataValue('manufacturer') in ['frient A/S', 'Develco Products A/S']) && !isFrientEnergyMonitor() }
 private boolean isFrientEnergyMonitor() { state.model in ['ZHEMI101', 'EMIZB-141'] }
+private boolean isFrientMonitor2() { state.model == 'EMIZB-141' }
 private boolean isCCM300() { device.getDataValue('model') == 'CCM-300Z' }
 private boolean isSercomm() { device.getDataValue('manufacturer') in ['Sercomm Corp.', ' Sercomm Corp.'] || device.getDataValue('model') == 'SZ-ESW01-AU' }
 private boolean isHeiman() { device.getDataValue('manufacturer') == 'HEIMAN' }
@@ -414,7 +419,9 @@ private boolean isShelly() { device.getDataValue('manufacturer') == 'Shelly' }
 private boolean isReportingConfigurable() { isSmartThingsOutlet() || isSengledOutlet() || isJascoProductsOutlet() || isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSercomm() || isDevelco() || isSiHAS() || isThirdRealityUS() || isThirdRealityEU() }
 
 // Tuya : default powerDiv = 1
+// Frient EMIZB-141 Monitor 2 requires 2.5x multiplier (firmware doesn't use pulse config for scaling)
 private int getPowerDiv() { isShelly() ? 100 : (isThirdRealityUS() || isThirdRealityEU() || isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() || isPJ1203A() && !(isDinRail() || isRTXCircuitBreaker() || isSPM01()))) ? 10 : 1 }
+private BigDecimal getPowerMultiplier() { isFrientMonitor2() ? 2.5 : 1.0 }
 // Tuya :  energyDiv = 100 ThirdReality: 3600000
 private int getEnergyDiv() { (isThirdRealityEU() || isThirdRealityUS()) ? 3600000 : isShelly() ? 1000000 : (isSengledOutlet() || isJascoProductsOutlet()) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS() ) /*|| isThirdRealityUS()*/ ? 1000 : 100 }
 // Tuya :  currentDiv = 1000 ThirdReality: 1000
@@ -817,6 +824,13 @@ void powerEvent(power, boolean isDigital=false) {
         logDebug "ignored powerEvent (${power}) - reportPower is disabled"
         return
     }
+    
+    // Apply Frient EMIZB-141 (Monitor 2) specific scaling
+    if (isFrientMonitor2()) {
+        power = power * getPowerMultiplier()
+        logDebug "Applied EMIZB-141 scaling: ${power} W (multiplier: ${getPowerMultiplier()})"
+    }
+    
     Map map = [:]
     map.name = 'power'
     map.value = power
@@ -875,6 +889,13 @@ void energyEvent(energy_total, boolean isDigital=false) {
         logDebug "ignored energyEvent (${energy_total}) - isEnergyEnabled is ${isEnergyEnabled()}"
         return
     }
+    
+    // Apply Frient EMIZB-141 (Monitor 2) specific scaling
+    if (isFrientMonitor2()) {
+        energy_total = energy_total * getPowerMultiplier()
+        logDebug "Applied EMIZB-141 scaling to energy: ${energy_total} kWh (multiplier: ${getPowerMultiplier()})"
+    }
+    
     Map map = [:]
     if (isDigital == false) {
         state.lastEnergyRaw = energy_total
@@ -2031,8 +2052,13 @@ void configure() {
             logDebug "setting frientEnergyMeterMode to ${modeName.value} (${settings?.frientEnergyMeterMode})"
             cmds += setEnergyMeterMode(modeName.value)
         }
-        logDebug "setting FrientEnergyMonitor pulseConfiguration (${settings?.pulseConfiguration} )"
-        cmds += pulseConfiguration(settings?.pulseConfiguration)
+        // EMIZB-141 (Monitor 2) firmware doesn't use pulse configuration for scaling - skip it
+        if (!isFrientMonitor2()) {
+            logDebug "setting FrientEnergyMonitor pulseConfiguration (${settings?.pulseConfiguration} )"
+            cmds += pulseConfiguration(settings?.pulseConfiguration)
+        } else {
+            logDebug "skipping pulseConfiguration for EMIZB-141 (Monitor 2) - firmware uses hardcoded scaling"
+        }
     }
     if (isTongouSY2()) {
         String E6Array
