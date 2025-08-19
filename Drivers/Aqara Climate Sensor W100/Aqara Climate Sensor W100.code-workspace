@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../../Libraries"
+		},
+		{
+			"path": "../../Apps/Thermostats Sync"
 		}
 	],
 	"settings": {}
