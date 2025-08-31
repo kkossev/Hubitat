@@ -61,12 +61,15 @@
  * ver. 1.8.4  2025-04-01 AlexF4Dev - added TS0210 _TZ3000_1o6x1bl0
  * ver. 1.8.5  2025-06-11 kkossev - added TS0601 _TZE284_myd45weu into 'TS0601 Soil_I' group;
  * ver. 1.8.6  2025-08-12 kkossev - added TS0601 _TZE204_cirvgep4 into 'TS0601_Tuya_2' group; added queryAllTuyaDP on device announcements and Tuya command 0x11
+ * ver. 1.9.0  2025-08-31 kkossev - added missing TS0601 variants (_TZE200_44af8vyi _TZE284_qyflbnbj _TZE284_yjjdcqsq _TZE200_utkemkbs _TZE204_utkemkbs _TZE284_utkemkbs _TZE284_upagmta9 _TZE284_vvmbj46n _TZE200_w6n8jeuu _TZE200_s1xgth2u _TZE200_vzqtvljm _TZE200_rbbx5mfq _TZE200_nvups4nh); 
+ *                                  added TS0201 variants (_TZ3210_alxkwn0h _TZ3000_0s1izerx _TZ3000_v1w2k9dd _TZ3000_lqmvrwa2 _TZ3000_f2bw0b6k _TZ3000_mxzo5rhf _TZ3000_1twfmkcc _TZ3000_fie1dpkm _TZ3000_saiqcn0y _TZ3000_akqdg6g7 _TZE200_iq4ygaai _TZE200_01fvxamo);
+ *                                  added TS0601 _TZE284_33bwcga2 to TS0601_Soil_II group; added missing model map _TZE200_bjawzodf.
  *
- *                                  TODO: update documentation : 
+ *                                  TODO: update GitHub documentation
 */
 
-@Field static final String VERSION = '1.8.6'
-@Field static final String TIME_STAMP = '2025/08/12 1:18 PM'
+@Field static final String VERSION = '1.9.0'
+@Field static final String TIME_STAMP = '2025/08/31 3:35 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -140,6 +143,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_sgabhwa6", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'   // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/538?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_nhgdf6qr", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'   // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/538?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_myd45weu", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'   // TODO - check the fingrprint !
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_33bwcga2', deviceJoinName: 'Tuya Temperature Humidity Sensor'                       // Soil_II variant; expect DP 0x03 moisture, 0x05 temp(/10), 0x14 battery_state (confirm from logs)  https://community.hubitat.com/t/driver-for-tuya-soil-tester-sensor/156528?u=kkossev
 
         // model: 'ZG-227ZL',
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0004,0005,0402,0405,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_qoy0ekbd', deviceJoinName: 'Tuya Temperature Humidity LCD Display'      // not tested
@@ -192,6 +196,36 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_eanjj2pa', deviceJoinName: 'Tuya Temperature Humidity Illuminance LCD Display with a Clock'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ydrdfkim', deviceJoinName: 'Tuya Temperature Humidity Illuminance LCD Display with a Clock'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_s139roas", deviceJoinName: 'AVATTO ZWSH16 TH Sensor Ink Display'
+    // Added in v1.9.0 - missing TS0601 Temperature/Humidity (and variants)
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_44af8vyi', deviceJoinName: 'Tuya Temperature Humidity Sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_qyflbnbj', deviceJoinName: 'Tuya Temperature Humidity Sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_yjjdcqsq', deviceJoinName: 'Tuya Temperature Humidity Sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_utkemkbs', deviceJoinName: 'Tuya Temperature Humidity Sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_utkemkbs', deviceJoinName: 'Tuya Temperature Humidity Sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_utkemkbs', deviceJoinName: 'Tuya Temperature Humidity Sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_upagmta9', deviceJoinName: 'Tuya Temperature Humidity Sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_vvmbj46n', deviceJoinName: 'Tuya Temperature Humidity Sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_w6n8jeuu', deviceJoinName: 'Tuya Temperature Humidity Sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_s1xgth2u', deviceJoinName: 'Tuya Temperature Humidity Sensor'
+    // Contact + T/H variant
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_nvups4nh', deviceJoinName: 'Tuya Contact Temperature Humidity Sensor'
+    // Illuminance + T/H variants
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_vzqtvljm', deviceJoinName: 'Tuya Illuminance Temperature Humidity Sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_rbbx5mfq', deviceJoinName: 'Tuya Illuminance Temperature Humidity Sensor'
+    // Added TS0201 additional variants and probe-only
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,EF00,0000', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZ3210_alxkwn0h', deviceJoinName: 'Tuya temperature and humidity sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,EF00,0000', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZ3000_0s1izerx', deviceJoinName: 'Tuya temperature and humidity sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,EF00,0000', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZ3000_v1w2k9dd', deviceJoinName: 'Tuya temperature and humidity sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,EF00,0000', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZ3000_lqmvrwa2', deviceJoinName: 'Tuya temperature and humidity sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,EF00,0000', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZ3000_f2bw0b6k', deviceJoinName: 'Tuya temperature and humidity sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,EF00,0000', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZ3000_mxzo5rhf', deviceJoinName: 'Tuya temperature and humidity sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,EF00,0000', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZ3000_1twfmkcc', deviceJoinName: 'Tuya temperature and humidity sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,EF00,0000', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZ3000_fie1dpkm', deviceJoinName: 'Tuya temperature and humidity sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,EF00,0000', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZ3000_saiqcn0y', deviceJoinName: 'Tuya temperature and humidity sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,EF00,0000', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZ3000_akqdg6g7', deviceJoinName: 'Tuya temperature and humidity sensor'
+    // Probe (temperature only) variants
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,EF00,0000', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZE200_iq4ygaai', deviceJoinName: 'Tuya temperature probe sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,EF00,0000', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZE200_01fvxamo', deviceJoinName: 'Tuya temperature probe sensor'
     }
     preferences {
         input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: 'Display measured values in HE log page. <br>The recommended setting is <b>enabled</b>.', defaultValue: true)
@@ -270,12 +304,24 @@ metadata {
     '_TZE200_zl1kmjqx'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005002836127648.html
     '_TZE200_qyflbnbj'  : 'TS0601_Tuya',         // not tested
     '_TZE200_zppcgbdj'  : 'TS0601_Tuya',         // not tested
+    '_TZE200_44af8vyi'  : 'TS0601_Tuya',         // added v1.9.0
+    '_TZE200_w6n8jeuu'  : 'TS0601_Tuya',         // added v1.9.0
+    '_TZE200_s1xgth2u'  : 'TS0601_Tuya',         // added v1.9.0
+    '_TZE200_vzqtvljm'  : 'TS0601_Tuya',         // added v1.9.0 (Illuminance + TH)
+    '_TZE200_rbbx5mfq'  : 'TS0601_Tuya',         // added v1.9.0 (Illuminance + TH)
+    '_TZE200_utkemkbs'  : 'TS0601_Tuya',         // added v1.9.0
+    '_TZE204_utkemkbs'  : 'TS0601_Tuya',         // added v1.9.0
+    '_TZE284_utkemkbs'  : 'TS0601_Tuya',         // added v1.9.0
+    '_TZE284_qyflbnbj'  : 'TS0601_Tuya',         // added v1.9.0
+    '_TZE284_yjjdcqsq'  : 'TS0601_Tuya_2',       // added v1.9.0 (follow yjjdcqsq family)
+    '_TZE284_upagmta9'  : 'TS0601_Tuya_2',       // added v1.9.0 (follow upagmta9 family)
     '_TZE204_qyflbnbj'  : 'TS0601_Tuya',         // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/522?u=kkossev
     '_TZE200_nnrfa68v'  : 'TS0601_Tuya',         // NOUS E6 https://community.hubitat.com/t/nous-humidity-and-temp-sensor/137764/7?u=kkossev
     '_TZE200_qrztc3ev'  : 'TS0601_Tuya',         // NOUS
     '_TZE200_snloy4rw'  : 'TS0601_Tuya',         // NOUS
     '_TZE200_eanjj2pa'  : 'TS0601_Tuya',         // NOUS
     '_TZE200_ydrdfkim'  : 'TS0601_Tuya',         // NOUS
+    '_TZE200_bjawzodf'  : 'TS0601_Tuya',         // added v1.9.0 (was fingerprint only)
 
     '_TZE200_cirvgep4'  : 'TS0601_Tuya_2',       // https://www.aliexpress.com/item/1005005198387789.html
     '_TZE204_cirvgep4'  : 'TS0601_Tuya_2',       //
@@ -311,6 +357,18 @@ metadata {
     '_TZ3000_8ybe88nf'  : 'TS0201',
     '_TZ3000_rdhukkmi'  : 'TS0201',
     '_TZ3000_utwgoauk'  : 'TS0201',
+    '_TZ3210_alxkwn0h'  : 'TS0201',             // added v1.9.0
+    '_TZ3000_0s1izerx'  : 'TS0201',             // added v1.9.0
+    '_TZ3000_v1w2k9dd'  : 'TS0201',             // added v1.9.0
+    '_TZ3000_lqmvrwa2'  : 'TS0201',             // added v1.9.0
+    '_TZ3000_f2bw0b6k'  : 'TS0201',             // added v1.9.0
+    '_TZ3000_mxzo5rhf'  : 'TS0201',             // added v1.9.0
+    '_TZ3000_1twfmkcc'  : 'TS0201',             // added v1.9.0
+    '_TZ3000_fie1dpkm'  : 'TS0201',             // added v1.9.0
+    '_TZ3000_saiqcn0y'  : 'TS0201',             // added v1.9.0
+    '_TZ3000_akqdg6g7'  : 'TS0201',             // added v1.9.0
+    '_TZE200_iq4ygaai'  : 'TS0201',             // temperature probe added v1.9.0
+    '_TZE200_01fvxamo'  : 'TS0201',             // temperature probe added v1.9.0
     'TUYATEC-gqhxixyk'  : 'TS0201',             // model RH3052
     '_TZ3000_qaaysllp'  : 'TS0201_LCZ030',      // NAS-TH02B  / NEO Coolcam ?  - T/H/I - testing! // https://github.com/Datakg/tuya/blob/53e33ae7767aedbb5d2138f2a31798badffd80d2/zhaquirks/tuya/ts0201_neo.py
     '_TYZB01_kvwjujy9'  : 'TS0222',             // "MOES ZSS-ZK-THL" e-Ink display
@@ -319,6 +377,7 @@ metadata {
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
     '_TZ3000_kky16aay'  : 'TS0222_Soil',        // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/535?u=kkossev
     '_TZE200_pay2byax'  : 'TS0601_Contact',     // Contact and illuminance sensor
+    '_TZE200_nvups4nh'  : 'TS0601_Contact',     // Contact + T/H sensor added v1.9.0
     '_TZ3000_1o6x1bl0'  : 'TS0201_TH',          // Temperature and humidity sensor; // reports both battery voltage and perceintage; cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)
     '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor; // reports both battery voltage and perceintage; cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)    
     '_TZ3000_ywagc4rj'  : 'TS0201_TH',          // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock/88093/210?u=kkossev
@@ -331,6 +390,7 @@ metadata {
     '_TZE284_aao3yzhs'  : 'TS0601_Soil_II',     // Soil monitoring sensor II
     '_TZE284_sgabhwa6'  : 'TS0601_Soil_II',     // Soil monitoring sensor II
     '_TZE284_nhgdf6qr'  : 'TS0601_Soil_II',     // Soil monitoring sensor II
+    '_TZE284_33bwcga2'  : 'TS0601_Soil_II',     // https://community.hubitat.com/t/driver-for-tuya-soil-tester-sensor/156528?u=kkossev
     'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D, SNZB-02P
     'SONOFF'            : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D, SNZB-02P
     'ShinaSystem'       : 'Zigbee NON-Tuya',    // USM-300Z
