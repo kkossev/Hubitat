@@ -46,8 +46,8 @@ preferences {
         }
         
         section("Testing") {
-            input "testAlarm", "button", title: "Test Alarm"
-            input "refreshStates", "button", title: "Refresh Device States"
+            input "testAlarm", "button", title: "Test Alarm", width: 6
+            input "refreshStates", "button", title: "Refresh Device States", width: 6
         }
         
         section("Status") {
@@ -394,21 +394,48 @@ def getStatusTable() {
             padding: 8px; 
             text-align: left; 
         }
-        .activity-table th { background-color: #f2f2f2; }
+        .activity-table th { 
+            background-color: #f2f2f2; 
+            cursor: pointer; 
+            user-select: none;
+            position: relative;
+        }
+        .activity-table th:hover { background-color: #e6e6e6; }
+        .activity-table th::after {
+            content: '';
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 4px solid transparent;
+            border-top: 4px solid #999;
+        }
+        .activity-table th.sort-asc::after {
+            border-top: none;
+            border-bottom: 4px solid #333;
+        }
+        .activity-table th.sort-desc::after {
+            border-bottom: none;
+            border-top: 4px solid #333;
+        }
         .activity-table tr:nth-child(even) { background-color: #f9f9f9; }
         .status-active { color: green; font-weight: bold; }
         .status-inactive { color: red; }
         .status-unknown { color: gray; }
     </style>
-    <table class="activity-table">
-        <tr>
-            <th>Device</th>
-            <th>Room</th>
-            <th>Type</th>
-            <th>Status</th>
-            <th>Last Change</th>
-            <th>Age</th>
-        </tr>
+    
+    <table class="activity-table" id="activityTable">
+        <thead>
+            <tr>
+                <th onclick="sortTable(0)">Device</th>
+                <th onclick="sortTable(1)">Room</th>
+                <th onclick="sortTable(2)">Type</th>
+                <th onclick="sortTable(3)">Status</th>
+                <th onclick="sortTable(4)">Last Change</th>
+                <th onclick="sortTable(5)">Age</th>
+            </tr>
+        </thead>
+        <tbody>
     """
     
     allDevices.sort { it.displayName }.each { device ->
@@ -425,19 +452,75 @@ def getStatusTable() {
         def ageStr = lastEventTime > 0 ? 
             formatDuration(now - lastEventTime) : "—"
         
+        // Add data attributes for sorting
+        def ageInMinutes = lastEventTime > 0 ? (now - lastEventTime) / (60 * 1000) : 999999
+        def lastChangeTimestamp = lastEventTime > 0 ? lastEventTime : 0
+        
         html += """
         <tr>
             <td>${device.displayName}</td>
             <td>${room}</td>
             <td>${deviceType}</td>
             <td class="${statusClass}">${status}</td>
-            <td>${lastChangeStr}</td>
-            <td>${ageStr}</td>
+            <td data-timestamp="${lastChangeTimestamp}">${lastChangeStr}</td>
+            <td data-age="${ageInMinutes}">${ageStr}</td>
         </tr>
         """
     }
     
-    html += "</table>"
+    html += """
+        </tbody>
+    </table>
+    
+    <script>
+        let sortDirections = {};
+        
+        function sortTable(columnIndex) {
+            const table = document.getElementById('activityTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const headers = table.querySelectorAll('th');
+            
+            // Determine sort direction
+            const currentDirection = sortDirections[columnIndex] || 'asc';
+            const newDirection = currentDirection === 'asc' ? 'desc' : 'asc';
+            sortDirections[columnIndex] = newDirection;
+            
+            // Clear all header classes
+            headers.forEach(header => {
+                header.classList.remove('sort-asc', 'sort-desc');
+            });
+            
+            // Add class to current header
+            headers[columnIndex].classList.add('sort-' + newDirection);
+            
+            // Sort rows
+            rows.sort((a, b) => {
+                let aValue, bValue;
+                
+                if (columnIndex === 4) { // Last Change column
+                    aValue = parseInt(a.cells[columnIndex].getAttribute('data-timestamp') || '0');
+                    bValue = parseInt(b.cells[columnIndex].getAttribute('data-timestamp') || '0');
+                } else if (columnIndex === 5) { // Age column
+                    aValue = parseFloat(a.cells[columnIndex].getAttribute('data-age') || '999999');
+                    bValue = parseFloat(b.cells[columnIndex].getAttribute('data-age') || '999999');
+                } else { // Text columns
+                    aValue = a.cells[columnIndex].textContent.trim().toLowerCase();
+                    bValue = b.cells[columnIndex].textContent.trim().toLowerCase();
+                }
+                
+                let comparison = 0;
+                if (aValue > bValue) comparison = 1;
+                if (aValue < bValue) comparison = -1;
+                
+                return newDirection === 'desc' ? -comparison : comparison;
+            });
+            
+            // Reorder rows in the table
+            rows.forEach(row => tbody.appendChild(row));
+        }
+    </script>
+    """
     
     def lastCheckStr = state.lastCheck ? 
         new Date(state.lastCheck).format("MM/dd/yyyy HH:mm:ss") : "Never"
