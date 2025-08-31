@@ -61,7 +61,8 @@
  * ver. 1.8.4  2025-04-01 AlexF4Dev - added TS0210 _TZ3000_1o6x1bl0
  * ver. 1.8.5  2025-06-11 kkossev - added TS0601 _TZE284_myd45weu into 'TS0601 Soil_I' group;
  * ver. 1.8.6  2025-08-12 kkossev - added TS0601 _TZE204_cirvgep4 into 'TS0601_Tuya_2' group; added queryAllTuyaDP on device announcements and Tuya command 0x11
- * ver. 1.9.0  2025-08-31 kkossev - added missing TS0601 variants (_TZE200_44af8vyi _TZE284_qyflbnbj _TZE284_yjjdcqsq _TZE200_utkemkbs _TZE204_utkemkbs _TZE284_utkemkbs _TZE284_upagmta9 _TZE284_vvmbj46n _TZE200_w6n8jeuu _TZE200_s1xgth2u _TZE200_vzqtvljm _TZE200_rbbx5mfq _TZE200_nvups4nh); 
+ * ver. 1.9.0  2025-08-31 kkossev - added a total of 27 new devices: 
+ *                                  added missing TS0601 variants (_TZE200_44af8vyi _TZE284_qyflbnbj _TZE284_yjjdcqsq _TZE200_utkemkbs _TZE204_utkemkbs _TZE284_utkemkbs _TZE284_upagmta9 _TZE284_vvmbj46n _TZE200_w6n8jeuu _TZE200_s1xgth2u _TZE200_vzqtvljm _TZE200_rbbx5mfq _TZE200_nvups4nh); 
  *                                  added TS0201 variants (_TZ3210_alxkwn0h _TZ3000_0s1izerx _TZ3000_v1w2k9dd _TZ3000_lqmvrwa2 _TZ3000_f2bw0b6k _TZ3000_mxzo5rhf _TZ3000_1twfmkcc _TZ3000_fie1dpkm _TZ3000_saiqcn0y _TZ3000_akqdg6g7 _TZE200_iq4ygaai _TZE200_01fvxamo);
  *                                  added TS0601 _TZE284_33bwcga2 to TS0601_Soil_II group; added missing model map _TZE200_bjawzodf.
  *
