@@ -1,11 +1,11 @@
 /* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoJavaUtilDate, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Battery Library', name: 'batteryLib', namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/batteryLib.groovy', documentationLink: '',
-    version: '3.2.2'
+    importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/batteryLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-batteryLib',
+    version: '3.2.3'
 )
 /*
- *  Zigbee Level Library
+ *  Zigbee Battery Library
  *
  *  Licensed Virtual the Apache License, Version 2.0
  *
@@ -15,13 +15,14 @@ library(
  * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment; added lastBattery; added handleTuyaBatteryLevel
  * ver. 3.2.1  2024-07-06 kkossev  - added tuyaToBatteryLevel and handleTuyaBatteryLevel; added batteryInitializeVars
  * ver. 3.2.2  2024-07-18 kkossev  - added BatteryVoltage and BatteryDelay device capability checks
+ * ver. 3.2.3  2025-07-13 kkossev  - bug fix: corrected runIn method name from 'sendDelayedBatteryEvent' to 'sendDelayedBatteryPercentageEvent'
  *
- *                                   TODO: 
+ *                                   TODO: add an Advanced Option resetBatteryToZeroWhenOffline
  *                                   TODO: battery voltage low/high limits configuration
 */
 
-static String batteryLibVersion()   { '3.2.2' }
-static String batteryLibStamp() { '2024/07/18 2:34 PM' }
+static String batteryLibVersion()   { '3.2.3' }
+static String batteryLibStamp() { '2025/07/13 7:45 PM' }
 
 metadata {
     capability 'Battery'
@@ -133,7 +134,7 @@ public void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigit
         map.descriptionText += " [delayed ${map.delayed} seconds]"
         map.lastBattery = lastBattery
         logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds"
-        runIn(delayedTime, 'sendDelayedBatteryEvent', [overwrite: true, data: map])
+        runIn(delayedTime, 'sendDelayedBatteryPercentageEvent', [overwrite: true, data: map])
     }
 }
 

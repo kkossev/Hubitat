@@ -1,8 +1,8 @@
 /* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, InsecureRandom, LineLength, MethodCount, MethodReturnTypeRequired, MethodSize, NglParseError, NoDouble, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnnecessaryPackageReference, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport, UnusedPrivateMethod, VariableName */
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy', documentationLink: '',
-    version: '3.3.2'
+    importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/commonLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-commonLib',
+    version: '3.5.1'
 )
 /*
   *  Common ZCL Library
@@ -37,24 +37,32 @@ library(
   * ver. 3.2.1  2024-06-05 kkossev  - 4 in 1 V3 compatibility; added IAS cluster; setDeviceNameAndProfile() fix;
   * ver. 3.2.2  2024-06-12 kkossev  - removed isAqaraTRV_OLD() and isAqaraTVOC_OLD() dependencies from the lib; added timeToHMS(); metering and electricalMeasure clusters swapped bug fix; added cluster 0x0204;
   * ver. 3.3.0  2024-06-25 kkossev  - fixed exception for unknown clusters; added cluster 0xE001; added powerSource - if 5 minutes after initialize() the powerSource is still unknown, query the device for the powerSource
-  * ver. 3.3.1  2024-07-06 kkossev  - removed isFingerbot() dependancy; added FC03 cluster (Frient); removed noDef from the linter; added customParseIasMessage and standardParseIasMessage; powerSource set to unknown on initialize();
+  * ver. 3.3.1  2024-07-06 kkossev  - removed isFingerbot() dependancy; added FC03 cluster (Frient); removed noDef from the linter; added customParseIasMessage and standardParseIasMessage; powerSource set to unknown on initialize(); add 0x0007 onOffConfiguration cluster';
   * ver. 3.3.2  2024-07-12 kkossev  - added PollControl (0x0020) cluster; ping for SONOFF
+  * ver. 3.3.3  2024-09-15 kkossev  - added queryAllTuyaDP(); 2 minutes healthCheck option;
+  * ver. 3.3.4  2025-01-29 kkossev  - 'LOAD ALL DEFAULTS' is the default Configure command.
+  * ver. 3.3.5  2025-03-05 kkossev  - getTuyaAttributeValue made public; fixed checkDriverVersion bug on hub reboot.
+  * ver. 3.4.0  2025-03-23 kkossev  - healthCheck by pinging the device; updateRxStats() replaced with inline code; added state.lastRx.timeStamp; added activeEndpoints() handler call; documentation improvements
+  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
+  * ver. 3.5.1  2025-07-23 kkossev  - Aqara W100 destEndpoint: 0x01 patch
+  * ver. 3.5.2  2025-08-13 kkossev  - (dev.branch) Status attribute renamed to _status_
   *
+  *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
+  *                                   TODO: make the configure() without parameter smart - analyze the State variables and call delete states.... call ActiveAndpoints() or/amd initialize() or/and configure()
+  *                                   TODO: check - offlineCtr is not increasing? (ZBMicro);
   *                                   TODO: check deviceCommandTimeout()
-  *                                   TODO: offlineCtr is not increasing! (ZBMicro);
   *                                   TODO: when device rejoins the network, read the battery percentage again (probably in custom handler, not for all devices)
   *                                   TODO: refresh() to include updating the softwareBuild data version
   *                                   TODO: map the ZCL powerSource options to Hubitat powerSource options
   *                                   TODO: MOVE ZDO counters to health state?
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: Versions of the main module + included libraries (in the 'Tuya Device' driver?)
-  *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
   *                                   TODO: disableDefaultResponse for Tuya commands
   *
 */
 
-String commonLibVersion() { '3.3.2' }
-String commonLibStamp() { '2024/07/12 8:53 PM' }
+String commonLibVersion() { '3.5.2' }
+String commonLibStamp() { '2025/08/13 8:18 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -86,21 +94,21 @@ metadata {
         // common attributes for all device types
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute 'rtt', 'number'
-        attribute 'Status', 'string'
+        attribute '_status_', 'string'
 
         // common commands for all device types
-        command 'configure', [[name:'normally it is not needed to configure anything', type: 'ENUM',   constraints: /*['--- select ---'] +*/ ConfigureOpts.keySet() as List<String>]]
+        command 'configure', [[name:'normally it is not needed to configure anything', type: 'ENUM', constraints: ConfigureOpts.keySet() as List<String>]]
 
         // trap for Hubitat F2 bug
         fingerprint profileId:'0104', endpointId:'F2', inClusters:'', outClusters:'', model:'unknown', manufacturer:'unknown', deviceJoinName: 'Zigbee device affected by Hubitat F2 bug'
 
     preferences {
-        // txtEnable and logEnable moved to the custom driver settings - coopy& paste there ...
+        // txtEnable and logEnable moved to the custom driver settings - copy& paste there ...
         //input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.'
         //input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: 'Turns on debug logging for 24 hours.'
 
         if (device) {
-            input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: 'These advanced options should be already automatically set in an optimal way for your device...', defaultValue: false
+            input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: 'The advanced options should be already automatically set in an optimal way for your device...Click on the "Save and Close" button when toggling this option!', defaultValue: false
             if (advancedOptions == true) {
                 input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: 'Method to check device online/offline status.'
                 input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: 'How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"'
@@ -126,10 +134,11 @@ metadata {
     defaultValue: 1, options: [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
 ]
 @Field static final Map HealthcheckIntervalOpts = [          // used by healthCheckInterval
-    defaultValue: 240, options: [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
+    defaultValue: 240, options: [2: 'Every 2 Mins', 10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
 ]
 
 @Field static final Map ConfigureOpts = [
+    '*** LOAD ALL DEFAULTS ***'  : [key:0, function: 'loadAllDefaults'],
     'Configure the device'       : [key:2, function: 'configureNow'],
     'Reset Statistics'           : [key:9, function: 'resetStatistics'],
     '           --            '  : [key:3, function: 'configureHelp'],
@@ -138,8 +147,7 @@ metadata {
     'Delete All Scheduled Jobs'  : [key:6, function: 'deleteAllScheduledJobs'],
     'Delete All State Variables' : [key:7, function: 'deleteAllStates'],
     'Delete All Child Devices'   : [key:8, function: 'deleteAllChildDevices'],
-    '           -             '  : [key:1, function: 'configureHelp'],
-    '*** LOAD ALL DEFAULTS ***'  : [key:0, function: 'loadAllDefaults']
+    '           -             '  : [key:1, function: 'configureHelp']
 ]
 
 public boolean isVirtual() { device.controllerType == null || device.controllerType == '' }
@@ -149,10 +157,12 @@ public boolean isVirtual() { device.controllerType == null || device.controllerT
  * @param description Zigbee message in hex format
  */
 public void parse(final String description) {
-    checkDriverVersion(state)    // +1 ms
-    updateRxStats(state)         // +1 ms
+    Map stateCopy = state            // .clone() throws java.lang.CloneNotSupportedException in HE platform version 2.4.1.155 !
+    checkDriverVersion(stateCopy)    // +1 ms
+    if (state.stats != null) { state.stats?.rxCtr= (state.stats?.rxCtr ?: 0) + 1 } else { state.stats = [:] }  // updateRxStats(state) // +1 ms
+    if (state.lastRx != null) { state.lastRx?.timeStamp = unix2formattedDate(now()) } else { state.lastRx = [:] }
     unscheduleCommandTimeoutCheck(state)
-    setHealthStatusOnline(state) // +2 ms
+    setHealthStatusOnline(state)    // +2 ms
 
     if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {
         logDebug "parse: zone status: $description"
@@ -213,7 +223,7 @@ public void parse(final String description) {
 }
 
 @Field static final Map<Integer, String> ClustersMap = [
-    0x0000: 'Basic',             0x0001: 'Power',            0x0003: 'Identify',         0x0004: 'Groups',           0x0005: 'Scenes',       0x0006: 'OnOff',           0x0008: 'LevelControl', 
+    0x0000: 'Basic',             0x0001: 'Power',            0x0003: 'Identify',         0x0004: 'Groups',           0x0005: 'Scenes',       0x0006: 'OnOff',           0x0007:'onOffConfiguration',      0x0008: 'LevelControl', 
     0x000C: 'AnalogInput',       0x0012: 'MultistateInput',  0x0020: 'PollControl',      0x0102: 'WindowCovering',   0x0201: 'Thermostat',  0x0204: 'ThermostatConfig',/*0x0300: 'ColorControl',*/
     0x0400: 'Illuminance',       0x0402: 'Temperature',      0x0405: 'Humidity',         0x0406: 'Occupancy',        0x042A: 'Pm25',         0x0500: 'IAS',             0x0702: 'Metering',
     0x0B04: 'ElectricalMeasure', 0xE001: 'E0001',            0xE002: 'E002',             0xEC03: 'EC03',             0xEF00: 'Tuya',         0xFC03: 'FC03',            0xFC11: 'FC11',            0xFC7E: 'AirQualityIndex', // Sensirion VOC index
@@ -249,6 +259,7 @@ boolean standardAndCustomParseCluster(Map descMap, final String description) {
     return false
 }
 
+// not used - throws exception :  error groovy.lang.MissingPropertyException: No such property: rxCtr for class: java.lang.String on line 1568 (method parse)
 private static void updateRxStats(final Map state) {
     if (state.stats != null) { state.stats['rxCtr'] = (state.stats['rxCtr'] ?: 0) + 1 } else { state.stats = [:] }  // +5ms
 }
@@ -269,6 +280,7 @@ public boolean isSpammyDeviceReport(final Map descMap) {
     return false
 }
 
+// not used?
 public boolean isSpammyTuyaRadar() {
     if (_TRACE_ALL == true) { return false }
     if (this.respondsTo('isSpammyDeviceProfile'())) {   // defined in deviceProfileLib
@@ -313,7 +325,7 @@ private void parseZdoClusters(final Map descMap) {
             break
         case 0x8004 : // simple descriptor response
             if (settings?.logEnable) { log.debug "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}" }
-            //parseSimpleDescriptorResponse( descMap )
+            if (this.respondsTo('parseSimpleDescriptorResponse')) { parseSimpleDescriptorResponse(descMap) }
             break
         case 0x8005 : // endpoint response
             String endpointCount = descMap.data[4]
@@ -323,9 +335,11 @@ private void parseZdoClusters(final Map descMap) {
         case 0x8021 : // bind response
             if (settings?.logEnable) { log.debug "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1] == '00' ? 'Success' : '<b>Failure</b>'})" }
             break
-        case 0x8022 : //unbind request
-        case 0x8034 : //leave response
-            if (settings?.logEnable) { log.debug "${clusterInfo}" }
+        case 0x0002 : // Node Descriptor Request
+        case 0x0036 : // Permit Joining Request
+        case 0x8022 : // unbind request
+        case 0x8034 : // leave response
+            if (settings?.logEnable) { log.debug "${device.displayName} Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}" }
             break
         default :
             if (settings?.logEnable) { log.warn "${device.displayName} Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}" }
@@ -484,7 +498,7 @@ private BigDecimal approxRollingAverage(BigDecimal avgPar, BigDecimal newSample)
     return avg
 }
 
-void handlePingResponse() {
+private void handlePingResponse() {
     Long now = new Date().getTime()
     if (state.lastRx == null) { state.lastRx = [:] }
     state.lastRx['checkInTime'] = now
@@ -515,7 +529,7 @@ private void standardParseBasicCluster(final Map descMap) {
     Long now = new Date().getTime()
     if (state.lastRx == null) { state.lastRx = [:] }
     state.lastRx['checkInTime'] = now
-    boolean isPing = state.states['isPing'] ?: false
+    boolean isPing = state.states?.isPing ?: false
     switch (descMap.attrInt as Integer) {
         case 0x0000:
             logDebug "Basic cluster: ZCLVersion = ${descMap?.value}"
@@ -624,6 +638,8 @@ Map myParseDescriptionAsMap(String description) {
     return descMap
 }
 
+// return true if the messages is processed here, and further processing in the main parse method should be cancelled !
+// return false if the cluster is not a Tuya cluster
 private boolean isTuyaE00xCluster(String description) {
     if (description == null || !(description.indexOf('cluster: E000') >= 0 || description.indexOf('cluster: E001') >= 0)) {
         return false
@@ -658,7 +674,7 @@ private boolean isTuyaE00xCluster(String description) {
     return true    // processed
 }
 
-// return true if further processing in the main parse method should be cancelled !
+// return true if processed here, and further processing in the main parse method should be cancelled !
 private boolean otherTuyaOddities(final String description) {
   /*
     if (description.indexOf('cluster: 0000') >= 0 && description.indexOf('attrId: 0004') >= 0) {
@@ -837,7 +853,7 @@ void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, fin
     logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
 }
 
-private int getTuyaAttributeValue(final List<String> _data, final int index) {
+public int getTuyaAttributeValue(final List<String> _data, final int index) {
     int retValue = 0
     if (_data.size() >= 6) {
         int dataLength = zigbee.convertHexToInt(_data[5 + index])
@@ -857,14 +873,13 @@ public List<String> sendTuyaCommand(String dp, String dp_type, String fncmd, int
     List<String> cmds = []
     int ep = safeToInt(state.destinationEP)
     if (ep == null || ep == 0) { ep = 1 }
-    //int tuyaCmd = isFingerbot() ? 0x04 : SETDATA
     int tuyaCmd
-    // added 07/01/2024 - deviceProfilesV3 device key tuyaCmd:04 : owerwrite all sendTuyaCommand calls for a specfic device profile, if specified!\
+    // added 07/01/2024 - deviceProfilesV3 device key tuyaCmd:04 : owerwrite all sendTuyaCommand calls for a specfic device profile, if specified!
     if (this.respondsTo('getDEVICE') && DEVICE?.device?.tuyaCmd != null) {
         tuyaCmd = DEVICE?.device?.tuyaCmd
     }
     else {
-        tuyaCmd = /*isFingerbot() ? 0x04 : */ tuyaCmdDefault // 0x00 is the default command for most of the Tuya devices, except some ..
+        tuyaCmd = tuyaCmdDefault // 0x00 is the default command for most of the Tuya devices, except some ..
     }
     cmds = zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], delay = 201, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd )
     logDebug "${device.displayName} getTuyaCommand (dp=$dp fncmd=$fncmd dp_type=$dp_type) = ${cmds}"
@@ -880,14 +895,18 @@ public void tuyaTest(String dpCommand, String dpValue, String dpTypeString ) {
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
 }
 
-//private getANALOG_INPUT_BASIC_CLUSTER() { 0x000C }
-//private getANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE() { 0x0055 }
 
 public List<String> tuyaBlackMagic() {
     int ep = safeToInt(state.destinationEP ?: 01)
     if (ep == null || ep == 0) { ep = 1 }
     logInfo 'tuyaBlackMagic()...'
     return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :ep], delay = 200)
+}
+
+public List<String> queryAllTuyaDP() {
+    logTrace 'queryAllTuyaDP()'
+    List<String> cmds = zigbee.command(0xEF00, 0x03)
+    return cmds
 }
 
 public void aqaraBlackMagic() {
@@ -911,6 +930,7 @@ public List<String> initializeDevice() {
         List<String> customCmds = customInitializeDevice()
         if (customCmds != null && !customCmds.isEmpty()) { cmds +=  customCmds }
     }
+    else { logDebug 'no customInitializeDevice method defined' }
     logDebug "initializeDevice(): cmds=${cmds}"
     return cmds
 }
@@ -923,6 +943,7 @@ public List<String> configureDevice() {
         List<String> customCmds = customConfigureDevice()
         if (customCmds != null && !customCmds.isEmpty()) { cmds +=  customCmds }
     }
+    else { logDebug 'no customConfigureDevice method defined' }
     // sendZigbeeCommands(cmds) changed 03/04/2024
     logDebug "configureDevice(): cmds=${cmds}"
     return cmds
@@ -947,7 +968,7 @@ List<String> customHandlers(final List customHandlersList) {
     return cmds
 }
 
-void refresh() {
+public void refresh() {
     logDebug "refresh()... DEVICE_TYPE is ${DEVICE_TYPE} model=${device.getDataValue('model')} manufacturer=${device.getDataValue('manufacturer')}"
     checkDriverVersion(state)
     List<String> cmds = [], customCmds = []
@@ -976,21 +997,25 @@ public void clearInfoEvent()      { sendInfoEvent('clear') }
 public void sendInfoEvent(String info=null) {
     if (info == null || info == 'clear') {
         logDebug 'clearing the Status event'
-        sendEvent(name: 'Status', value: 'clear', type: 'digital')
+        sendEvent(name: '_status_', value: 'clear', type: 'digital')
     }
     else {
         logInfo "${info}"
-        sendEvent(name: 'Status', value: info, type: 'digital')
+        sendEvent(name: '_status_', value: info, type: 'digital')
         runIn(INFO_AUTO_CLEAR_PERIOD, 'clearInfoEvent')            // automatically clear the Info attribute after 1 minute
     }
 }
 
 public void ping() {
     if (state.lastTx == null ) { state.lastTx = [:] } ; state.lastTx['pingTime'] = new Date().getTime()
-    if (state.states == null ) { state.states = [:] } ;     state.states['isPing'] = true
+    if (state.states == null ) { state.states = [:] } ; state.states['isPing'] = true
     scheduleCommandTimeoutCheck()
     int  pingAttr = (device.getDataValue('manufacturer') == 'SONOFF') ? 0x05 : PING_ATTR_ID
     if (isVirtual()) { runInMillis(10, 'virtualPong') }
+    else if (device.getDataValue('manufacturer') == 'Aqara') {
+        logDebug 'Aqara device ping...'
+        sendZigbeeCommands(zigbee.readAttribute(zigbee.BASIC_CLUSTER, pingAttr, [destEndpoint: 0x01], 0) )
+    }
     else { sendZigbeeCommands(zigbee.readAttribute(zigbee.BASIC_CLUSTER, pingAttr, [:], 0) ) }
     logDebug 'ping...'
 }
@@ -1001,7 +1026,7 @@ private void virtualPong() {
     int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: '0').toInteger()
     if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
         state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1
-        if (timeRunning < safeToInt((state.stats['pingsMin'] ?: '999'))) { state.stats['pingsMin'] = timeRunning }
+        if (timeRunning < safeToInt((state.stats['pingsMin'] ?: '9999'))) { state.stats['pingsMin'] = timeRunning }
         if (timeRunning > safeToInt((state.stats['pingsMax'] ?: '0')))   { state.stats['pingsMax'] = timeRunning }
         state.stats['pingsAvg'] = approxRollingAverage(safeToDouble(state.stats['pingsAvg']), safeToDouble(timeRunning)) as int
         sendRttEvent()
@@ -1056,6 +1081,16 @@ void deviceCommandTimeout() {
     logWarn 'no response received (sleepy device or offline?)'
     sendRttEvent('timeout')
     state.stats['pingsFail'] = (state.stats['pingsFail'] ?: 0) + 1
+    if (state.health?.isHealthCheck == true) {
+        logWarn 'device health check failed!'
+        state.health?.checkCtr3 = (state.health?.checkCtr3 ?: 0 ) + 1
+        if (state.health?.checkCtr3 >= PRESENCE_COUNT_THRESHOLD) {
+            if ((device.currentValue('healthStatus') ?: 'unknown') != 'offline' ) {
+                sendHealthStatusEvent('offline')
+            }
+        }
+        state.health['isHealthCheck'] = false
+    }
 }
 
 private void scheduleDeviceHealthCheck(final int intervalMins, final int healthMethod) {
@@ -1097,9 +1132,14 @@ private void deviceHealthCheck() {
         }
     }
     else {
-        logDebug "deviceHealthCheck - online (notPresentCounter=${ctr})"
+        logDebug "deviceHealthCheck - online (notPresentCounter=${(ctr + 1)})"
     }
     state.health['checkCtr3'] = ctr + 1
+    // added 03/06/2025
+    if (settings?.healthCheckMethod as int == 2) {
+        state.health['isHealthCheck'] = true
+        ping()  // proactively ping the device...
+    }
 }
 
 private void sendHealthStatusEvent(final String value) {
@@ -1184,7 +1224,7 @@ void configureHelp(final String val) {
 }
 
 public void loadAllDefaults() {
-    logWarn 'loadAllDefaults() !!!'
+    logDebug 'loadAllDefaults() !!!'
     deleteAllSettings()
     deleteAllCurrentStates()
     deleteAllScheduledJobs()
@@ -1305,20 +1345,17 @@ public String getDestinationEP() {    // [destEndpoint:safeToInt(getDestinationE
     return state.destinationEP ?: device.endpointId ?: '01'
 }
 
-@CompileStatic
-public void checkDriverVersion(final Map state) {
-    if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
-        logDebug "checkDriverVersion: updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+//@CompileStatic
+public void checkDriverVersion(final Map stateCopy) {
+    if (stateCopy.driverVersion == null || driverVersionAndTimeStamp() != stateCopy.driverVersion) {
+        logDebug "checkDriverVersion: updating the settings from the current driver version ${stateCopy.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()}")
         state.driverVersion = driverVersionAndTimeStamp()
         initializeVars(false)
         updateTuyaVersion()
         updateAqaraVersion()
     }
-    if (state.states == null) { state.states = [:] }
-    if (state.lastRx == null) { state.lastRx = [:] }
-    if (state.lastTx == null) { state.lastTx = [:] }
-    if (state.stats  == null) { state.stats =  [:] }
+    if (state.states == null) { state.states = [:] } ; if (state.lastRx == null) { state.lastRx = [:] } ; if (state.lastTx == null) { state.lastTx = [:] } ; if (state.stats  == null) { state.stats =  [:] }
 }
 
 // credits @thebearmay
@@ -1365,7 +1402,7 @@ void resetStats() {
     logDebug 'resetStats...'
     state.stats = [:] ; state.states = [:] ; state.lastRx = [:] ; state.lastTx = [:] ; state.health = [:]
     if (this.respondsTo('groupsLibVersion')) { state.zigbeeGroups = [:] }
-    state.stats['rxCtr'] = 0 ; state.stats['txCtr'] = 0
+    state.stats.rxCtr = 0 ; state.stats.txCtr = 0
     state.states['isDigital'] = false ; state.states['isRefresh'] = false ; state.states['isPing'] = false
     state.health['offlineCtr'] = 0 ; state.health['checkCtr3'] = 0
 }
