@@ -1,9 +1,6 @@
 {
     "extends": "recommended",
     "rules": {
-        "DuplicateMapLiteral": {
-            "enabled": false
-        },
         "InsecureRandom": {
             "enabled": false
         }

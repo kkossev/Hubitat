@@ -1,4 +1,4 @@
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, LineLength, MethodCount, MethodParameterTypeRequired, MethodSize, NoDef, NoDouble, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessarySetter */
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, LineLength, MethodCount, MethodParameterTypeRequired, NoDef, NoDouble, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessarySetter */
 /**
  *  Matter test - Device Driver for Hubitat Elevation
  *
@@ -15,26 +15,22 @@
  *
  * Thanks to Hubitat for publishing the sample Matter driver https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/thirdRealityMatterNightLight.groovy
  *
- * ver. 1.0.1  2023-12-23 kkossev  - Inital version; added onOff stats; added toggle(); commented out the initialize() and configure() capabilities because of duplicated subscriptions
- * ver. 1.0.2  2023-12-26 kkossev  - added getInfo command; fixed the refresh() command for MATTER_OUTLET; added isDigital isRefresh; use the Basic cluster attr. 0 for ping()
- * ver. 1.0.3  2023-12-28 kkossev  - (dev. branch) added initializeCtr and duplicatedCtr in stats; added reSubscribe() method
+ * ver. 1.0.0  2023-12-27 kkossev  - (dev. branch) inital version (based on the RGBW bulb driver version 1.0.3); added initializeCtr and duplicatedCtr in stats; re-enabled initialize() method w/ unsubscribe() call - hopefully it works! 
+ * ver. 1.0.1  2023-12-28 kkossev  - (dev. branch) reverted back the initialize() method to the previous version (w/o unsubscribe() call); exposed unsubscribe() method
  *
- *                                   TODO: add power meter handling
- *                                   TODO: add flashRate preference; add flash() command
- *                                   TODO: add flashOnce()
- *                                   TODO: add powerOnBehavior
+ *                                   TODO: add state.battery w/ all details
  */
 
-static String version() { '1.0.3' }
-static String timeStamp() { '2023/12/28 9:12 PM' }
+static String version() { '1.0.0' }
+static String timeStamp() { '2023/12/28 4:24 PM' }
 
 @Field static final Boolean _DEBUG = false
-@Field static final String  DEVICE_TYPE = 'MATTER_OUTLET'
+@Field static final String  DEVICE_TYPE = 'MATTER_CONTACT_SENSOR'
 @Field static final Integer DIGITAL_TIMER = 3000             // command was sent by this driver
-@Field static final Integer REFRESH_TIMER = 6000             // refresh time in miliseconds
+@Field static final Integer REFRESH_TIMER = 9000             // refresh time in miliseconds
 @Field static final Integer INFO_AUTO_CLEAR_PERIOD = 60      // automatically clear the Info attribute after 60 seconds
 @Field static final Integer COMMAND_TIMEOUT = 10             // timeout time in seconds
-@Field static final Integer MAX_PING_MILISECONDS = 10000     // rtt more than 10 seconds will be ignored
+@Field static final Integer MAX_PING_MILISECONDS = 20000     // rtt more than 20 seconds will be ignored
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3     // missing 3 checks will set the device healthStatus to offline
 @Field static final String  UNKNOWN = 'UNKNOWN'
 
@@ -42,12 +38,11 @@ import groovy.transform.Field
 import hubitat.helper.HexUtils
 
 metadata {
-    definition(name: 'Matter Advanced Outlet', namespace: 'kkossev', author: 'Krassimir Kossev') {
-        capability 'Actuator'
+    definition(name: 'Matter Advanced Contact Sensor', namespace: 'kkossev', author: 'Krassimir Kossev') {
         capability 'Sensor'
-        capability 'Outlet'
-        capability 'Switch'
-        capability 'Power Meter'
+        capability 'Battery'
+        capability 'Contact Sensor'
+        //capability 'Configuration'
         capability 'Initialize'
         capability 'Refresh'
         capability 'Health Check'
@@ -55,20 +50,21 @@ metadata {
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute 'rtt', 'number'
         attribute 'Status', 'string'
-
-        command 'toggle'
+        attribute 'batteryVoltage', 'number'
+        attribute 'batteryStatus', 'enum', PowerSourceClusterStatus.values() as List<String>
+        attribute 'batteryChargeLevel', 'enum', PowerSourceClusterBatteryChargeLevel.values() as List<String>
+        
         command 'getInfo'
         //command 'identify'  // can't make it work ... :(
-        //command 'unsubscribe'
         //command 'subscribe'
-        command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
-        command 'reSubscribe', [[name: 're-subscribe to the Matter controller events']]
+        command 'unsubscribe'
 
         if (_DEBUG) {
             command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
         }
         // fingerprints are commented out, because are already included in the stock driver
-        // fingerprint endpointId:'01', inClusters:'001D,0003,0004,0005,0006', outClusters:'', model:'S4', manufacturer:'Onvis', controllerType:'MAT'      // Onvis plug                                          // Onvis Smart Plug SP120
+        //fingerprint endpointId:'01', inClusters:'0003,001D,0045', outClusters:'', model:'Aqara Door and Window Sensor P2', manufacturer:'Aqara', controllerType:'MAT'
+        //fingerprint endpointId:'02', inClusters:'001D,002F',      outClusters:'', model:'Aqara Door and Window Sensor P2', manufacturer:'Aqara', controllerType:'MAT'
     }
     preferences {
         input(name:'txtEnable', type:'bool', title:'Enable descriptionText logging', defaultValue:true)
@@ -89,12 +85,11 @@ metadata {
     defaultValue: 240,
     options     : [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
 ]
-@Field static final Map StartUpOnOffEnumOpts = [0: 'Off', 1: 'On', 2: 'Toggle']
 
 //parsers
 void parse(String description) {
     checkDriverVersion()
-    if (state.stats  != null) { state.stats['rxCtr'] = (state.stats['rxCtr'] ?: 0) + 1 } else { state.stats =  [:] }
+    if (state.stats  != null) { state.stats['rxCtr'] = (state.stats['rxCtr'] ?: 0) + 1 } else { state.stats =  [:] } 
     if (state.lastRx != null) { state.lastRx['checkInTime'] = new Date().getTime() }     else { state.lastRx = [:] }
     checkSubscriptionStatus()
     unschedule('deviceCommandTimeout')
@@ -113,7 +108,7 @@ void parse(String description) {
         return
     }
     if (descMap.attrId == 'FFFB') { // parse the AttributeList first!
-        pareseAttributeList(descMap)
+        parseAttributeList(descMap)
         return
     }
     switch (descMap.cluster) {
@@ -135,7 +130,6 @@ void parse(String description) {
             gatherAttributesValuesInfo(descMap, ScenesClusterAttributes)
         case '0006' :   // On/Off Cluster
             gatherAttributesValuesInfo(descMap, OnOffClusterAttributes)
-            parseOnOffCluster(descMap)
             break
         case '001D' :  // Descriptor, ep:00
             gatherAttributesValuesInfo(descMap, DescriptorClusterAttributes)
@@ -213,14 +207,47 @@ void parseBatteryEvent(Map descMap) {
 }
 
 // AttributeList 0xFFFB
-void pareseAttributeList(final Map descMap) {
-    logDebug "pareseAttributeList: descMap:${descMap}"
+void parseAttributeList(final Map descMap) {
+    logDebug "parseAttributeList: descMap:${descMap}"
     Integer cluster  = descMap.clusterInt  as Integer
     String stateName = '0x' + HexUtils.integerToHexString(cluster, 2)
     if (state.matter == null) { state.matter = [:] }
     state.matter[stateName] = descMap.value
-    logDebug "pareseAttributeList: state.matter[$stateName] = ${descMap.value}"
+    logDebug "parseAttributeList: state.matter[$stateName] = ${descMap.value}"
 }
+
+/*
+String parseAttributeValueString(final Map descMap) {
+    String  attrName = knownClusterAttributes[descMap.attrInt as int]
+    Integer tempIntValue
+    String  tmpStr
+    if (attrName == null) {
+        attrName = GlobalElementsAttributes[descMap.attrInt as int]
+    }
+    if (descMap.value != null && descMap.value != '') {
+        tmpStr = "[${descMap.attrId}] ${attrName}"
+        // check if tmpStr is not already in the state.tmpStr
+        if (tmpStr in state.tmp) {
+            logWarn "gatherAttributesValuesInfo: tmpStr:${tmpStr} is already in the state.tmp"
+            return
+        }
+        try {
+            tempIntValue = HexUtils.hexStringToInt(descMap.value)
+            if (tempIntValue >= 10) {
+                tmpStr += ' = 0x' + descMap.value + ' (' + tempIntValue + ')'
+            }
+            else {
+                tmpStr += ' = ' + descMap.value
+            }
+        } catch (e) {
+            tmpStr += ' = ' + descMap.value
+        }
+        if (logEnable) { logInfo "$tmpStr" }
+        state.tmp = (state.tmp ?: '') + "${tmpStr} " + '<br>'
+    }
+    return tmpStr
+}
+*/
 
 void gatherAttributesValuesInfo(final Map descMap, final Map knownClusterAttributes) {
     Integer attrInt = descMap.attrInt as Integer
@@ -281,61 +308,6 @@ void gatherAttributesValuesInfo(final Map descMap, final Map knownClusterAttribu
     }
 }
 
-void parseOnOffCluster(Map descMap) {
-    logDebug "parseOnOffCluster: descMap:${descMap}"
-    if (descMap.cluster != '0006') {
-        logWarn "parseOnOffCluster: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"
-        return
-    }
-    Integer attrInt = descMap.attrInt as Integer
-    Integer value
-    String descriptionText = ''
-    Map eventMap = [:]
-    String attrName = OnOffClusterAttributes[attrInt] ?: GlobalElementsAttributes[attrInt] ?: UNKNOWN
-
-    switch (descMap.attrId) {
-        case '0000' : // Switch
-            sendSwitchEvent(descMap.value)
-            break
-        case '4000' : // GlobalSceneControl            
-            if (logEnable) { logInfo "parse: Switch: GlobalSceneControl = ${descMap.value}" }
-            if (state.onOff  == null) { state.onOff =  [:] } ; state.onOff['GlobalSceneControl'] = descMap.value
-            break
-        case '4001' : // OnTime
-            if (logEnable) { logInfo  "parse: Switch: OnTime = ${descMap.value}" }
-            if (state.onOff  == null) { state.onOff =  [:] } ; state.onOff['OnTime'] = descMap.value
-            break
-        case '4002' : // OffWaitTime
-            if (logEnable) { logInfo  "parse: Switch: OffWaitTime = ${descMap.value}" }
-            if (state.onOff  == null) { state.onOff =  [:] } ; state.onOff['OffWaitTime'] = descMap.value
-            break
-        case '4003' : // StartUpOnOff
-            value = descMap.value as int
-            String startUpOnOffText = "parse: Switch: StartUpOnOff = ${descMap.value} (${StartUpOnOffEnumOpts[value] ?: UNKNOWN})"
-            if (logEnable) { logInfo  "${startUpOnOffText}" }
-            if (state.onOff  == null) { state.onOff =  [:] } ; state.onOff['StartUpOnOff'] = descMap.value
-            break
-        case ['FFF8', 'FFF9', 'FFFA', 'FFFB', 'FFFC', 'FFFD', '00FE'] :
-            if (logEnable) {
-                logInfo "parse: Switch: ${attrName} = ${descMap.value}"
-            }
-            break
-        default :
-            logWarn "parseOnOffCluster: unexpected attrId:${descMap.attrId} (raw:${descMap.value})"
-    }
-    /*
-    if (eventMap != null) {
-        eventMap.type = 'physical'
-        eventMap.isStateChange = true
-        if (state.states['isRefresh'] == true) {
-            eventMap.descriptionText += ' [refresh]'
-        }
-        sendEvent(eventMap)
-        logInfo eventMap.descriptionText
-    }
-    */
-}
-
 //events
 private void sendContactEvent(String rawValue, isDigital = false) {
     String value = rawValue == '01' ? 'closed' : 'open'
@@ -355,43 +327,7 @@ private void sendContactEvent(String rawValue, isDigital = false) {
     sendEvent(eventMap)
 }
 
-private void sendSwitchEvent(String rawValue, isDigital = false) {
-    String value = rawValue == '01' ? 'on' : 'off'
-    String descriptionText = "switch was turned ${value}"
-    Map eventMap = [name: 'switch', value: value, descriptionText: descriptionText, type: isDigital ? 'digital' : 'physical']
-    if (state.states['isRefresh'] == true) {
-        eventMap.descriptionText = "switch is ${value} [refresh]"
-        eventMap.isStateChange = true   // force the event to be sent
-    }
-    if (device.currentValue('switch') == value && state.states['isRefresh'] != true) {
-        logDebug "ignored duplicated switch event, value:${value}"
-        return
-    }
-    eventMap.descriptionText += (isDigital == true || state.states['isDigital'] == true ) ? ' [digital]' : ' [physical]'
-    logInfo "${eventMap.descriptionText}"
-    sendEvent(eventMap)
-}
-
 //capability commands
-void on() {
-    logDebug 'switching on()'
-    setDigitalRequest()    // 3 seconds
-    sendToDevice(matter.on())
-}
-
-void off() {
-    logDebug 'switching off()'
-    setDigitalRequest()
-    sendToDevice(matter.off())
-}
-
-void toggle() {
-    logDebug 'toggling...'
-    setDigitalRequest()
-    String cmd = matter.invoke(device.endpointId, 0x0006, 0x0002)
-    sendToDevice(cmd)
-}
-
 void identify() {
     List<Map<String, String>> attributeWriteRequests = []
     attributeWriteRequests.add(matter.attributeWriteRequest(device.endpointId, 0x0003, 0x0000, 0x05, '0101'))
@@ -512,9 +448,9 @@ void updated() {
 
 void initialize() {
     log.warn 'initialize()...'
+
     Integer timeSinceLastSubscribe   = (now() - (state.lastTx['subscribeTime']   ?: 0)) / 1000
     Integer timeSinceLastUnsubscribe = (now() - (state.lastTx['unsubscribeTime'] ?: 0)) / 1000
-    
     logDebug "'isSubscribe'= ${state.states['isSubscribe']} timeSinceLastSubscribe= ${timeSinceLastSubscribe} 'isUnsubscribe' = ${state.states['isUnsubscribe']} timeSinceLastUnsubscribe= ${timeSinceLastUnsubscribe}"
 
     state.stats['initializeCtr'] = (state.stats['initializeCtr'] ?: 0) + 1
@@ -533,13 +469,13 @@ void initialize() {
     }
     else {
         log.warn "initialize(): unsubscribe() was already called in the last ${timeSinceLastUnsubscribe} seconds ..."
-        if (timeSinceLastSubscribe > 30) {
+        if (timeSinceLastSubscribe > 45) {
             */
             log.warn "initialize(): calling subscribe()! (last unsubscribe was more than ${timeSinceLastSubscribe} seconds ago)"
             state.lastTx['subscribeTime'] = now()
             state.states['isUnsubscribe'] = false
             state.states['isSubscribe'] = true  // should be set to false in the parse() method
-            scheduleCommandTimeoutCheck(delay = 30)
+            scheduleCommandTimeoutCheck(delay = 45)
             subscribe()
             /*
         }
@@ -547,11 +483,6 @@ void initialize() {
             log.warn "initialize(): subscribe() was already called in the last ${timeSinceLastSubscribe} seconds ... We are good to go!"
         }
     } */
-}
-
-void reSubscribe() {
-    logWarn 'reSubscribe() ...'
-    unsubscribe() 
 }
 
 void unsubscribe() {
@@ -593,14 +524,14 @@ String subscribeCmd() {
     }
     else if (state.deviceType == 'MATTER_OUTLET') {
         attributePaths.add(matter.attributePath(0x01, 0x0006, 0x00))
-        cmd = matter.subscribe(0, 300, attributePaths)
+        cmd = matter.subscribe(0, 0xFFFF, attributePaths)
     }
     else if (state.deviceType == 'MATTER_CONTACT_SENSOR') {
-        attributePaths.add(matter.attributePath(0x01, 0x0045, 0x00))
-        attributePaths.add(matter.attributePath(0x02, 0x002F, 0x0C))
+        attributePaths.add(matter.attributePath(0x01, 0x0045, 0x00))    // Boolean State Cluster : PresentValue
+        attributePaths.add(matter.attributePath(0x02, 0x002F, 0x0C))    // BatteryPercentageRemaining is reported every 8 hours
         attributePaths.add(matter.attributePath(0x02, 0x002F, 0x0B))    // BatteryVoltage is reported every 8 hours
-        attributePaths.add(matter.attributePath(0x02, 0x002F, 0x00))
-        attributePaths.add(matter.attributePath(0x02, 0x002F, 0x0E))
+        //attributePaths.add(matter.attributePath(0x02, 0x002F, 0x00))    // Status
+        attributePaths.add(matter.attributePath(0x02, 0x002F, 0x0E))    // BattChargeLevel
         cmd = matter.subscribe(0, 0xFFFF, attributePaths)
     }
     return cmd
@@ -627,7 +558,7 @@ void refresh() {
     sendToDevice(refreshCmd())
 }
 
-String refreshCmd() {
+String refreshCmd() {   //   on/off: :[FFF8, FFF9, FFFB, FFFC, FFFD, 00, 4000, 4001, 4002, 4003]
     List<Map<String, String>> attributePaths = []
     if (state.deviceType == 'MATTER_OUTLET') {
         if (state.matter != null && state.matter['0x0006'] != null) {
@@ -665,6 +596,18 @@ String refreshCmd() {
 void logsOff() {
     log.warn 'debug logging disabled...'
     device.updateSetting('logEnable', [value:'false', type:'bool'])
+}
+
+Integer hex254ToInt100(String value) {
+    return Math.round(hexStrToUnsignedInt(value) / 2.54)
+}
+
+String int100ToHex254(value) {
+    return intToHexStr(Math.round(value * 2.54))
+}
+
+Integer getLuxValue(rawValue) {
+    return Math.max((Math.pow(10, (rawValue / 10000)) - 1).toInteger(), 1)
 }
 
 void sendToDevice(List<String> cmds, Integer delay = 300) {
@@ -719,7 +662,7 @@ String getModel() {
 void sendInfoEvent(info = null, descriptionText = null) {
     if (info == null || info == 'clear') {
         logDebug 'clearing the Status event'
-        sendEvent(name: 'Status', value: 'clear', descriptionText: 'last info messages auto cleared', isDigital: true)
+        sendEvent(name: 'Status', value: 'clear', descriptionText: "last info messages auto cleared", isDigital: true)
     }
     else {
         logInfo "${info}"
@@ -862,12 +805,12 @@ String getDeviceInfo() {
 
 void resetStats() {
     logDebug 'resetStats...'
-    state.stats  = state.states = [:]
+    state.stats  = state.states = [:] 
     state.lastRx = state.lastTx = [:]
     state.lastTx['pingTime'] = state.lastTx['cmdTime'] = now()
     state.lastTx['subscribeTime'] = state.lastTx['unsubscribeTime'] = now()
     state.health = [:]
-    state.onOff  = [:]  // driver specific
+    //state.onOff  = [:]  // driver specific
     state.matter = [:]
     state.stats['rxCtr'] = state.stats['txCtr'] = 0
     state.stats['initializeCtr'] = state.stats['duplicatedCtr'] = 0
@@ -882,7 +825,7 @@ void initializeVars(boolean fullInit = false) {
         state.clear()
         unschedule()
         resetStats()
-        state.comment = 'Works with Onvis Matter plug'
+        state.comment = 'Works with Aqara P2 Contact Sensor'
         logInfo 'all states and scheduled jobs cleared!'
         state.driverVersion = driverVersionAndTimeStamp()
         logInfo "DEVICE_TYPE = ${DEVICE_TYPE}"
@@ -953,16 +896,10 @@ void parseTest(par) {
 }
 
 void test(par) {
-    /*
     log.warn "test... ${par}"
     log.debug "Matter cluster names = ${matter.getClusterNames()}"    // OK
     log.debug "Matter getClusterIdByName ${matter.getClusterIdByName('Identify')}"  // OK
     log.debug "Matter getClusterName(3) = ${matter.getClusterName(3)}"  // not OK - echoes back the cluster number?
-    */
-    List<Map<String, String>> attributePaths = []
-    attributePaths.add(matter.attributePath(0, 0x4000, 0x00))   
-    String cmd = matter.readAttributes(attributePaths)
-    sendToDevice(cmd)
 }
 
 /*
@@ -973,7 +910,7 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
 @Field static final Map<Integer, String> MatterClusters = [
     0x001D  : 'Descriptor',                 // The Descriptor cluster is meant to replace the support from the Zigbee Device Object (ZDO) for describing a node, its endpoints and clusters
     0x001E  : 'Binding',                    // Meant to replace the support from the Zigbee Device Object (ZDO) for supportiprefriginatng the binding table.
-    0x001F  : 'AccessControl',              // Exposes a data model view of a Node’s Access Control List (ACL), which codifies the rules used to manage and enforce Access Control for the Node’s endpoints and their associated cluster instances.
+    0x001F  : 'AccessControl',              // Exposes a data model view of a Nodeâ€™s Access Control List (ACL), which codifies the rules used to manage and enforce Access Control for the Nodeâ€™s endpoints and their associated cluster instances.
     0x0025  : 'Actions',                    // Provides a standardized way for a Node (typically a Bridge, but could be any Node) to expose information, commands, events ...
     0x0028  : 'BasicInformation',           // Provides attributes and events for determining basic information about Nodes, which supports both Commissioning and operational determination of Node characteristics, such as Vendor ID, Product ID and serial number, which apply to the whole Node.
     0x0029  : 'OTASoftwareUpdateProvider',
@@ -981,17 +918,17 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x002B  : 'LocalizationConfiguration',  // Provides attributes for determining and configuring localization information
     0x002C  : 'TimeFormatLocalization',     // Provides attributes for determining and configuring time and date formatting information
     0x002D  : 'UnitLocalization',           // Provides attributes for determining and configuring the units
-    0x002E  : 'PowerSourceConfiguration',   // Used to describe the configuration and capabilities of a Device’s power system
+    0x002E  : 'PowerSourceConfiguration',   // Used to describe the configuration and capabilities of a Deviceâ€™s power system
     0x002F  : 'PowerSource',                // Used to describe the configuration and capabilities of a physical power source that provides power to the Node
     0x0030  : 'GeneralCommissioning',       // Used to manage basic commissioning lifecycle
-    0x0031  : 'NetworkCommissioning',       // Associates a Node with or manage a Node’s one or more network interfaces
+    0x0031  : 'NetworkCommissioning',       // Associates a Node with or manage a Nodeâ€™s one or more network interfaces
     0x0032  : 'DiagnosticLogs',             // Provides commands for retrieving unstructured diagnostic logs from a Node that may be used to aid in diagnostics.
     0x0033  : 'GeneralDiagnostics',         // Provides a means to acquire standardized diagnostics metrics
     0x0034  : 'SoftwareDiagnostics',        // Provides a means to acquire standardized diagnostics metrics that MAY be used by a Node to assist a user or Administrator in diagnosing potential problems
     0x0035  : 'ThreadNetworkDiagnostics',   // Provides a means to acquire standardized diagnostics metrics that MAY be used by a Node to assist a user or Administrator in diagnosing potential problems
     0x0036  : 'WiFiNetworkDiagnostics',     // Provides a means to acquire standardized diagnostics metrics that MAY be used by a Node to assist a user or Administrator in diagnosing potential
     0x0037  : 'EthernetNetworkDiagnostics', // Provides a means to acquire standardized diagnostics metrics that MAY be used by a Node to assist a user or Administrator in diagnosing potential
-    0x0038  : 'TimeSync',                   // Provides Attributes for reading a Node’s current time
+    0x0038  : 'TimeSync',                   // Provides Attributes for reading a Nodeâ€™s current time
     0x0039  : 'BridgedDeviceBasicInformation',  // Serves two purposes towards a Node communicating with a Bridge
     0x003C  : 'AdministratorCommissioning', // Used to trigger a Node to allow a new Administrator to commission it. It defines Attributes, Commands and Responses needed for this purpose.
     0x003E  : 'OperationalCredentials',     // Used to add or remove Node Operational credentials on a Commissionee or Node, as well as manage the associated Fabrics.

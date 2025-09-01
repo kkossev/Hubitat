@@ -15,7 +15,7 @@
  *
  * ver. 2.0.1  2023-05-27 kkossev  - Aqara TVOC Air Monitor driver first version
  * ver. 3.0.0  2023-12-03 kkossev  - transfer kkossev.airQualityLib into the refactored driver
- * ver. 3.0.5  2024-03-05 kkossev  - commonLib 3.0.5 check; Groovy lint;
+ * ver. 3.0.5  2024-03-05 kkossev  - (dev. branch) commonLib 3.0.5 check; Groovy lint;
  *
  *                                   TODO: move autoPoll() from the commonLib here ?
  *                                   TODO: code cleanup
