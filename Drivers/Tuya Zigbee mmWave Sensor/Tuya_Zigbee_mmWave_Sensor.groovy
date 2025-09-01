@@ -40,7 +40,7 @@
  * ver. 3.4.2  2025-03-24 kkossev  - healthCheck by pinging the device; updateRxStats() replaced with inline code; deviceProfilesV3 optimizations; 
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException in common.lib for HE platform version 2.4.1.155
  * ver. 3.5.1  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
- * ver. 3.5.2  2025-06-15 kkossev  - (dev. branch) added _TZE284_4qznlkbu. (_TZE284_iadro9bf is NOT supported by this driver!);
+ * ver. 3.5.2  2025-06-15 kkossev  - added _TZE284_4qznlkbu. (_TZE284_iadro9bf is NOT supported by this driver!);
  *                                   
  *                                   TODO: check why ignoreDistance prefrence is not shown when forcebly changing the deviceProfile
  *                                   TODO: Optimize the deviceProfilesV3 !! (reached max size ... :( )  
