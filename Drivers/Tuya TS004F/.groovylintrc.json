@@ -1,0 +1,26 @@
+{
+    "extends": "recommended",
+    "rules": {
+        "DuplicateListLiteral": {
+            "enabled": false
+        },
+        "DuplicateNumberLiteral": {
+            "enabled": false
+        },
+        "DuplicateStringLiteral": {
+            "enabled": false
+        },
+        "ImplicitClosureParameter": {
+            "enabled": false
+        },
+        "LineLength": {
+            "enabled": false
+        },
+        "MethodSize": {
+            "enabled": false
+        },
+        "UnnecessarySetter": {
+            "enabled": false
+        }
+    }
+}
