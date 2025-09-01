@@ -44,8 +44,9 @@
  *  ver. 1.5.0 2024-12-16 kkossev - added TS0601 _TZE284_8zizsafo _TZE284_eaet5qt5 in 'TS0601_TZE284_VALVE' group 
  *  ver. 1.6.0 2025-02-15 kkossev - added Switch capability
  *  ver. 1.6.1 2025-06-07 kkossev - added TS0601 _TZE284_fhvpaltk MUCIAKiE into TS0601_TZE284_VALVE group
+ *  ver. 1.6.2 2025-07-05 kkossev - added TS0601 _TZE204_a7sghmms _TZE200_7ytb3h8u _TZE284_7ytb3h8u into TS0601_GIEX_VALVE group
  *
- *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes
+ *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes ''
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
  *                                  TODO: set the device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
  *                                  TODO: clear the old states on update; add rejoinCtr;
@@ -54,8 +55,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-static String version() { '1.6.1' }
-static String timeStamp() { '2025/06/07 11:49 AM' }
+static String version() { '1.6.2' }
+static String timeStamp() { '2025/07/05 4:47 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true                // disable it for the production release !
@@ -322,11 +323,14 @@ boolean isTZE284()               { return getModelGroup().contains('TZE284') || 
 
     'TS0601_GIEX_VALVE'   : [         // https://www.aliexpress.com/item/1005004222098040.html    // GiEX valve device
             model         : 'TS0601',        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/21a66c05aa533de356a51c8417073f28092c6e9d/devices/giex.js
-            manufacturers : ['_TZE200_sh1btabb', '_TZE200_a7sghmms', '_TZE204_7ytb3h8u'],
+            manufacturers : ['_TZE200_sh1btabb', '_TZE200_a7sghmms', '_TZE204_7ytb3h8u', '_TZE204_a7sghmms', '_TZE200_7ytb3h8u', '_TZE284_7ytb3h8u'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_sh1btabb'],    // WaterIrrigationValve
                 [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_a7sghmms'],    // WaterIrrigationValve
-                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_7ytb3h8u']     // https://www.amazon.com/dp/B0D3BXVZKY
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_a7sghmms'],    // https://community.hubitat.com/t/tuya-zigbee-irrigation-valve-wrong-installation-drivers/154836?u=kkossev
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_7ytb3h8u'],    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/3c1d56c1db0422b3edd800f611764f9d507b9193/src/devices/giex.ts#L63
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_7ytb3h8u'],    // https://www.amazon.com/dp/B0D3BXVZKY
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000',                outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE284_7ytb3h8u']     // 
             ],
             deviceJoinName: 'Tuya Zigbee Irrigation Valve',
             capabilities  : ['valve': true, 'battery': true],        // no consumption reporting ?
