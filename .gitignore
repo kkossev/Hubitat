@@ -46,3 +46,4 @@ Drivers/Aqara LED Strip T1/.hubitat/metadata.json
 Drivers/AWTRIX 3 MQTT/.hubitat/metadata.json
 Drivers/Tuya Zigbee Metering Plug/scratchpad.txt
 Drivers/Aqara Climate Sensor W100/scratchPad.txt
+Drivers/Tuya Zigbee mmWave Sensor/docs/cntop_zigbee_sensor.js
