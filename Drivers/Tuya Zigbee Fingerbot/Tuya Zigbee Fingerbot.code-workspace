@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../Libraries/.hubitat"
+		},
+		{
+			"path": "../../Libraries"
+		}
+	],
+	"settings": {}
+}

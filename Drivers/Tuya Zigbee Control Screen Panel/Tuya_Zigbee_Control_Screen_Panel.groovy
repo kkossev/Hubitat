@@ -14,20 +14,24 @@
  * 	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  * 	for the specific language governing permissions and limitations under the License.
  *
- * ver. 0.1.0  2024-04-07 kkossev  - (dev. branch) first version
- * ver. 0.1.1  2024-04-10 kkossev  - (dev. branch) removed Switch capability; added Smart Blind buttons 110,111,112; Projector buttons 113,114
- * ver. 0.1.2  2024-04-11 kkossev  - (dev. branch) added syncTuyaDateTime test button; added info links; removed duplicated switch switch in the child device names
+ * ver. 0.1.0  2024-04-07 kkossev  - first version
+ * ver. 0.1.1  2024-04-10 kkossev  - removed Switch capability; added Smart Blind buttons 110,111,112; Projector buttons 113,114
+ * ver. 0.1.2  2024-04-11 kkossev  - added syncTuyaDateTime test button; added info links; removed duplicated switch switch in the child device names
  * ver. 1.0.0  2024-04-13 kkossev  - first release version
+ * ver. 1.0.1  2024-04-27 kkossev  - commonLib 3.1.0 update; sync the time automatically on device power up; 
+ * ver. 1.1.0  2024-04-28 kkossev  - relays child devices are created automatically; if a child device exist, send a switch event, otherwise send a button event;
+ * ver. 1.2.0  2024-05-21 kkossev  - (dev.branch) commonLib 3.2.0 allignment;
  *
- *                                   TODO:  
+ *                                   TODO:  configure the number of the physical switches (relays) in the Preferences
+ *                                   TODO:  enable/disable the virtual switches 1,2,3 in the Preferences (also create child devices)
  */
 
-static String version() { "1.0.0" }
-static String timeStamp() {"2024/04/13 4:32 PM"}
+static String version() { "1.2.0" }
+static String timeStamp() {"2024/05/21 9:58 AM"}
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
-@Field static final Boolean _SIMULATION = false      // _TZE200_vm1gyrso
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = true
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -42,7 +46,14 @@ import com.hubitat.app.DeviceWrapper
 deviceType = "multiEpSwitch"
 @Field static final String DEVICE_TYPE = "multiEpSwitch"
 
+@Field static final String DRIVER_NAME = 'Tuya Zigbee Control Screen Panel'
+@Field static final String WIKI   = 'Wiki page:'
+@Field static final String COMM_LINK =   'https://community.hubitat.com/t/a-new-interesting-tuya-zigbee-control-screen-panel-w-relays-and-scenes-t3e-2023-new-model/136208/1'
+@Field static final String GITHUB_LINK = 'https://github.com/kkossev/Hubitat/wiki/Tuya-Zigbee-Control-Screen-Panel'
+@Field static final int    NUMBER_OF_BUTTONS = 141
+
 #include kkossev.commonLib
+#include kkossev.onOffLib
 
 metadata {
     definition (
@@ -56,12 +67,9 @@ metadata {
 
         //attribute 'hubitatMode', 'enum', HubitatModeOpts.options.values() as List<String>
         //attribute 'scene', 'string'   // not used, TOBEDEL
-
-        command 'syncTuyaDateTime'
-     
+        //command 'syncTuyaDateTime'
     }
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mua6ucdj"   // this device
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_vm1gyrso"   //3 gangs dimmer - for tests only
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
@@ -77,159 +85,140 @@ metadata {
     options     : [0: 'Scene Mode', 1: 'Virtual Buttons']
 ]
 
+@Field static final Map<Integer,String> TuyaPanelOthers = [
+    30: 'Countdown 1',
+    31: 'Countdown 2',
+    32: 'Countdown 3',
+    33: 'Countdown 4',
 
+    38: 'Relay status all',
+    39: 'Relay status 1',
+    40: 'Relay status 2',
+    41: 'Relay status 3',
+    42: 'Relay status 4',
+
+    101: 'Temp value',
+    102: 'Bright value 1',
+    103: 'Temp switch 1',
+]
+
+@Field static final Map<Integer,String> TuyaPanelScenes = [
+    1: 'Reserve Scene1',    // can be written ENUM data type and will report back the value
+    2: 'Reserve Scene2',    // no UI on the panel ?
+    3: 'Reserve Scene3',    // processed as a button
+    4: 'Reserve Scene4',
+
+    5: 'Full-on mode',      // same as the scenes 1..4
+    6: 'Full-off mode',     // processed as a button
+    7: 'Viewing mode',
+    8: 'Meeting mode',
+    9: 'Sleeping mode',
+    10: 'Coffee break mode',
+
+    17: 'Scene ID & Group ID',  // ??? // processed as a button
+
+    18: 'Mode 1',           // processed as a button
+    19: 'Mode 2',
+    20: 'Mode 3',
+    21: 'Mode 4',
+
+    104: 'Curtain open',
+    105: 'Curtain stop',
+    106: 'Curtain close',
+    107: 'Roller shutter open',
+    108: 'Roller shutter stop',
+    109: 'Roller shutter close',
+    110: 'Blinds open',
+    111: 'Blinds stop',
+    112: 'Blinds close',
+    113: 'Projector open',
+    114: 'Projector close',
+    115: 'Screen open',
+    116: 'Screen stop',
+    117: 'Screen close',
+    118: 'Gauze curtain open',
+    119: 'Gauze curtain stop',
+    120: 'Gauze curtain close',
+    121: 'Window open',
+    122: 'Window stop',
+    123: 'Window close',
+    124: 'Air Conditioner on',
+    125: 'Air Conditioner off',
+    126: 'Air Conditioner cooling',
+    127: 'Air Conditioner heating'
+]
+
+@Field static final Map<Integer,String> TuyaPanelSwitches = [
+    24: 'Switch 1',        // 0x18 can be written BOOL data type and will report back the value
+    25: 'Switch 2',
+    26: 'Switch 3',
+    27: 'Switch 4',
+
+    130: 'Switch 1-1',
+    131: 'Switch 1-2',
+    132: 'Switch 1-3',
+    133: 'Switch 1-4',
+    134: 'Switch 2-1',
+    135: 'Switch 2-2',
+    136: 'Switch 2-3',
+    137: 'Switch 2-4',
+    138: 'Switch 3-1',
+    139: 'Switch 3-2',
+    140: 'Switch 3-3',
+    141: 'Switch 3-4'
+]
 
 boolean customProcessTuyaDp(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
-    logDebug "customProcessTuyaDp(${descMap}, ${dp}, ${dp_id}, ${fncmd}, ${dp_len})"
-
-    switch (dp) {
-        /*
-        case 0x01 : // on/off
-            sendChildSwitchEvent(dp, fncmd)
-            break
-            */
-        case 0x05 : // Full-on mode
-            logDebug "Full-on mode: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Mode FullOn')
-            break
-        case 0x06 : // Full-off mode
-            logDebug "Full-off mode: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Mode FullOff')
-            break
-        case 0x07 : //  Viewing mode
-            if (_SIMULATION) {
-                logDebug "<b>test!</b>Switch 2: ${fncmd}"
-                sendChildSwitchEvent(25, fncmd)
-            }
-            else {
-                logDebug "Viewing mode: ${fncmd}"
-                sendSceneButtonEvent(dp, fncmd, 'Mode Viewing')
-            }
-            break
-        case 0x08 : // Meeting mode
-            logDebug "Meeting mode: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Mode Meeting')
-            break
-        case 0x09 : // Sleeping mode
-            logDebug "Sleeping mode: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Mode Sleeping')
-            break
-        case 0x0A : // (10) Coffee break mode
-            logDebug "Coffee break mode: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Mode CoffeeBreak')
-            break
-        case 0x12 : // (18) Unkknown 1
-            logDebug "Unkknown 1: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Mode Unknown1')
-            break
-        case 0x13 : // (19) Unkknown 2
-            logDebug "Unkknown 2: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Mode Unknown2')
-            break
-        case 0x14 : // (20) Unkknown 3
-            logDebug "Unkknown 3: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Mode Unknown3')
-            break
-        case 0x15 : // (21) Unkknown 4
-            logDebug "Unkknown 4: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Mode Unknown4')
-            break
-        case 0x18 : // (24) Switch 1
-            logDebug "Switch 1: ${fncmd}"
-            sendChildSwitchEvent(dp, fncmd)
-            break
-        case 0x19 : // (25) Switch 2
-            logDebug "Switch 2: ${fncmd}"
-            sendChildSwitchEvent(dp, fncmd)
-            break
-        case 0x1A : // (26) Switch 3
-            logDebug "Switch 3: ${fncmd}"
-            sendChildSwitchEvent(dp, fncmd)
-            break
-        case 0x1B : // (27) Switch 4
-            logDebug "Switch 4: ${fncmd}"
-            sendChildSwitchEvent(dp, fncmd)
-            break
-        case 0x68: // (104) Smart Curtain button 1
-            logDebug "Smart Curtain button 1: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Curtain button1')
-            break
-        case 0x69: // (105) Smart Curtain button 2
-            logDebug "Smart Curtain button 2: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Curtain button2')
-            break
-        case 0x6A: // (106) Smart Curtain button 3
-            logDebug "Smart Curtain button 3: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Curtain button3')
-            break
-        case 0x6E : // (110) Smart Blind button 1
-            logDebug "Smart Blind button 1: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Blind button1')
-            break
-        case 0x6F : // (111) Smart Blind button 2   
-            logDebug "Smart Blind button 2: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Blind button2')
-            break
-        case 0x70 : // (112) Smart Blind button 3
-            logDebug "Smart Blind button 3: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Blind button3')
-            break
-        case 0x71 : // (113) Projector button 1
-            logDebug "Projector button 1: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Projector button1')
-            break
-        case 0x72 : // (114) Projector button 2
-            logDebug "Projector button 2: ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'Projector button2')
-            break
-        case 0x7C: // (124) Air Conditioner button 4 (ON)
-            logDebug "Air Conditioner button 4 (ON): ${fncmd}"  
-            sendSceneButtonEvent(dp, fncmd, 'AC button4')
-            break
-        case 0x7D: // (125) Air Conditioner button 1 (OFF)
-            logDebug "Air Conditioner button 1 (OFF): ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'AC button1')
-            break
-        case 0x7E: // (126) Air Conditioner button 2 (Cooling)
-            logDebug "Air Conditioner button 2 (Cooling): ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'AC button2')
-            break
-        case 0x7F: // (127) Air Conditioner button 3 (Heating)
-            logDebug "Air Conditioner button 3 (Heating): ${fncmd}"
-            sendSceneButtonEvent(dp, fncmd, 'AC button3')
-            break
-        
-        default :
-            logWarn "<b>UNKNOWN</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
-            sendSceneButtonEvent(dp, fncmd, 'unknown')
-            break
+    //logDebug "customProcessTuyaDp(${descMap}, <b>dp=${dp}, fncmd=${fncmd}</b>, len=${dp_len})"
+    String dpName = ''
+    // check if TuyaPanelSwitches has a key equal to fncmd
+    if (TuyaPanelSwitches.containsKey(dp)) {
+        dpName = TuyaPanelSwitches[dp]
+        logDebug "customProcessTuyaDp: TuyaPanelSwitches: dp=${dp} fncmd=${fncmd} dpName=${dpName}"
+        sendChildSwitchEvent(dp, fncmd, dpName)
+    }
+    else if (TuyaPanelScenes.containsKey(dp)) {
+        dpName = TuyaPanelScenes[dp]
+        logDebug "customProcessTuyaDp: TuyaPanelScenes: dp=${dp} fncmd=${fncmd} dpName=${dpName}"
+        sendSceneButtonEvent(dp, fncmd, dpName)
+    }
+    else if (TuyaPanelOthers.containsKey(dp)) {
+        dpName = TuyaPanelOthers[dp]
+        logDebug "customProcessTuyaDp: TuyaPanelOthers: dp=${dp} fncmd=${fncmd} dpName=${dpName}"
+        sendSceneButtonEvent(dp, fncmd, dpName)
+    }
+    else {
+        logWarn "customProcessTuyaDp: <b>UNKNOWN</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+        sendSceneButtonEvent(dp, fncmd, 'unknown')
     }
     return true
 }
 
-void sendChildSwitchEvent(final int dp, final int fncmd) {
+void sendChildSwitchEvent(final int dp, final int fncmd, final String switchLabel) {
     logTrace "sendChildSwitchEvent(dp=${dp}, fncmd=${fncmd})"
-    if (dp <= 0 || dp > 99) { return }
+    if (dp <= 0 || dp > 255) { return }
     // get the dni from the Tuya endpoint
-    String numberString = dp.toString().padLeft(2, '0')   
-    String descriptionText = "${device.displayName} switch #${dp} was turned ${fncmd == 1 ? 'on' : 'off'}"
+    String numberString = dp.toString().padLeft(3, '0')   
+    String descriptionText = "${device.displayName} switch #${dp} (${switchLabel}) was turned ${fncmd == 1 ? 'on' : 'off'}"
     Map eventMap = [name: 'switch', value: fncmd == 1 ? 'on' : 'off', descriptionText: descriptionText, isStateChange: true]
-    logInfo "${descriptionText} (child device #${dp})"
     String dni = getChildIdString(dp)
     logTrace "dni=${dni}"
+    descriptionText += dni ? " (child device #${dp})" : " (no child device)"
+    logInfo "${descriptionText}"
     ChildDeviceWrapper dw = getChildDevice(dni) // null if dni is null for the parent device
     logDebug "dw=${dw} eventMap=${eventMap}"
     if (dw != null) {
         dw.parse([eventMap])
     }
     else {
-        logWarn "ChildDeviceWrapper for dni ${dni} is null"
+        logWarn "ChildDeviceWrapper for dni ${dni} (${switchLabel}) is null. Sending a button event instead..."
+        sendSceneButtonEvent(dp, fncmd, switchLabel)
     }
 }
 
 void sendSceneButtonEvent(final int dp, final int fncmd, final String sceneName) {
     logTrace "sendSceneButtonEvent(dp=${dp}, fncmd=${fncmd}, sceneName=${sceneName})"
-    String descriptionText = "${sceneName ?: 'unknown'} button was pushed (device #${dp})"	
+    String descriptionText = "button ${dp} was pushed (${sceneName ?: 'unknown'})"	
     Map event = [name: 'pushed', value: dp.toString(), data: [buttonNumber: dp], descriptionText: descriptionText, isStateChange: true, type: isDigital == true ? 'digital' : 'physical']
     logInfo "$descriptionText"
     sendEvent(event)
@@ -246,38 +235,36 @@ void customInitializeVars(final boolean fullInit=false) {
 
 void customInitEvents(final boolean fullInit=false) {
     logDebug "customInitEvents(${fullInit})"
-    sendEvent(name: 'numberOfButtons', value: 127, isStateChange: true, type: 'digital')
+    sendEvent(name: 'numberOfButtons', value: NUMBER_OF_BUTTONS, isStateChange: true, type: 'digital')
 }
 
 void componentOn(DeviceWrapper childDevice) {
     int childIdNumber = getChildIdNumber(childDevice)
-    if (_SIMULATION) { if (childIdNumber == 25) { childIdNumber = 7 } }   // test
-    logDebug "sending componentOff ${childDevice.deviceNetworkId} (${childIdNumber})"
+    logDebug "componentOn: ${childDevice.deviceNetworkId} (${childIdNumber})"
     List<String> cmds = sendTuyaCommand(HexUtils.integerToHexString(childIdNumber,1), DP_TYPE_BOOL, '01')
     sendZigbeeCommands(cmds)
 }
 
 void componentOff(DeviceWrapper childDevice) {
     int childIdNumber = getChildIdNumber(childDevice)
-    if (_SIMULATION) { log.trace "childIdNumber=${childIdNumber}"; if (childIdNumber == 25) { childIdNumber = 7 } }   // test
-    logDebug "sending componentOff ${childDevice.deviceNetworkId} (${childIdNumber})"
+    logDebug "componentOff: ${childDevice.deviceNetworkId} (${childIdNumber})"
     List<String> cmds = sendTuyaCommand(HexUtils.integerToHexString(childIdNumber,1), DP_TYPE_BOOL, '00')
     sendZigbeeCommands(cmds)
 }
 
 void componentRefresh(DeviceWrapper childDevice) {
-    logDebug "componentRefresh ${childDevice.deviceNetworkId} ${childDevice} (${getChildIdNumber(childDevice)}) - n/a"
+    logDebug "componentRefresh: ${childDevice.deviceNetworkId} ${childDevice} (${getChildIdNumber(childDevice)}) - n/a"
 }
 
 int getChildIdNumber(DeviceWrapper childDevice) {
     String childId = childDevice.deviceNetworkId.split('-').last()
-    logTrace "getChildIdNumber ${childDevice.deviceNetworkId} -> ${childId}"
+    logTrace "getChildIdNumber: ${childDevice.deviceNetworkId} -> ${childId}"
     return childId.toInteger()
 }
 
 String getChildIdString(int childId) {
     String numberString = childId.toString().padLeft(2, '0')
-    logTrace "getChildIdString ${childId} -> ${device.id}-${numberString}"
+    logTrace "getChildIdString: ${childId} -> ${device.id}-${numberString}"
     return "${device.id}-${numberString}"
 }
 
@@ -307,50 +294,34 @@ void createSwitchChildDevice(int index, String switchLabel) {
     }
 }
 
-@Field static final int FirstSwitchIndex = 24
+//@Field static final int FirstSwitchIndex = 24
 @Field static final int NumberOfSwitches = 4
 
-void createAllSwitchChildDevices() {
-    logDebug "createAllSwitchChildDevices}"
-    for (index in FirstSwitchIndex..(FirstSwitchIndex + NumberOfSwitches - 1)) {
-        String switchLabel = "Switch #${(index - FirstSwitchIndex + 1)}"
+void createGroupOflSwitchChildDevices(int firstSwitchIndex=24, int numberOfSwitches=4) {
+    logDebug "createGroupOflSwitchChildDevices}"
+    for (index in firstSwitchIndex..(firstSwitchIndex + numberOfSwitches - 1)) {
+        String switchLabel = "Switch #${(index - firstSwitchIndex + 1)}"
         createSwitchChildDevice(index, switchLabel)
     }
 }
 
+// called from initializeVars() in the commonLib
 void customCreateChildDevices(boolean fullInit=false) {
     logDebug "customCreateChildDevices(${fullInit})"
-    if (fullInit) {
-        createAllSwitchChildDevices()
-    }
+    //if (fullInit) {
+        createGroupOflSwitchChildDevices(24, 4)
+    //}
 }
 
-void syncTuyaDateTime() {
-    // The data format for time synchronization, including standard timestamps and local timestamps. Standard timestamp (4 bytes)    local timestamp (4 bytes) Time synchronization data format: The standard timestamp is the total number of seconds from 00:00:00 on January 01, 1970 GMT to the present.
-    // For example, local timestamp = standard timestamp + number of seconds between standard time and local time (including time zone and daylight saving time).                 // Y2K = 946684800
-    long offset = 0
-    int offsetHours = 0
-    Calendar cal = Calendar.getInstance();    //it return same time as new Date()
-    def hour = cal.get(Calendar.HOUR_OF_DAY)
-    try {
-        offset = location.getTimeZone().getOffset(new Date().getTime())
-        offsetHours = (offset / 3600000) as int
-        logDebug "timezone offset of current location is ${offset} (${offsetHours} hours), current hour is ${hour} h"
-    } catch(e) {
-        log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
+void customParseTuyaCluster(final Map descMap) {
+    logDebug "customParseTuyaCluster(${descMap})"
+    if (descMap.cluster == CLUSTER_TUYA && descMap.command == '11') {
+        syncTuyaDateTime()
     }
-    //
-    List<String> cmds
-    cmds = zigbee.command(CLUSTER_TUYA, SETTIME, '0008' + zigbee.convertToHexString((int)(now() / 1000),8) + zigbee.convertToHexString((int)((now() + offset) / 1000), 8))
-    logDebug "sending time data : ${cmds}"
-    cmds.each { sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
+    else {
+        standardParseTuyaCluster(descMap)       // from commonLib
+    }
 }
-
-@Field static final String DRIVER_NAME = 'Tuya Zigbee Control Screen Panel'
-@Field static final String WIKI   = 'Wiki page:'
-@Field static final String COMM_LINK =   'https://community.hubitat.com/t/a-new-interesting-tuya-zigbee-control-screen-panel-w-relays-and-scenes-t3e-2023-new-model/136208/1'
-@Field static final String GITHUB_LINK = 'https://github.com/kkossev/Hubitat/wiki/Tuya-Zigbee-Control-Screen-Panel'
-
 
 // credits @jtp10181
 String fmtHelpInfo(String str) {
@@ -375,7 +346,7 @@ void test(String par) {
 
     sendZigbeeCommands(cmds)
     */
-    createAllSwitchChildDevices()
+    createGroupOflSwitchChildDevices()
 }
 
 

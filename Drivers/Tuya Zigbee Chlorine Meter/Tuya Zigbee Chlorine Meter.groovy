@@ -13,23 +13,19 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.3.0  2024-08-03 kkossev  - first test version
- *                                   
- *                                   TODO:
+ * ver. 3.3.1  2024-08-31 kkossev  - added tuyaDataQuery; added dp 103 104 114 115 116 118 decoding; invalid freeChlorine value -1.0  (0xFFFFFFFFF) returned as 0 (zero), added automatic polling (configurable)
+ * ver. 3.3.2  2024-09-06 kkossev  - debug is off by default; freeChlorine is divided by 10;
+ * ver. 3.4.0  2025-05-24 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
+ * 
+ *                                   TODO: 
  */
 
-static String version() { "3.3.0" }
-static String timeStamp() {"2024/08/18 11:41 PM"}
+static String version() { "3.4.0" }
+static String timeStamp() { "2025/05/24 6:46 PM" }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
-@Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for production
-
-/*
-import groovy.transform.Field
-import groovy.transform.CompileStatic
-import hubitat.helper.HexUtils
-import hubitat.zigbee.zcl.DataType
-*/
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = false  // disable it for production
 
 #include kkossev.deviceProfileLib
 #include kkossev.commonLib
@@ -40,7 +36,7 @@ deviceType = "MultiMeter"
 metadata {
     definition (
         name: 'Tuya Zigbee Chlorine Meter',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Chlorine%20Meter/Tuya_Chlorine_meter_lib_included.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Chlorine%20Meter/Tuya_Zigbee_Chlorine_Meter_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         // no standard capabilities
@@ -89,10 +85,18 @@ metadata {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables events logging.'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_DEBUG_LOGGING, description: 'Turns on debug logging for 24 hours.'
         // the rest of the preferences are inputIt from the deviceProfileLib and from the included libraries
+        if (device) {
+            input name: 'pollingInterval', type: 'enum', title: '<b>Polling Interval</b>', options: PollingIntervalOpts.options, defaultValue: PollingIntervalOpts.defaultValue, required: true, description: 'Changes how often the hub will poll the sensor.'
+        }
     }
 }
 
 @Field static String ttStyleStr = '<style>.tTip {display:inline-block;border-bottom: 1px dotted black;}.tTip .tTipText {display:none;border-radius: 6px;padding: 5px 0;position: absolute;z-index: 1;}.tTip:hover .tTipText {display:inline-block;background-color:red;color:red;}</style>'
+
+@Field static final Map PollingIntervalOpts = [
+    defaultValue: 300,
+    options     : [0: 'Disabled', 5: 'Every 5 seconds (DONT DO THAT!)', 60: 'Every minute (not recommended)', 120: 'Every 2 minutes', 300: 'Every 5 minutes (default)', 600: 'Every 10 minutes', 900: 'Every 15 minutes', 1800: 'Every 30 minutes', 3600: 'Every 1 hour']
+]
 
 /*
 Measures :
@@ -111,6 +115,7 @@ Measures :
     // https://community.home-assistant.io/t/pool-monitoring-device-yieryi-ble-yl01-zigbee-ph-orp-free-chlorine-salinity-etc/659545/10
     // https://github.com/Koenkk/zigbee2mqtt/issues/18704#issuecomment-1732263086 
     // https://github.com/zigbeefordomoticz/z4d-certified-devices/blob/e65463300dda776145ca4b2953ebe162c2f60b3d/z4d_certified_devices/Certified/Tuya/TS0601-BLE-YL01.json#L7
+    // https://github.com/Koenkk/zigbee2mqtt/issues/18704#issuecomment-2899808006 
     'CHLORINE_METER_BLE_YL01'  : [
             description   : 'BLE_YL01 Tuya Zigbee Chlorine Meter',
             models        : ['TS0601'],
@@ -127,30 +132,28 @@ Measures :
                 [dp:1,   name:'tds',                  type:'number',  rw: 'ro',  scale:1,   unit:'ppm',   description:'Total Dissolved Solids'],
                 [dp:2,   name:'temperature',          type:'decimal', rw: 'ro',  scale:10,  unit:'C',     description:'Temperature'],
                 [dp:7,   name:'battery',              type:'number',  rw: 'ro',  scale:1,   unit:'%',     description:'Battery level remaining'],
-                [dp:10,  name:'ph',                   type:'decimal', rw: 'ro',  scale:100, unit:'pH',    description:'pH value'],     // 'pH value, if the pH value is lower than 6.5, it means that the water quality is too acidic and has impurities, and it is necessary to add disinfectant water for disinfection
+                [dp:10,  name:'ph',                   type:'decimal', rw: 'ro',  scale:100, unit:'pH',    description:'pH value'],                              // 'pH value, if the pH value is lower than 6.5, it means that the water quality is too acidic and has impurities, and it is necessary to add disinfectant water for disinfection
                 [dp:11,  name:'ec',                   type:'decimal', rw: 'ro',  scale:1,   unit:'µS/cm', description:'Electrical conductivity'],
                 [dp:101, name:'orp',                  type:'decimal', rw: 'ro',  scale:1,   unit:'mV',    description:'Oxidation Reduction Potential value'],   // 'Oxidation Reduction Potential value. If the ORP value is above 850mv, it means that the disinfectant has been added too much, and it is necessary to add water or change the water for neutralization. If the ORP value is below 487mv, it means that too little disinfectant has been added and the pool needs to be disinfected again'
-                [dp:102, name:'freeChlorine',         type:'decimal', rw: 'ro',  scale:1,   unit:'mg/L',  description:'Free chlorine value'],   // The water in the swimming pool should be between 6.5-8ph and ORP should be between 487-840mv, and the chlorine value will be displayed normally. Chlorine will not be displayed if either value is out of range
-                // "67": { "sensor_type": "phCalibration1" },
-                // "68": { "store_tuya_attribute": "backlight_status", "EvalExp": "(value)" },
-                // "69": { "store_tuya_attribute": "backlight_level", "EvalExp": "(value)" },
-                [dp:105, name:'backlightvalue',       type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'Backlight value'],      // unknown
-                [dp:106, name:'phMmax',               type:'decimal', rw: 'rw',  min:0,   max:20,   /*defVal:1.5,*/  scale:10,  unit:'pH',    title:'<b>pH maximal value</b>'],
-                [dp:107, name:'phMmin',               type:'decimal', rw: 'rw',  min:0,   max:20,   /*defVal:0.5,*/  scale:10,  unit:'pH',    title:'<b>pH minimal value</b>'],
-                [dp:108, name:'ecMmax',               type:'decimal', rw: 'rw',  min:0,   max:100,  /*defVal:80.0,*/ scale:1,   unit:'µS/cm', title:'<b>Electrical Conductivity maximal value</b>'],
-                [dp:109, name:'ecMmin',               type:'decimal', rw: 'rw',  min:0,   max:100,  /*defVal:20.0,*/ scale:1,   unit:'µS/cm', title:'<b>Electrical Conductivity minimal value</b>'],
-                [dp:110, name:'orpMmax',              type:'decimal', rw: 'rw',  min:0,   max:1000, /*defVal:20.0,*/ scale:1,   unit:'mV',    title:'<b>Oxidation Reduction Potential maximal value</b>'],
-                [dp:111, name:'orpMmin',              type:'decimal', rw: 'rw',  min:0,   max:1000, /*defVal:20.0,*/ scale:1,   unit:'mV',    title:'<b>Oxidation Reduction Potential minimal value</b>'],
-                [dp:112, name:'freeChlorineMax',      type:'decimal', rw: 'rw',  min:0,   max:15,   /*defVal:20.0,*/ scale:10,  unit:'mg/L',  title:'<b>Free Chlorine maximal value</b>'],
-                [dp:113, name:'freeChlorineMin',      type:'decimal', rw: 'rw',  min:0,   max:15,   /*defVal:20.0,*/ scale:10,  unit:'mg/L',  title:'<b>Free Chlorine minimal value</b>'],
-                // "72": { "sensor_type": "phCalibration2"},
-                // "73": { "sensor_type": "ecCalibration"},
-                // "74": { "sensor_type": "orpCalibration"},
-                [dp:117, name:'salinity',             type:'decimal', rw: 'ro',  scale:1,   unit:'gg', description:'Salt value'],
-                // "78": { "store_tuya_attribute": "ORP_Calibration" }
-
+                [dp:102, name:'freeChlorine', preProc:'checkInvalidValue',       type:'decimal', rw: 'ro',  scale:10,   unit:'mg/L',  description:'Free chlorine value'],                   // The water in the swimming pool should be between 6.5-8ph and ORP should be between 487-840mv, and the chlorine value will be displayed normally. Chlorine will not be displayed if either value is out of range
+                [dp:103, name:'phCalibration1',       type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'pH Calibration 1'],                      // "67": { "sensor_type": "phCalibration1" },
+                [dp:104, name:'backlightStatus',      type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'Backlight status'],                      // "68": { "store_tuya_attribute": "backlight_status", "EvalExp": "(value)" },
+                [dp:105, name:'backlightLevel',       type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'Backlight level'],                                                                   // "69": { "store_tuya_attribute": "backlight_level", "EvalExp": "(value)" }, dp:105
+                [dp:106, name:'phMmax',               type:'decimal', rw: 'rw',  min:0,   max:20,   /*defVal:14.0,*/  scale:10,  unit:'pH',    title:'<b>pH maximal value</b>'],
+                [dp:107, name:'phMmin',               type:'decimal', rw: 'rw',  min:0,   max:20,   /*defVal:0.0,*/   scale:10,  unit:'pH',    title:'<b>pH minimal value</b>'],
+                [dp:108, name:'ecMmax',               type:'decimal', rw: 'rw',  min:0,   max:20000, /*defVal:20000.0,*/ scale:1, unit:'µS/cm', title:'<b>Electrical Conductivity maximal value</b>'],
+                [dp:109, name:'ecMmin',               type:'decimal', rw: 'rw',  min:0,   max:100,  /*defVal:0.0,*/   scale:1,   unit:'µS/cm', title:'<b>Electrical Conductivity minimal value</b>'],
+                [dp:110, name:'orpMmax',              type:'decimal', rw: 'rw',  min:0,   max:1000, /*defVal:999.0,*/ scale:1,   unit:'mV',    title:'<b>Oxidation Reduction Potential maximal value</b>'],
+                [dp:111, name:'orpMmin',              type:'decimal', rw: 'rw',  min:0,   max:1000, /*defVal:0.0,*/   scale:1,   unit:'mV',    title:'<b>Oxidation Reduction Potential minimal value</b>'],
+                [dp:112, name:'freeChlorineMax',      type:'decimal', rw: 'rw',  min:0,   max:15,   /*defVal:20.0,*/  scale:10,  unit:'mg/L',  title:'<b>Free Chlorine maximal value</b>'],
+                [dp:113, name:'freeChlorineMin',      type:'decimal', rw: 'rw',  min:0,   max:15,   /*defVal:20.0,*/  scale:10,  unit:'mg/L',  title:'<b>Free Chlorine minimal value</b>'],
+                [dp:114, name:'phCalibration2',       type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'pH Calibration 2'],                       // "72": { "sensor_type": "phCalibration2" },
+                [dp:115, name:'ecCalibration',        type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'EC Calibration'],                         // "73": { "sensor_type": "ecCalibration" },
+                [dp:116, name:'orpCalibration',       type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'ORP Calibration'],                        // "74": { "sensor_type": "orpCalibration" },
+                [dp:117, name:'salinity',             type:'decimal', rw: 'ro',  scale:1,   unit:'gg',    description:'Salt value'],
+                [dp:118, name:'salinityCalibration',  type:'number',  rw: 'ro',  scale:1,   unit:'',     description:'Salinity? Calibration ?(0x76)'],            // "76": { "sensor_type": "salinityCalibration" },
             ],
-            refresh:        ['tuyaDataQuery'],
+            refresh:        ['refreshQueryAllTuyaDP'],
             configuration : ['battery': false],
             deviceJoinName: 'BLE_YL01 Tuya Zigbee Chlorine Meter'
     ]
@@ -160,6 +163,13 @@ Measures :
 
 ]
 
+Number checkInvalidValue(Number value) {
+    if (value < 0) {
+        logDebug "freeChlorine Invalid value -1.0 detected, returning zero!"
+        return 0
+    }
+    return value
+}
 
 // called from standardProcessTuyaDP in the commonLib for each Tuya dp report in a Zigbee message
 // should always return true, as we are processing all the dp reports here
@@ -196,11 +206,6 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, value
     }
 }
 
-List<String> refreshFantem() {
-    List<String>  cmds = zigbee.command(0xEF00, 0x07, '00')    // Fantem Tuya Magic
-    return cmds
-}
-
 List<String> customRefresh() {
     logDebug "customRefresh()"
     List<String> cmds = []
@@ -234,19 +239,59 @@ void customUpdated() {
         logDebug "forcedProfile is not set"
     }
 
+    final int interval = (settings?.pollingInterval as Integer) ?: 0
+    if (interval > 0) {
+        logInfo "customUpdated: scheduling polling every ${interval} seconds"
+        schedulePolling(interval)
+    }
+    else {
+        unSchedulePolling()
+        logInfo 'customUpdated: polling is disabled!'
+    }
+
     // Itterates through all settings
     cmds += updateAllPreferences()  // defined in deviceProfileLib
     sendZigbeeCommands(cmds)
 }
 
+/**
+ * Schedule polling
+ * @param intervalMins interval in seconds
+ */
+private void schedulePolling(final int intervalSecs) {
+    String cron = getCron( intervalSecs )
+    logDebug "cron = ${cron}"
+    schedule(cron, 'autoPoll')
+}
+
+private void unSchedulePolling() {
+    unschedule('autoPoll')
+}
+
+/**
+ * Scheduled job for polling device specific attribute(s)
+ */
+void autoPoll() {
+    logDebug 'autoPoll()...'
+    checkDriverVersion(state)
+    List<String> cmds = []
+    cmds = refreshFromDeviceProfileList()
+    if (cmds != null && cmds != [] ) {
+        sendZigbeeCommands(cmds)
+    }
+}
+
+
+
 void customInitializeVars(final boolean fullInit=false) {
     logDebug "customInitializeVars(${fullInit})"
     if (state.deviceProfile == null || state.deviceProfile == '' || state.deviceProfile == 'UNKNOWN') {
-        setDeviceNameAndProfile('TS0601', '_TZE200_lvkk0hdg')               // in deviceProfileiLib.groovy
+        setDeviceNameAndProfile('TS0601', '_TZE200_v1jqz5cy')               // in deviceProfileiLib.groovy
     }
     if (fullInit == true) {
         resetPreferencesToDefaults()
     }
+    if (fullInit || settings?.pollingInterval == null) { device.updateSetting('pollingInterval', [value: PollingIntervalOpts.defaultValue.toString(), type: 'enum']) }
 }
 
 void customInitEvents(final boolean fullInit=false) {
@@ -258,18 +303,13 @@ void customInitEvents(final boolean fullInit=false) {
 void customParseZdoClusters(Map descMap) {
     if (descMap.clusterInt == 0x0013) {
         logDebug "customParseZdoClusters() - device announce"
-        tyyaDataQuery()
+        sendZigbeeCommands(refreshQueryAllTuyaDP())
     }
 }
 
-void tuyaDataQuery() {
-    logDebug "tuyaDataQuery()"
-    List<String> cmds = []
-    //cmds = zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], delay = 201, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd )
-    cmds += zigbee.command(0xEF00, 0x03)    // Tuya Data Query
-    sendZigbeeCommands(cmds)
+List<String> refreshQueryAllTuyaDP() {
+    return queryAllTuyaDP()
 }
-
 
 void test(String par) {
     long startTime = now()
