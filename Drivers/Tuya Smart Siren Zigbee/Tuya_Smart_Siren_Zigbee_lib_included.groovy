@@ -27,7 +27,7 @@
  * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
  * ver. 2.1.3  2023-08-28 kkossev  - ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version; Tuya mmWave Radar driver; processTuyaDpFingerbot; added Momentary capability for Fingerbot
  * ver. 2.1.4  2023-09-02 kkossev  - buttonDimmerLib library; added IKEA Styrbar E2001/E2002, IKEA on/off switch E1743, IKEA remote control E1810; added Identify cluster; Ranamed 'Zigbee Button Dimmer'
- * ver. 2.1.5  2023-09-03 kkossev  - (dev. branch) VINDSTYRKA: removed airQualityLevel, added thresholds; airQualityIndex replaced by sensirionVOCindex; new 'Tuya Smart Siren Zigbee' driver (playSound bug fixed); 
+ * ver. 2.1.5  2023-09-04 kkossev  - (dev. branch) VINDSTYRKA: removed airQualityLevel, added thresholds; airQualityIndex replaced by sensirionVOCindex; new 'Tuya Smart Siren Zigbee' driver (playSound bug fixed); 
  *
  *                                   TODO: refresh() to update the platform version ..
  *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
@@ -44,7 +44,7 @@
  */
 
 static String version() { "2.1.5" }
-static String timeStamp() {"2023/09/03 7:18 PM"}
+static String timeStamp() {"2023/09/03 8:45 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -3356,74 +3356,74 @@ library ( // library marker kkossev.tuyaAlarmLib, line 1
  * tuyaAlarmLib - Tuya Alarm Library // library marker kkossev.tuyaAlarmLib, line 13
  * // library marker kkossev.tuyaAlarmLib, line 14
  * ver. 1.0.0  2023-09-03 kkossev  - (dev. branch) - code transfered from "Tuya Smart Siren Zigbee" driver ver. 1.2.2 // library marker kkossev.tuyaAlarmLib, line 15
- * // library marker kkossev.tuyaAlarmLib, line 16
- *                                   TODO: setDuration infoLog; setMelody infoLog; setVolume infoLog // library marker kkossev.tuyaAlarmLib, line 17
- * // library marker kkossev.tuyaAlarmLib, line 18
-*/ // library marker kkossev.tuyaAlarmLib, line 19
+ * ver. 1.0.1  2023-09-04 kkossev  - (dev. branch) - battery percentage bug fix // library marker kkossev.tuyaAlarmLib, line 16
+ * // library marker kkossev.tuyaAlarmLib, line 17
+ *                                   TODO: setDuration infoLog; setMelody infoLog; setVolume infoLog // library marker kkossev.tuyaAlarmLib, line 18
+ * // library marker kkossev.tuyaAlarmLib, line 19
+*/ // library marker kkossev.tuyaAlarmLib, line 20
 
-def tuyaAlarmLibVersion()   {"1.0.0"} // library marker kkossev.tuyaAlarmLib, line 21
-def tuyaAlarmLibTimeStamp() {"2023/09/03 7:18 PM"} // library marker kkossev.tuyaAlarmLib, line 22
+def tuyaAlarmLibVersion()   {"1.0.1"} // library marker kkossev.tuyaAlarmLib, line 22
+def tuyaAlarmLibTimeStamp() {"2023/09/04 8:45 PM"} // library marker kkossev.tuyaAlarmLib, line 23
 
-metadata { // library marker kkossev.tuyaAlarmLib, line 24
-        capability "Alarm"    // alarm - ENUM ["strobe", "off", "both", "siren"]; Commands: both() off() siren() strobe() // library marker kkossev.tuyaAlarmLib, line 25
-        capability "Tone"     // Commands: beep() // library marker kkossev.tuyaAlarmLib, line 26
-        capability "Chime"    // soundEffects - JSON_OBJECT; soundName - STRING; status - ENUM ["playing", "stopped"]; Commands: playSound(soundnumber); soundnumber required (NUMBER) - Sound number to play; stop() // library marker kkossev.tuyaAlarmLib, line 27
-        capability "AudioVolume" //Attributes: mute - ENUM ["unmuted", "muted"] volume - NUMBER, unit:%; Commands: mute() setVolume(volumelevel) volumelevel required (NUMBER) - Volume level (0 to 100) unmute() volumeDown() volumeUp() // library marker kkossev.tuyaAlarmLib, line 28
-        //capability "TemperatureMeasurement" // library marker kkossev.tuyaAlarmLib, line 29
-        //capability "RelativeHumidityMeasurement" // library marker kkossev.tuyaAlarmLib, line 30
+metadata { // library marker kkossev.tuyaAlarmLib, line 25
+        capability "Alarm"    // alarm - ENUM ["strobe", "off", "both", "siren"]; Commands: both() off() siren() strobe() // library marker kkossev.tuyaAlarmLib, line 26
+        capability "Tone"     // Commands: beep() // library marker kkossev.tuyaAlarmLib, line 27
+        capability "Chime"    // soundEffects - JSON_OBJECT; soundName - STRING; status - ENUM ["playing", "stopped"]; Commands: playSound(soundnumber); soundnumber required (NUMBER) - Sound number to play; stop() // library marker kkossev.tuyaAlarmLib, line 28
+        capability "AudioVolume" //Attributes: mute - ENUM ["unmuted", "muted"] volume - NUMBER, unit:%; Commands: mute() setVolume(volumelevel) volumelevel required (NUMBER) - Volume level (0 to 100) unmute() volumeDown() volumeUp() // library marker kkossev.tuyaAlarmLib, line 29
+        //capability "TemperatureMeasurement" // library marker kkossev.tuyaAlarmLib, line 30
+        //capability "RelativeHumidityMeasurement" // library marker kkossev.tuyaAlarmLib, line 31
 
-        attribute "duration", "number" // library marker kkossev.tuyaAlarmLib, line 32
-        attribute "Info", "text" // library marker kkossev.tuyaAlarmLib, line 33
+        attribute "duration", "number" // library marker kkossev.tuyaAlarmLib, line 33
+        attribute "Info", "text" // library marker kkossev.tuyaAlarmLib, line 34
 
-        command "setMelody", [ // library marker kkossev.tuyaAlarmLib, line 35
-            [name:"alarmType", type: "ENUM", description: "Sound Type", constraints: soundTypeOptions], // library marker kkossev.tuyaAlarmLib, line 36
-            [name:"melodyNumber", type: "NUMBER", description: "Set the Melody Number 1..18"] // library marker kkossev.tuyaAlarmLib, line 37
-        ] // library marker kkossev.tuyaAlarmLib, line 38
-        command "setDuration", [ // library marker kkossev.tuyaAlarmLib, line 39
-            [name:"alarmType", type: "ENUM", description: "Sound Type", constraints: soundTypeOptions], // library marker kkossev.tuyaAlarmLib, line 40
-            [name:"alarmLength", type: "NUMBER", description: "Set the  Duration in seconds 0..180"] // library marker kkossev.tuyaAlarmLib, line 41
-        ] // library marker kkossev.tuyaAlarmLib, line 42
-        command "setVolume", [ // library marker kkossev.tuyaAlarmLib, line 43
-            [name:"volumeType", type: "ENUM", description: "Sound Type", constraints: volumeTypeOptions], // library marker kkossev.tuyaAlarmLib, line 44
-            [name:"Volume", type: "ENUM", description: "Set the Volume", constraints: volumeNameOptions ] // library marker kkossev.tuyaAlarmLib, line 45
-        ] // library marker kkossev.tuyaAlarmLib, line 46
-        command "playSound", [ // library marker kkossev.tuyaAlarmLib, line 47
-            [name:"soundNumber", type: "NUMBER", description: "Melody Number, 1..18", isRequired: true], // library marker kkossev.tuyaAlarmLib, line 48
-            [name:"volumeLevel", type: "NUMBER", description: "Sound Volume level, 0..100 %"], // library marker kkossev.tuyaAlarmLib, line 49
-            [name:"duration", type: "NUMBER", description: "Duration is seconds"] // library marker kkossev.tuyaAlarmLib, line 50
-        ] // library marker kkossev.tuyaAlarmLib, line 51
+        command "setMelody", [ // library marker kkossev.tuyaAlarmLib, line 36
+            [name:"alarmType", type: "ENUM", description: "Sound Type", constraints: soundTypeOptions], // library marker kkossev.tuyaAlarmLib, line 37
+            [name:"melodyNumber", type: "NUMBER", description: "Set the Melody Number 1..18"] // library marker kkossev.tuyaAlarmLib, line 38
+        ] // library marker kkossev.tuyaAlarmLib, line 39
+        command "setDuration", [ // library marker kkossev.tuyaAlarmLib, line 40
+            [name:"alarmType", type: "ENUM", description: "Sound Type", constraints: soundTypeOptions], // library marker kkossev.tuyaAlarmLib, line 41
+            [name:"alarmLength", type: "NUMBER", description: "Set the  Duration in seconds 0..180"] // library marker kkossev.tuyaAlarmLib, line 42
+        ] // library marker kkossev.tuyaAlarmLib, line 43
+        command "setVolume", [ // library marker kkossev.tuyaAlarmLib, line 44
+            [name:"volumeType", type: "ENUM", description: "Sound Type", constraints: volumeTypeOptions], // library marker kkossev.tuyaAlarmLib, line 45
+            [name:"Volume", type: "ENUM", description: "Set the Volume", constraints: volumeNameOptions ] // library marker kkossev.tuyaAlarmLib, line 46
+        ] // library marker kkossev.tuyaAlarmLib, line 47
+        command "playSound", [ // library marker kkossev.tuyaAlarmLib, line 48
+            [name:"soundNumber", type: "NUMBER", description: "Melody Number, 1..18", isRequired: true], // library marker kkossev.tuyaAlarmLib, line 49
+            [name:"volumeLevel", type: "NUMBER", description: "Sound Volume level, 0..100 %"], // library marker kkossev.tuyaAlarmLib, line 50
+            [name:"duration", type: "NUMBER", description: "Duration is seconds"] // library marker kkossev.tuyaAlarmLib, line 51
+        ] // library marker kkossev.tuyaAlarmLib, line 52
 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_t1blo2bj", deviceJoinName: "Tuya NEO Smart Siren"          // vendor: 'Neo', model: 'NAS-AB02B2' // library marker kkossev.tuyaAlarmLib, line 53
-        // not working with this driver - use Markus's driver instead // library marker kkossev.tuyaAlarmLib, line 54
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE200_d0yu2xgi", deviceJoinName: "Tuya NEO Smart Siren T&H"      // Neo NAS-AB02B0 // library marker kkossev.tuyaAlarmLib, line 55
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TYST11_d0yu2xgi", deviceJoinName: "Tuya NEO Smart Siren T&H"      // not tested // library marker kkossev.tuyaAlarmLib, line 56
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:        "d0yu2xgi", deviceJoinName: "Tuya NEO Smart Siren T&H"      // not tested // library marker kkossev.tuyaAlarmLib, line 57
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE204_t1blo2bj", deviceJoinName: "Tuya Smart Siren"              // https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/67?u=kkossev // library marker kkossev.tuyaAlarmLib, line 58
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_t1blo2bj", deviceJoinName: "Tuya NEO Smart Siren"          // vendor: 'Neo', model: 'NAS-AB02B2' // library marker kkossev.tuyaAlarmLib, line 54
+        // not working with this driver - use Markus's driver instead // library marker kkossev.tuyaAlarmLib, line 55
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE200_d0yu2xgi", deviceJoinName: "Tuya NEO Smart Siren T&H"      // Neo NAS-AB02B0 // library marker kkossev.tuyaAlarmLib, line 56
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TYST11_d0yu2xgi", deviceJoinName: "Tuya NEO Smart Siren T&H"      // not tested // library marker kkossev.tuyaAlarmLib, line 57
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:        "d0yu2xgi", deviceJoinName: "Tuya NEO Smart Siren T&H"      // not tested // library marker kkossev.tuyaAlarmLib, line 58
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE204_t1blo2bj", deviceJoinName: "Tuya Smart Siren"              // https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/67?u=kkossev // library marker kkossev.tuyaAlarmLib, line 59
 
-        // https://github.com/zigpy/zha-device-handlers/issues/1379#issuecomment-1077772021  // library marker kkossev.tuyaAlarmLib, line 60
+        // https://github.com/zigpy/zha-device-handlers/issues/1379#issuecomment-1077772021  // library marker kkossev.tuyaAlarmLib, line 61
 
-    preferences { // library marker kkossev.tuyaAlarmLib, line 62
-        input (name: "beepVolume", type: "enum", title: "<b>Beep Volume</b>", description:"<i>Select the volume used in the Beep command</i>", defaultValue: "low", options: volumeNameOptions) // library marker kkossev.tuyaAlarmLib, line 63
-        // // library marker kkossev.tuyaAlarmLib, line 64
-        input (name: "alarmMelody", type: "enum", title: "<b>Alarm default Melody</b>", description:"<i>Select the melody used in the Alarm commands</i>", defaultValue: '12=Alarm Siren', options: melodiesOptions) // library marker kkossev.tuyaAlarmLib, line 65
-        input (name: "alarmSoundVolume", type: "enum", title: "<b>Alarm default Volume</b>", description:"<i>Select the volume used in the Alarm commands</i>", defaultValue: 'high', options: volumeNameOptions) // library marker kkossev.tuyaAlarmLib, line 66
-        input (name: "alarmSoundDuration", type: "number", title: "<b>Alarm default Duration</b>, seconds", description: "<i>Select the duration used in the Alarm commands, seconds</i>", range: "1..$TUYA_MAX_DURATION", defaultValue: TUYA_MAX_DURATION) // library marker kkossev.tuyaAlarmLib, line 67
-        // // library marker kkossev.tuyaAlarmLib, line 68
-        input (name: "playSoundMelody", type: "enum", title: "<b>Play Sound (Chime) default Melody</b>", description:"<i>Select the default melody used in the playSound (Chime) command</i>", defaultValue: TUYA_DEFAULT_MELODY, options: melodiesOptions) // library marker kkossev.tuyaAlarmLib, line 69
-        input (name: "playSoundVolume", type: "enum", title: "<b>Play Sound (Chime) default Volume</b>", description:"<i>Select the default volume used in the playSound (Chime) command</i>", defaultValue: TUYA_DEFAULT_VOLUME, options: volumeNameOptions) // library marker kkossev.tuyaAlarmLib, line 70
-        input (name: "playSoundDuration", type: "number", title: "<b>Play Sound (Chime) default Duration</b>, seconds", description: "<i>Select the default duration used in the playSound (Chime) command, seconds</i>", range: "1..$TUYA_MAX_DURATION", defaultValue: TUYA_DEFAULT_DURATION) // library marker kkossev.tuyaAlarmLib, line 71
-        // // library marker kkossev.tuyaAlarmLib, line 72
-        if (advancedOptions == true) { // library marker kkossev.tuyaAlarmLib, line 73
-            input (name: "restoreAlarmSettings", type: "bool", title: "<b>Restore Default Alarm Settings</b>", description: "<i>After playing Beep or Chime sounds, the default Alarm settings will be restored after 7 seconds </i>", defaultValue: false) // library marker kkossev.tuyaAlarmLib, line 74
-            input (name: "presetBeepAndChimeSettings", type: "enum", title: "<b>Preset Beep and Chime Settings</b>", description: "<i>Before playing Beep or Chime sounds, the preset Beep/Chime settings will be restored first</i>", defaultValue: "fast", options:["fast", /*"slow",*/ "none"]) // library marker kkossev.tuyaAlarmLib, line 75
-        }  // library marker kkossev.tuyaAlarmLib, line 76
-    }     // library marker kkossev.tuyaAlarmLib, line 77
+    preferences { // library marker kkossev.tuyaAlarmLib, line 63
+        input (name: "beepVolume", type: "enum", title: "<b>Beep Volume</b>", description:"<i>Select the volume used in the Beep command</i>", defaultValue: "low", options: volumeNameOptions) // library marker kkossev.tuyaAlarmLib, line 64
+        // // library marker kkossev.tuyaAlarmLib, line 65
+        input (name: "alarmMelody", type: "enum", title: "<b>Alarm default Melody</b>", description:"<i>Select the melody used in the Alarm commands</i>", defaultValue: '12=Alarm Siren', options: melodiesOptions) // library marker kkossev.tuyaAlarmLib, line 66
+        input (name: "alarmSoundVolume", type: "enum", title: "<b>Alarm default Volume</b>", description:"<i>Select the volume used in the Alarm commands</i>", defaultValue: 'high', options: volumeNameOptions) // library marker kkossev.tuyaAlarmLib, line 67
+        input (name: "alarmSoundDuration", type: "number", title: "<b>Alarm default Duration</b>, seconds", description: "<i>Select the duration used in the Alarm commands, seconds</i>", range: "1..$TUYA_MAX_DURATION", defaultValue: TUYA_MAX_DURATION) // library marker kkossev.tuyaAlarmLib, line 68
+        // // library marker kkossev.tuyaAlarmLib, line 69
+        input (name: "playSoundMelody", type: "enum", title: "<b>Play Sound (Chime) default Melody</b>", description:"<i>Select the default melody used in the playSound (Chime) command</i>", defaultValue: TUYA_DEFAULT_MELODY, options: melodiesOptions) // library marker kkossev.tuyaAlarmLib, line 70
+        input (name: "playSoundVolume", type: "enum", title: "<b>Play Sound (Chime) default Volume</b>", description:"<i>Select the default volume used in the playSound (Chime) command</i>", defaultValue: TUYA_DEFAULT_VOLUME, options: volumeNameOptions) // library marker kkossev.tuyaAlarmLib, line 71
+        input (name: "playSoundDuration", type: "number", title: "<b>Play Sound (Chime) default Duration</b>, seconds", description: "<i>Select the default duration used in the playSound (Chime) command, seconds</i>", range: "1..$TUYA_MAX_DURATION", defaultValue: TUYA_DEFAULT_DURATION) // library marker kkossev.tuyaAlarmLib, line 72
+        // // library marker kkossev.tuyaAlarmLib, line 73
+        if (advancedOptions == true) { // library marker kkossev.tuyaAlarmLib, line 74
+            input (name: "restoreAlarmSettings", type: "bool", title: "<b>Restore Default Alarm Settings</b>", description: "<i>After playing Beep or Chime sounds, the default Alarm settings will be restored after 7 seconds </i>", defaultValue: false) // library marker kkossev.tuyaAlarmLib, line 75
+            input (name: "presetBeepAndChimeSettings", type: "enum", title: "<b>Preset Beep and Chime Settings</b>", description: "<i>Before playing Beep or Chime sounds, the preset Beep/Chime settings will be restored first</i>", defaultValue: "fast", options:["fast", /*"slow",*/ "none"]) // library marker kkossev.tuyaAlarmLib, line 76
+        }  // library marker kkossev.tuyaAlarmLib, line 77
+    }     // library marker kkossev.tuyaAlarmLib, line 78
 
-} // library marker kkossev.tuyaAlarmLib, line 79
+} // library marker kkossev.tuyaAlarmLib, line 80
 
 
-def isNeo()  { (device.getDataValue("manufacturer") in ['_TZE200_d0yu2xgi', '_TZE200_d0yu2xgi', 'd0yu2xgi']) } // library marker kkossev.tuyaAlarmLib, line 82
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TODO !!!!!!!!!!!!!!!! check all isTuya() and replace w/ isTuyaAlarm()  !!!!!!!!!!!!!!!!!!! // library marker kkossev.tuyaAlarmLib, line 83
+def isNeo()  { (device.getDataValue("manufacturer") in ['_TZE200_d0yu2xgi', '_TZE200_d0yu2xgi', 'd0yu2xgi']) } // library marker kkossev.tuyaAlarmLib, line 83
 def isTuyaAlarm() { (device.getDataValue("manufacturer") in ['_TZE204_t1blo2bj']) } // library marker kkossev.tuyaAlarmLib, line 84
 
 @Field static final Map disabledEnabledOptions = [ // library marker kkossev.tuyaAlarmLib, line 86
@@ -3447,11 +3447,11 @@ def isTuyaAlarm() { (device.getDataValue("manufacturer") in ['_TZE204_t1blo2bj']
     'high'     : [ volume: '100', tuya: '2'] // library marker kkossev.tuyaAlarmLib, line 104
 ]// as ConfigObject // library marker kkossev.tuyaAlarmLib, line 105
 
-@Field static final String  TUYA_DEFAULT_VOLUME    = 'medium' // library marker kkossev.tuyaAlarmLib, line 107
-@Field static final Integer TUYA_DEFAULT_DURATION  = 10 // library marker kkossev.tuyaAlarmLib, line 108
-@Field static final Integer TUYA_MAX_DURATION      = 180 // library marker kkossev.tuyaAlarmLib, line 109
-@Field static final String  TUYA_DEFAULT_MELODY    = '2=Fur Elise' // library marker kkossev.tuyaAlarmLib, line 110
-@Field static final Integer TUYA_MAX_MELODIES      = 18 // library marker kkossev.tuyaAlarmLib, line 111
+@Field static final String  TUYA_DEFAULT_VOLUME_NAME = 'medium' // library marker kkossev.tuyaAlarmLib, line 107
+@Field static final Integer TUYA_DEFAULT_DURATION    = 10 // library marker kkossev.tuyaAlarmLib, line 108
+@Field static final Integer TUYA_MAX_DURATION        = 180 // library marker kkossev.tuyaAlarmLib, line 109
+@Field static final String  TUYA_DEFAULT_MELODY_NAME = '2=Fur Elise' // library marker kkossev.tuyaAlarmLib, line 110
+@Field static final Integer TUYA_MAX_MELODIES        = 18 // library marker kkossev.tuyaAlarmLib, line 111
 
 @Field static final List<String> melodiesOptions = [ // library marker kkossev.tuyaAlarmLib, line 113
     '1=Doorbell 1', // library marker kkossev.tuyaAlarmLib, line 114
@@ -3493,7 +3493,7 @@ private findVolumeByTuyaValue( fncmd ) { // library marker kkossev.tuyaAlarmLib,
     def volumeName = 'unknown' // library marker kkossev.tuyaAlarmLib, line 150
     def volumePct = -1 // library marker kkossev.tuyaAlarmLib, line 151
     volumeMapping.each{ k, v ->  // library marker kkossev.tuyaAlarmLib, line 152
-        if (v.tuya.value as String == fncmd.toString()) { // library marker kkossev.tuyaAlarmLib, line 153
+        if (v.tuya as String == fncmd.toString()) { // library marker kkossev.tuyaAlarmLib, line 153
             volumeName = k // library marker kkossev.tuyaAlarmLib, line 154
             volumePct = v.volume // library marker kkossev.tuyaAlarmLib, line 155
         } // library marker kkossev.tuyaAlarmLib, line 156
@@ -3505,7 +3505,7 @@ private findVolumeByPct( pct ) { // library marker kkossev.tuyaAlarmLib, line 16
     def volumeName = 'unknown' // library marker kkossev.tuyaAlarmLib, line 162
     def volumeTuya = -1 // library marker kkossev.tuyaAlarmLib, line 163
     volumeMapping.each{ k, v ->  // library marker kkossev.tuyaAlarmLib, line 164
-        if (v.volume.value as String == pct.toString()) { // library marker kkossev.tuyaAlarmLib, line 165
+        if (v.volume as String == pct.toString()) { // library marker kkossev.tuyaAlarmLib, line 165
             volumeName = k // library marker kkossev.tuyaAlarmLib, line 166
             volumeTuya = v.tuya // library marker kkossev.tuyaAlarmLib, line 167
         } // library marker kkossev.tuyaAlarmLib, line 168
@@ -3568,494 +3568,500 @@ void processTuyaDpAlarm(descMap, dp, dp_id, fncmd) { // library marker kkossev.t
                 sendAlarmEvent(value) // library marker kkossev.tuyaAlarmLib, line 225
                 break // library marker kkossev.tuyaAlarmLib, line 226
             case TUYA_DP_BATTERY :    // (15) battery [VALUE] percentage // library marker kkossev.tuyaAlarmLib, line 227
-                getBatteryPercentageResult( fncmd * 2) // library marker kkossev.tuyaAlarmLib, line 228
-                break // library marker kkossev.tuyaAlarmLib, line 229
+                logDebug "received TUYA_DP_BATTERY event fncmd=${fncmd}" // library marker kkossev.tuyaAlarmLib, line 228
+                sendBatteryPercentageEvent(fncmd) // library marker kkossev.tuyaAlarmLib, line 229
+                break // library marker kkossev.tuyaAlarmLib, line 230
 
-            case 0x66 : // Neo Alarm Melody 18 Max ? -> fncmd+1 ? TODO // library marker kkossev.tuyaAlarmLib, line 231
-                logDebug "received Neo Alarm melody ${fncmd}" // library marker kkossev.tuyaAlarmLib, line 232
-            case TUYA_DP_MELODY :     // (21) melody [enum] 0..17 // library marker kkossev.tuyaAlarmLib, line 233
-                if (settings?.logEnable) logInfo "confirmed melody ${melodiesOptions[fncmd]} (${fncmd})" // library marker kkossev.tuyaAlarmLib, line 234
-                sendEvent(name: "soundName", value: melodiesOptions[fncmd], descriptionText: descriptionText, type: "physical" )             // library marker kkossev.tuyaAlarmLib, line 235
-                break // library marker kkossev.tuyaAlarmLib, line 236
+            case 0x66 : // Neo Alarm Melody 18 Max ? -> fncmd+1 ? TODO // library marker kkossev.tuyaAlarmLib, line 232
+                logDebug "received Neo Alarm melody ${fncmd}" // library marker kkossev.tuyaAlarmLib, line 233
+            case TUYA_DP_MELODY :     // (21) melody [enum] 0..17 // library marker kkossev.tuyaAlarmLib, line 234
+                if (settings?.logEnable) logInfo "confirmed melody ${melodiesOptions[fncmd]} (${fncmd})" // library marker kkossev.tuyaAlarmLib, line 235
+                sendEvent(name: "soundName", value: melodiesOptions[fncmd], descriptionText: descriptionText, type: "physical" )             // library marker kkossev.tuyaAlarmLib, line 236
+                break // library marker kkossev.tuyaAlarmLib, line 237
 
-            case 0x65 : // Neo Power Mode  ['battery_full', 'battery_high', 'battery_medium', 'battery_low', 'usb'] // library marker kkossev.tuyaAlarmLib, line 238
-                if (settings?.logEnable) logInfo "Neo Power Mode is ${fncmd}" // library marker kkossev.tuyaAlarmLib, line 239
-                break // library marker kkossev.tuyaAlarmLib, line 240
-            case 0x69 : // Neo Temperature  ( x10 ) // library marker kkossev.tuyaAlarmLib, line 241
-                if (settings?.logEnable) logInfo "Neo Temperature is ${fncmd/10.0} C (${fncmd})" // library marker kkossev.tuyaAlarmLib, line 242
-                sendTemperatureEvent( fncmd/10.0 ) // library marker kkossev.tuyaAlarmLib, line 243
-                break // library marker kkossev.tuyaAlarmLib, line 244
-            case 0x6A : // Neo Humidity Level (x10 ) // library marker kkossev.tuyaAlarmLib, line 245
-                if (settings?.logEnable) logInfo "Neo Humidity Level is ${fncmd/10.0} %RH (${fncmd})" // library marker kkossev.tuyaAlarmLib, line 246
-                sendHumidityEvent( fncmd/10.0 ) // library marker kkossev.tuyaAlarmLib, line 247
-                break // library marker kkossev.tuyaAlarmLib, line 248
-            case 0x6B : // Neo Min Alarm Temperature -20 .. 80 // library marker kkossev.tuyaAlarmLib, line 249
-                if (settings?.logEnable) logInfo "Neo Min Alarm Temperature is ${fncmd} C" // library marker kkossev.tuyaAlarmLib, line 250
-                break // library marker kkossev.tuyaAlarmLib, line 251
-            case 0x6C : // Neo Max Alarm Temperature -20 .. 80 // library marker kkossev.tuyaAlarmLib, line 252
-                if (settings?.logEnable) logInfo "Neo Max Alarm Temperature is ${fncmd} C" // library marker kkossev.tuyaAlarmLib, line 253
-                break // library marker kkossev.tuyaAlarmLib, line 254
-            case 0x6D : // Neo Min Alarm Humidity 1..100 // library marker kkossev.tuyaAlarmLib, line 255
-                if (settings?.logEnable) logInfo "Neo Min Alarm Humidity is ${fncmd} %RH" // library marker kkossev.tuyaAlarmLib, line 256
-                break // library marker kkossev.tuyaAlarmLib, line 257
-            case 0x6E : // Neo Max Alarm Humidity 1..100 // library marker kkossev.tuyaAlarmLib, line 258
-                if (settings?.logEnable) logInfo "Neo Max Alarm Humidity is ${fncmd} %RH" // library marker kkossev.tuyaAlarmLib, line 259
-                break // library marker kkossev.tuyaAlarmLib, line 260
-            case 0x70 : // Neo Temperature Unit (F 0x00, C 0x01) // library marker kkossev.tuyaAlarmLib, line 261
-                if (settings?.logEnable) logInfo "Neo Temperature Unit is ${temperatureScaleOptions[safeToInt(fncmd).toString()]} (${fncmd})" // library marker kkossev.tuyaAlarmLib, line 262
-                break // library marker kkossev.tuyaAlarmLib, line 263
-            case 0x71 : // Neo Alarm by Temperature status // library marker kkossev.tuyaAlarmLib, line 264
-                if (settings?.logEnable) logInfo "Neo Alarm by Temperature status is ${disabledEnabledOptions[safeToInt(fncmd).toString()]} (${fncmd})" // library marker kkossev.tuyaAlarmLib, line 265
-                break // library marker kkossev.tuyaAlarmLib, line 266
-            case 0x72 : // Neo Alarm by Humidity status // library marker kkossev.tuyaAlarmLib, line 267
-                if (settings?.logEnable) logInfo "Neo Alarm by Humidity status is ${disabledEnabledOptions[safeToInt(fncmd).toString()]} (${fncmd})" // library marker kkossev.tuyaAlarmLib, line 268
-                break // library marker kkossev.tuyaAlarmLib, line 269
-            case 0x73 : // Neo ??? // library marker kkossev.tuyaAlarmLib, line 270
-                if (settings?.logEnable) logInfo "Neo unknown parameter (x073) is ${fncmd}" // library marker kkossev.tuyaAlarmLib, line 271
-                break // library marker kkossev.tuyaAlarmLib, line 272
-            default : // library marker kkossev.tuyaAlarmLib, line 273
-                logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.tuyaAlarmLib, line 274
-                break // library marker kkossev.tuyaAlarmLib, line 275
-        } // library marker kkossev.tuyaAlarmLib, line 276
-} // library marker kkossev.tuyaAlarmLib, line 277
-
-
-private wakeUpTuya() { // library marker kkossev.tuyaAlarmLib, line 280
-    logDebug "wakeUpTuya()" // library marker kkossev.tuyaAlarmLib, line 281
-    sendZigbeeCommands(zigbee.readAttribute(0x0000, 0x0005, [:], delay=50) ) // library marker kkossev.tuyaAlarmLib, line 282
-} // library marker kkossev.tuyaAlarmLib, line 283
-
-private combinedTuyaCommands(String cmds) { // library marker kkossev.tuyaAlarmLib, line 285
-    if (state.stats != null) { state.stats['txCtr'] = (state.stats['txCtr'] ?: 0) + 1 } else { state.stats=[:] } // library marker kkossev.tuyaAlarmLib, line 286
-    if (state.lastTx != null) { state.lastTx['cmdTime'] = now() } else { state.lastTx = [:] } // library marker kkossev.tuyaAlarmLib, line 287
-    return zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay=200, PACKET_ID + cmds )  // library marker kkossev.tuyaAlarmLib, line 288
-} // library marker kkossev.tuyaAlarmLib, line 289
-
-private appendTuyaCommand(Integer dp, String dp_type, Integer fncmd) { // library marker kkossev.tuyaAlarmLib, line 291
-    Integer fncmdLen =  dp_type== DP_TYPE_VALUE? 8 : 2 // library marker kkossev.tuyaAlarmLib, line 292
-    String cmds = zigbee.convertToHexString(dp, 2) + dp_type + zigbee.convertToHexString((int)(fncmdLen/2), 4) + zigbee.convertToHexString(fncmd, fncmdLen)  // library marker kkossev.tuyaAlarmLib, line 293
-    //logDebug "appendTuyaCommand = ${cmds}" // library marker kkossev.tuyaAlarmLib, line 294
-    return cmds // library marker kkossev.tuyaAlarmLib, line 295
-} // library marker kkossev.tuyaAlarmLib, line 296
-
-void sendSimpleTuyaCommand(Integer command, String payload) { // library marker kkossev.tuyaAlarmLib, line 298
-  Random rnd = new Random() // library marker kkossev.tuyaAlarmLib, line 299
-  String fullPayload = "00${HexUtils.integerToHexString(rnd.nextInt(255),1)}" + payload // library marker kkossev.tuyaAlarmLib, line 300
-  sendSimpleZigbeeCommands(zigbeeCommand(0x01, 0xEF00, command, 101, fullPayload)) // library marker kkossev.tuyaAlarmLib, line 301
-  logDebug "Payload sent: ${fullPayload}" // library marker kkossev.tuyaAlarmLib, line 302
-} // library marker kkossev.tuyaAlarmLib, line 303
-
-void sendSimpleZigbeeCommands(ArrayList<String> cmd) { // library marker kkossev.tuyaAlarmLib, line 305
-    logDebug "sendZigbeeCommands(cmd=${cmd})" // library marker kkossev.tuyaAlarmLib, line 306
-    hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction() // library marker kkossev.tuyaAlarmLib, line 307
-    cmd.each { // library marker kkossev.tuyaAlarmLib, line 308
-            allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) // library marker kkossev.tuyaAlarmLib, line 309
-    } // library marker kkossev.tuyaAlarmLib, line 310
-    sendHubCommand(allActions) // library marker kkossev.tuyaAlarmLib, line 311
-} // library marker kkossev.tuyaAlarmLib, line 312
-
-ArrayList<String> zigbeeCommand(Integer cluster, Integer command, Map additionalParams, int delay = 201, String... payload) { // library marker kkossev.tuyaAlarmLib, line 314
-    ArrayList<String> cmd = zigbee.command(cluster, command, additionalParams, delay, payload) // library marker kkossev.tuyaAlarmLib, line 315
-    cmd[0] = cmd[0].replace('0xnull', '0x01') // library marker kkossev.tuyaAlarmLib, line 316
-
-    return cmd // library marker kkossev.tuyaAlarmLib, line 318
-} // library marker kkossev.tuyaAlarmLib, line 319
-
-String integerToHexString(BigDecimal value, Integer minBytes, boolean reverse=false) { // library marker kkossev.tuyaAlarmLib, line 321
-    return integerToHexString(value.intValue(), minBytes, reverse=reverse) // library marker kkossev.tuyaAlarmLib, line 322
-} // library marker kkossev.tuyaAlarmLib, line 323
-
-ArrayList<String> zigbeeCommand(Integer endpoint, Integer cluster, Integer command, int delay = 203, String... payload) { // library marker kkossev.tuyaAlarmLib, line 325
-    zigbeeCommand(endpoint, cluster, command, [:], delay, payload) // library marker kkossev.tuyaAlarmLib, line 326
-} // library marker kkossev.tuyaAlarmLib, line 327
-
-ArrayList<String> zigbeeCommand(Integer endpoint, Integer cluster, Integer command, Map additionalParams, int delay = 204, String... payload) { // library marker kkossev.tuyaAlarmLib, line 329
-    String mfgCode = "" // library marker kkossev.tuyaAlarmLib, line 330
-    if(additionalParams.containsKey("mfgCode")) { // library marker kkossev.tuyaAlarmLib, line 331
-        mfgCode = " {${HexUtils.integerToHexString(HexUtils.hexStringToInt(additionalParams.get("mfgCode")), 2)}}" // library marker kkossev.tuyaAlarmLib, line 332
-    } // library marker kkossev.tuyaAlarmLib, line 333
-    String finalPayload = payload != null && payload != [] ? payload[0] : "" // library marker kkossev.tuyaAlarmLib, line 334
-    String cmdArgs = "0x${device.deviceNetworkId} 0x${HexUtils.integerToHexString(endpoint, 1)} 0x${HexUtils.integerToHexString(cluster, 2)} " +  // library marker kkossev.tuyaAlarmLib, line 335
-                       "0x${HexUtils.integerToHexString(command, 1)} " +  // library marker kkossev.tuyaAlarmLib, line 336
-                       "{$finalPayload}" +  // library marker kkossev.tuyaAlarmLib, line 337
-                       "$mfgCode" // library marker kkossev.tuyaAlarmLib, line 338
-    ArrayList<String> cmd = ["he cmd $cmdArgs", "delay $delay"] // library marker kkossev.tuyaAlarmLib, line 339
-    return cmd // library marker kkossev.tuyaAlarmLib, line 340
-} // library marker kkossev.tuyaAlarmLib, line 341
-
-String integerToHexString(Integer value, Integer minBytes, boolean reverse=false) { // library marker kkossev.tuyaAlarmLib, line 343
-    if(reverse == true) { // library marker kkossev.tuyaAlarmLib, line 344
-        return HexUtils.integerToHexString(value, minBytes).split("(?<=\\G..)").reverse().join() // library marker kkossev.tuyaAlarmLib, line 345
-    } else { // library marker kkossev.tuyaAlarmLib, line 346
-        return HexUtils.integerToHexString(value, minBytes) // library marker kkossev.tuyaAlarmLib, line 347
-    } // library marker kkossev.tuyaAlarmLib, line 348
-
-} // library marker kkossev.tuyaAlarmLib, line 350
-
-def offAlarm() { // library marker kkossev.tuyaAlarmLib, line 352
-    sendTuyaAlarm("off") // library marker kkossev.tuyaAlarmLib, line 353
-} // library marker kkossev.tuyaAlarmLib, line 354
-
-def onAlarm() { // library marker kkossev.tuyaAlarmLib, line 356
-    sendTuyaAlarm("on") // library marker kkossev.tuyaAlarmLib, line 357
-} // library marker kkossev.tuyaAlarmLib, line 358
-
-def both() { // library marker kkossev.tuyaAlarmLib, line 360
-    sendTuyaAlarm("both") // library marker kkossev.tuyaAlarmLib, line 361
-} // library marker kkossev.tuyaAlarmLib, line 362
-
-def strobe() { // library marker kkossev.tuyaAlarmLib, line 364
-    sendTuyaAlarm("strobe") // library marker kkossev.tuyaAlarmLib, line 365
-} // library marker kkossev.tuyaAlarmLib, line 366
-
-def siren() { // library marker kkossev.tuyaAlarmLib, line 368
-    sendTuyaAlarm( "siren") // library marker kkossev.tuyaAlarmLib, line 369
-} // library marker kkossev.tuyaAlarmLib, line 370
-
-def sendTuyaAlarm( commandName ) { // library marker kkossev.tuyaAlarmLib, line 372
-    logDebug "swithing alarm ${commandName} (presetBeepAndChimeSettings = ${settings?.presetBeepAndChimeSettings})" // library marker kkossev.tuyaAlarmLib, line 373
-    String cmds = "" // library marker kkossev.tuyaAlarmLib, line 374
-    state.lastTx["lastCommand"] = commandName // library marker kkossev.tuyaAlarmLib, line 375
-    def mode = settings?.presetBeepAndChimeSettings ?: "fast" // library marker kkossev.tuyaAlarmLib, line 376
-    switch (mode) { // library marker kkossev.tuyaAlarmLib, line 377
-        case "none" : // library marker kkossev.tuyaAlarmLib, line 378
-            if (commandName != "off") { // library marker kkossev.tuyaAlarmLib, line 379
-                sendSimpleTuyaCommand(0x00, isNeo() ? "6801000101" : "0D01000101") // library marker kkossev.tuyaAlarmLib, line 380
-            } // library marker kkossev.tuyaAlarmLib, line 381
-            else { // library marker kkossev.tuyaAlarmLib, line 382
-                sendSimpleTuyaCommand(0x00, isNeo() ? "6801000100" : "0D01000100") // library marker kkossev.tuyaAlarmLib, line 383
-            } // library marker kkossev.tuyaAlarmLib, line 384
-            break // library marker kkossev.tuyaAlarmLib, line 385
-        case "fast" : // library marker kkossev.tuyaAlarmLib, line 386
-            wakeUpTuya() // library marker kkossev.tuyaAlarmLib, line 387
-            if (commandName != "off") { // library marker kkossev.tuyaAlarmLib, line 388
-                // volume // library marker kkossev.tuyaAlarmLib, line 389
-                def volumeName = settings?.alarmSoundVolume ?: 'high' // library marker kkossev.tuyaAlarmLib, line 390
-                def volumeTuya = volumeNameOptions.indexOf(volumeName) // library marker kkossev.tuyaAlarmLib, line 391
-                if (volumeTuya >= 0 && volumeTuya <=2) { // library marker kkossev.tuyaAlarmLib, line 392
-                    cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, volumeTuya as int )  // library marker kkossev.tuyaAlarmLib, line 393
-                }  // library marker kkossev.tuyaAlarmLib, line 394
-                // duration // library marker kkossev.tuyaAlarmLib, line 395
-                def durationTuya = safeToInt( settings?.alarmSoundDuration ) // library marker kkossev.tuyaAlarmLib, line 396
-                if (durationTuya >=1 && durationTuya <= TUYA_MAX_DURATION) { // library marker kkossev.tuyaAlarmLib, line 397
-                    cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, durationTuya as int )  // library marker kkossev.tuyaAlarmLib, line 398
-                } // library marker kkossev.tuyaAlarmLib, line 399
-                // melody // library marker kkossev.tuyaAlarmLib, line 400
-                def melodyName = settings?.alarmMelody ?: '12=Alarm Siren' // library marker kkossev.tuyaAlarmLib, line 401
-                def melodyTuya = melodiesOptions.indexOf(melodyName) // library marker kkossev.tuyaAlarmLib, line 402
-                if (melodyTuya >=0 && melodyTuya <= TUYA_MAX_MELODIES-1) { // library marker kkossev.tuyaAlarmLib, line 403
-                    cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, melodyTuya as int)  // library marker kkossev.tuyaAlarmLib, line 404
-                } // library marker kkossev.tuyaAlarmLib, line 405
-                // play it // library marker kkossev.tuyaAlarmLib, line 406
-                unschedule(restoreDefaultSettings) // library marker kkossev.tuyaAlarmLib, line 407
-                cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 )  // library marker kkossev.tuyaAlarmLib, line 408
-                sendZigbeeCommands( combinedTuyaCommands(cmds) )     // library marker kkossev.tuyaAlarmLib, line 409
-            } // library marker kkossev.tuyaAlarmLib, line 410
-            else { // library marker kkossev.tuyaAlarmLib, line 411
-                unschedule(restoreDefaultSettings) // library marker kkossev.tuyaAlarmLib, line 412
-                sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "00"))     // library marker kkossev.tuyaAlarmLib, line 413
-            } // library marker kkossev.tuyaAlarmLib, line 414
-            break // library marker kkossev.tuyaAlarmLib, line 415
-        case "slow" : // library marker kkossev.tuyaAlarmLib, line 416
-            logWarn "NOT IMPLEMENTED!" // library marker kkossev.tuyaAlarmLib, line 417
-            break // library marker kkossev.tuyaAlarmLib, line 418
-    } // library marker kkossev.tuyaAlarmLib, line 419
-
-} // library marker kkossev.tuyaAlarmLib, line 421
-
-// capability "Tone" // library marker kkossev.tuyaAlarmLib, line 423
-def beep() { // library marker kkossev.tuyaAlarmLib, line 424
-    String cmds = "" // library marker kkossev.tuyaAlarmLib, line 425
-    state.lastTx["lastCommand"] = "beep"     // library marker kkossev.tuyaAlarmLib, line 426
-    logDebug "sending beep() beepVolume = ${settings?.beepVolume}" // library marker kkossev.tuyaAlarmLib, line 427
-
-    if (settings?.presetBeepAndChimeSettings == "none") { // library marker kkossev.tuyaAlarmLib, line 429
-        sendSimpleTuyaCommand(0x00, isNeo() ? "6801000101" : "0D01000101") // just turn the siren on!  // TODO! // library marker kkossev.tuyaAlarmLib, line 430
-    } // library marker kkossev.tuyaAlarmLib, line 431
-    else { // library marker kkossev.tuyaAlarmLib, line 432
-        wakeUpTuya() // library marker kkossev.tuyaAlarmLib, line 433
-        Integer volumeTuya; Integer volumePct // library marker kkossev.tuyaAlarmLib, line 434
-        (volumeTuya, volumePct) = findVolumeByName(settings?.beepVolume ) // library marker kkossev.tuyaAlarmLib, line 435
-        if (volumeTuya >= 0 && volumeTuya <=2) { // library marker kkossev.tuyaAlarmLib, line 436
-            cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, volumeTuya as int)  // library marker kkossev.tuyaAlarmLib, line 437
-        } // library marker kkossev.tuyaAlarmLib, line 438
-        else { // library marker kkossev.tuyaAlarmLib, line 439
-            logWarn "volumeTuya <=2 is ${volumeTuya}, added cmds=${cmds} " // library marker kkossev.tuyaAlarmLib, line 440
-        } // library marker kkossev.tuyaAlarmLib, line 441
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, 1 )  // library marker kkossev.tuyaAlarmLib, line 442
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, 2 )  // library marker kkossev.tuyaAlarmLib, line 443
-        unschedule(restoreDefaultSettings) // library marker kkossev.tuyaAlarmLib, line 444
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) // library marker kkossev.tuyaAlarmLib, line 445
-        sendZigbeeCommands( combinedTuyaCommands(cmds) ) // library marker kkossev.tuyaAlarmLib, line 446
-    } // library marker kkossev.tuyaAlarmLib, line 447
-} // library marker kkossev.tuyaAlarmLib, line 448
-
-def restoreDefaultSettings() { // library marker kkossev.tuyaAlarmLib, line 450
-    wakeUpTuya() // library marker kkossev.tuyaAlarmLib, line 451
-    String cmds = "" // library marker kkossev.tuyaAlarmLib, line 452
-    // restore alarm volume // library marker kkossev.tuyaAlarmLib, line 453
-    def volumeName = settings?.alarmSoundVolume ?: 'high' // library marker kkossev.tuyaAlarmLib, line 454
-    def volumeTuya = volumeNameOptions.indexOf(volumeName) // library marker kkossev.tuyaAlarmLib, line 455
-    if (volumeTuya >= 0 && volumeTuya <=2) { // library marker kkossev.tuyaAlarmLib, line 456
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, volumeTuya as int )  // library marker kkossev.tuyaAlarmLib, line 457
-    }     // library marker kkossev.tuyaAlarmLib, line 458
-    // restore alarm duration // library marker kkossev.tuyaAlarmLib, line 459
-    def durationTuya = safeToInt(settings?.alarmSoundDuration, TUYA_MAX_DURATION) // library marker kkossev.tuyaAlarmLib, line 460
-    if (durationTuya >=1 && durationTuya <= TUYA_MAX_DURATION) { // library marker kkossev.tuyaAlarmLib, line 461
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, durationTuya as int )  // library marker kkossev.tuyaAlarmLib, line 462
-    } // library marker kkossev.tuyaAlarmLib, line 463
-    // restore alarm melody // library marker kkossev.tuyaAlarmLib, line 464
-    def melodyName = settings?.alarmMelody ?: '12=Alarm Siren' // library marker kkossev.tuyaAlarmLib, line 465
-    def melodyTuya = melodiesOptions.indexOf(melodyName) // library marker kkossev.tuyaAlarmLib, line 466
-    if (melodyTuya >=0 && melodyTuya <= TUYA_MAX_MELODIES-1) { // library marker kkossev.tuyaAlarmLib, line 467
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, melodyTuya as int)  // library marker kkossev.tuyaAlarmLib, line 468
-    } // library marker kkossev.tuyaAlarmLib, line 469
-    logDebug "restoring default settings volume=${volumeName}, duration=${durationTuya}, melody=${melodyName}" // library marker kkossev.tuyaAlarmLib, line 470
-    sendZigbeeCommands( combinedTuyaCommands(cmds) )     // library marker kkossev.tuyaAlarmLib, line 471
-} // library marker kkossev.tuyaAlarmLib, line 472
-
-//capability "AudioVolume" //Attributes: mute - ENUM ["unmuted", "muted"] volume - NUMBER, unit:%; Commands: mute() setVolume(volumelevel) volumelevel required (NUMBER) - Volume level (0 to 100) unmute() volumeDown() volumeUp() // library marker kkossev.tuyaAlarmLib, line 474
-def mute() { // library marker kkossev.tuyaAlarmLib, line 475
-    sendEvent(name: "mute", value: "muted", type: "digital")        // library marker kkossev.tuyaAlarmLib, line 476
-} // library marker kkossev.tuyaAlarmLib, line 477
-
-def unmute() { // library marker kkossev.tuyaAlarmLib, line 479
-    sendEvent(name: "mute", value: "unmuted", type: "digital")        // library marker kkossev.tuyaAlarmLib, line 480
-} // library marker kkossev.tuyaAlarmLib, line 481
-
-def getNearestTuyaVolumeLevel( volumelevel ) { // library marker kkossev.tuyaAlarmLib, line 483
-    def nearestlevel = 0 // library marker kkossev.tuyaAlarmLib, line 484
-    if (volumelevel <= 33) nearestlevel = 33 // library marker kkossev.tuyaAlarmLib, line 485
-    else if (volumelevel <= 66) nearestlevel = 66 // library marker kkossev.tuyaAlarmLib, line 486
-    else nearestlevel = 100 // library marker kkossev.tuyaAlarmLib, line 487
-    return nearestlevel // library marker kkossev.tuyaAlarmLib, line 488
-} // library marker kkossev.tuyaAlarmLib, line 489
-
-def setVolumeLevel( volumelevel ) { // library marker kkossev.tuyaAlarmLib, line 491
-    // - Volume level (0 to 100) // library marker kkossev.tuyaAlarmLib, line 492
-    String cmds = "" // library marker kkossev.tuyaAlarmLib, line 493
-    def nearestlevel =  getNearestTuyaVolumeLevel( volumelevel ) // library marker kkossev.tuyaAlarmLib, line 494
-    if      (nearestlevel == 0 && device.currentValue("mute", true) == "unmuted")  mute() // library marker kkossev.tuyaAlarmLib, line 495
-    else if (nearestlevel != 0 && device.currentValue("mute", true) == "muted") unmute()  // library marker kkossev.tuyaAlarmLib, line 496
-    def volumeName // library marker kkossev.tuyaAlarmLib, line 497
-    def volumeTuya // library marker kkossev.tuyaAlarmLib, line 498
-    (volumeName, volumeTuya) =  findVolumeByPct( nearestlevel )  // library marker kkossev.tuyaAlarmLib, line 499
-    logDebug "matched volumelevel=${volumelevel} to nearestLlevel=${nearestlevel} (volumeTuya=${volumeTuya})" // library marker kkossev.tuyaAlarmLib, line 500
-
-    if (settings?.presetBeepAndChimeSettings == "none") { // library marker kkossev.tuyaAlarmLib, line 502
-        switch(volumeName) { // library marker kkossev.tuyaAlarmLib, line 503
-            case "high": // library marker kkossev.tuyaAlarmLib, line 504
-                sendSimpleTuyaCommand(0x00, "0504000102") // library marker kkossev.tuyaAlarmLib, line 505
-                break // library marker kkossev.tuyaAlarmLib, line 506
-            case "medium": // library marker kkossev.tuyaAlarmLib, line 507
-                sendSimpleTuyaCommand(0x00, "0504000101") // library marker kkossev.tuyaAlarmLib, line 508
-                break // library marker kkossev.tuyaAlarmLib, line 509
-            default: // library marker kkossev.tuyaAlarmLib, line 510
-                sendSimpleTuyaCommand(0x00, "0504000100") // library marker kkossev.tuyaAlarmLib, line 511
-                break // library marker kkossev.tuyaAlarmLib, line 512
-          } // library marker kkossev.tuyaAlarmLib, line 513
-    } // library marker kkossev.tuyaAlarmLib, line 514
-    else { // library marker kkossev.tuyaAlarmLib, line 515
-    //state.volume = nearestlevel // library marker kkossev.tuyaAlarmLib, line 516
-        if (safeToInt(volumeTuya) >= 0) { // library marker kkossev.tuyaAlarmLib, line 517
-            cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) )  // library marker kkossev.tuyaAlarmLib, line 518
-        } // library marker kkossev.tuyaAlarmLib, line 519
-        logDebug "setting volume=${volumeName}" // library marker kkossev.tuyaAlarmLib, line 520
-        sendZigbeeCommands( combinedTuyaCommands(cmds) ) // library marker kkossev.tuyaAlarmLib, line 521
-    } // library marker kkossev.tuyaAlarmLib, line 522
-} // library marker kkossev.tuyaAlarmLib, line 523
-
-def volumeDown() { // library marker kkossev.tuyaAlarmLib, line 525
-    setVolumeLevel( (device.currentValue("volume") ?: 0 ) - 34) // library marker kkossev.tuyaAlarmLib, line 526
-} // library marker kkossev.tuyaAlarmLib, line 527
-
-def volumeUp() { // library marker kkossev.tuyaAlarmLib, line 529
-    setVolumeLevel( (device.currentValue("volume") ?: 0 ) + 33) // library marker kkossev.tuyaAlarmLib, line 530
-} // library marker kkossev.tuyaAlarmLib, line 531
-
-def playSound(soundnumberPar=null, volumeLevelPar=null, durationPar=null) { // library marker kkossev.tuyaAlarmLib, line 533
-    logWarn "playSound: soundnumberPar=${soundnumberPar} volumeLevelPar=${volumeLevelPar} durationPar=${durationPar}" // library marker kkossev.tuyaAlarmLib, line 534
-    def soundnumber = safeToInt(soundnumberPar) // library marker kkossev.tuyaAlarmLib, line 535
-    def volumeLevel = safeToInt(volumeLevelPar) // library marker kkossev.tuyaAlarmLib, line 536
-    def duration = safeToInt(durationPar) // library marker kkossev.tuyaAlarmLib, line 537
-    wakeUpTuya() // library marker kkossev.tuyaAlarmLib, line 538
-    String cmds = "" // library marker kkossev.tuyaAlarmLib, line 539
-    def volumeName; def volumeTuya; def volumePct // library marker kkossev.tuyaAlarmLib, line 540
-    if (soundnumber == null || soundnumber <= 0)  {    // use the default melody // library marker kkossev.tuyaAlarmLib, line 541
-        soundnumber = melodiesOptions.indexOf(settings?.playSoundMelody ?: TUYA_DEFAULT_MELODY ) + 1 // library marker kkossev.tuyaAlarmLib, line 542
-        logWarn "playSound: using the default soundnumber ${soundnumber}" // library marker kkossev.tuyaAlarmLib, line 543
-    } // library marker kkossev.tuyaAlarmLib, line 544
-    int soundNumberIndex = safeToInt(soundnumber) // library marker kkossev.tuyaAlarmLib, line 545
-    soundNumberIndex = soundNumberIndex < 1 ? 1 : soundNumberIndex > TUYA_MAX_MELODIES ? TUYA_MAX_MELODIES : soundNumberIndex;  // library marker kkossev.tuyaAlarmLib, line 546
-    soundNumberIndex -= 1    // Tuya parameter is zero based ! // library marker kkossev.tuyaAlarmLib, line 547
-    // // library marker kkossev.tuyaAlarmLib, line 548
-    if (volumeLevel == null || volumeLevel <= 0) {    // use the default playSoundVolume     // library marker kkossev.tuyaAlarmLib, line 549
-        volumeName = settings?.playSoundVolume ?: TUYA_DEFAULT_VOLUME // library marker kkossev.tuyaAlarmLib, line 550
-        (volumeTuya, volumePct) = findVolumeByName( volumeName )         // library marker kkossev.tuyaAlarmLib, line 551
-        logWarn "playSound: using default Chime volume ${volumeName} (${volumeTuya})" // library marker kkossev.tuyaAlarmLib, line 552
-    } // library marker kkossev.tuyaAlarmLib, line 553
-    else { // library marker kkossev.tuyaAlarmLib, line 554
-        def nearestVolume = getNearestTuyaVolumeLevel( volumeLevel ) // library marker kkossev.tuyaAlarmLib, line 555
-        (volumeName, volumeTuya) =  findVolumeByPct( nearestVolume )  // library marker kkossev.tuyaAlarmLib, line 556
-    } // library marker kkossev.tuyaAlarmLib, line 557
-    // // library marker kkossev.tuyaAlarmLib, line 558
-    if (duration == null || duration <= 0) { // library marker kkossev.tuyaAlarmLib, line 559
-        duration = settings?.playSoundDuration ?: TUYA_DEFAULT_DURATION as int // library marker kkossev.tuyaAlarmLib, line 560
-        logWarn "playSound: using the default duration ${duration}" // library marker kkossev.tuyaAlarmLib, line 561
-    } // library marker kkossev.tuyaAlarmLib, line 562
-    else { // library marker kkossev.tuyaAlarmLib, line 563
-        duration = duration <1 ? 1 : duration > TUYA_MAX_DURATION ? TUYA_MAX_DURATION : duration as int // library marker kkossev.tuyaAlarmLib, line 564
-    } // library marker kkossev.tuyaAlarmLib, line 565
-    state.lastTx["lastCommand"] = "playSound" // library marker kkossev.tuyaAlarmLib, line 566
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya))  // library marker kkossev.tuyaAlarmLib, line 567
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, safeToInt(duration) )  // library marker kkossev.tuyaAlarmLib, line 568
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, soundNumberIndex)  // library marker kkossev.tuyaAlarmLib, line 569
-    unschedule(restoreDefaultSettings) // library marker kkossev.tuyaAlarmLib, line 570
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) // library marker kkossev.tuyaAlarmLib, line 571
-    logDebug "playSound ${soundnumber} (${melodiesOptions.get(soundNumberIndex)}) index=${soundNumberIndex}, duration=${duration}, volume=${volumeName}(${volumeTuya})" // library marker kkossev.tuyaAlarmLib, line 572
-    sendZigbeeCommands( combinedTuyaCommands(cmds) ) // library marker kkossev.tuyaAlarmLib, line 573
-} // library marker kkossev.tuyaAlarmLib, line 574
-
-def stop() { // library marker kkossev.tuyaAlarmLib, line 576
-    off() // library marker kkossev.tuyaAlarmLib, line 577
-} // library marker kkossev.tuyaAlarmLib, line 578
-
-// capability "MusicPlayer" // library marker kkossev.tuyaAlarmLib, line 580
-def pause() { // library marker kkossev.tuyaAlarmLib, line 581
-} // library marker kkossev.tuyaAlarmLib, line 582
-
-def play() { // library marker kkossev.tuyaAlarmLib, line 584
-} // library marker kkossev.tuyaAlarmLib, line 585
-
-def sendVolumeEvent( volume,  isDigital=false ) { // library marker kkossev.tuyaAlarmLib, line 587
-    def map = [:]  // library marker kkossev.tuyaAlarmLib, line 588
-    map.name = "volume" // library marker kkossev.tuyaAlarmLib, line 589
-    map.value = volume // library marker kkossev.tuyaAlarmLib, line 590
-    map.unit = "%" // library marker kkossev.tuyaAlarmLib, line 591
-    map.type = isDigital == true ? "digital" : "physical" // library marker kkossev.tuyaAlarmLib, line 592
-    map.descriptionText = "${map.name} is ${map.value}" // library marker kkossev.tuyaAlarmLib, line 593
-    if (((device.currentValue("volume") ?: 0 ) as int) != (volume as int)) { // library marker kkossev.tuyaAlarmLib, line 594
-        if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"} // library marker kkossev.tuyaAlarmLib, line 595
-    } // library marker kkossev.tuyaAlarmLib, line 596
-    sendEvent(map) // library marker kkossev.tuyaAlarmLib, line 597
-} // library marker kkossev.tuyaAlarmLib, line 598
-
-def sendAlarmEvent( mode, isDigital=false ) { // library marker kkossev.tuyaAlarmLib, line 600
-    def map = [:]  // library marker kkossev.tuyaAlarmLib, line 601
-    map.name = "alarm" // library marker kkossev.tuyaAlarmLib, line 602
-    map.value = mode // library marker kkossev.tuyaAlarmLib, line 603
-    //map.unit = "Hz" // library marker kkossev.tuyaAlarmLib, line 604
-    map.type = isDigital == true ? "digital" : "physical" // library marker kkossev.tuyaAlarmLib, line 605
-    map.descriptionText = "${map.name} is ${map.value}" // library marker kkossev.tuyaAlarmLib, line 606
-    if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"} // library marker kkossev.tuyaAlarmLib, line 607
-    sendEvent(map) // library marker kkossev.tuyaAlarmLib, line 608
-    sendEvent(name: "switch", value: mode=="off"?"off":"on", descriptionText: map.descriptionText, type:"digital")        // library marker kkossev.tuyaAlarmLib, line 609
-} // library marker kkossev.tuyaAlarmLib, line 610
-
-// TODO - use the main code! // library marker kkossev.tuyaAlarmLib, line 612
-def sendTemperatureEvent( temperature, isDigital=false ) { // library marker kkossev.tuyaAlarmLib, line 613
-    def map = [:] // library marker kkossev.tuyaAlarmLib, line 614
-    map.name = "temperature" // library marker kkossev.tuyaAlarmLib, line 615
-    def Scale = location.temperatureScale // library marker kkossev.tuyaAlarmLib, line 616
-    if (Scale == "F") { // library marker kkossev.tuyaAlarmLib, line 617
-        temperature = (temperature * 1.8) + 32 // library marker kkossev.tuyaAlarmLib, line 618
-        map.unit = "\u00B0"+"F" // library marker kkossev.tuyaAlarmLib, line 619
-    } // library marker kkossev.tuyaAlarmLib, line 620
-    else { // library marker kkossev.tuyaAlarmLib, line 621
-        map.unit = "\u00B0"+"C" // library marker kkossev.tuyaAlarmLib, line 622
-    } // library marker kkossev.tuyaAlarmLib, line 623
-    def tempCorrected = temperature // library marker kkossev.tuyaAlarmLib, line 624
-    map.value  =  Math.round((tempCorrected - 0.05) * 10) / 10 // library marker kkossev.tuyaAlarmLib, line 625
-    map.type = isDigital == true ? "digital" : "physical" // library marker kkossev.tuyaAlarmLib, line 626
-    map.descriptionText = "${map.name} is ${tempCorrected} ${map.unit}" // library marker kkossev.tuyaAlarmLib, line 627
-    if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText}"} // library marker kkossev.tuyaAlarmLib, line 628
-    sendEvent(map) // library marker kkossev.tuyaAlarmLib, line 629
-} // library marker kkossev.tuyaAlarmLib, line 630
-
-// TODO - use the main code! // library marker kkossev.tuyaAlarmLib, line 632
-def sendHumidityEvent( humidity, isDigital=false ) { // library marker kkossev.tuyaAlarmLib, line 633
-    def map = [:] // library marker kkossev.tuyaAlarmLib, line 634
-    def humidityAsDouble = safeToDouble(humidity) +safeToDouble(settings?.humidityOffset) // library marker kkossev.tuyaAlarmLib, line 635
-    humidityAsDouble = humidityAsDouble < 0.0 ? 0.0 : humidityAsDouble > 100.0 ? 100.0 : humidityAsDouble // library marker kkossev.tuyaAlarmLib, line 636
-    map.value = Math.round(humidityAsDouble) // library marker kkossev.tuyaAlarmLib, line 637
-    map.name = "humidity" // library marker kkossev.tuyaAlarmLib, line 638
-    map.unit = "% RH" // library marker kkossev.tuyaAlarmLib, line 639
-    map.type = isDigital == true ? "digital" : "physical" // library marker kkossev.tuyaAlarmLib, line 640
-    map.isStateChange = true // library marker kkossev.tuyaAlarmLib, line 641
-    map.descriptionText = "${map.name} is ${humidityAsDouble.round(1)} ${map.unit}" // library marker kkossev.tuyaAlarmLib, line 642
-    if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText}"} // library marker kkossev.tuyaAlarmLib, line 643
-    sendEvent(map) // library marker kkossev.tuyaAlarmLib, line 644
-} // library marker kkossev.tuyaAlarmLib, line 645
+            case 0x65 : // Neo Power Mode  ['battery_full', 'battery_high', 'battery_medium', 'battery_low', 'usb'] // library marker kkossev.tuyaAlarmLib, line 239
+                if (settings?.logEnable) logInfo "Neo Power Mode is ${fncmd}" // library marker kkossev.tuyaAlarmLib, line 240
+                break // library marker kkossev.tuyaAlarmLib, line 241
+            case 0x69 : // Neo Temperature  ( x10 ) // library marker kkossev.tuyaAlarmLib, line 242
+                if (settings?.logEnable) logInfo "Neo Temperature is ${fncmd/10.0} C (${fncmd})" // library marker kkossev.tuyaAlarmLib, line 243
+                sendTemperatureEvent( fncmd/10.0 ) // library marker kkossev.tuyaAlarmLib, line 244
+                break // library marker kkossev.tuyaAlarmLib, line 245
+            case 0x6A : // Neo Humidity Level (x10 ) // library marker kkossev.tuyaAlarmLib, line 246
+                if (settings?.logEnable) logInfo "Neo Humidity Level is ${fncmd/10.0} %RH (${fncmd})" // library marker kkossev.tuyaAlarmLib, line 247
+                sendHumidityEvent( fncmd/10.0 ) // library marker kkossev.tuyaAlarmLib, line 248
+                break // library marker kkossev.tuyaAlarmLib, line 249
+            case 0x6B : // Neo Min Alarm Temperature -20 .. 80 // library marker kkossev.tuyaAlarmLib, line 250
+                if (settings?.logEnable) logInfo "Neo Min Alarm Temperature is ${fncmd} C" // library marker kkossev.tuyaAlarmLib, line 251
+                break // library marker kkossev.tuyaAlarmLib, line 252
+            case 0x6C : // Neo Max Alarm Temperature -20 .. 80 // library marker kkossev.tuyaAlarmLib, line 253
+                if (settings?.logEnable) logInfo "Neo Max Alarm Temperature is ${fncmd} C" // library marker kkossev.tuyaAlarmLib, line 254
+                break // library marker kkossev.tuyaAlarmLib, line 255
+            case 0x6D : // Neo Min Alarm Humidity 1..100 // library marker kkossev.tuyaAlarmLib, line 256
+                if (settings?.logEnable) logInfo "Neo Min Alarm Humidity is ${fncmd} %RH" // library marker kkossev.tuyaAlarmLib, line 257
+                break // library marker kkossev.tuyaAlarmLib, line 258
+            case 0x6E : // Neo Max Alarm Humidity 1..100 // library marker kkossev.tuyaAlarmLib, line 259
+                if (settings?.logEnable) logInfo "Neo Max Alarm Humidity is ${fncmd} %RH" // library marker kkossev.tuyaAlarmLib, line 260
+                break // library marker kkossev.tuyaAlarmLib, line 261
+            case 0x70 : // Neo Temperature Unit (F 0x00, C 0x01) // library marker kkossev.tuyaAlarmLib, line 262
+                if (settings?.logEnable) logInfo "Neo Temperature Unit is ${temperatureScaleOptions[safeToInt(fncmd).toString()]} (${fncmd})" // library marker kkossev.tuyaAlarmLib, line 263
+                break // library marker kkossev.tuyaAlarmLib, line 264
+            case 0x71 : // Neo Alarm by Temperature status // library marker kkossev.tuyaAlarmLib, line 265
+                if (settings?.logEnable) logInfo "Neo Alarm by Temperature status is ${disabledEnabledOptions[safeToInt(fncmd).toString()]} (${fncmd})" // library marker kkossev.tuyaAlarmLib, line 266
+                break // library marker kkossev.tuyaAlarmLib, line 267
+            case 0x72 : // Neo Alarm by Humidity status // library marker kkossev.tuyaAlarmLib, line 268
+                if (settings?.logEnable) logInfo "Neo Alarm by Humidity status is ${disabledEnabledOptions[safeToInt(fncmd).toString()]} (${fncmd})" // library marker kkossev.tuyaAlarmLib, line 269
+                break // library marker kkossev.tuyaAlarmLib, line 270
+            case 0x73 : // Neo ??? // library marker kkossev.tuyaAlarmLib, line 271
+                if (settings?.logEnable) logInfo "Neo unknown parameter (x073) is ${fncmd}" // library marker kkossev.tuyaAlarmLib, line 272
+                break // library marker kkossev.tuyaAlarmLib, line 273
+            default : // library marker kkossev.tuyaAlarmLib, line 274
+                logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.tuyaAlarmLib, line 275
+                break // library marker kkossev.tuyaAlarmLib, line 276
+        } // library marker kkossev.tuyaAlarmLib, line 277
+} // library marker kkossev.tuyaAlarmLib, line 278
 
 
-void setMelody( alarmType, melodyNumber ) { // library marker kkossev.tuyaAlarmLib, line 648
-    int index = safeToInt( melodyNumber ) // library marker kkossev.tuyaAlarmLib, line 649
-    if (index < 1 || index> TUYA_MAX_MELODIES) { // library marker kkossev.tuyaAlarmLib, line 650
-        logWarn "melody number must be between 1 and ${TUYA_MAX_MELODIES}" // library marker kkossev.tuyaAlarmLib, line 651
-        return // library marker kkossev.tuyaAlarmLib, line 652
-    } // library marker kkossev.tuyaAlarmLib, line 653
-    index = index - 1 // library marker kkossev.tuyaAlarmLib, line 654
-    if (alarmType == 'alarm') { // library marker kkossev.tuyaAlarmLib, line 655
-        device.updateSetting("alarmMelody", [value:melodiesOptions[index], type:"enum"]) // library marker kkossev.tuyaAlarmLib, line 656
-        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(index, 2))) // library marker kkossev.tuyaAlarmLib, line 657
-    } // library marker kkossev.tuyaAlarmLib, line 658
-    else if (alarmType == 'chime') { // library marker kkossev.tuyaAlarmLib, line 659
-        device.updateSetting("playSoundMelody", [value:melodiesOptions[index], type:"enum"]) // library marker kkossev.tuyaAlarmLib, line 660
-        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(index, 2))) // library marker kkossev.tuyaAlarmLib, line 661
-    } // library marker kkossev.tuyaAlarmLib, line 662
-    else { // library marker kkossev.tuyaAlarmLib, line 663
-        logWarn "alarmType must be one of ${soundTypeOptions}" // library marker kkossev.tuyaAlarmLib, line 664
-        return // library marker kkossev.tuyaAlarmLib, line 665
-    }     // library marker kkossev.tuyaAlarmLib, line 666
-    logDebug "setMelody ${alarmType} ${melodiesOptions[index]} (${index})" // library marker kkossev.tuyaAlarmLib, line 667
-} // library marker kkossev.tuyaAlarmLib, line 668
+private wakeUpTuya() { // library marker kkossev.tuyaAlarmLib, line 281
+    logDebug "wakeUpTuya()" // library marker kkossev.tuyaAlarmLib, line 282
+    ping() // library marker kkossev.tuyaAlarmLib, line 283
+    //sendZigbeeCommands(zigbee.readAttribute(0x0000, 0x0005, [:], delay=50) ) // library marker kkossev.tuyaAlarmLib, line 284
+} // library marker kkossev.tuyaAlarmLib, line 285
 
-void setDuration( alarmType, alarmLength) { // library marker kkossev.tuyaAlarmLib, line 670
-    int duration = safeToInt( alarmLength ) // library marker kkossev.tuyaAlarmLib, line 671
-    if (duration > TUYA_MAX_DURATION) duration = TUYA_MAX_DURATION // library marker kkossev.tuyaAlarmLib, line 672
-    if (duration < 1 ) duration = 1 // library marker kkossev.tuyaAlarmLib, line 673
-    logDebug "setAlarmDuration ${duration}" // library marker kkossev.tuyaAlarmLib, line 674
-    if (alarmType == 'alarm') { // library marker kkossev.tuyaAlarmLib, line 675
-        device.updateSetting("alarmSoundDuration", [value:duration, type:"number"]) // library marker kkossev.tuyaAlarmLib, line 676
-        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8))) // library marker kkossev.tuyaAlarmLib, line 677
-    } // library marker kkossev.tuyaAlarmLib, line 678
-    else if (alarmType == 'chime') { // library marker kkossev.tuyaAlarmLib, line 679
-        device.updateSetting("playSoundDuration", [value:duration, type:"number"]) // library marker kkossev.tuyaAlarmLib, line 680
-        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8))) // library marker kkossev.tuyaAlarmLib, line 681
-    } // library marker kkossev.tuyaAlarmLib, line 682
-    else { // library marker kkossev.tuyaAlarmLib, line 683
-        logWarn "alarmType must be one of ${soundTypeOptions}" // library marker kkossev.tuyaAlarmLib, line 684
-    } // library marker kkossev.tuyaAlarmLib, line 685
-} // library marker kkossev.tuyaAlarmLib, line 686
+private combinedTuyaCommands(String cmds) { // library marker kkossev.tuyaAlarmLib, line 287
+    if (state.stats != null) { state.stats['txCtr'] = (state.stats['txCtr'] ?: 0) + 1 } else { state.stats=[:] } // library marker kkossev.tuyaAlarmLib, line 288
+    if (state.lastTx != null) { state.lastTx['cmdTime'] = now() } else { state.lastTx = [:] } // library marker kkossev.tuyaAlarmLib, line 289
+    return zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay=200, PACKET_ID + cmds )  // library marker kkossev.tuyaAlarmLib, line 290
+} // library marker kkossev.tuyaAlarmLib, line 291
 
-void setVolume( volumeType, volumeName) { // library marker kkossev.tuyaAlarmLib, line 688
-    if (!(volumeType in volumeTypeOptions)) { // library marker kkossev.tuyaAlarmLib, line 689
-        logWarn "setVolume not supported type ${volumeType}, must be one of ${volumeTypeOptions}" // library marker kkossev.tuyaAlarmLib, line 690
-        return // library marker kkossev.tuyaAlarmLib, line 691
-    } // library marker kkossev.tuyaAlarmLib, line 692
-    if (!(volumeName in volumeNameOptions)) { // library marker kkossev.tuyaAlarmLib, line 693
-        logWarn "setVolume not supported type ${volumeType}, must be one of ${volumeNameOptions}" // library marker kkossev.tuyaAlarmLib, line 694
-        return // library marker kkossev.tuyaAlarmLib, line 695
-    } // library marker kkossev.tuyaAlarmLib, line 696
-    def volumePct = volumeMapping[volumeName].find{it.key=='volume'}.value // library marker kkossev.tuyaAlarmLib, line 697
-    def tuyaValue = volumeMapping[volumeName].find{it.key=='tuya'}.value // library marker kkossev.tuyaAlarmLib, line 698
-    //log.trace "volumeType=${volumeType} volumeName=${volumeName} volumePct=${volumePct}, tuyaValue=${tuyaValue} " // library marker kkossev.tuyaAlarmLib, line 699
-    switch (volumeName) { // library marker kkossev.tuyaAlarmLib, line 700
-        case "muted" : // library marker kkossev.tuyaAlarmLib, line 701
-            mute() // library marker kkossev.tuyaAlarmLib, line 702
-            return // library marker kkossev.tuyaAlarmLib, line 703
-        case "low" : // library marker kkossev.tuyaAlarmLib, line 704
-        case "medium" : // library marker kkossev.tuyaAlarmLib, line 705
-        case "high" : // library marker kkossev.tuyaAlarmLib, line 706
-            sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, zigbee.convertToHexString(tuyaValue as int, 2))) // library marker kkossev.tuyaAlarmLib, line 707
-            break // library marker kkossev.tuyaAlarmLib, line 708
-        default : // library marker kkossev.tuyaAlarmLib, line 709
-            logWarn "setVolume not supported parameter ${volume}" // library marker kkossev.tuyaAlarmLib, line 710
-            return // library marker kkossev.tuyaAlarmLib, line 711
-    } // library marker kkossev.tuyaAlarmLib, line 712
-    unmute() // library marker kkossev.tuyaAlarmLib, line 713
-    logDebug "setVolume ${volumeType} ${volumeName} ${volumePct}% (Tuya:${tuyaValue})" // library marker kkossev.tuyaAlarmLib, line 714
-} // library marker kkossev.tuyaAlarmLib, line 715
+private appendTuyaCommand(Integer dp, String dp_type, Integer fncmd) { // library marker kkossev.tuyaAlarmLib, line 293
+    Integer fncmdLen =  dp_type== DP_TYPE_VALUE? 8 : 2 // library marker kkossev.tuyaAlarmLib, line 294
+    String cmds = zigbee.convertToHexString(dp, 2) + dp_type + zigbee.convertToHexString((int)(fncmdLen/2), 4) + zigbee.convertToHexString(fncmd, fncmdLen)  // library marker kkossev.tuyaAlarmLib, line 295
+    //logDebug "appendTuyaCommand = ${cmds}" // library marker kkossev.tuyaAlarmLib, line 296
+    return cmds // library marker kkossev.tuyaAlarmLib, line 297
+} // library marker kkossev.tuyaAlarmLib, line 298
+
+void sendSimpleTuyaCommand(Integer command, String payload) { // library marker kkossev.tuyaAlarmLib, line 300
+  Random rnd = new Random() // library marker kkossev.tuyaAlarmLib, line 301
+  String fullPayload = "00${HexUtils.integerToHexString(rnd.nextInt(255),1)}" + payload // library marker kkossev.tuyaAlarmLib, line 302
+  sendSimpleZigbeeCommands(zigbeeCommand(0x01, 0xEF00, command, 101, fullPayload)) // library marker kkossev.tuyaAlarmLib, line 303
+  logDebug "Payload sent: ${fullPayload}" // library marker kkossev.tuyaAlarmLib, line 304
+} // library marker kkossev.tuyaAlarmLib, line 305
+
+void sendSimpleZigbeeCommands(ArrayList<String> cmd) { // library marker kkossev.tuyaAlarmLib, line 307
+    logDebug "sendZigbeeCommands(cmd=${cmd})" // library marker kkossev.tuyaAlarmLib, line 308
+    hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction() // library marker kkossev.tuyaAlarmLib, line 309
+    cmd.each { // library marker kkossev.tuyaAlarmLib, line 310
+            allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) // library marker kkossev.tuyaAlarmLib, line 311
+    } // library marker kkossev.tuyaAlarmLib, line 312
+    sendHubCommand(allActions) // library marker kkossev.tuyaAlarmLib, line 313
+} // library marker kkossev.tuyaAlarmLib, line 314
+
+ArrayList<String> zigbeeCommand(Integer cluster, Integer command, Map additionalParams, int delay = 201, String... payload) { // library marker kkossev.tuyaAlarmLib, line 316
+    ArrayList<String> cmd = zigbee.command(cluster, command, additionalParams, delay, payload) // library marker kkossev.tuyaAlarmLib, line 317
+    cmd[0] = cmd[0].replace('0xnull', '0x01') // library marker kkossev.tuyaAlarmLib, line 318
+
+    return cmd // library marker kkossev.tuyaAlarmLib, line 320
+} // library marker kkossev.tuyaAlarmLib, line 321
+
+String integerToHexString(BigDecimal value, Integer minBytes, boolean reverse=false) { // library marker kkossev.tuyaAlarmLib, line 323
+    return integerToHexString(value.intValue(), minBytes, reverse=reverse) // library marker kkossev.tuyaAlarmLib, line 324
+} // library marker kkossev.tuyaAlarmLib, line 325
+
+ArrayList<String> zigbeeCommand(Integer endpoint, Integer cluster, Integer command, int delay = 203, String... payload) { // library marker kkossev.tuyaAlarmLib, line 327
+    zigbeeCommand(endpoint, cluster, command, [:], delay, payload) // library marker kkossev.tuyaAlarmLib, line 328
+} // library marker kkossev.tuyaAlarmLib, line 329
+
+ArrayList<String> zigbeeCommand(Integer endpoint, Integer cluster, Integer command, Map additionalParams, int delay = 204, String... payload) { // library marker kkossev.tuyaAlarmLib, line 331
+    String mfgCode = "" // library marker kkossev.tuyaAlarmLib, line 332
+    if(additionalParams.containsKey("mfgCode")) { // library marker kkossev.tuyaAlarmLib, line 333
+        mfgCode = " {${HexUtils.integerToHexString(HexUtils.hexStringToInt(additionalParams.get("mfgCode")), 2)}}" // library marker kkossev.tuyaAlarmLib, line 334
+    } // library marker kkossev.tuyaAlarmLib, line 335
+    String finalPayload = payload != null && payload != [] ? payload[0] : "" // library marker kkossev.tuyaAlarmLib, line 336
+    String cmdArgs = "0x${device.deviceNetworkId} 0x${HexUtils.integerToHexString(endpoint, 1)} 0x${HexUtils.integerToHexString(cluster, 2)} " +  // library marker kkossev.tuyaAlarmLib, line 337
+                       "0x${HexUtils.integerToHexString(command, 1)} " +  // library marker kkossev.tuyaAlarmLib, line 338
+                       "{$finalPayload}" +  // library marker kkossev.tuyaAlarmLib, line 339
+                       "$mfgCode" // library marker kkossev.tuyaAlarmLib, line 340
+    ArrayList<String> cmd = ["he cmd $cmdArgs", "delay $delay"] // library marker kkossev.tuyaAlarmLib, line 341
+    return cmd // library marker kkossev.tuyaAlarmLib, line 342
+} // library marker kkossev.tuyaAlarmLib, line 343
+
+String integerToHexString(Integer value, Integer minBytes, boolean reverse=false) { // library marker kkossev.tuyaAlarmLib, line 345
+    if(reverse == true) { // library marker kkossev.tuyaAlarmLib, line 346
+        return HexUtils.integerToHexString(value, minBytes).split("(?<=\\G..)").reverse().join() // library marker kkossev.tuyaAlarmLib, line 347
+    } else { // library marker kkossev.tuyaAlarmLib, line 348
+        return HexUtils.integerToHexString(value, minBytes) // library marker kkossev.tuyaAlarmLib, line 349
+    } // library marker kkossev.tuyaAlarmLib, line 350
+
+} // library marker kkossev.tuyaAlarmLib, line 352
+
+def offAlarm() { // library marker kkossev.tuyaAlarmLib, line 354
+    sendTuyaAlarm("off") // library marker kkossev.tuyaAlarmLib, line 355
+} // library marker kkossev.tuyaAlarmLib, line 356
+
+def onAlarm() { // library marker kkossev.tuyaAlarmLib, line 358
+    sendTuyaAlarm("on") // library marker kkossev.tuyaAlarmLib, line 359
+} // library marker kkossev.tuyaAlarmLib, line 360
+
+def both() { // library marker kkossev.tuyaAlarmLib, line 362
+    sendTuyaAlarm("both") // library marker kkossev.tuyaAlarmLib, line 363
+} // library marker kkossev.tuyaAlarmLib, line 364
+
+def strobe() { // library marker kkossev.tuyaAlarmLib, line 366
+    sendTuyaAlarm("strobe") // library marker kkossev.tuyaAlarmLib, line 367
+} // library marker kkossev.tuyaAlarmLib, line 368
+
+def siren() { // library marker kkossev.tuyaAlarmLib, line 370
+    sendTuyaAlarm( "siren") // library marker kkossev.tuyaAlarmLib, line 371
+} // library marker kkossev.tuyaAlarmLib, line 372
+
+def sendTuyaAlarm( commandName ) { // library marker kkossev.tuyaAlarmLib, line 374
+    logDebug "swithing alarm ${commandName} (presetBeepAndChimeSettings = ${settings?.presetBeepAndChimeSettings})" // library marker kkossev.tuyaAlarmLib, line 375
+    String cmds = "" // library marker kkossev.tuyaAlarmLib, line 376
+    state.lastTx["lastCommand"] = commandName // library marker kkossev.tuyaAlarmLib, line 377
+    def mode = settings?.presetBeepAndChimeSettings ?: "fast" // library marker kkossev.tuyaAlarmLib, line 378
+    switch (mode) { // library marker kkossev.tuyaAlarmLib, line 379
+        case "none" : // library marker kkossev.tuyaAlarmLib, line 380
+            if (commandName != "off") { // library marker kkossev.tuyaAlarmLib, line 381
+                sendSimpleTuyaCommand(0x00, isNeo() ? "6801000101" : "0D01000101") // library marker kkossev.tuyaAlarmLib, line 382
+            } // library marker kkossev.tuyaAlarmLib, line 383
+            else { // library marker kkossev.tuyaAlarmLib, line 384
+                sendSimpleTuyaCommand(0x00, isNeo() ? "6801000100" : "0D01000100") // library marker kkossev.tuyaAlarmLib, line 385
+            } // library marker kkossev.tuyaAlarmLib, line 386
+            break // library marker kkossev.tuyaAlarmLib, line 387
+        case "fast" : // library marker kkossev.tuyaAlarmLib, line 388
+            wakeUpTuya() // library marker kkossev.tuyaAlarmLib, line 389
+            if (commandName != "off") { // library marker kkossev.tuyaAlarmLib, line 390
+                // volume // library marker kkossev.tuyaAlarmLib, line 391
+                def volumeName = settings?.alarmSoundVolume ?: 'high' // library marker kkossev.tuyaAlarmLib, line 392
+                def volumeTuya = volumeNameOptions.indexOf(volumeName) // library marker kkossev.tuyaAlarmLib, line 393
+                if (volumeTuya >= 0 && volumeTuya <=2) { // library marker kkossev.tuyaAlarmLib, line 394
+                    cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, volumeTuya as int )  // library marker kkossev.tuyaAlarmLib, line 395
+                }  // library marker kkossev.tuyaAlarmLib, line 396
+                // duration // library marker kkossev.tuyaAlarmLib, line 397
+                def durationTuya = safeToInt( settings?.alarmSoundDuration ) // library marker kkossev.tuyaAlarmLib, line 398
+                if (durationTuya >=1 && durationTuya <= TUYA_MAX_DURATION) { // library marker kkossev.tuyaAlarmLib, line 399
+                    cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, durationTuya as int )  // library marker kkossev.tuyaAlarmLib, line 400
+                } // library marker kkossev.tuyaAlarmLib, line 401
+                // melody // library marker kkossev.tuyaAlarmLib, line 402
+                def melodyName = settings?.alarmMelody ?: '12=Alarm Siren' // library marker kkossev.tuyaAlarmLib, line 403
+                def melodyTuya = melodiesOptions.indexOf(melodyName) // library marker kkossev.tuyaAlarmLib, line 404
+                if (melodyTuya >=0 && melodyTuya <= TUYA_MAX_MELODIES-1) { // library marker kkossev.tuyaAlarmLib, line 405
+                    cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, melodyTuya as int)  // library marker kkossev.tuyaAlarmLib, line 406
+                } // library marker kkossev.tuyaAlarmLib, line 407
+                // play it // library marker kkossev.tuyaAlarmLib, line 408
+                unschedule(restoreDefaultSettings) // library marker kkossev.tuyaAlarmLib, line 409
+                cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 )  // library marker kkossev.tuyaAlarmLib, line 410
+                sendZigbeeCommands( combinedTuyaCommands(cmds) )     // library marker kkossev.tuyaAlarmLib, line 411
+            } // library marker kkossev.tuyaAlarmLib, line 412
+            else { // library marker kkossev.tuyaAlarmLib, line 413
+                unschedule(restoreDefaultSettings) // library marker kkossev.tuyaAlarmLib, line 414
+                sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "00"))     // library marker kkossev.tuyaAlarmLib, line 415
+            } // library marker kkossev.tuyaAlarmLib, line 416
+            break // library marker kkossev.tuyaAlarmLib, line 417
+        case "slow" : // library marker kkossev.tuyaAlarmLib, line 418
+            logWarn "NOT IMPLEMENTED!" // library marker kkossev.tuyaAlarmLib, line 419
+            break // library marker kkossev.tuyaAlarmLib, line 420
+    } // library marker kkossev.tuyaAlarmLib, line 421
+
+} // library marker kkossev.tuyaAlarmLib, line 423
+
+// capability "Tone" // library marker kkossev.tuyaAlarmLib, line 425
+def beep() { // library marker kkossev.tuyaAlarmLib, line 426
+    String cmds = "" // library marker kkossev.tuyaAlarmLib, line 427
+    state.lastTx["lastCommand"] = "beep"     // library marker kkossev.tuyaAlarmLib, line 428
+    logDebug "sending beep() beepVolume = ${settings?.beepVolume}" // library marker kkossev.tuyaAlarmLib, line 429
+
+    if (settings?.presetBeepAndChimeSettings == "none") { // library marker kkossev.tuyaAlarmLib, line 431
+        sendSimpleTuyaCommand(0x00, isNeo() ? "6801000101" : "0D01000101") // just turn the siren on!  // TODO! // library marker kkossev.tuyaAlarmLib, line 432
+    } // library marker kkossev.tuyaAlarmLib, line 433
+    else { // library marker kkossev.tuyaAlarmLib, line 434
+        wakeUpTuya() // library marker kkossev.tuyaAlarmLib, line 435
+        Integer volumeTuya; Integer volumePct // library marker kkossev.tuyaAlarmLib, line 436
+        (volumeTuya, volumePct) = findVolumeByName(settings?.beepVolume ) // library marker kkossev.tuyaAlarmLib, line 437
+        if (volumeTuya >= 0 && volumeTuya <=2) { // library marker kkossev.tuyaAlarmLib, line 438
+            cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, volumeTuya as int)  // library marker kkossev.tuyaAlarmLib, line 439
+        } // library marker kkossev.tuyaAlarmLib, line 440
+        else { // library marker kkossev.tuyaAlarmLib, line 441
+            logWarn "volumeTuya <=2 is ${volumeTuya}, added cmds=${cmds} " // library marker kkossev.tuyaAlarmLib, line 442
+        } // library marker kkossev.tuyaAlarmLib, line 443
+        cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, 1 )  // library marker kkossev.tuyaAlarmLib, line 444
+        cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, 2 )  // library marker kkossev.tuyaAlarmLib, line 445
+        unschedule(restoreDefaultSettings) // library marker kkossev.tuyaAlarmLib, line 446
+        cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) // library marker kkossev.tuyaAlarmLib, line 447
+        sendZigbeeCommands( combinedTuyaCommands(cmds) ) // library marker kkossev.tuyaAlarmLib, line 448
+    } // library marker kkossev.tuyaAlarmLib, line 449
+} // library marker kkossev.tuyaAlarmLib, line 450
+
+def restoreDefaultSettings() { // library marker kkossev.tuyaAlarmLib, line 452
+    wakeUpTuya() // library marker kkossev.tuyaAlarmLib, line 453
+    String cmds = "" // library marker kkossev.tuyaAlarmLib, line 454
+    // restore alarm volume // library marker kkossev.tuyaAlarmLib, line 455
+    def volumeName = settings?.alarmSoundVolume ?: 'high' // library marker kkossev.tuyaAlarmLib, line 456
+    def volumeTuya = volumeNameOptions.indexOf(volumeName) // library marker kkossev.tuyaAlarmLib, line 457
+    if (volumeTuya >= 0 && volumeTuya <=2) { // library marker kkossev.tuyaAlarmLib, line 458
+        cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, volumeTuya as int )  // library marker kkossev.tuyaAlarmLib, line 459
+    }     // library marker kkossev.tuyaAlarmLib, line 460
+    // restore alarm duration // library marker kkossev.tuyaAlarmLib, line 461
+    def durationTuya = safeToInt(settings?.alarmSoundDuration, TUYA_MAX_DURATION) // library marker kkossev.tuyaAlarmLib, line 462
+    if (durationTuya >=1 && durationTuya <= TUYA_MAX_DURATION) { // library marker kkossev.tuyaAlarmLib, line 463
+        cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, durationTuya as int )  // library marker kkossev.tuyaAlarmLib, line 464
+    } // library marker kkossev.tuyaAlarmLib, line 465
+    // restore alarm melody // library marker kkossev.tuyaAlarmLib, line 466
+    def melodyName = settings?.alarmMelody ?: '12=Alarm Siren' // library marker kkossev.tuyaAlarmLib, line 467
+    def melodyTuya = melodiesOptions.indexOf(melodyName) // library marker kkossev.tuyaAlarmLib, line 468
+    if (melodyTuya >=0 && melodyTuya <= TUYA_MAX_MELODIES-1) { // library marker kkossev.tuyaAlarmLib, line 469
+        cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, melodyTuya as int)  // library marker kkossev.tuyaAlarmLib, line 470
+    } // library marker kkossev.tuyaAlarmLib, line 471
+    logDebug "restoring default settings volume=${volumeName}, duration=${durationTuya}, melody=${melodyName}" // library marker kkossev.tuyaAlarmLib, line 472
+    sendZigbeeCommands( combinedTuyaCommands(cmds) )     // library marker kkossev.tuyaAlarmLib, line 473
+} // library marker kkossev.tuyaAlarmLib, line 474
+
+//capability "AudioVolume" //Attributes: mute - ENUM ["unmuted", "muted"] volume - NUMBER, unit:%; Commands: mute() setVolume(volumelevel) volumelevel required (NUMBER) - Volume level (0 to 100) unmute() volumeDown() volumeUp() // library marker kkossev.tuyaAlarmLib, line 476
+def mute() { // library marker kkossev.tuyaAlarmLib, line 477
+    sendEvent(name: "mute", value: "muted", type: "digital")        // library marker kkossev.tuyaAlarmLib, line 478
+} // library marker kkossev.tuyaAlarmLib, line 479
+
+def unmute() { // library marker kkossev.tuyaAlarmLib, line 481
+    sendEvent(name: "mute", value: "unmuted", type: "digital")        // library marker kkossev.tuyaAlarmLib, line 482
+} // library marker kkossev.tuyaAlarmLib, line 483
+
+def getNearestTuyaVolumeLevel( volumelevel ) { // library marker kkossev.tuyaAlarmLib, line 485
+    def nearestlevel = 0 // library marker kkossev.tuyaAlarmLib, line 486
+    if (volumelevel <= 33) nearestlevel = 33 // library marker kkossev.tuyaAlarmLib, line 487
+    else if (volumelevel <= 66) nearestlevel = 66 // library marker kkossev.tuyaAlarmLib, line 488
+    else nearestlevel = 100 // library marker kkossev.tuyaAlarmLib, line 489
+    return nearestlevel // library marker kkossev.tuyaAlarmLib, line 490
+} // library marker kkossev.tuyaAlarmLib, line 491
+
+def setVolumeLevel( volumelevel ) { // library marker kkossev.tuyaAlarmLib, line 493
+    // - Volume level (0 to 100) // library marker kkossev.tuyaAlarmLib, line 494
+    String cmds = "" // library marker kkossev.tuyaAlarmLib, line 495
+    def nearestlevel =  getNearestTuyaVolumeLevel( volumelevel ) // library marker kkossev.tuyaAlarmLib, line 496
+    if      (nearestlevel == 0 && device.currentValue("mute", true) == "unmuted")  mute() // library marker kkossev.tuyaAlarmLib, line 497
+    else if (nearestlevel != 0 && device.currentValue("mute", true) == "muted") unmute()  // library marker kkossev.tuyaAlarmLib, line 498
+    def volumeName // library marker kkossev.tuyaAlarmLib, line 499
+    def volumeTuya // library marker kkossev.tuyaAlarmLib, line 500
+    (volumeName, volumeTuya) =  findVolumeByPct( nearestlevel )  // library marker kkossev.tuyaAlarmLib, line 501
+    logDebug "matched volumelevel=${volumelevel} to nearestLlevel=${nearestlevel} (volumeTuya=${volumeTuya})" // library marker kkossev.tuyaAlarmLib, line 502
+
+    if (settings?.presetBeepAndChimeSettings == "none") { // library marker kkossev.tuyaAlarmLib, line 504
+        switch(volumeName) { // library marker kkossev.tuyaAlarmLib, line 505
+            case "high": // library marker kkossev.tuyaAlarmLib, line 506
+                sendSimpleTuyaCommand(0x00, "0504000102") // library marker kkossev.tuyaAlarmLib, line 507
+                break // library marker kkossev.tuyaAlarmLib, line 508
+            case "medium": // library marker kkossev.tuyaAlarmLib, line 509
+                sendSimpleTuyaCommand(0x00, "0504000101") // library marker kkossev.tuyaAlarmLib, line 510
+                break // library marker kkossev.tuyaAlarmLib, line 511
+            default: // library marker kkossev.tuyaAlarmLib, line 512
+                sendSimpleTuyaCommand(0x00, "0504000100") // library marker kkossev.tuyaAlarmLib, line 513
+                break // library marker kkossev.tuyaAlarmLib, line 514
+          } // library marker kkossev.tuyaAlarmLib, line 515
+    } // library marker kkossev.tuyaAlarmLib, line 516
+    else { // library marker kkossev.tuyaAlarmLib, line 517
+    //state.volume = nearestlevel // library marker kkossev.tuyaAlarmLib, line 518
+        if (safeToInt(volumeTuya) >= 0) { // library marker kkossev.tuyaAlarmLib, line 519
+            cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) )  // library marker kkossev.tuyaAlarmLib, line 520
+        } // library marker kkossev.tuyaAlarmLib, line 521
+        logDebug "setting volume=${volumeName}" // library marker kkossev.tuyaAlarmLib, line 522
+        sendZigbeeCommands( combinedTuyaCommands(cmds) ) // library marker kkossev.tuyaAlarmLib, line 523
+    } // library marker kkossev.tuyaAlarmLib, line 524
+} // library marker kkossev.tuyaAlarmLib, line 525
+
+def volumeDown() { // library marker kkossev.tuyaAlarmLib, line 527
+    setVolumeLevel( (device.currentValue("volume") ?: 0 ) - 34) // library marker kkossev.tuyaAlarmLib, line 528
+} // library marker kkossev.tuyaAlarmLib, line 529
+
+def volumeUp() { // library marker kkossev.tuyaAlarmLib, line 531
+    setVolumeLevel( (device.currentValue("volume") ?: 0 ) + 33) // library marker kkossev.tuyaAlarmLib, line 532
+} // library marker kkossev.tuyaAlarmLib, line 533
+
+def playSound(soundnumberPar=null, volumeLevelPar=null, durationPar=null) { // library marker kkossev.tuyaAlarmLib, line 535
+    logWarn "playSound: soundnumberPar=${soundnumberPar} volumeLevelPar=${volumeLevelPar} durationPar=${durationPar}" // library marker kkossev.tuyaAlarmLib, line 536
+    def soundnumber = safeToInt(soundnumberPar) // library marker kkossev.tuyaAlarmLib, line 537
+    def volumeLevel = safeToInt(volumeLevelPar) // library marker kkossev.tuyaAlarmLib, line 538
+    def duration = safeToInt(durationPar) // library marker kkossev.tuyaAlarmLib, line 539
+    wakeUpTuya() // library marker kkossev.tuyaAlarmLib, line 540
+    String cmds = "" // library marker kkossev.tuyaAlarmLib, line 541
+    def volumeName; def volumeTuya; def volumePct // library marker kkossev.tuyaAlarmLib, line 542
+    if (soundnumber == null || soundnumber <= 0)  {    // use the default melody // library marker kkossev.tuyaAlarmLib, line 543
+        soundnumber = melodiesOptions.indexOf(settings?.playSoundMelody ?: TUYA_DEFAULT_MELODY_NAME ) + 1 // library marker kkossev.tuyaAlarmLib, line 544
+        logWarn "playSound: using the default soundnumber ${soundnumber}" // library marker kkossev.tuyaAlarmLib, line 545
+    } // library marker kkossev.tuyaAlarmLib, line 546
+    int soundNumberIndex = safeToInt(soundnumber) // library marker kkossev.tuyaAlarmLib, line 547
+    soundNumberIndex = soundNumberIndex < 1 ? 1 : soundNumberIndex > TUYA_MAX_MELODIES ? TUYA_MAX_MELODIES : soundNumberIndex;  // library marker kkossev.tuyaAlarmLib, line 548
+    soundNumberIndex -= 1    // Tuya parameter is zero based ! // library marker kkossev.tuyaAlarmLib, line 549
+    // // library marker kkossev.tuyaAlarmLib, line 550
+    if (volumeLevel == null || volumeLevel <= 0) {    // use the default playSoundVolume     // library marker kkossev.tuyaAlarmLib, line 551
+        volumeName = settings?.playSoundVolume ?: TUYA_DEFAULT_VOLUME_NAME // library marker kkossev.tuyaAlarmLib, line 552
+        (volumeTuya, volumePct) = findVolumeByName( volumeName )         // library marker kkossev.tuyaAlarmLib, line 553
+        logWarn "playSound: using default Chime volume ${volumeName} (${volumeTuya})" // library marker kkossev.tuyaAlarmLib, line 554
+    } // library marker kkossev.tuyaAlarmLib, line 555
+    else { // library marker kkossev.tuyaAlarmLib, line 556
+        def nearestVolume = getNearestTuyaVolumeLevel( volumeLevel ) // library marker kkossev.tuyaAlarmLib, line 557
+        (volumeName, volumeTuya) =  findVolumeByPct( nearestVolume )  // library marker kkossev.tuyaAlarmLib, line 558
+    } // library marker kkossev.tuyaAlarmLib, line 559
+    // // library marker kkossev.tuyaAlarmLib, line 560
+    if (duration == null || duration <= 0) { // library marker kkossev.tuyaAlarmLib, line 561
+        duration = settings?.playSoundDuration ?: TUYA_DEFAULT_DURATION as int // library marker kkossev.tuyaAlarmLib, line 562
+        logWarn "playSound: using the default duration ${duration}" // library marker kkossev.tuyaAlarmLib, line 563
+    } // library marker kkossev.tuyaAlarmLib, line 564
+    else { // library marker kkossev.tuyaAlarmLib, line 565
+        duration = duration <1 ? 1 : duration > TUYA_MAX_DURATION ? TUYA_MAX_DURATION : duration as int // library marker kkossev.tuyaAlarmLib, line 566
+    } // library marker kkossev.tuyaAlarmLib, line 567
+    if (volumeTuya < 0) { // library marker kkossev.tuyaAlarmLib, line 568
+        volumeTuya = 1 // medium // library marker kkossev.tuyaAlarmLib, line 569
+        logWarn "playSound: using the default volumeTuya ${volumeTuya}" // library marker kkossev.tuyaAlarmLib, line 570
+    } // library marker kkossev.tuyaAlarmLib, line 571
+    state.lastTx["lastCommand"] = "playSound" // library marker kkossev.tuyaAlarmLib, line 572
+    cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya))  // library marker kkossev.tuyaAlarmLib, line 573
+    cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, safeToInt(duration) )  // library marker kkossev.tuyaAlarmLib, line 574
+    cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, soundNumberIndex)  // library marker kkossev.tuyaAlarmLib, line 575
+    unschedule(restoreDefaultSettings) // library marker kkossev.tuyaAlarmLib, line 576
+    cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) // library marker kkossev.tuyaAlarmLib, line 577
+    logDebug "playSound ${soundnumber} (${melodiesOptions.get(soundNumberIndex)}) index=${soundNumberIndex}, duration=${duration}, volume=${volumeName}(${volumeTuya})" // library marker kkossev.tuyaAlarmLib, line 578
+    sendZigbeeCommands( combinedTuyaCommands(cmds) ) // library marker kkossev.tuyaAlarmLib, line 579
+} // library marker kkossev.tuyaAlarmLib, line 580
+
+def stop() { // library marker kkossev.tuyaAlarmLib, line 582
+    off() // library marker kkossev.tuyaAlarmLib, line 583
+} // library marker kkossev.tuyaAlarmLib, line 584
+
+// capability "MusicPlayer" // library marker kkossev.tuyaAlarmLib, line 586
+def pause() { // library marker kkossev.tuyaAlarmLib, line 587
+} // library marker kkossev.tuyaAlarmLib, line 588
+
+def play() { // library marker kkossev.tuyaAlarmLib, line 590
+} // library marker kkossev.tuyaAlarmLib, line 591
+
+def sendVolumeEvent( volume,  isDigital=false ) { // library marker kkossev.tuyaAlarmLib, line 593
+    def map = [:]  // library marker kkossev.tuyaAlarmLib, line 594
+    map.name = "volume" // library marker kkossev.tuyaAlarmLib, line 595
+    map.value = volume // library marker kkossev.tuyaAlarmLib, line 596
+    map.unit = "%" // library marker kkossev.tuyaAlarmLib, line 597
+    map.type = isDigital == true ? "digital" : "physical" // library marker kkossev.tuyaAlarmLib, line 598
+    map.descriptionText = "${map.name} is ${map.value}" // library marker kkossev.tuyaAlarmLib, line 599
+    if (((device.currentValue("volume") ?: 0 ) as int) != (volume as int)) { // library marker kkossev.tuyaAlarmLib, line 600
+        if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"} // library marker kkossev.tuyaAlarmLib, line 601
+    } // library marker kkossev.tuyaAlarmLib, line 602
+    sendEvent(map) // library marker kkossev.tuyaAlarmLib, line 603
+} // library marker kkossev.tuyaAlarmLib, line 604
+
+def sendAlarmEvent( mode, isDigital=false ) { // library marker kkossev.tuyaAlarmLib, line 606
+    def map = [:]  // library marker kkossev.tuyaAlarmLib, line 607
+    map.name = "alarm" // library marker kkossev.tuyaAlarmLib, line 608
+    map.value = mode // library marker kkossev.tuyaAlarmLib, line 609
+    //map.unit = "Hz" // library marker kkossev.tuyaAlarmLib, line 610
+    map.type = isDigital == true ? "digital" : "physical" // library marker kkossev.tuyaAlarmLib, line 611
+    map.descriptionText = "${map.name} is ${map.value}" // library marker kkossev.tuyaAlarmLib, line 612
+    if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"} // library marker kkossev.tuyaAlarmLib, line 613
+    sendEvent(map) // library marker kkossev.tuyaAlarmLib, line 614
+    sendEvent(name: "switch", value: mode=="off"?"off":"on", descriptionText: map.descriptionText, type:"digital")        // library marker kkossev.tuyaAlarmLib, line 615
+} // library marker kkossev.tuyaAlarmLib, line 616
+
+// TODO - use the main code! // library marker kkossev.tuyaAlarmLib, line 618
+def sendTemperatureEvent( temperature, isDigital=false ) { // library marker kkossev.tuyaAlarmLib, line 619
+    def map = [:] // library marker kkossev.tuyaAlarmLib, line 620
+    map.name = "temperature" // library marker kkossev.tuyaAlarmLib, line 621
+    def Scale = location.temperatureScale // library marker kkossev.tuyaAlarmLib, line 622
+    if (Scale == "F") { // library marker kkossev.tuyaAlarmLib, line 623
+        temperature = (temperature * 1.8) + 32 // library marker kkossev.tuyaAlarmLib, line 624
+        map.unit = "\u00B0"+"F" // library marker kkossev.tuyaAlarmLib, line 625
+    } // library marker kkossev.tuyaAlarmLib, line 626
+    else { // library marker kkossev.tuyaAlarmLib, line 627
+        map.unit = "\u00B0"+"C" // library marker kkossev.tuyaAlarmLib, line 628
+    } // library marker kkossev.tuyaAlarmLib, line 629
+    def tempCorrected = temperature // library marker kkossev.tuyaAlarmLib, line 630
+    map.value  =  Math.round((tempCorrected - 0.05) * 10) / 10 // library marker kkossev.tuyaAlarmLib, line 631
+    map.type = isDigital == true ? "digital" : "physical" // library marker kkossev.tuyaAlarmLib, line 632
+    map.descriptionText = "${map.name} is ${tempCorrected} ${map.unit}" // library marker kkossev.tuyaAlarmLib, line 633
+    if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText}"} // library marker kkossev.tuyaAlarmLib, line 634
+    sendEvent(map) // library marker kkossev.tuyaAlarmLib, line 635
+} // library marker kkossev.tuyaAlarmLib, line 636
+
+// TODO - use the main code! // library marker kkossev.tuyaAlarmLib, line 638
+def sendHumidityEvent( humidity, isDigital=false ) { // library marker kkossev.tuyaAlarmLib, line 639
+    def map = [:] // library marker kkossev.tuyaAlarmLib, line 640
+    def humidityAsDouble = safeToDouble(humidity) +safeToDouble(settings?.humidityOffset) // library marker kkossev.tuyaAlarmLib, line 641
+    humidityAsDouble = humidityAsDouble < 0.0 ? 0.0 : humidityAsDouble > 100.0 ? 100.0 : humidityAsDouble // library marker kkossev.tuyaAlarmLib, line 642
+    map.value = Math.round(humidityAsDouble) // library marker kkossev.tuyaAlarmLib, line 643
+    map.name = "humidity" // library marker kkossev.tuyaAlarmLib, line 644
+    map.unit = "% RH" // library marker kkossev.tuyaAlarmLib, line 645
+    map.type = isDigital == true ? "digital" : "physical" // library marker kkossev.tuyaAlarmLib, line 646
+    map.isStateChange = true // library marker kkossev.tuyaAlarmLib, line 647
+    map.descriptionText = "${map.name} is ${humidityAsDouble.round(1)} ${map.unit}" // library marker kkossev.tuyaAlarmLib, line 648
+    if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText}"} // library marker kkossev.tuyaAlarmLib, line 649
+    sendEvent(map) // library marker kkossev.tuyaAlarmLib, line 650
+} // library marker kkossev.tuyaAlarmLib, line 651
+
+
+void setMelody( alarmType, melodyNumber ) { // library marker kkossev.tuyaAlarmLib, line 654
+    int index = safeToInt( melodyNumber ) // library marker kkossev.tuyaAlarmLib, line 655
+    if (index < 1 || index> TUYA_MAX_MELODIES) { // library marker kkossev.tuyaAlarmLib, line 656
+        logWarn "melody number must be between 1 and ${TUYA_MAX_MELODIES}" // library marker kkossev.tuyaAlarmLib, line 657
+        return // library marker kkossev.tuyaAlarmLib, line 658
+    } // library marker kkossev.tuyaAlarmLib, line 659
+    index = index - 1 // library marker kkossev.tuyaAlarmLib, line 660
+    if (alarmType == 'alarm') { // library marker kkossev.tuyaAlarmLib, line 661
+        device.updateSetting("alarmMelody", [value:melodiesOptions[index], type:"enum"]) // library marker kkossev.tuyaAlarmLib, line 662
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(index, 2))) // library marker kkossev.tuyaAlarmLib, line 663
+    } // library marker kkossev.tuyaAlarmLib, line 664
+    else if (alarmType == 'chime') { // library marker kkossev.tuyaAlarmLib, line 665
+        device.updateSetting("playSoundMelody", [value:melodiesOptions[index], type:"enum"]) // library marker kkossev.tuyaAlarmLib, line 666
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(index, 2))) // library marker kkossev.tuyaAlarmLib, line 667
+    } // library marker kkossev.tuyaAlarmLib, line 668
+    else { // library marker kkossev.tuyaAlarmLib, line 669
+        logWarn "alarmType must be one of ${soundTypeOptions}" // library marker kkossev.tuyaAlarmLib, line 670
+        return // library marker kkossev.tuyaAlarmLib, line 671
+    }     // library marker kkossev.tuyaAlarmLib, line 672
+    logDebug "setMelody ${alarmType} ${melodiesOptions[index]} (${index})" // library marker kkossev.tuyaAlarmLib, line 673
+} // library marker kkossev.tuyaAlarmLib, line 674
+
+void setDuration( alarmType, alarmLength) { // library marker kkossev.tuyaAlarmLib, line 676
+    int duration = safeToInt( alarmLength ) // library marker kkossev.tuyaAlarmLib, line 677
+    if (duration > TUYA_MAX_DURATION) duration = TUYA_MAX_DURATION // library marker kkossev.tuyaAlarmLib, line 678
+    if (duration < 1 ) duration = 1 // library marker kkossev.tuyaAlarmLib, line 679
+    logDebug "setAlarmDuration ${duration}" // library marker kkossev.tuyaAlarmLib, line 680
+    if (alarmType == 'alarm') { // library marker kkossev.tuyaAlarmLib, line 681
+        device.updateSetting("alarmSoundDuration", [value:duration, type:"number"]) // library marker kkossev.tuyaAlarmLib, line 682
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8))) // library marker kkossev.tuyaAlarmLib, line 683
+    } // library marker kkossev.tuyaAlarmLib, line 684
+    else if (alarmType == 'chime') { // library marker kkossev.tuyaAlarmLib, line 685
+        device.updateSetting("playSoundDuration", [value:duration, type:"number"]) // library marker kkossev.tuyaAlarmLib, line 686
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8))) // library marker kkossev.tuyaAlarmLib, line 687
+    } // library marker kkossev.tuyaAlarmLib, line 688
+    else { // library marker kkossev.tuyaAlarmLib, line 689
+        logWarn "alarmType must be one of ${soundTypeOptions}" // library marker kkossev.tuyaAlarmLib, line 690
+    } // library marker kkossev.tuyaAlarmLib, line 691
+} // library marker kkossev.tuyaAlarmLib, line 692
+
+void setVolume( volumeType, volumeName) { // library marker kkossev.tuyaAlarmLib, line 694
+    if (!(volumeType in volumeTypeOptions)) { // library marker kkossev.tuyaAlarmLib, line 695
+        logWarn "setVolume not supported type ${volumeType}, must be one of ${volumeTypeOptions}" // library marker kkossev.tuyaAlarmLib, line 696
+        return // library marker kkossev.tuyaAlarmLib, line 697
+    } // library marker kkossev.tuyaAlarmLib, line 698
+    if (!(volumeName in volumeNameOptions)) { // library marker kkossev.tuyaAlarmLib, line 699
+        logWarn "setVolume not supported type ${volumeType}, must be one of ${volumeNameOptions}" // library marker kkossev.tuyaAlarmLib, line 700
+        return // library marker kkossev.tuyaAlarmLib, line 701
+    } // library marker kkossev.tuyaAlarmLib, line 702
+    def volumePct = volumeMapping[volumeName].find{it.key=='volume'}.value // library marker kkossev.tuyaAlarmLib, line 703
+    def tuyaValue = volumeMapping[volumeName].find{it.key=='tuya'}.value // library marker kkossev.tuyaAlarmLib, line 704
+    //log.trace "volumeType=${volumeType} volumeName=${volumeName} volumePct=${volumePct}, tuyaValue=${tuyaValue} " // library marker kkossev.tuyaAlarmLib, line 705
+    switch (volumeName) { // library marker kkossev.tuyaAlarmLib, line 706
+        case "muted" : // library marker kkossev.tuyaAlarmLib, line 707
+            mute() // library marker kkossev.tuyaAlarmLib, line 708
+            return // library marker kkossev.tuyaAlarmLib, line 709
+        case "low" : // library marker kkossev.tuyaAlarmLib, line 710
+        case "medium" : // library marker kkossev.tuyaAlarmLib, line 711
+        case "high" : // library marker kkossev.tuyaAlarmLib, line 712
+            sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, zigbee.convertToHexString(tuyaValue as int, 2))) // library marker kkossev.tuyaAlarmLib, line 713
+            break // library marker kkossev.tuyaAlarmLib, line 714
+        default : // library marker kkossev.tuyaAlarmLib, line 715
+            logWarn "setVolume not supported parameter ${volume}" // library marker kkossev.tuyaAlarmLib, line 716
+            return // library marker kkossev.tuyaAlarmLib, line 717
+    } // library marker kkossev.tuyaAlarmLib, line 718
+    unmute() // library marker kkossev.tuyaAlarmLib, line 719
+    logDebug "setVolume ${volumeType} ${volumeName} ${volumePct}% (Tuya:${tuyaValue})" // library marker kkossev.tuyaAlarmLib, line 720
+} // library marker kkossev.tuyaAlarmLib, line 721
 
 
 
@@ -4066,83 +4072,83 @@ void setVolume( volumeType, volumeName) { // library marker kkossev.tuyaAlarmLib
 
 
 
-def configureDeviceAlarm() { // library marker kkossev.tuyaAlarmLib, line 726
-    ArrayList<String> cmds = [] // library marker kkossev.tuyaAlarmLib, line 727
-    logDebug 'configureDeviceAlarm() ' // library marker kkossev.tuyaAlarmLib, line 728
-    /* // library marker kkossev.tuyaAlarmLib, line 729
-        // https://forum.phoscon.de/t/aqara-tvoc-zhaairquality-data/1160/21 // library marker kkossev.tuyaAlarmLib, line 730
-        final int tScale = (settings.temperatureScale as Integer) ?: TemperatureScaleOpts.defaultValue // library marker kkossev.tuyaAlarmLib, line 731
-        final int tUnit =  (settings.tVocUnut as Integer) ?: TvocUnitOpts.defaultValue // library marker kkossev.tuyaAlarmLib, line 732
-        logDebug "setting temperatureScale to ${TemperatureScaleOpts.options[tScale]} (${tScale})" // library marker kkossev.tuyaAlarmLib, line 733
-        int cfg = tUnit // library marker kkossev.tuyaAlarmLib, line 734
-        cfg |= (tScale << 4) // library marker kkossev.tuyaAlarmLib, line 735
-        cmds += zigbee.writeAttribute(0xFCC0, 0x0114, DataType.UINT8, cfg, [mfgCode: 0x115F], delay=200) // library marker kkossev.tuyaAlarmLib, line 736
-        cmds += zigbee.readAttribute(0xFCC0, 0x0114, [mfgCode: 0x115F], delay=200)     // library marker kkossev.tuyaAlarmLib, line 737
-*/ // library marker kkossev.tuyaAlarmLib, line 738
-    return cmds // library marker kkossev.tuyaAlarmLib, line 739
-} // library marker kkossev.tuyaAlarmLib, line 740
+def configureDeviceAlarm() { // library marker kkossev.tuyaAlarmLib, line 732
+    ArrayList<String> cmds = [] // library marker kkossev.tuyaAlarmLib, line 733
+    logDebug 'configureDeviceAlarm() ' // library marker kkossev.tuyaAlarmLib, line 734
+    /* // library marker kkossev.tuyaAlarmLib, line 735
+        // https://forum.phoscon.de/t/aqara-tvoc-zhaairquality-data/1160/21 // library marker kkossev.tuyaAlarmLib, line 736
+        final int tScale = (settings.temperatureScale as Integer) ?: TemperatureScaleOpts.defaultValue // library marker kkossev.tuyaAlarmLib, line 737
+        final int tUnit =  (settings.tVocUnut as Integer) ?: TvocUnitOpts.defaultValue // library marker kkossev.tuyaAlarmLib, line 738
+        logDebug "setting temperatureScale to ${TemperatureScaleOpts.options[tScale]} (${tScale})" // library marker kkossev.tuyaAlarmLib, line 739
+        int cfg = tUnit // library marker kkossev.tuyaAlarmLib, line 740
+        cfg |= (tScale << 4) // library marker kkossev.tuyaAlarmLib, line 741
+        cmds += zigbee.writeAttribute(0xFCC0, 0x0114, DataType.UINT8, cfg, [mfgCode: 0x115F], delay=200) // library marker kkossev.tuyaAlarmLib, line 742
+        cmds += zigbee.readAttribute(0xFCC0, 0x0114, [mfgCode: 0x115F], delay=200)     // library marker kkossev.tuyaAlarmLib, line 743
+*/ // library marker kkossev.tuyaAlarmLib, line 744
+    return cmds // library marker kkossev.tuyaAlarmLib, line 745
+} // library marker kkossev.tuyaAlarmLib, line 746
 
 
-def initializeDeviceAlarm() { // library marker kkossev.tuyaAlarmLib, line 743
-    ArrayList<String> cmds = [] // library marker kkossev.tuyaAlarmLib, line 744
-    // nothing to initialize? // library marker kkossev.tuyaAlarmLib, line 745
-    return cmds // library marker kkossev.tuyaAlarmLib, line 746
-} // library marker kkossev.tuyaAlarmLib, line 747
+def initializeDeviceAlarm() { // library marker kkossev.tuyaAlarmLib, line 749
+    ArrayList<String> cmds = [] // library marker kkossev.tuyaAlarmLib, line 750
+    // nothing to initialize? // library marker kkossev.tuyaAlarmLib, line 751
+    return cmds // library marker kkossev.tuyaAlarmLib, line 752
+} // library marker kkossev.tuyaAlarmLib, line 753
 
-void updatedAlarm() { // library marker kkossev.tuyaAlarmLib, line 749
-    if (isVINDSTYRKA()) { // library marker kkossev.tuyaAlarmLib, line 750
-        final int intervalAirQuality = (settings.airQualityIndexCheckInterval as Integer) ?: 0 // library marker kkossev.tuyaAlarmLib, line 751
-        if (intervalAirQuality > 0) { // library marker kkossev.tuyaAlarmLib, line 752
-            logInfo "updatedAirQuality: scheduling Air Quality Index check every ${intervalAirQuality} seconds" // library marker kkossev.tuyaAlarmLib, line 753
-            scheduleAirQualityIndexCheck(intervalAirQuality) // library marker kkossev.tuyaAlarmLib, line 754
-        } // library marker kkossev.tuyaAlarmLib, line 755
-        else { // library marker kkossev.tuyaAlarmLib, line 756
-            unScheduleAirQualityIndexCheck() // library marker kkossev.tuyaAlarmLib, line 757
-            logInfo "updatedAirQuality: Air Quality Index polling is disabled!" // library marker kkossev.tuyaAlarmLib, line 758
-            // 09/02/2023 // library marker kkossev.tuyaAlarmLib, line 759
-            device.deleteCurrentState("airQualityIndex") // library marker kkossev.tuyaAlarmLib, line 760
+void updatedAlarm() { // library marker kkossev.tuyaAlarmLib, line 755
+    if (isVINDSTYRKA()) { // library marker kkossev.tuyaAlarmLib, line 756
+        final int intervalAirQuality = (settings.airQualityIndexCheckInterval as Integer) ?: 0 // library marker kkossev.tuyaAlarmLib, line 757
+        if (intervalAirQuality > 0) { // library marker kkossev.tuyaAlarmLib, line 758
+            logInfo "updatedAirQuality: scheduling Air Quality Index check every ${intervalAirQuality} seconds" // library marker kkossev.tuyaAlarmLib, line 759
+            scheduleAirQualityIndexCheck(intervalAirQuality) // library marker kkossev.tuyaAlarmLib, line 760
         } // library marker kkossev.tuyaAlarmLib, line 761
+        else { // library marker kkossev.tuyaAlarmLib, line 762
+            unScheduleAirQualityIndexCheck() // library marker kkossev.tuyaAlarmLib, line 763
+            logInfo "updatedAirQuality: Air Quality Index polling is disabled!" // library marker kkossev.tuyaAlarmLib, line 764
+            // 09/02/2023 // library marker kkossev.tuyaAlarmLib, line 765
+            device.deleteCurrentState("airQualityIndex") // library marker kkossev.tuyaAlarmLib, line 766
+        } // library marker kkossev.tuyaAlarmLib, line 767
 
-    } // library marker kkossev.tuyaAlarmLib, line 763
-    else { // library marker kkossev.tuyaAlarmLib, line 764
-        logDebug "updatedAirQuality: skipping airQuality polling " // library marker kkossev.tuyaAlarmLib, line 765
-    } // library marker kkossev.tuyaAlarmLib, line 766
-} // library marker kkossev.tuyaAlarmLib, line 767
+    } // library marker kkossev.tuyaAlarmLib, line 769
+    else { // library marker kkossev.tuyaAlarmLib, line 770
+        logDebug "updatedAirQuality: skipping airQuality polling " // library marker kkossev.tuyaAlarmLib, line 771
+    } // library marker kkossev.tuyaAlarmLib, line 772
+} // library marker kkossev.tuyaAlarmLib, line 773
 
-def refreshAlarm() { // library marker kkossev.tuyaAlarmLib, line 769
-    List<String> cmds = [] // library marker kkossev.tuyaAlarmLib, line 770
-    if (isAqaraTVOC()) { // library marker kkossev.tuyaAlarmLib, line 771
-            // TODO - check what is available for VINDSTYRKA // library marker kkossev.tuyaAlarmLib, line 772
-	        cmds += zigbee.readAttribute(0x042a, 0x0000, [:], delay=200)                    // pm2.5    attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value; 3:Tolerance // library marker kkossev.tuyaAlarmLib, line 773
-	        cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay=200)      // tVOC   !! mfcode="0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value; // library marker kkossev.tuyaAlarmLib, line 774
-    } // library marker kkossev.tuyaAlarmLib, line 775
-        else if (false) { // library marker kkossev.tuyaAlarmLib, line 776
-            // TODO - check what is available for Aqara  // library marker kkossev.tuyaAlarmLib, line 777
-        } // library marker kkossev.tuyaAlarmLib, line 778
-        else { // library marker kkossev.tuyaAlarmLib, line 779
-            // TODO - unknown AirQuaility sensor - try all ?? // library marker kkossev.tuyaAlarmLib, line 780
-        } // library marker kkossev.tuyaAlarmLib, line 781
+def refreshAlarm() { // library marker kkossev.tuyaAlarmLib, line 775
+    List<String> cmds = [] // library marker kkossev.tuyaAlarmLib, line 776
+    if (isAqaraTVOC()) { // library marker kkossev.tuyaAlarmLib, line 777
+            // TODO - check what is available for VINDSTYRKA // library marker kkossev.tuyaAlarmLib, line 778
+	        cmds += zigbee.readAttribute(0x042a, 0x0000, [:], delay=200)                    // pm2.5    attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value; 3:Tolerance // library marker kkossev.tuyaAlarmLib, line 779
+	        cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay=200)      // tVOC   !! mfcode="0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value; // library marker kkossev.tuyaAlarmLib, line 780
+    } // library marker kkossev.tuyaAlarmLib, line 781
+        else if (false) { // library marker kkossev.tuyaAlarmLib, line 782
+            // TODO - check what is available for Aqara  // library marker kkossev.tuyaAlarmLib, line 783
+        } // library marker kkossev.tuyaAlarmLib, line 784
+        else { // library marker kkossev.tuyaAlarmLib, line 785
+            // TODO - unknown AirQuaility sensor - try all ?? // library marker kkossev.tuyaAlarmLib, line 786
+        } // library marker kkossev.tuyaAlarmLib, line 787
 
-    logDebug "refreshAirQuality() : ${cmds}" // library marker kkossev.tuyaAlarmLib, line 783
-    return cmds // library marker kkossev.tuyaAlarmLib, line 784
-} // library marker kkossev.tuyaAlarmLib, line 785
+    logDebug "refreshAirQuality() : ${cmds}" // library marker kkossev.tuyaAlarmLib, line 789
+    return cmds // library marker kkossev.tuyaAlarmLib, line 790
+} // library marker kkossev.tuyaAlarmLib, line 791
 
-def initVarsAlarm(boolean fullInit=false) { // library marker kkossev.tuyaAlarmLib, line 787
-    logDebug "initVarsAlarm(${fullInit})" // library marker kkossev.tuyaAlarmLib, line 788
-    device.updateSetting("beepVolume", [value:"low", type:"enum"]) // library marker kkossev.tuyaAlarmLib, line 789
-    device.updateSetting("alarmMelody",        [value:'12=Alarm Siren', type:"enum"]) // library marker kkossev.tuyaAlarmLib, line 790
-    device.updateSetting("alarmSoundVolume",   [value:'high', type:"enum"]) // library marker kkossev.tuyaAlarmLib, line 791
-    device.updateSetting("alarmSoundDuration", [value:TUYA_MAX_DURATION, type:"number"]) // library marker kkossev.tuyaAlarmLib, line 792
-    device.updateSetting("playSoundMelody",    [value:TUYA_DEFAULT_MELODY, type:"enum"])  // library marker kkossev.tuyaAlarmLib, line 793
-    device.updateSetting("playSoundVolume",    [value: TUYA_DEFAULT_VOLUME, type:"enum"]) // library marker kkossev.tuyaAlarmLib, line 794
-    device.updateSetting("playSoundDuration",  [value:TUYA_DEFAULT_DURATION, type:"number"]) // library marker kkossev.tuyaAlarmLib, line 795
-    device.updateSetting("restoreAlarmSettings", false) // library marker kkossev.tuyaAlarmLib, line 796
-    device.updateSetting("presetBeepAndChimeSettings", [value: "fast", type:"enum"]) // library marker kkossev.tuyaAlarmLib, line 797
-} // library marker kkossev.tuyaAlarmLib, line 798
+def initVarsAlarm(boolean fullInit=false) { // library marker kkossev.tuyaAlarmLib, line 793
+    logDebug "initVarsAlarm(${fullInit})" // library marker kkossev.tuyaAlarmLib, line 794
+    device.updateSetting("beepVolume", [value:"low", type:"enum"]) // library marker kkossev.tuyaAlarmLib, line 795
+    device.updateSetting("alarmMelody",        [value:'12=Alarm Siren', type:"enum"]) // library marker kkossev.tuyaAlarmLib, line 796
+    device.updateSetting("alarmSoundVolume",   [value:'high', type:"enum"]) // library marker kkossev.tuyaAlarmLib, line 797
+    device.updateSetting("alarmSoundDuration", [value:TUYA_MAX_DURATION, type:"number"]) // library marker kkossev.tuyaAlarmLib, line 798
+    device.updateSetting("playSoundMelody",    [value:TUYA_DEFAULT_MELODY_NAME, type:"enum"])  // library marker kkossev.tuyaAlarmLib, line 799
+    device.updateSetting("playSoundVolume",    [value: TUYA_DEFAULT_VOLUME_NAME, type:"enum"]) // library marker kkossev.tuyaAlarmLib, line 800
+    device.updateSetting("playSoundDuration",  [value:TUYA_DEFAULT_DURATION, type:"number"]) // library marker kkossev.tuyaAlarmLib, line 801
+    device.updateSetting("restoreAlarmSettings", false) // library marker kkossev.tuyaAlarmLib, line 802
+    device.updateSetting("presetBeepAndChimeSettings", [value: "fast", type:"enum"]) // library marker kkossev.tuyaAlarmLib, line 803
+} // library marker kkossev.tuyaAlarmLib, line 804
 
-void initEventsAlarm(boolean fullInit=false) { // library marker kkossev.tuyaAlarmLib, line 800
-    // nothing to do ? // library marker kkossev.tuyaAlarmLib, line 801
-     unmute() // library marker kkossev.tuyaAlarmLib, line 802
-} // library marker kkossev.tuyaAlarmLib, line 803
+void initEventsAlarm(boolean fullInit=false) { // library marker kkossev.tuyaAlarmLib, line 806
+    // nothing to do ? // library marker kkossev.tuyaAlarmLib, line 807
+     unmute() // library marker kkossev.tuyaAlarmLib, line 808
+} // library marker kkossev.tuyaAlarmLib, line 809
 
 // ~~~~~ end include (138) kkossev.tuyaAlarmLib ~~~~~

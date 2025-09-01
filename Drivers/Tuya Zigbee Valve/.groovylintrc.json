@@ -1,0 +1,62 @@
+{
+    "extends": "recommended",
+    "rules": {
+        "CompileStatic": {
+            "enabled": false
+        },
+        "CouldBeSwitchStatement": {
+            "enabled": false
+        },
+        "DuplicateListLiteral": {
+            "enabled": false
+        },
+        "DuplicateMapLiteral": {
+            "enabled": false
+        },
+        "DuplicateNumberLiteral": {
+            "enabled": false
+        },
+        "DuplicateStringLiteral": {
+            "enabled": false
+        },
+        "GetterMethodCouldBeProperty": {
+            "enabled": false
+        },
+        "ImplementationAsType": {
+            "enabled": false
+        },
+        "ImplicitClosureParameter": {
+            "enabled": false
+        },
+        "ImplicitReturnStatement": {
+            "enabled": false
+        },
+        "InsecureRandom": {
+            "enabled": false
+        },
+        "LineLength": {
+            "enabled": false
+        },
+        "MethodCount": {
+            "enabled": false
+        },
+        "MethodSize": {
+            "enabled": false
+        },
+        "NestedBlockDepth": {
+            "enabled": false
+        },
+        "NoWildcardImports": {
+            "enabled": false
+        },
+        "UnnecessaryGetter": {
+            "enabled": false
+        },
+        "UnnecessarySetter": {
+            "enabled": false
+        },
+        "UnusedPrivateMethod": {
+            "enabled": false
+        }
+    }
+}
