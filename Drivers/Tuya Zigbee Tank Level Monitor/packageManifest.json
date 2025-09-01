@@ -3,8 +3,8 @@
  "author":"kkossev",
  "version":"3.4.0",
  "minimumHEVersion":"2.3.7.100",
- "dateReleased":"2024-09-07",
- "releaseNotes":"3.4.0  2025-04-25 - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.\n3.3.4  2024-09-06 - first version pushed to HPM",
+ "dateReleased":"2025-04-25",
+ "releaseNotes":"ver. 3.4.0  2025-04-25 - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.\nver. 3.3.4  2024-09-06 - first version pushed to HPM",
  "communityLink":"https://community.hubitat.com/t/beta-tuya-zigbee-tank-level-monitor/141666",
  "drivers": [
   {

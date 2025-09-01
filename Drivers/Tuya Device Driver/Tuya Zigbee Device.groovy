@@ -72,7 +72,7 @@ metadata {
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
-        //input(name: "deviceNetworkId", type: "enum", title: "Router Device", description: "<small>Select a mains-powered device that you want to put in pairing mode.</small>", options: [ "0000":"ðŸ‘‘ Hubitat Hub" ] + getDevices(), required: true)
+        //input(name: "deviceNetworkId", type: "enum", title: "Router Device", description: "<small>Select a mains-powered device that you want to put in pairing mode.</small>", options: [ "0000":"?? Hubitat Hub" ] + getDevices(), required: true)
     }
 }
 
@@ -118,12 +118,12 @@ void getCpuTemperature(resp, data) {
                 log.debug tempWork
                 /*
                 if (location.temperatureScale == "F")
-                    updateAttr("temperature",String.format("%.1f", celsiusToFahrenheit(tempWork)),"Â°F")
+                    updateAttr("temperature",String.format("%.1f", celsiusToFahrenheit(tempWork)),"°F")
                 else
-                    updateAttr("temperature",String.format("%.1f",tempWork),"Â°C")
+                    updateAttr("temperature",String.format("%.1f",tempWork),"°C")
 
-                updateAttr("temperatureF",String.format("%.1f",celsiusToFahrenheit(tempWork))+ " Â°F")
-                updateAttr("temperatureC",String.format("%.1f",tempWork)+ " Â°C")
+                updateAttr("temperatureF",String.format("%.1f",celsiusToFahrenheit(tempWork))+ " °F")
+                updateAttr("temperatureC",String.format("%.1f",tempWork)+ " °C")
                 */
             }
         }

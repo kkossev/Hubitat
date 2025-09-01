@@ -17,7 +17,7 @@
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
  * ver. 2.0.6  2023-07-09 kkossev  - Tuya Zigbee Light Sensor: added min/max reporting time; illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
- * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) commonLib 3.06
+ * ver. 3.0.6  2024-04-06 kkossev  - commonLib 3.06
  *
  *                                   TODO:  */
 

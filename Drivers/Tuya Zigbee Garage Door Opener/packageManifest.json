@@ -1,10 +1,10 @@
 {
   "packageName": "Tuya Zigbee Garage Door Opener",
   "author": "Krassimir Kossev",
-  "version": "1.0.4",
+  "version": "1.2.0",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2022-07-06",
-  "releaseNotes": "1.0.4 2022-07-06 - on() command opens the door if it was closed, off() command closes the door if it was open; 'contact is open/closed' info and warning logs are shown only on contact state change;\n1.0.3 2022-06-26 - fixed new device exceptions bug; warnings in Debug logs only; Debug logs are off by default\n1.0.2 2022-06-20 - ignore Open command if the sensor is open; ignore Close command if the sensor is closed.\n1.0.0 2022-06-18 - first release version\n",
+  "dateReleased": "2024-12-21",
+  "releaseNotes": "1.2.0 2024-12-21 - HE Platform 2.4.x adjustments; added TS0603 _TZE608_c75zqghm @kuzenkohome; adding contact sensor inverse preference @PM_Disaster;\n1.1.0 2024-07-15 - added commands setContact() and setDoor()\n1.0.5 2023-10-09 - added _TZE204_nklqjk62 fingerprint\n1.0.4 2022-07-06 - on() command opens the door if it was closed, off() command closes the door if it was open; 'contact is open/closed' info and warning logs are shown only on contact state change;\n1.0.3 2022-06-26 - fixed new device exceptions bug; warnings in Debug logs only; Debug logs are off by default\n1.0.2 2022-06-20 - ignore Open command if the sensor is open; ignore Close command if the sensor is closed.\n1.0.0 2022-06-18 - first release version\n",
   "documentationLink": "https://community.hubitat.com/t/tuya-zigbee-garage-door-opener/95579/26?u=kkossev",
   "communityLink": "https://community.hubitat.com/t/tuya-zigbee-garage-door-opener/95579/30",
   "drivers": [
@@ -12,7 +12,7 @@
       "id": "e82f88ed-94f3-47ce-b54c-1fafaee3208d",
       "name": "Tuya Zigbee Garage Door Opener",
       "namespace": "kkossev",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Garage%20Door%20Opener/Tuya%20Zigbee%20Garage%20Door%20Opener.groovy",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Garage%20Door%20Opener/Tuya%20Zigbee%20Garage%20Door%20Opener.groovy",
       "required": true
     }
   ]
