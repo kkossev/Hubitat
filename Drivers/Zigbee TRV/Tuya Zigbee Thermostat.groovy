@@ -1,8 +1,8 @@
 /* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateMapLiteral, DuplicateStringLiteral, ImplicitClosureParameter, MethodCount, MethodSize, NglParseError, NoDouble, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessarySetter, UnusedImport */
 /**
- *  Tuya Zigbee Thermostat - Device Driver for Hubitat Elevation
+ *  Tuya Zigbee TRVs and Thermostats - Device Driver for Hubitat Elevation
  *
- *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
+ *  https://community.hubitat.com/t/release-tuya-zigbee-thermostats-and-trvs-driver/128916
  *
  *     Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *     in compliance with the License. You may obtain a copy of the License at:
@@ -19,36 +19,18 @@
  *                                   'Battery Voltage to Percentage' and 'Minimum time between reports' are hidden; 
  * ver. 3.3.3  2024-08-01 kkossev  - added _TZE200_g9a3awaj 'AVATTO_ZWT07_BATTERY_THERMOSTAT'
  * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
+ * ver. 3.4.1  2024-10-26 kkossev  - fixed exception in sendDigitalEventIfNeeded when the attribute is not found (level); added faultAlarm attribute; added TRV602 profile (TS0601  _TZE200_rtrmfadk)
+ *                                   added TRV602Z profile (TS0601 _TZE204_ltwbm23f); queryAllTuyaDP() when refreshing TRV602 and TRV602Z;
+ * ver. 3.4.2  2024-11-12 kkossev  - added TS0601 _TZE204_xnbkhhdr (_TZE200_viy9ihs7 _TZE200_viy9ihs7) thermostat profile 'AVATTO_ZWT198_ZWT100-BH_THERMOSTAT'
+ * ver. 3.5.0  2025-02-16 kkossev  - restored sendCommand and setPar; added brightness attribute; added checkIfIsDuplicated; added Resend failed commands : setThermostatMode and heatingSetpoint retries; added forceManual prefrence
+ * ver. 3.5.1  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
+ * ver. 3.5.2  2025-05-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
  *
- *                                   TODO: add TS0601 _TZE204_lzriup1  https://community.hubitat.com/t/release-tuya-wall-mount-thermostat-water-electric-floor-heating-zigbee-driver/87050/318?u=kkossev 
- *                                   TODO: AVATTO -  better descriptions for anti-freeze and limescaleProtect preferences
- *                                   TODO: BEOK - needs retries, the first command is lost sometimes! :(  Battery Voltage to Percentage
- *                                   TODO: BEOK: check calibration and correction DPs !!!
- *                                   TODO: BEOK: do NOT synchronize the clock between 00:00 and 09:00 local time !!
- *                                   TODO: add Info dummy preference to the driver with a hyperlink
- *                                   TODO: add state.thermostat for storing last attributes
- *                                   TODO: Healthcheck to be every hour (not 4 hours) for mains powered thermostats
- *                                   TODO: add 'force manual mode' preference (like in the wall thermostat driver)
- *                                   TODO: option to disable the Auto mode ! (like in the wall thermostat driver)
- *                                   TODO: BRT-100 : what is emergencyHeatingTime and boostTime ?
- *                                   TODO: initializeDeviceThermostat() - configure in the device profile !
- *                                   TODO: partial match for the fingerprint (model if Tuya, manufacturer for the rest)
- *                                   TODO: add [refresh] for battery heatingSetpoint thermostatOperatingState events and logs
- *                                   TODO: autoPollThermostat: no polling for device profile UNKNOWN
- *                                   TODO: configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
- *                                   TODO: Ping the device on initialize
- *                                   TODO: add factoryReset command Basic -0x0000 (Server); command 0x00
- *                                   TODO: add option 'Simple TRV' (no additinal attributes)
- *                                   TODO: HomeKit - min and max temperature limits?
- *                                   TODO: add receiveCheck() methods for heatingSetpint and mode (option)
- *                                   TODO: separate the autoPoll commands from the refresh commands (lite)
- *                                   TODO: All TRVs - after emergency heat, restore the last mode and heatingSetpoint
- *                                   TODO: VIRTUAL thermostat - option to simualate the thermostatOperatingState
- *                                   TODO: UNKNOWN TRV - update the deviceProfile - separate 'Unknown Tuya' and 'Unknown ZCL'
+ *                                   TODO:
  */
 
-static String version() { '3.4.0' }
-static String timeStamp() { '2024/10/05 6:51 PM' }
+static String version() { '3.5.2' }
+static String timeStamp() { '2025/05/25 8:54 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -79,14 +61,17 @@ metadata {
     {
 
         // TODO - add all other models attributes possible values
-        attribute 'antiFreeze', 'enum', ['off', 'on']               // Tuya Saswell, AVATTO
+        attribute 'antiFreeze', 'enum', ['off', 'on']               // TUYA_SASWELL_TRV, AVATTO_TRV06_TRV16_ME167_ME168_TRV, 
         attribute 'batteryVoltage', 'number'
         attribute 'boostTime', 'number'                             // BRT-100
         attribute 'calibrated', 'enum', ['false', 'true']           // Aqara E1
+        attribute 'brightness', 'enum', ['off', 'low', 'medium', 'high']    // BEOK/AVATTO
         attribute 'calibrationTemp', 'number'                       // BRT-100, Sonoff
         attribute 'childLock', 'enum', ['off', 'on']                // BRT-100, Aqara E1, Sonoff, AVATTO
+        attribute 'comfortTemp', 'number'                           // TRV602Z, IMMAX_Neo Lite TRV 07732L
+        attribute 'controlMode', 'enum', ['PID', 'OnOff']           // TRV602Z
         attribute 'ecoMode', 'enum', ['off', 'on']                  // BRT-100
-        attribute 'ecoTemp', 'number'                               // BRT-100
+        attribute 'ecoTemp', 'number'                               // BRT-100, TRV602Z
         attribute 'emergencyHeating', 'enum', ['off', 'on']         // BRT-100
         attribute 'emergencyHeatingTime', 'number'                  // BRT-100
         attribute 'floorTemperature', 'number'                      // AVATTO/MOES floor thermostats
@@ -104,11 +89,22 @@ metadata {
         attribute 'windowsState', 'enum', ['open', 'closed']        // BRT-100, Aqara E1
         attribute 'batteryLowAlarm', 'enum', ['batteryOK', 'batteryLow']        // TUYA_SASWELL
         //attribute 'workingState', "enum", ["open", "closed"]        // BRT-100
+        attribute 'faultAlarm', 'enum', ['clear', 'faultSensor', 'faultMotor', 'faultLowBatt', 'faultUgLowBatt', 'error']        // TUYA
+        attribute 'motorThrust', 'enum', ['strong', 'middle', 'weak']   // TRV602Z
 
         // Aqaura E1 attributes     TODO - consolidate a common set of attributes
         attribute 'preset', 'enum', ['manual', 'auto', 'away']      // TODO - remove?
         attribute 'awayPresetTemperature', 'number'
 
+        command 'sendCommand', [
+            [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
+            [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
+        ]
+        command 'setPar', [
+                [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
+                [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
+        ]
+    
         if (_DEBUG) { command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  }
 
         // itterate through all the figerprints and add them on the fly
@@ -125,8 +121,16 @@ metadata {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables command logging.'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: 'Turns on debug logging for 24 hours.'
         // the rest of the preferences are inputed from the deviceProfile maps in the deviceProfileLib
+        if (advancedOptions == true) {
+            input (name: 'resendFailed', type: 'bool', title: '<b>Resend failed commands</b>', description: '<i>If the thermostat does not change the Setpoint or Mode as expected, then commands will be resent automatically</i>', defaultValue: false)
+            input (name: 'forceManual',  type: 'bool', title: '<b>Force Manual Mode</b>', description: '<i>If the thermostat changes into schedule mode, then it automatically reverts back to manual mode</i>', defaultValue: false)
+        }
+
     }
 }
+
+@Field static final Integer MaxRetries = 5
+@Field static final Integer NOT_SET = -1
 
 @Field static final Map deviceProfilesV3 = [    // https://github.com/jacekk015/zha_quirks
     // BRT-100-B0
@@ -295,6 +299,98 @@ metadata {
         configuration : [:]
     ],
 
+    'Tuya_TRV602'   : [        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f7cb1f160f07fcca7a354429cad9d63c7272ea85/src/devices/tuya.ts#L3285-L3348
+        description   : 'Tuya TRV602 TRV',
+        device        : [models: ['TS0601'], type: 'TRV', powerSource: 'battery', isSleepy:false],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
+        preferences   : ['windowOpenDetection':'8', 'childLock':'12', /*'calibrationTemp':'101',*/ 'minHeatingSetpoint':'15', 'maxHeatingSetpoint':'16', 'brightness':'111', 'orientation':'113', 'ecoMode':'114'],
+        fingerprints  : [
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_rtrmfadk', deviceJoinName: 'Tuya TRV602'],
+        ],
+        commands      : ['sendSupportedThermostatModes':'sendSupportedThermostatModes', 'setHeatingSetpoint':'setHeatingSetpoint', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+        tuyaDPs       : [
+            [dp:1,   name:'thermostatMode',     type:'enum',            rw: 'rw', min:0,     max:3,    defVal:'1',  step:1,   scale:1,  map:[0: 'auto', 1: 'heat', 2: 'off', 3: 'emergency heat'] ,   unit:'', title:'<b>Thermostat Mode</b>',  description:'Thermostat mode'],    // 'system_mode'
+            [dp:2,   name:'heatingSetpoint',    type:'decimal',         rw: 'rw', min:5.0,   max:35.0, defVal:20.0, step:0.5, scale:10,  unit:'°C',  title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
+            [dp:3,   name:'temperature',        type:'decimal',         rw: 'ro', min:-10.0, max:50.0, defVal:20.0, step:0.5, scale:10, unit:'°C',  description:'Temperature'],
+            [dp:6,   name:'thermostatOperatingState',  type:'enum',     rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'idle', 1:'heating'], description:'Thermostat Operating State(working state)'],
+            [dp:7,   name:'windowsState',       type:'enum',            rw: 'ro', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'closed', 1:'open'],  title:'<bWindow State</b>',  description:'Window state'],
+            [dp:8,   name:'windowOpenDetection', type:'enum', dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Window Detection</b>',  description:'Window detection'],
+            [dp:12,  name:'childLock',          type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Child Lock</b>',  description:'Child lock'],
+            [dp:13,  name:'battery',            type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:1,   scale:1,  unit:'%',          description:'Battery level'],
+            [dp:14,  name:'faultAlarm',         type:'enum',            rw: 'ro', defVal:'0', map:[0:'clear', 1:'error'],  description:'Fault alarm'],
+            [dp:15,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,   max:15.0, defVal:10.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Minimum Temperature</b>',      description:'Minimum temperature'],
+            [dp:16,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0,  max:45.0, defVal:35.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Maximum Temperature</b>',      description:'Maximum temperature'],
+            [dp:17,  name:'scheduleMonday',     type:'number',          rw: 'ro', description:'Schedule Monday'],
+            [dp:18,  name:'scheduleTuesday',    type:'number',          rw: 'ro', description:'Schedule Tueasday'],
+            [dp:19,  name:'scheduleWednesday',  type:'number',          rw: 'ro', description:'Schedule Wednesday'],
+            [dp:20,  name:'scheduleThursday',   type:'number',          rw: 'ro', description:'Schedule Thursday'],
+            [dp:21,  name:'scheduleFriday',     type:'number',          rw: 'ro', description:'Schedule Friday'],
+            [dp:22,  name:'scheduleSaturday',   type:'number',          rw: 'ro', description:'Schedule Saturday'],
+            [dp:23,  name:'scheduleSunday',     type:'number',          rw: 'ro', description:'Schedule Sunday'],
+            [dp:101, name:'calibrationTemp',    type:'decimal',         rw: 'ro', min:-10.0,  max:19.0,  defVal:0.0, step:0.1,   scale:1,  unit:'°C',  title:'<b>Calibration Temperature</b>', description:'Calibration Temperature'],
+            // ^^^^^ calibrationTemp is temporary made read-only !!  https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/tuya.ts#L845
+            [dp:108, name:'level',              type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:10,   scale:10,  unit:'%', description:'Valve level'],      // valve open degree
+            [dp:111, name:'brightness',         type:'enum',            rw: 'rw', defVal:'1', map:[0:'high', 1:'medium', 2:'low'], title:'<b>Display Brightness</b>',  description:'Display brightness'],
+            [dp:113, name:'orientation',        type:'enum',            rw: 'rw', defVal:'1', map:[0:'up', 1:'right', 2:'down', 3:'left'], title:'<b>Screen Orientation</b>',  description:'Screen orientation'],
+            [dp:114, name:'ecoMode',            type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Eco mode</b>',  description:'Eco mode'],       // {'comfort': tuya.enum(0), 'eco': tuya.enum(1)}
+        ],
+        supportedThermostatModes: ['off', 'heat', 'auto', 'emergency heat', 'eco'],
+        refresh: ['queryAllTuyaDP'],
+        deviceJoinName: 'Tuya TRV602 TRV',
+        configuration : [:]
+    ],
+
+    'Tuya_TRV602Z'   : [        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/af278d3a520a3fb37e7417f41e613cc39c485ea9/src/devices/tuya.ts#L5117C62-L5241
+        description   : 'Tuya TRV602Z TRV',
+        device        : [models: ['TS0601'], type: 'TRV', powerSource: 'battery', isSleepy:false],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
+        preferences   : ['controlMode':'127', 'childLock':'7', 'minHeatingSetpoint':'10', 'maxHeatingSetpoint':'9', 'windowOpenDetection':'14',  'calibrationTemp':'47', 'brightness':'111','orientation':'113', 'comfortTemp':'119', 'ecoTemp':'120'],
+        fingerprints  : [
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_ltwbm23f', deviceJoinName: 'Tuya TRV602Z TRV']      // https://s.click.aliexpress.com/e/_DDZf6Md
+        ],
+        commands      : ["pollTuya":"pollTuya","autoPollThermostat":"autoPollThermostat", 'sendSupportedThermostatModes':'sendSupportedThermostatModes', 'setHeatingSetpoint':'setHeatingSetpoint', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+        tuyaDPs       : [
+            [dp:2,   name:'thermostatMode',     type:'enum',            rw: 'rw', min:0,     max:5,    defVal:'3',  step:1,   scale:1,  map:[
+                    0: 'off',       // standby: tuya.enum(0),
+                    1: 'antifrost', // antifrost: tuya.enum(1),
+                    2: 'eco',       // eco: tuya.enum(2),
+                    3: 'heat',      // comfort: tuya.enum(3),
+                    4: 'auto',      // auto: tuya.enum(4),
+                    5: 'emergency heat',        // on: tuya.enum(5),
+                ] , title:'<b>Thermostat Mode</b>',  description:'Thermostat mode'],     // 'system_mode'   [0: 'auto', 1: 'heat', 2: 'off', 3: 'emergency heat'] 
+            //[dp:3,   name:'thermostatOperatingState',  type:'enum',     rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'heating', 1:'idle'] ,  unit:'', description:'Thermostat Operating State(working state)'],           // running_state
+            [dp:4,   name:'heatingSetpoint',    type:'decimal',         rw: 'rw', min:5.0,   max:35.0, defVal:20.0, step:0.5, scale:10, unit:'°C',  title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
+            [dp:5,   name:'temperature',        type:'decimal',         rw: 'ro', min:0.0,   max:50.0, defVal:20.0, step:0.5, scale:10, unit:'°C',  description:'Temperature'],     // current_heating_setpoint
+            [dp:6,   name:'battery',            type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:1,   scale:1,  unit:'%',   description:'Battery level'],
+            [dp:7,   name:'childLock',          type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'], title:'<b>Child Lock</b>',  description:'Child lock'],
+            [dp:9,   name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0,  max:45.0, defVal:35.0, step:1.0, scale:10, unit:'°C',  title: '<b>Maximum Temperature</b>',      description:'Maximum temperature'],
+            [dp:10,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,   max:15.0, defVal:10.0, step:1.0, scale:10, unit:'°C',  title: '<b>Minimum Temperature</b>',      description:'Minimum temperature'],
+            [dp:14,  name:'windowOpenDetection', type:'enum', dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Window Detection</b>',  description:'Window detection'],
+            [dp:15,  name:'windowsState',       type:'enum',            rw: 'ro', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'closed', 1:'open'],  title:'<bWindow State</b>',  description:'Window state'],
+            [dp:47,  name:'calibrationTemp',    type:'decimal',         rw: 'rw', min:-3.0,  max:3.0,  defVal:0.0,  step:1,   scale:1,  unit:'°C',  title:'<b>Calibration Temperature</b>', description:'Calibration Temperature'],                  // local_temperature_calibration
+            // ^^ check! ^^^ tuya.valueConverter.localTempCalibration1
+            [dp:102, name:'scheduleMonday',     type:'number',          rw: 'ro',  description:'Schedule Monday'],
+            [dp:103, name:'scheduleTuesday',    type:'number',          rw: 'ro',  description:'Schedule Tueasday'],
+            [dp:104, name:'scheduleWednesday',  type:'number',          rw: 'ro',  description:'Schedule Wednesday'],
+            [dp:105, name:'scheduleThursday',   type:'number',          rw: 'ro',  description:'Schedule Thursday'],
+            [dp:106, name:'scheduleFriday',     type:'number',          rw: 'ro',  description:'Schedule Friday'],
+            [dp:107, name:'scheduleSaturday',   type:'number',          rw: 'ro',  description:'Schedule Saturday'],
+            [dp:108, name:'scheduleSunday',     type:'number',          rw: 'ro',  description:'Schedule Sunday'],
+            [dp:110, name:'motorThrust',        type:'enum',            rw: 'ro', defVal:'1', map:[0:'strong', 1:'middle', 2:'weak'], description:'Motor thrust'],
+            [dp:111, name:'brightness',         type:'enum',            rw: 'rw', defVal:'1', map:[0:'high', 1:'medium', 2:'low'], title:'<b>Display Brightness</b>',  description:'Display brightness'],
+            [dp:113, name:'orientation',        type:'enum',            rw: 'rw', defVal:'1', map:[0:'up', 1:'right', 2:'down', 3:'left'], title:'<b>Screen Orientation</b>',  description:'Screen orientation'],
+            [dp:114, name:'level',              type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:10,   scale:10,  unit:'%', description:'Valve level'],      // valve open degree (position)
+            [dp:119, name:'comfortTemp',        type:'decimal',         rw: 'rw', min:5.0,   max:30.0, defVal:20.0, step:1.0, scale:10,  unit:'°C', title: '<b>Comfort Temperature</b>',      description:'Comfort temperature'],
+            [dp:120, name:'ecoTemp',            type:'decimal',         rw: 'rw', min:5.0,   max:30.0, defVal:7.0,  step:1.0, scale:10,  unit:'°C',  title: '<b>Eco Temperature</b>',      description:'Eco temperature'],
+            [dp:127, name:'controlMode',        type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'PID', 1:'onOff'] ,   unit:'', title:'<b>Control Mode</b>',  description:'PID - valve smooth control from 0% to 100%<br>onOff - 0.5 degrees above or below, valve either 0% or 100%'],   // 'system_mode', { comfort: 0, eco:(1) }
+        ],
+        supportedThermostatModes: ['off', 'heat', 'auto', 'emergency heat', 'eco'],
+        refresh: ['queryAllTuyaDP'],
+        deviceJoinName: 'Tuya TRV602Z TRV',
+        configuration : [:]
+    ],
+
+
     'IMMAX_Neo Lite TRV 07732L'   : [
         description   : 'IMMAX_Neo Lite TRV 07732L (not tested!)',
         device        : [models: ['TS0601'], type: 'TRV', powerSource: 'battery', isSleepy:false],
@@ -331,12 +427,9 @@ metadata {
         ],
         supportedThermostatModes: ['off', 'heat', 'auto', 'emergency heat', 'eco'],
         refresh: ['pollTuya'],
-        deviceJoinName: 'MOES BRT-100 TRV',
+        deviceJoinName: 'IMMAX_Neo Lite TRV 07732L',
         configuration : [:]
     ],
-
-
-
 
 
     'TUYA_HY367_HY368_HY369_TRV'   : [        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/a615c8077123197a6d30aac334160e5dd4cf1058/src/devices/tuya.ts#L3018
@@ -507,7 +600,7 @@ metadata {
                 [dp:101, name:'hysteresis',         type:'decimal',         rw: 'rw', min:1.0,    max:9.5,  defVal:1.0,  step:0.5, scale:10,  title: '<b>Hysteresis</b>', description:'hysteresis'],
                 [dp:102, name:'protectionTemperature', type:'decimal',      rw: 'rw', min:20.0,   max:80.0, defVal:70.0, step:1.0, scale:1,  unit:'°C',  title: '<b>Protection Temperature Limit</b>', description:'Protection Temperature Limit'],
                 [dp:103, name:'outputReverse',      type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Output Reverse</b>',  description:'Output reverse'],  
-                [dp:104, name:'brightness',         type:'enum',            rw: 'rw', defVal:'2', map:[0:'off', 1:'low', 2:'medium', 3:'high'], title:'<b>LCD Brightness</b>',  description:'LCD brightness']
+                [dp:104, name:'brightness',         type:'enum',            rw: 'rw', defVal:'2', min:0, max:3, map:[0:'off', 1:'low', 2:'medium', 3:'high'], title:'<b>LCD Brightness</b>',  description:'LCD brightness']
             ],
             supportedThermostatModes: ['off', 'heat', 'auto'],
             refresh: ['pollTuya'],
@@ -547,6 +640,44 @@ metadata {
             configuration : [:]
     ],
 
+    'AVATTO_ZWT198_ZWT100-BH_THERMOSTAT'   : [       // https://github.com/Koenkk/zigbee-herdsman-converters/blob/8705f77d83dcfa42e9ccc3ad284070abcf7cff00/src/devices/tuya.ts#L6331
+            description   : 'Avatto ZWT198/ZWT100-BH Thermostat',
+            device        : [models: ['TS0601'], type: 'Thermostat', powerSource: 'ac', isSleepy:false],
+            capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
+            preferences   : [childLock:'9', minHeatingSetpoint:'16', maxHeatingSetpoint:'15', sensor:'106', antiFreeze:'102', hysteresis:'107', temperatureCalibration:'19', brightness:'110'],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_xnbkhhdr", controllerType: "ZGB", deviceJoinName: 'Avatto ZWT198/ZWT100-BH Thermostat'],   // https://community.hubitat.com/t/avatto-thermostat-driver-note-working-cirrectly/145261?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_lzriup1j", controllerType: "ZGB", deviceJoinName: 'Avatto ZWT198/ZWT100-BH Thermostat'],   // https://community.hubitat.com/t/avatto-thermostat-driver-note-working-cirrectly/145261?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_viy9ihs7", controllerType: "ZGB", deviceJoinName: 'Avatto ZWT198/ZWT100-BH Thermostat'],   // https://community.hubitat.com/t/avatto-thermostat-driver-note-working-cirrectly/145261?u=kkossev
+            ],
+            commands      : ['sendSupportedThermostatModes':'sendSupportedThermostatModes', 'setHeatingSetpoint':'setHeatingSetpoint', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            tuyaDPs       : [
+                [dp:1,   name:'systemMode',         type:'enum',  dt: '01', rw: 'rw', defVal:'1', map:[0: 'off', 1: 'on'],  title:'<b>Thermostat Switch</b>',  description:'Thermostat Switch (system mode)'],  //'system_mode', 'switch'
+                [dp:2,   name:'heatingSetpoint',    type:'decimal',         rw: 'rw', min:5.0,    max:35.0, defVal:20.0, step:0.5, scale:10,  unit:'°C',  title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
+                [dp:3,   name:'temperature',        type:'decimal',         rw: 'ro', defVal:20.0, scale:10 , unit:'°C',  description:'Temperature'],                                                    // 'local_temperature'
+                [dp:4,   name:'thermostatMode',     type:'enum',            rw: 'rw', defVal:'0', map:[0:'heat', 1:'auto', 2:'auto+manual'], description:'Thermostat Working Mode'],                     // 'preset', 'mode'
+                // TODO - preProc for  _TZE200_viy9ihs7 // https://github.com/Koenkk/zigbee2mqtt/issues/21353#issuecomment-1938328429
+                [dp:9,   name:'childLock',          type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Child Lock</b>',  description:'Child lock'],
+                [dp:11,  name:'faultAlarm',         type:'enum',            rw: 'ro', defVal:'0', map:[0:'e1', 1:'e2', 2:'e3'], title:'<b>Fault Alarm Selection</b>',  description:'Fault alarm'],
+                [dp:15,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0,   max:90.0, defVal:60.0, step:0.5, scale:10,  unit:'°C',  title:'<b>Maximum Heating Setpoint</b>',      description:'Maximum heating setpoint'],
+                [dp:16,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,    max:15.0, defVal:10.0, step:0.5, scale:10,  unit:'°C',  title:'<b>Minimum Heating Setpoint</b>',      description:'Minimum heating setpoint'],    // 'dp16 is listed in Tuya, but no communication from device'
+                [dp:19,  name:'temperatureCalibration',  type:'decimal',    rw: 'rw', min:-9.9,   max:9.9,  defVal:0.0, step:1,    scale:10,  unit:'°C',  title:'<b>Temperature Calibration</b>',  description:'Temperature calibration'],
+                [dp:101, name:'thermostatOperatingState',  type:'enum',     rw: 'rw', defVal:'0', map:[1:'heating', 0:'idle'] ,  unit:'', description:'Thermostat Operating State(working state)'],      //  'running_state' valve state?
+                [dp:102, name:'antiFreeze',         type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Anti-Freeze</b>',  description:'Anti-Freeze / Frost Protection'],     // 'frost_protection'
+                [dp:103, name:'reset',              type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Factory Reset</b>',  description:'Full factory reset, use with caution!'],
+                [dp:104, name:'workdaySet',         type:'enum',            rw: 'ro',             map:[0:'disabled', 1:'6-1', 2:'5-2', 3:'7'], description:'Workday Set'],
+                [dp:105, name:'unknown105',         type:'enum',  dt: '01', rw: 'ro', defVal:'0', map:[0:'off', 1:'on'], description:'Unknown 105'],
+                [dp:106, name:'sensor',             type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'internal', 1:'external', 2:'both'], title:'<b>Sensor Selection</b>',  description:'Sensor Selection'],  // only in/out for BEOK
+                [dp:107, name:'hysteresis',         type:'decimal',         rw: 'rw', min:1.0,    max:9.5,  defVal:1.0,  step:0.5, scale:10,  title: '<b>Hysteresis</b>', description:'hysteresis'],
+                [dp:109, name:'heatingSchedule',    type:'number',          rw: 'ro', description:'Heating Schedule'],
+                [dp:110, name:'brightness',         type:'enum',            rw: 'rw', defVal:'2', map:[0:'off', 1:'low', 2:'medium', 3:'high'], title:'<b>LCD Brightness</b>',  description:'LCD brightness'],
+                [dp:111, name:'unknown111',         type:'enum',  dt: '01', rw: 'ro', defVal:'0', map:[0:'off', 1:'on'], description:'Unknown 111'],
+            ],
+            supportedThermostatModes: ['off', 'heat', 'auto'],
+            refresh: ['pollTuya'],
+            deviceJoinName: 'Avatto ZWT198/ZWT100-BH Thermostat',
+            configuration : [:]
+    ],
 ]
 
 /*
@@ -584,6 +715,17 @@ List pollTuya() {
 void customUpdated() {
     //ArrayList<String> cmds = []
     logDebug 'customUpdated: ...'
+    //if (setting?.advancedOptions == true) {
+        logInfo "Force manual is <b>${settings?.forceManual}</b>; Resend failed is <b>${settings?.resendFailed}</b>"
+        if (settings?.resendFailed == true) {
+            logInfo 'resendFailed is enabled!'
+            runEvery1Minute('receiveCheck')
+        }
+        else {
+            logInfo 'resendFailed is disabled'
+            unschedule('receiveCheck')
+        }
+    //}
     //
     if (settings?.forcedProfile != null) {
         //logDebug "current state.deviceProfile=${state.deviceProfile}, settings.forcedProfile=${settings?.forcedProfile}, getProfileKey()=${getProfileKey(settings?.forcedProfile)}"
@@ -644,13 +786,22 @@ void customInitializeVars(final boolean fullInit=false) {
     }
     // for Tuya TRVs and thermostats - change the default polling method to 0 'disabled'
     if (fullInit || settings?.temperaturePollingInterval == null) { device.updateSetting('temperaturePollingInterval', [value: '0', type: 'enum']) }
-
+    if (fullInit || settings?.resendFailed == null) { device.updateSetting('resendFailed', [value: 'false', type: 'bool']) }
+    if (fullInit || settings?.forceManual == null)  { device.updateSetting('forceManual',  [value: 'false', type: 'bool']) }
 }
 
 // called from initializeVars() in the main code ...
 void customInitEvents(final boolean fullInit=false) {
     logDebug "customInitEvents(${fullInit})"
     thermostatInitEvents(fullInit)
+    if (settings?.resendFailed == true) {
+        logInfo 'resendFailed is enabled!'
+        runEvery1Minute('receiveCheck')    // KK: check
+    }
+    else {
+        logInfo 'resendFailed is disabled'
+        unschedule('receiveCheck')
+    }
 }
 
 
@@ -689,6 +840,13 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
                 sendEvent(eventMap)
                 logInfo "${descText}"
                 state.lastThermostatMode = valueScaled
+            }
+            // added 02/16/2025
+            if (settings?.forceManual == true) {
+                if (valueScaled == 'auto') {
+                    logWarn "customProcessDeviceProfileEvent: forceManual is <b>enabled</b>! Changing the thermostatMode from auto to heat"
+                    runIn(1, 'heat')
+                }
             }
             break
         case 'ecoMode' :    // BRT-100 - simulate OFF mode ?? or keep the ecoMode on ?
@@ -745,6 +903,70 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
             logInfo "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy DPs ?
             //}
             break
+    }
+}
+
+void customParseTuyaCluster(final Map descMap) {
+    boolean isDuplicated = false
+/*    
+    int dp = zigbee.convertHexToInt(descMap?.data[2])
+    int fncmd = getTuyaAttributeValue(descMap?.data, 0) // PATCH! zero-based index
+    if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '0B') {    // ZCL Command Default Response
+        setLastRx( NOT_SET, NOT_SET)    // -1
+    }
+    else if (descMap?.clusterInt == CLUSTER_TUYA && dp != 24) {    // Tuya set time command
+        if (checkIfIsDuplicated( dp, fncmd )) {
+            logDebug "<b>(duplicate)</b>  <b>dp=${dp}</b> fncmd=${fncmd} command=${descMap?.command} data = ${descMap?.data}"
+            state.stats['dupeCtr'] = (state.stats['dupeCtr'] ?: 0) + 1
+            isDuplicated = true
+        }
+        else {
+            logDebug "${device.displayName} dp_id=${dp_id} <b>dp=${dp}</b> fncmd=${fncmd}" 
+            setLastRx( dp, fncmd)
+        }
+
+    }
+    */
+    if (isDuplicated == false) {
+        standardParseTuyaCluster(descMap)   // defined in commonLib
+    }
+}
+
+
+//  receiveCheck() is unconditionally scheduled Every1Minute from installed() ..
+void receiveCheck() {
+    logDebug "receiveCheck() called"
+    modeReceiveCheck()
+    setpointReceiveCheck()
+    setBrightnessReceiveCheck()
+}
+
+
+// NOT ACTIVATED !!! Needs a dedicated setBrightness() command ?
+// Brightness checking is also called every 1 minute from receiveCheck()
+void setBrightnessReceiveCheck() {
+    if (settings?.resendFailed == false ) { return }
+    if (state.lastTx.isSetBrightnessReq == false) { return }
+
+    if (state.lastTx.setBrightness != NOT_SET && ((state.lastTx.setBrightness as String) != (state.lastRx.setBrightness as String))) {
+        state.lastTx.setBrightnessRetries = (state.lastTx.setBrightnessRetries ?: 0) + 1
+        if (state.lastTx.setBrightnessRetries < MaxRetries) {
+            logWarn "setBrightnessReceiveCheck(${state.lastTx.setBrightness}) <b>failed<b/> (last received is still ${state.lastRx.setBrightness})"
+            logDebug "resending setBrightness command : ${state.lastTx.setBrightness} (retry# ${state.lastTx.setBrightnessRetries}) of ${MaxRetries}"
+            state.stats.txFailCtr = (state.stats.txFailCtr ?: 0) + 1
+            //setBrightness(lastTxMap.setBrightness)
+            setPar('brightness', state.lastTx.setBrightness)
+        }
+        else {
+            logWarn "setBrightnessReceiveCheck(${state.lastTx.setBrightness}) <b>giving up retrying<b/>"
+            state.lastTx.isSetBrightnessReq = false
+            state.lastTx.setBrightnessRetries = 0
+        }
+    }
+    else {
+        logDebug "setBrightnessReceiveCheck brightness was changed successfuly to (${state.lastTx.setBrightness}). No need for further checks."
+        state.lastTx.setBrightness = NOT_SET
+        state.lastTx.isSetBrightnessReq = false
     }
 }
 
