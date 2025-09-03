@@ -59,9 +59,9 @@
 */
 
 static String version() { "4.0.0" }
-static String timeStamp() {"2025/09/03 9:21 PM"}
+static String timeStamp() {"2025/09/03 9:29 PM"}
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true           // debug logging
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = false 
 
@@ -77,7 +77,7 @@ import groovy.json.JsonOutput
 #include kkossev.illuminanceLib
 #include kkossev.motionLib
 #include kkossev.batteryLib
-#include kkossev.deviceProfileLib
+#include kkossev.deviceProfileLibV4
 #include kkossev.commonLib
 
 deviceType = "mmWaveSensor"

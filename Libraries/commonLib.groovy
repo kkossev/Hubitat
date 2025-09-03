@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/commonLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-commonLib',
-    version: '3.5.1'
+    version: '4.0.0'
 )
 /*
   *  Common ZCL Library
@@ -45,7 +45,8 @@ library(
   * ver. 3.4.0  2025-03-23 kkossev  - healthCheck by pinging the device; updateRxStats() replaced with inline code; added state.lastRx.timeStamp; added activeEndpoints() handler call; documentation improvements
   * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
   * ver. 3.5.1  2025-07-23 kkossev  - Aqara W100 destEndpoint: 0x01 patch
-  * ver. 3.5.2  2025-08-13 kkossev  - (dev.branch) Status attribute renamed to _status_
+  * ver. 3.5.2  2025-08-13 kkossev  - Status attribute renamed to _status_
+  * ver. 4.0.0  2025-09-03 kkossev  - deviceProfileV4 BRANCH created
   *
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
   *                                   TODO: make the configure() without parameter smart - analyze the State variables and call delete states.... call ActiveAndpoints() or/amd initialize() or/and configure()
@@ -61,8 +62,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.5.2' }
-String commonLibStamp() { '2025/08/13 8:18 PM' }
+String commonLibVersion() { '4.0.0' }
+String commonLibStamp() { '2025/09/03 9:25 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
