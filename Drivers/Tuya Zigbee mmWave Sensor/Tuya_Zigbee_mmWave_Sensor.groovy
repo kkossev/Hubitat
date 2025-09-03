@@ -41,6 +41,7 @@
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException in common.lib for HE platform version 2.4.1.155
  * ver. 3.5.1  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
  * ver. 3.5.2  2025-06-15 kkossev  - added _TZE284_4qznlkbu. (_TZE284_iadro9bf is NOT supported by this driver!);
+ * ver. 4.0.0  2025-09-03 kkossev  - deviceProfileV4 BRANCH created
  *                                   
  *                                   TODO: check why ignoreDistance prefrence is not shown when forcebly changing the deviceProfile
  *                                   TODO: Optimize the deviceProfilesV3 !! (reached max size ... :( )  
@@ -57,8 +58,8 @@
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
 */
 
-static String version() { "3.5.2" }
-static String timeStamp() {"2025/06/15 5:07 PM"}
+static String version() { "4.0.0" }
+static String timeStamp() {"2025/09/03 9:21 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
