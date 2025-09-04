@@ -17,18 +17,17 @@
  *
  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) first version
  * ..............................
- * ver. 4.0.0  2025-09-03 kkossev  - deviceProfileV4 BRANCH created
+ * ver. 4.0.0  2025-09-04 kkossev  - deviceProfileV4 BRANCH created
  *                                   
  *                                   TODO:
 */
 
 static String version() { "4.0.0" }
-static String timeStamp() {"2025/09/03 11:19 PM"}
+static String timeStamp() {"2025/09/04 8:09 AM"}
 
 @Field static final Boolean _DEBUG = true           // debug logging
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = false 
-
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -125,8 +124,8 @@ metadata {
 
 
 
-
-@Field static final Map deviceProfilesV3 = [
+/*
+@Field static final Map deviceProfilesV33 = [
     'TS0601_TUYA_RADAR'   : [        // isZY_M100Radar()        // very spammy devices!
             description   : 'Tuya Human Presence mmWave Radar ZY-M100',
             device        : [powerSource: 'dc', ignoreIAS:true], // sends all DPs periodically!
@@ -322,7 +321,133 @@ metadata {
             configuration : ['0x0406':'bind', '0x0FC57':'bind']
     ]
 ]
+*/
 
+
+@Field static final String testJSON = '''{
+  "deviceProfiles": {
+    "TS0601_TUYA_RADAR": {
+      "description": "Tuya Human Presence mmWave Radar ZY-M100",
+      "device": { "powerSource": "dc", "ignoreIAS": true },
+      "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement": true },
+      "preferences": { "radarSensitivity": "2", "detectionDelay": "101", "fadingTime": "102", "minimumDistance": "3", "maximumDistance": "4" },
+      "commands": { "resetStats": "" },
+      "defaultFingerprint": { 
+        "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", 
+        "model": "TS0601", "manufacturer": "_TZE200_ztc6ggyl", "deviceJoinName": "Tuya ZigBee Breath Presence Sensor ZY-M100"
+      },
+      "fingerprints": [
+        { "model": "TS0601", "manufacturer": "_TZE200_ztc6ggyl", "deviceJoinName": "Tuya ZigBee Breath Presence Sensor ZY-M100" },
+        { "model": "TS0601", "manufacturer": "_TZE204_ztc6ggyl" },
+        { "model": "TS0601", "manufacturer": "_TZE200_ikvncluo", "deviceJoinName": "Moes TuyaHuman Presence Detector Radar 2 in 1" },
+        { "model": "TS0601", "manufacturer": "_TZE200_lyetpprm" },
+        { "model": "TS0601", "manufacturer": "_TZE200_wukb7rhc", "deviceJoinName": "Moes Smart Human Presence Detector" },
+        { "model": "TS0601", "manufacturer": "_TZE200_jva8ink8", "deviceJoinName": "AUBESS Human Presence Detector" },
+        { "model": "TS0601", "manufacturer": "_TZE200_mrf6vtua" },
+        { "model": "TS0601", "manufacturer": "_TZE200_ar0slwnd" },
+        { "model": "TS0601", "manufacturer": "_TZE200_sfiy5tfs" },
+        { "model": "TS0601", "manufacturer": "_TZE200_holel4dk" },
+        { "model": "TS0601", "manufacturer": "_TZE200_xpq2rzhq" },
+        { "model": "TS0601", "manufacturer": "_TZE204_qasjif9e" },
+        { "model": "TS0601", "manufacturer": "_TZE204_xsm7l9xa" },
+        { "model": "TS0601", "manufacturer": "_TZE204_ztqnh5cg" },
+        { "model": "TS0601", "manufacturer": "_TZE204_fwondbzy", "deviceJoinName": "Moes Smart Human Presence Detector" }
+      ],
+      "tuyaDPs": [
+        { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "scale": 1, "map": { "0": "inactive", "1": "active" }, "unit": "", "title": "<b>Presence state</b>", "description": "<i>Presence state</i>" },
+        { "dp": 2, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 0, "max": 9, "defVal": 7, "scale": 1, "unit": "", "title": "<b>Radar sensitivity</b>", "description": "<i>Sensitivity of the radar</i>" },
+        { "dp": 3, "name": "minimumDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 10.0, "defVal": 0.1, "scale": 100, "unit": "meters", "title": "<b>Minimim detection distance</b>", "description": "<i>Minimim (near) detection distance</i>" },
+        { "dp": 4, "name": "maximumDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 10.0, "defVal": 6.0, "scale": 100, "unit": "meters", "title": "<b>Maximum detection distance</b>", "description": "<i>Maximum (far) detection distance</i>" },
+        { "dp": 6, "name": "radarStatus", "type": "enum", "rw": "ro", "min": 0, "max": 5, "defVal": "1", "scale": 1, "map": { "0": "checking", "1": "check_success", "2": "check_failure", "3": "others", "4": "comm_fault", "5": "radar_fault" }, "unit": "TODO", "title": "<b>Radar self checking status</b>", "description": "<i>Radar self checking status</i>" },
+        { "dp": 9, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 10.0, "defVal": 0.0, "scale": 100, "unit": "meters", "title": "<b>Distance</b>", "description": "<i>detected distance</i>" },
+        { "dp": 101, "name": "detectionDelay", "type": "decimal", "rw": "rw", "min": 0.0, "max": 10.0, "defVal": 0.2, "scale": 10, "unit": "seconds", "title": "<b>Detection delay</b>", "description": "<i>Presence detection delay timer</i>" },
+        { "dp": 102, "name": "fadingTime", "type": "decimal", "rw": "rw", "min": 0.5, "max": 500.0, "defVal": 60.0, "scale": 10, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Presence inactivity delay timer</i>" },
+        { "dp": 103, "name": "debugCLI", "type": "number", "rw": "ro", "min": 0, "max": 99999, "defVal": 0, "scale": 1, "unit": "?", "title": "<b>debugCLI</b>", "description": "<i>debug CLI</i>" },
+        { "dp": 104, "name": "illuminance", "type": "number", "rw": "ro", "min": 0, "max": 2000, "defVal": 0, "scale": 1, "unit": "lx", "title": "<b>illuminance</b>", "description": "<i>illuminance</i>" }
+      ],
+      "refresh": ["queryAllTuyaDP"],
+      "spammyDPsToIgnore": [9],
+      "spammyDPsToNotTrace": [2, 3, 4, 6, 9, 101, 102, 103, 104]
+    },
+    "TS0601_BLACK_SQUARE_RADAR": {
+      "description": "24GHz Black Square Human Presence Radar w/ LED",
+      "device": { "powerSource": "dc" },
+      "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement": true },
+      "preferences": { "radarSensitivity": "102", "fadingTime": "104" },
+      "defaultFingerprint": { 
+        "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", 
+        "model": "TS0601", "manufacturer": "_TZE200_0u3bj3rc", "deviceJoinName": "24GHz Black Square Human Presence Radar w/ LED"
+      },
+      "fingerprints": [
+        { "model": "TS0601", "manufacturer": "_TZE200_0u3bj3rc" },
+        { "model": "TS0601", "manufacturer": "_TZE200_v6ossqfy" },
+        { "model": "TS0601", "manufacturer": "_TZE200_mx6u6l4y" }
+      ],
+      "tuyaDPs": [
+        { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "map": { "0": "inactive", "1": "active" }, "title": "<b>Presence state</b>", "description": "<i>Presence state</i>" },
+        { "dp": 2, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 10.0, "defVal": 0.0, "scale": 100, "unit": "meters", "title": "<b>Distance</b>", "description": "<i>Detected distance</i>" },
+        { "dp": 4, "name": "illuminance", "type": "number", "rw": "ro", "min": 0, "max": 2000, "defVal": 0, "scale": 1, "unit": "lx", "title": "<b>Illuminance</b>", "description": "<i>Illuminance</i>" },
+        { "dp": 102, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 1, "max": 5, "defVal": 3, "scale": 1, "unit": "", "title": "<b>Radar sensitivity</b>", "description": "<i>Sensitivity of the radar</i>" },
+        { "dp": 104, "name": "fadingTime", "type": "number", "rw": "rw", "min": 5, "max": 1500, "defVal": 60, "scale": 1, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Presence inactivity timer, seconds</i>" },
+        { "dp": 103, "name": "detectionDelay", "type": "decimal", "rw": "rw", "min": 0.0, "max": 10.0, "defVal": 1.0, "scale": 10, "unit": "seconds", "title": "<b>Detection delay</b>", "description": "<i>Detection delay</i>" },
+        { "dp": 104, "name": "radar_scene", "type": "enum", "rw": "rw", "min": 0, "max": 4, "defVal": "0", "map": { "0": "default", "1": "bathroom", "2": "bedroom", "3": "sleeping" }, "description": "Presets for sensitivity for presence and movement" },
+        { "dp": 105, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 10.0, "scale": 100, "unit": "meters", "description": "Distance" }
+      ],
+      "refresh": ["queryAllTuyaDP"],
+      "spammyDPsToIgnore": [105],
+      "spammyDPsToNotTrace": [105]
+    },
+    "TS0601_24GHZ_PIR_RADAR": {
+      "description": "Tuya TS0601_2AAELWXK 24 GHz + PIR Radar",
+      "device": { "powerSource": "battery", "ignoreIAS": true },
+      "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "HumanMotionState": true, "Battery": true },
+      "preferences": { "radarSensitivity": "123", "staticDetectionSensitivity": "2", "staticDetectionDistance": "4", "fadingTime": "102", "ledIndicator": "107", "motionDetectionMode": "122" },
+      "commands": { "resetSettings": "", "resetStats": "" },
+      "fingerprints": [
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0003,0500,0001,0400", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_2aaelwxk", "deviceJoinName": "Tuya 2AAELWXK 24 GHz + PIR Radar" },
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0003,0500,0001,0400", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_kb5noeto", "deviceJoinName": "Tuya KB5NOETO 24 GHz + PIR Radar" }
+      ],
+      "tuyaDPs": [
+        { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "scale": 1, "map": { "0": "inactive", "1": "active" }, "unit": "", "title": "<b>Presence state</b>", "description": "<i>Presence state</i>" },
+        { "dp": 2, "name": "staticDetectionSensitivity", "type": "number", "rw": "rw", "min": 0, "max": 10, "defVal": 7, "scale": 1, "unit": "", "title": "<b>Static Detection Sensitivity</b>", "description": "<i>Static detection sensitivity</i>" },
+        { "dp": 4, "name": "staticDetectionDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 10.0, "defVal": 5.0, "scale": 100, "unit": "meters", "title": "<b>Static detection distance</b>", "description": "<i>Static detection distance</i>" },
+        { "dp": 101, "name": "humanMotionState", "type": "enum", "rw": "ro", "min": 0, "max": 3, "defVal": "0", "map": { "0": "none", "1": "moving", "2": "small", "3": "static" }, "description": "Human motion state" },
+        { "dp": 102, "name": "fadingTime", "type": "number", "rw": "rw", "min": 0, "max": 28800, "defVal": 30, "scale": 1, "unit": "seconds", "title": "<b>Presence keep time</b>", "description": "<i>Presence keep time</i>" },
+        { "dp": 106, "name": "illuminance", "type": "number", "rw": "ro", "scale": 10, "unit": "lx", "description": "Illuminance" },
+        { "dp": 107, "name": "ledIndicator", "type": "enum", "rw": "rw", "min": 0, "max": 1, "defVal": "0", "map": { "0": "0 - OFF", "1": "1 - ON" }, "title": "<b>LED indicator</b>", "description": "<i>LED indicator mode</i>" },
+        { "dp": 121, "name": "battery", "type": "number", "rw": "ro", "min": 0, "max": 100, "defVal": 100, "scale": 1, "unit": "%", "title": "<b>Battery level</b>", "description": "<i>Battery level</i>" },
+        { "dp": 122, "name": "motionDetectionMode", "type": "enum", "rw": "rw", "min": 0, "max": 2, "defVal": "1", "map": { "0": "0 - onlyPIR", "1": "1 - PIRandRadar", "2": "2 - onlyRadar" }, "title": "<b>Motion detection mode</b>", "description": "<i>Motion detection mode</i>" },
+        { "dp": 123, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 1, "max": 9, "defVal": 5, "scale": 1, "unit": "", "title": "<b>Motion Detection sensitivity</b>", "description": "<i>Motion detection sensitivity</i>" }
+      ],
+      "refresh": ["queryAllTuyaDP"]
+    },
+    "TS0225_LINPTECH_RADAR": {
+      "description": "Tuya TS0225_LINPTECH 24GHz Radar",
+      "device": { "powerSource": "dc" },
+      "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement": true },
+      "preferences": { "fadingTime": "101", "motionDetectionDistance": "0xE002:0xE00B", "motionDetectionSensitivity": "0xE002:0xE004", "staticDetectionSensitivity": "0xE002:0xE005", "ledIndicator": "0xE002:0xE009" },
+      "commands": { "resetStats": "", "refresh": "", "initialize": "", "updateAllPreferences": "", "resetPreferencesToDefaults": "", "validateAndFixPreferences": "" },
+      "fingerprints": [
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0003,0004,0005,E002,4000,EF00,0500", "outClusters": "0019,000A", "model": "TS0225", "manufacturer": "_TZ3218_awarhusb", "deviceJoinName": "Tuya TS0225_LINPTECH 24Ghz Human Presence Detector" },
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0003,0004,0005,E002,4000,EF00,0500", "outClusters": "0019,000A", "model": "TS0225", "manufacturer": "_TZ3218_t9ynfz4x", "deviceJoinName": "Tuya TS0225_LINPTECH 24Ghz Human Presence Detector" }
+      ],
+      "tuyaDPs": [
+        { "dp": 101, "name": "fadingTime", "type": "number", "rw": "rw", "min": 1, "max": 9999, "defVal": 10, "scale": 1, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Presence inactivity timer, seconds</i>" }
+      ],
+      "attributes": [
+        { "at": "0xE002:0xE001", "name": "occupiedTime", "type": "number", "dt": "0x21", "rw": "ro", "min": 0, "max": 65535, "scale": 1, "unit": "minutes", "title": "<b>Existence time</b>", "description": "<i>Existence (presence) time, recommended value is > 10 seconds!</i>" },
+        { "at": "0xE002:0xE004", "name": "motionDetectionSensitivity", "type": "enum", "dt": "0x20", "rw": "rw", "min": 1, "max": 5, "defVal": "4", "scale": 1, "map": { "1": "1 - low", "2": "2 - medium low", "3": "3 - medium", "4": "4 - medium high", "5": "5 - high" }, "unit": "", "title": "<b>Motion Detection Sensitivity</b>", "description": "<i>Large motion detection sensitivity</i>" },
+        { "at": "0xE002:0xE005", "name": "staticDetectionSensitivity", "type": "enum", "dt": "0x20", "rw": "rw", "min": 1, "max": 5, "defVal": "3", "scale": 1, "map": { "1": "1 - low", "2": "2 - medium low", "3": "3 - medium", "4": "4 - medium high", "5": "5 - high" }, "unit": "", "title": "<b>Static Detection Sensitivity</b>", "description": "<i>Static detection sensitivity</i>" },
+        { "at": "0xE002:0xE009", "name": "ledIndicator", "type": "enum", "dt": "0x10", "rw": "rw", "min": 0, "max": 1, "defVal": "0", "map": { "0": "0 - OFF", "1": "1 - ON" }, "title": "<b>LED indicator mode</b>", "description": "<i>LED indicator mode<br>Requires firmware version 1.0.6 (application:46)!</i>" },
+        { "at": "0xE002:0xE00A", "name": "distance", "type": "decimal", "dt": "0x21", "rw": "ro", "min": 0.0, "max": 6.0, "defVal": 0.0, "scale": 100, "unit": "meters", "title": "<b>Distance</b>", "description": "<i>Measured distance</i>" },
+        { "at": "0xE002:0xE00B", "name": "motionDetectionDistance", "type": "enum", "dt": "0x21", "rw": "rw", "min": 0.75, "max": 6.00, "defVal": "450", "step": 75, "scale": 100, "map": { "75": "0.75 meters", "150": "1.50 meters", "225": "2.25 meters", "300": "3.00 meters", "375": "3.75 meters", "450": "4.50 meters", "525": "5.25 meters", "600": "6.00 meters" }, "unit": "meters", "title": "<b>Motion Detection Distance</b>", "description": "<i>Large motion detection distance, meters</i>" }
+      ],
+      "refresh": ["queryAllTuyaDP"],
+      "configuration": {},
+      "comments": ["https://github.com/Koenkk/zigbee2mqtt/issues/18637"]
+    }
+}
+''' 
 
 // called from processFoundItem() for Linptech radar
 Integer skipIfDisabled(int val) {
@@ -567,20 +692,63 @@ void testFunc( par) {
     parse('catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100') 
 }
 
-// catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100 
+
+@Field static final Map deviceProfilesV3 = [:]  
+
 void test(String par) {
     long startTime = now()
     logDebug "test() started at ${startTime}"
+
+    boolean loaded = loadProfilesFromJSON()
+    if (!loaded) {
+        logWarn "test(): profiles not loaded, aborting test()"
+        return
+    }
+    List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes
+    logDebug "test() attribMap: ${attribMap}"
+
+    /*
     //parse('catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100')
     def parpar = 'catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100'
 
     for (int i=0; i<100; i++) { 
         testFunc(parpar) 
     }
-
+*/
     long endTime = now()
     logDebug "test() ended at ${endTime} (duration ${endTime - startTime}ms)"
 }
+
+
+// -------------- new test functions - add here !!! -------------------------
+
+
+boolean loadProfilesFromJSON() {
+    // idempotent : don't re-parse if already populated
+    if (!deviceProfilesV3.isEmpty()) {
+        logDebug "loadProfilesFromJSON: already loaded (${deviceProfilesV3.size()} profiles)"
+        return true
+    }
+    try {
+        if (!testJSON) {
+            logWarn "loadProfilesFromJSON: testJSON is empty/null"
+            return false
+        }
+        def parsed = new groovy.json.JsonSlurper().parseText(testJSON.trim())
+        def dp = parsed?.deviceProfiles
+        if (!(dp instanceof Map) || dp.isEmpty()) {
+            logWarn "loadProfilesFromJSON: parsed deviceProfiles missing or empty"
+            return false
+        }
+        deviceProfilesV3.putAll(dp as Map)
+        logDebug "loadProfilesFromJSON: loaded ${deviceProfilesV3.size()} profiles: ${deviceProfilesV3.keySet()}"
+        return true
+    } catch (Exception e) {
+        logError "loadProfilesFromJSON: error converting JSON: ${e.message}"
+        return false
+    }
+}
+
 
 
 
