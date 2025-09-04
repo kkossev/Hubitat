@@ -40,7 +40,7 @@ library(
 */
 
 String commonLibVersion() { '4.0.0' }
-String commonLibStamp() { '2025/09/03 9:25 PM' }
+String commonLibStamp() { '2025/09/04 4:42 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -817,19 +817,19 @@ public void standardParseTuyaCluster(final Map descMap) {
 void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
     logTrace "standardProcessTuyaDP: <b> checking customProcessTuyaDp</b> dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
     if (this.respondsTo('customProcessTuyaDp')) {
-        logTrace 'standardProcessTuyaDP: customProcessTuyaDp exists, calling it...'
+        //logTrace 'standardProcessTuyaDP: customProcessTuyaDp exists, calling it...'
         if (customProcessTuyaDp(descMap, dp, dp_id, fncmd, dp_len) == true) {
             return       // EF00 DP has been processed in the custom handler - we are done!
         }
     }
     // check if DeviceProfile processing method exists (deviceProfieLib should be included in the main driver)
     if (this.respondsTo(processTuyaDPfromDeviceProfile)) {
-        logTrace 'standardProcessTuyaDP: processTuyaDPfromDeviceProfile exists, calling it...'
+        //logTrace 'standardProcessTuyaDP: processTuyaDPfromDeviceProfile exists, calling it...'
         if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {
             return      // sucessfuly processed the new way - we are done.  (version 3.0)
         }
     }
-    logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+    logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data} (deviceProfile = ${state.deviceProfile}, deviceProfilesV3 count = ${deviceProfilesV3?.size() ?: 0})"
 }
 
 public int getTuyaAttributeValue(final List<String> _data, final int index) {

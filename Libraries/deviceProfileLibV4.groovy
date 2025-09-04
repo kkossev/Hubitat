@@ -19,7 +19,7 @@ library(
  * ver. 1.0.0  2023-11-04 kkossev  - added deviceProfileLib (based on Tuya 4 In 1 driver)
  * ...................................
  * ver. 3.5.0  2025-08-14 kkossev  - zclWriteAttribute() support for forced destinationEndpoint in the attributes map
- * ver. 4.0.0  2025-09-03 kkossev  - deviceProfileV4 BRANCH created
+ * ver. 4.0.0  2025-09-03 kkossev  - deviceProfileV4 BRANCH created; deviceProfilesV2 support is dropped; 
  *
  *                                   TODO - 
  *
@@ -68,14 +68,15 @@ metadata {
 private boolean is2in1() { return getDeviceProfile().startsWith('TS0601_2IN1')  }   // patch!
 
 public String  getDeviceProfile()       { state?.deviceProfile ?: 'UNKNOWN' }
-public Map     getDEVICE()              { deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : deviceProfilesV2 != null ? deviceProfilesV2[getDeviceProfile()] : [:] }
-public Set     getDeviceProfiles()      { deviceProfilesV3 != null ? deviceProfilesV3?.keySet() : deviceProfilesV2 != null ?  deviceProfilesV2?.keySet() : [] }
+public Map     getDEVICE()              { 
+    if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
+    return deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : [:] 
+}
+public Set     getDeviceProfiles()      { deviceProfilesV3 != null ? deviceProfilesV3?.keySet() : [] }
 
 public List<String> getDeviceProfilesMap()   {
-    if (deviceProfilesV3 == null) {
-        if (deviceProfilesV2 == null) { return [] }
-        return deviceProfilesV2.values().description as List<String>
-    }
+    if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
+    if (deviceProfilesV3 == null) { return [] }
     List<String> activeProfiles = []
     deviceProfilesV3.each { profileName, profileMap ->
         if ((profileMap.device?.isDepricated ?: false) != true) {
@@ -93,8 +94,8 @@ public List<String> getDeviceProfilesMap()   {
  * @return The profile key if found, otherwise null.
  */
 public String getProfileKey(final String valueStr) {
+    if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
     if (deviceProfilesV3 != null) { return deviceProfilesV3.find { _, profileMap -> profileMap.description == valueStr }?.key }
-    else if (deviceProfilesV2 != null) { return deviceProfilesV2.find { _, profileMap -> profileMap.description == valueStr }?.key }
     else { return null }
 }
 
@@ -821,6 +822,7 @@ public Map inputIt(String paramPar, boolean debug = false) {
  * @return A list containing the device name and profile.
  */
 public List<String> getDeviceNameAndProfile(String model=null, String manufacturer=null) {
+    if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
     String deviceName = UNKNOWN, deviceProfile = UNKNOWN
     String deviceModel        = model != null ? model : device.getDataValue('model') ?: UNKNOWN
     String deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
@@ -842,6 +844,7 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
 
 // called from  initializeVars( fullInit = true)
 public void setDeviceNameAndProfile(String model=null, String manufacturer=null) {
+    if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
     def (String deviceName, String deviceProfile) = getDeviceNameAndProfile(model, manufacturer)
     if (deviceProfile == null || deviceProfile == UNKNOWN) {
         logInfo "unknown model ${deviceModel} manufacturer ${deviceManufacturer}"
@@ -935,6 +938,8 @@ List<String> initializeDeviceProfile() {
 
 public void deviceProfileInitializeVars(boolean fullInit=false) {
     logDebug "deviceProfileInitializeVars(${fullInit})"
+    // Eager loading during initialization
+    if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
     if (state.deviceProfile == null) {
         setDeviceNameAndProfile()
     }
@@ -1194,6 +1199,7 @@ public boolean processClusterAttributeFromDeviceProfile(final Map descMap) {
     if (state.deviceProfile == null)  { logTrace '<b>state.deviceProfile is missing!<b>'; return false }
     if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return false }
 
+    if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
     List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes
     if (attribMap == null || attribMap?.isEmpty()) { return false }    // no any attributes are defined in the Device Profile
 
@@ -1235,6 +1241,7 @@ public boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, f
     if (state.deviceProfile == null)  { return false }
     if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status)
 
+    if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
     List<Map> tuyaDPsMap = deviceProfilesV3[state.deviceProfile]?.tuyaDPs
     if (tuyaDPsMap == null || tuyaDPsMap == [:]) { return false }    // no any Tuya DPs defined in the Device Profile
 
@@ -1264,7 +1271,7 @@ private boolean processFoundItem(final Map descMap, final Map foundItem, int val
             value = preProcValue as int
         }
     }
-    else { logTrace "processFoundItem: no preProc for ${foundItem.name}" }
+    //else { logTrace "processFoundItem: no preProc for ${foundItem.name}" }
 
     String name = foundItem.name                                   // preference name as in the attributes map
     String existingPrefValue = settings[foundItem.name] ?: 'none'  // existing preference value

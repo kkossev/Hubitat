@@ -23,7 +23,7 @@
 */
 
 static String version() { "4.0.0" }
-static String timeStamp() {"2025/09/04 2:03 PM"}
+static String timeStamp() {"2025/09/04 5:32 PM"}
 
 @Field static final Boolean _DEBUG = true           // debug logging
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -702,13 +702,15 @@ void testFunc( par) {
 }
 
 
-@Field static final Map deviceProfilesV3 = [:]  
+@Field static final Map deviceProfilesV3 = [:]
+@Field static volatile boolean profilesLoading = false
+@Field static volatile boolean profilesLoaded = false
 
 void test(String par) {
     long startTime = now()
     logDebug "test() started at ${startTime}"
 
-    boolean loaded = loadProfilesFromJSON()
+    boolean loaded = ensureProfilesLoaded()
     if (!loaded) {
         logWarn "test(): profiles not loaded, aborting test()"
         return
@@ -739,12 +741,14 @@ void cacheTest(String action) {
             logInfo "cacheTest Info: deviceProfilesV3 size=${size} keys=${keys}"
             break
         case 'Initialize':
-            boolean ok = loadProfilesFromJSON()
-            logInfo "cacheTest Initialize: loadProfilesFromJSON() -> ${ok}; size now ${deviceProfilesV3.size()}"
+            boolean ok = ensureProfilesLoaded()
+            logInfo "cacheTest Initialize: ensureProfilesLoaded() -> ${ok}; size now ${deviceProfilesV3.size()}"
             break
         case 'Clear':
             int before = deviceProfilesV3.size()
             deviceProfilesV3.clear()
+            profilesLoaded = false
+            profilesLoading = false
             logInfo "cacheTest Clear: cleared ${before} entries; size now ${deviceProfilesV3.size()}"
             break
         default:
@@ -774,6 +778,7 @@ boolean loadProfilesFromJSON() {
             return false
         }
         deviceProfilesV3.putAll(dp as Map)
+        profilesLoaded = true
         logDebug "loadProfilesFromJSON: loaded ${deviceProfilesV3.size()} profiles: ${deviceProfilesV3.keySet()}"
         return true
     } catch (Exception e) {
@@ -781,6 +786,52 @@ boolean loadProfilesFromJSON() {
         return false
     }
 }
+
+/**
+ * Ensures that device profiles are loaded with thread-safe lazy loading
+ * This is the main function that should be called before accessing deviceProfilesV3
+ * @return true if profiles are loaded successfully, false otherwise
+ */
+private boolean ensureProfilesLoaded() {
+    // Fast path: already loaded
+    if (!deviceProfilesV3.isEmpty() && profilesLoaded) {
+        return true
+    }
+    
+    // Check if another thread is already loading
+    if (profilesLoading) {
+        // Wait briefly for other thread to finish
+        for (int i = 0; i < 10; i++) {
+            pauseExecution(100)
+            if (profilesLoaded && !deviceProfilesV3.isEmpty()) {
+                return true
+            }
+        }
+        // If still loading after wait, proceed anyway
+        logDebug "ensureProfilesLoaded: timeout waiting for other thread, proceeding"
+    }
+    
+    // Acquire loading lock
+    profilesLoading = true
+    try {
+        // Double-check after acquiring lock
+        if (deviceProfilesV3.isEmpty() || !profilesLoaded) {
+            logDebug "ensureProfilesLoaded: loading device profiles..."
+            boolean result = loadProfilesFromJSON()
+            if (result) {
+                profilesLoaded = true
+                logDebug "ensureProfilesLoaded: successfully loaded ${deviceProfilesV3.size()} profiles"
+            } else {
+                logWarn "ensureProfilesLoaded: failed to load device profiles"
+            }
+            return result
+        }
+        return true
+    } finally {
+        profilesLoading = false
+    }
+}
+
 
 
 
