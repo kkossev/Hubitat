@@ -824,6 +824,7 @@ void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, fin
     }
     // check if DeviceProfile processing method exists (deviceProfieLib should be included in the main driver)
     if (this.respondsTo(processTuyaDPfromDeviceProfile)) {
+        logTrace 'standardProcessTuyaDP: processTuyaDPfromDeviceProfile exists, calling it...'
         if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {
             return      // sucessfuly processed the new way - we are done.  (version 3.0)
         }

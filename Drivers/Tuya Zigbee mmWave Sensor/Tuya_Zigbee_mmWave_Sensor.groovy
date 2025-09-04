@@ -23,11 +23,11 @@
 */
 
 static String version() { "4.0.0" }
-static String timeStamp() {"2025/09/04 8:09 AM"}
+static String timeStamp() {"2025/09/04 2:03 PM"}
 
 @Field static final Boolean _DEBUG = true           // debug logging
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
-@Field static final Boolean DEFAULT_DEBUG_LOGGING = false 
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = true 
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -99,6 +99,7 @@ metadata {
             command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]] 
             // testParse is defined in the common library
             // tuyaTest is defined in the common library
+            command 'cacheTest', [[name: "action", type: "ENUM", description: "Cache action", constraints: ["Info", "Initialize", "Clear"], defaultValue: "Info"]]
         }
         // itterate through all the figerprints and add them on the fly
         deviceProfilesV3.each { profileName, profileMap ->
@@ -617,10 +618,18 @@ void customInitEvents(final boolean fullInit=false) {
     logDebug "customInitEvents()"
     if (getDeviceProfile() == 'TS0601_BLACK_SQUARE_RADAR') {
         sendEvent(name: 'WARNING', value: 'EXTREMLY SPAMMY DEVICE!', descriptionText: 'This device bombards the hub every 4 seconds!')
+        logWarn "customInitEvents: ${device.displayName} is a known spammy device!"
+        logInfo 'This device bombards the hub every 4 seconds!'
+    }
+    if (!state.deviceProfile || state.deviceProfile == UNKNOWN) {
+        String unknown = "<b>UNKNOWN</b> mmWave model/manufacturer ${device.getDataValue('model')}/${device.getDataValue('manufacturer')}"
+        sendEvent(name: 'WARNING', value: unknown, descriptionText: 'Device profile is not set')
+        logInfo unknown
+        logWarn unknown
     }
 }
 
-void updateInidicatorLight() {
+void updateIndicatorLight() {
     if (settings?.indicatorLight != null && getDeviceProfile() == 'TS0601_BLACK_SQUARE_RADAR') {
         // in the old 4-in-1 driver we used the Tuya command 0x11 to restore the LED on/off configuration
         // dont'know what command "11" means, it is sent by the square black radar when powered on. Will use it to restore the LED on/off configuration :)
@@ -710,6 +719,7 @@ void test(String par) {
     /*
     //parse('catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100')
     def parpar = 'catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100'
+    catchall: 0104 EF00 01 01 0040 00 E03B 01 00 0000 02 01 00EB0104000100
 
     for (int i=0; i<100; i++) { 
         testFunc(parpar) 
@@ -717,6 +727,29 @@ void test(String par) {
 */
     long endTime = now()
     logDebug "test() ended at ${endTime} (duration ${endTime - startTime}ms)"
+}
+
+// cacheTest command - manage and inspect cached data structures (currently deviceProfilesV3)
+void cacheTest(String action) {
+    String act = (action ?: 'Info').trim()
+    switch(act) {
+        case 'Info':
+            int size = deviceProfilesV3?.size() ?: 0
+            List keys = deviceProfilesV3 ? new ArrayList(deviceProfilesV3.keySet()) : []
+            logInfo "cacheTest Info: deviceProfilesV3 size=${size} keys=${keys}"
+            break
+        case 'Initialize':
+            boolean ok = loadProfilesFromJSON()
+            logInfo "cacheTest Initialize: loadProfilesFromJSON() -> ${ok}; size now ${deviceProfilesV3.size()}"
+            break
+        case 'Clear':
+            int before = deviceProfilesV3.size()
+            deviceProfilesV3.clear()
+            logInfo "cacheTest Clear: cleared ${before} entries; size now ${deviceProfilesV3.size()}"
+            break
+        default:
+            logWarn "cacheTest: unknown action '${action}'"
+    }
 }
 
 
