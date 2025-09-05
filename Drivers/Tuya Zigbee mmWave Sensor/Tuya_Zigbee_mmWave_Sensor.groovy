@@ -24,7 +24,7 @@
 */
 
 static String version() { "4.0.0" }
-static String timeStamp() {"2025/09/05 1:29 PM"}
+static String timeStamp() {"2025/09/05 4:48 PM"}
 
 @Field static final Boolean _DEBUG = true           // debug logging
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -100,9 +100,9 @@ metadata {
             command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]] 
             // testParse is defined in the common library
             // tuyaTest is defined in the common library
-            command 'cacheTest', [[name: "action", type: "ENUM", description: "Cache action", constraints: ["Info", "Initialize", "ReconstructedFingerprints", "Clear"], defaultValue: "Info"]]
+            command 'cacheTest', [[name: "action", type: "ENUM", description: "Cache action", constraints: ["Info", "Initialize", "ReconstructedFingerprints", "CurrentProfilesV4", "currentProfilesV4 Dump", "LoadCurrentProfile", "DisposeV3", "Clear"], defaultValue: "Info"]]
         }
-        
+        /*
         // Generate fingerprints from optimized deviceFingerprintsV4 map (fast access!)
         // Uses pre-loaded fingerprint data instead of processing deviceProfilesV3
         if (deviceFingerprintsV4 && !deviceFingerprintsV4.isEmpty()) {
@@ -112,6 +112,7 @@ metadata {
                 }
             }
         }
+        */
     }
 
     preferences {
@@ -713,107 +714,12 @@ def pageDeviceConfiguration(params) {
 
 // ------------------------- end of Simon's tooltips methods -------------------------
 
-@CompileStatic
-void testFunc( par) {
-    parse('catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100') 
-}
-
-
-void test(String par) {
-    long startTime = now()
-    logWarn "test() started at ${startTime}"
-
-    def xx = getDeviceProfilesMap()
-    logDebug "test() getDeviceProfilesMap() returned ${xx?.size() ?: 0} profiles"
-    /*
-
-    boolean loaded = ensureProfilesLoaded()
-    if (!loaded) {
-        logWarn "test(): profiles not loaded, aborting test()"
-        return
-    }
-    List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes
-    logDebug "test() attribMap: ${attribMap}"
-    */
-
-    /*
-    //parse('catchall: 0104 EF00 01 01 0040 00 E03B 01 00 0000 02 01 00556701000100')
-    def parpar = 'catchall: 0104 EF00 01 01 0040 00 E03B 01 00 0000 02 01 00556701000100'
-    catchall: 0104 EF00 01 01 0040 00 E03B 01 00 0000 02 01 00EB0104000100
-
-    for (int i=0; i<100; i++) { 
-        testFunc(parpar) 
-    }
-*/
-    long endTime = now()
-    logWarn "test() ended at ${endTime} (duration ${endTime - startTime}ms)"
-}
-
-
-// cacheTest command - manage and inspect cached data structures (currently deviceProfilesV3)
-void cacheTest(String action) {
-    String act = (action ?: 'Info').trim()
-    switch(act) {
-        case 'Info':
-            int size = deviceProfilesV3?.size() ?: 0
-            int fingerprintSize = deviceFingerprintsV4?.size() ?: 0
-            List keys = deviceProfilesV3 ? new ArrayList(deviceProfilesV3.keySet()) : []
-            List fingerprintKeys = deviceFingerprintsV4 ? new ArrayList(deviceFingerprintsV4.keySet()) : []
-            
-            // Count computed fingerprints
-            int totalComputedFingerprints = 0
-            deviceFingerprintsV4.each { key, value ->
-                totalComputedFingerprints += value.computedFingerprints?.size() ?: 0
-            }
-            
-            logInfo "cacheTest Info: deviceProfilesV3 size=${size} keys=${keys}"
-            logInfo "cacheTest Info: deviceFingerprintsV4 size=${fingerprintSize} keys=${fingerprintKeys}"
-            logInfo "cacheTest Info: total computed fingerprint strings=${totalComputedFingerprints}"
-            break
-        case 'Initialize':
-            boolean ok = ensureProfilesLoaded()
-            logInfo "cacheTest Initialize: ensureProfilesLoaded() -> ${ok}; size now ${deviceProfilesV3.size()}"
-            break
-        case 'ReconstructedFingerprints':
-            if (deviceFingerprintsV4.isEmpty()) {
-                logInfo "cacheTest ReconstructedFingerprints: no fingerprints loaded - run Initialize first"
-            } else {
-                deviceFingerprintsV4.each { profileName, fingerprintData ->
-                    int fpCount = fingerprintData.computedFingerprints?.size() ?: 0
-                    if (fpCount > 0) {
-                        StringBuilder allFingerprints = new StringBuilder()
-                        allFingerprints.append("Profile ${profileName} has ${fpCount} computed fingerprints:<br>")
-                        fingerprintData.computedFingerprints.eachWithIndex { fpString, index ->
-                            allFingerprints.append(" [${index + 1}] ${fpString}")
-                            if (index < fpCount - 1) allFingerprints.append(" <br>")  // add line break except after last
-                        }
-                        logInfo "cacheTest ReconstructedFingerprints: ${allFingerprints.toString()}"
-                    } else {
-                        logInfo "cacheTest ReconstructedFingerprints: Profile ${profileName} has no computed fingerprints"
-                    }
-                }
-                logInfo "cacheTest ReconstructedFingerprints: completed"
-            }
-            break
-        case 'Clear':
-            int before = deviceProfilesV3.size()
-            int beforeFingerprints = deviceFingerprintsV4.size()
-            deviceProfilesV3.clear()
-            deviceFingerprintsV4.clear()
-            profilesLoaded = false
-            profilesLoading = false
-            logInfo "cacheTest Clear: cleared ${before} profiles and ${beforeFingerprints} fingerprint entries"
-            break
-        default:
-            logWarn "cacheTest: unknown action '${action}'"
-    }
-}
-
 
 @Field static  Map deviceProfilesV3 = [:]
 @Field static  boolean profilesLoading = false
 @Field static  boolean profilesLoaded = false
 @Field static  Map deviceFingerprintsV4 = [:]
+@Field static  Map currentProfilesV4 = [:]  // Key: device?.deviceNetworkId, Value: complete profile data
 
 // -------------- new test functions - add here !!! -------------------------
 
@@ -980,6 +886,173 @@ private boolean ensureProfilesLoaded() {
 }
 
 
+
+
+// cacheTest command - manage and inspect cached data structures (currently deviceProfilesV3)
+void cacheTest(String action) {
+    String act = (action ?: 'Info').trim()
+    switch(act) {
+        case 'Info':
+            int size = deviceProfilesV3?.size() ?: 0
+            int fingerprintSize = deviceFingerprintsV4?.size() ?: 0
+            int currentProfileSize = currentProfilesV4?.size() ?: 0
+            List keys = deviceProfilesV3 ? new ArrayList(deviceProfilesV3.keySet()) : []
+            List fingerprintKeys = deviceFingerprintsV4 ? new ArrayList(deviceFingerprintsV4.keySet()) : []
+            List currentProfileKeys = currentProfilesV4 ? new ArrayList(currentProfilesV4.keySet()) : []
+            
+            // Count computed fingerprints
+            int totalComputedFingerprints = 0
+            deviceFingerprintsV4.each { key, value ->
+                totalComputedFingerprints += value.computedFingerprints?.size() ?: 0
+            }
+            
+            String dni = device?.deviceNetworkId
+            boolean hasCurrentProfile = currentProfilesV4.containsKey(dni)
+            
+            logInfo "cacheTest Info: deviceProfilesV3 size=${size} keys=${keys}"
+            logInfo "cacheTest Info: deviceFingerprintsV4 size=${fingerprintSize} keys=${fingerprintKeys}"
+            logInfo "cacheTest Info: currentProfilesV4 size=${currentProfileSize} keys=${currentProfileKeys}"
+            logInfo "cacheTest Info: total computed fingerprint strings=${totalComputedFingerprints}"
+            logInfo "cacheTest Info: this device (${dni}) has current profile loaded=${hasCurrentProfile}"
+            break
+        case 'Initialize':
+            boolean ok = ensureProfilesLoaded()
+            logInfo "cacheTest Initialize: ensureProfilesLoaded() -> ${ok}; size now ${deviceProfilesV3.size()}"
+            break
+        case 'ReconstructedFingerprints':
+            if (deviceFingerprintsV4.isEmpty()) {
+                logInfo "cacheTest ReconstructedFingerprints: no fingerprints loaded - run Initialize first"
+            } else {
+                deviceFingerprintsV4.each { profileName, fingerprintData ->
+                    int fpCount = fingerprintData.computedFingerprints?.size() ?: 0
+                    if (fpCount > 0) {
+                        StringBuilder allFingerprints = new StringBuilder()
+                        allFingerprints.append("Profile ${profileName} has ${fpCount} computed fingerprints:<br>")
+                        fingerprintData.computedFingerprints.eachWithIndex { fpString, index ->
+                            allFingerprints.append(" [${index + 1}] ${fpString}")
+                            if (index < fpCount - 1) allFingerprints.append(" <br>")  // add line break except after last
+                        }
+                        logInfo "cacheTest ReconstructedFingerprints: ${allFingerprints.toString()}"
+                    } else {
+                        logInfo "cacheTest ReconstructedFingerprints: Profile ${profileName} has no computed fingerprints"
+                    }
+                }
+                logInfo "cacheTest ReconstructedFingerprints: completed"
+            }
+            break
+        case 'CurrentProfilesV4':
+            int currentSize = currentProfilesV4?.size() ?: 0
+            List currentKeys = currentProfilesV4 ? new ArrayList(currentProfilesV4.keySet()) : []
+            String dni = device?.deviceNetworkId
+            boolean hasCurrentProfile = currentProfilesV4.containsKey(dni)
+            
+            logInfo "cacheTest CurrentProfilesV4: size=${currentSize} keys=${currentKeys}"
+            logInfo "cacheTest CurrentProfilesV4: this device (${dni}) has profile loaded=${hasCurrentProfile}"
+            
+            if (hasCurrentProfile) {
+                Map currentProfile = currentProfilesV4[dni]
+                List profileKeys = currentProfile ? new ArrayList(currentProfile.keySet()) : []
+                logInfo "cacheTest CurrentProfilesV4: current profile keys=${profileKeys}"
+            }
+            break
+        case 'currentProfilesV4 Dump':
+            if (currentProfilesV4.isEmpty()) {
+                logInfo "cacheTest currentProfilesV4 Dump: currentProfilesV4 is empty"
+            } else {
+                logInfo "cacheTest currentProfilesV4 Dump: dumping entire currentProfilesV4 map:"
+                currentProfilesV4.each { dni, profileData ->
+                    logInfo "cacheTest currentProfilesV4 Dump: DNI '${dni}' -> ${profileData}"
+                }
+                logInfo "cacheTest currentProfilesV4 Dump: completed"
+            }
+            break
+        case 'LoadCurrentProfile':
+            String dni = device?.deviceNetworkId
+            String profileName = getDeviceProfile()
+            logInfo "cacheTest LoadCurrentProfile: attempting to load profile '${profileName}' for device ${dni}"
+            
+            ensureCurrentProfileLoaded()
+            
+            boolean loaded = currentProfilesV4.containsKey(dni)
+            logInfo "cacheTest LoadCurrentProfile: profile loaded=${loaded}"
+            if (loaded) {
+                Map profile = currentProfilesV4[dni]
+                logInfo "cacheTest LoadCurrentProfile: profile contains ${profile?.keySet()?.size() ?: 0} sections"
+            }
+            break
+        case 'DisposeV3':
+            int v3SizeBefore = deviceProfilesV3?.size() ?: 0
+            int currentSizeCheck = currentProfilesV4?.size() ?: 0
+            String dni = device?.deviceNetworkId
+            boolean hasCurrentProfile = currentProfilesV4.containsKey(dni)
+            
+            if (!hasCurrentProfile) {
+                logWarn "cacheTest DisposeV3: current device profile not loaded - cannot dispose V3 safely"
+            } else {
+                deviceProfilesV3.clear()
+                profilesLoaded = false
+                logInfo "cacheTest DisposeV3: disposed V3 profiles (was ${v3SizeBefore}) - currentProfilesV4 still has ${currentSizeCheck} entries"
+            }
+            break
+        case 'Clear':
+            int before = deviceProfilesV3.size()
+            int beforeFingerprints = deviceFingerprintsV4.size()
+            int beforeCurrentProfiles = currentProfilesV4.size()
+            deviceProfilesV3.clear()
+            deviceFingerprintsV4.clear()
+            currentProfilesV4.clear()
+            profilesLoaded = false
+            profilesLoading = false
+            logInfo "cacheTest Clear: cleared ${before} V3 profiles, ${beforeFingerprints} fingerprint entries, and ${beforeCurrentProfiles} current profiles"
+            break
+        default:
+            logWarn "cacheTest: unknown action '${action}'"
+    }
+}
+
+
+
+
+void testFunc( par) {
+    parse('catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100') 
+}
+
+
+void test(String par) {
+    long startTime = now()
+    logWarn "test() started at ${startTime}"
+
+    /*
+    def xx = getDeviceProfilesMap()
+    logDebug "test() getDeviceProfilesMap() returned ${xx?.size() ?: 0} profiles"
+    */
+     String dni = device?.deviceNetworkId
+    if (!currentProfilesV4.containsKey(dni)) {
+        populateCurrentProfile(dni)
+    }
+    /*
+
+    boolean loaded = ensureProfilesLoaded()
+    if (!loaded) {
+        logWarn "test(): profiles not loaded, aborting test()"
+        return
+    }
+    List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes
+    logDebug "test() attribMap: ${attribMap}"
+    */
+
+    /*
+    //parse('catchall: 0104 EF00 01 01 0040 00 E03B 01 00 0000 02 01 00556701000100')
+    def parpar = 'catchall: 0104 EF00 01 01 0040 00 E03B 01 00 0000 02 01 00556701000100'
+    catchall: 0104 EF00 01 01 0040 00 E03B 01 00 0000 02 01 00EB0104000100
+
+    for (int i=0; i<100; i++) { 
+        testFunc(parpar) 
+    }
+*/
+    long endTime = now()
+    logWarn "test() ended at ${endTime} (duration ${endTime - startTime}ms)"
+}
 
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////

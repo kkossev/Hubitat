@@ -40,7 +40,7 @@ library(
 */
 
 String commonLibVersion() { '4.0.0' }
-String commonLibStamp() { '2025/09/04 11:01 PM' }
+String commonLibStamp() { '2025/09/04 3:12 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -135,6 +135,7 @@ public boolean isVirtual() { device.controllerType == null || device.controllerT
  * @param description Zigbee message in hex format
  */
 public void parse(final String description) {
+    
     Map stateCopy = state            // .clone() throws java.lang.CloneNotSupportedException in HE platform version 2.4.1.155 !
     checkDriverVersion(stateCopy)    // +1 ms
     if (state.stats != null) { state.stats?.rxCtr= (state.stats?.rxCtr ?: 0) + 1 } else { state.stats = [:] }  // updateRxStats(state) // +1 ms
@@ -243,6 +244,7 @@ private static void updateRxStats(final Map state) {
 }
 
 public boolean isChattyDeviceReport(final Map descMap)  {  // when @CompileStatis is slower?
+return false
     if (_TRACE_ALL == true) { return false }
     if (this.respondsTo('isSpammyDPsToNotTrace')) {  // defined in deviceProfileLib
         return isSpammyDPsToNotTrace(descMap)
@@ -251,6 +253,7 @@ public boolean isChattyDeviceReport(final Map descMap)  {  // when @CompileStati
 }
 
 public boolean isSpammyDeviceReport(final Map descMap) {
+    return false
     if (_TRACE_ALL == true) { return false }
     if (this.respondsTo('isSpammyDPsToIgnore')) {   // defined in deviceProfileLib
         return isSpammyDPsToIgnore(descMap)
@@ -260,6 +263,7 @@ public boolean isSpammyDeviceReport(final Map descMap) {
 
 // not used?
 public boolean isSpammyTuyaRadar() {
+    return false
     if (_TRACE_ALL == true) { return false }
     if (this.respondsTo('isSpammyDeviceProfile'())) {   // defined in deviceProfileLib
         return isSpammyDeviceProfile()
@@ -288,13 +292,13 @@ private void parseZdoClusters(final Map descMap) {
             state.stats['activeEpRqCtr'] = (state.stats['activeEpRqCtr'] ?: 0) + 1
             if (settings?.logEnable) { log.debug "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, data:${descMap.data})" }
             // send the active endpoint response
-            cmds += ["he raw ${device.deviceNetworkId} 0 0 0x8005 {00 00 00 00 01 01} {0x0000}"]
+            cmds += ["he raw ${device?.deviceNetworkId} 0 0 0x8005 {00 00 00 00 01 01} {0x0000}"]
             sendZigbeeCommands(cmds)
             break
         case 0x0006 :
             state.stats['matchDescCtr'] = (state.stats['matchDescCtr'] ?: 0) + 1
             if (settings?.logEnable) { log.debug "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7] + descMap.data[6]})" }
-            cmds += ["he raw ${device.deviceNetworkId} 0 0 0x8006 {00 00 00 00 00} {0x0000}"]
+            cmds += ["he raw ${device?.deviceNetworkId} 0 0 0x8006 {00 00 00 00 00} {0x0000}"]
             sendZigbeeCommands(cmds)
             break
         case 0x0013 : // device announcement

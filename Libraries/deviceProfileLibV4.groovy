@@ -26,7 +26,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '4.0.0' }
-static String deviceProfileLibStamp() { '2025/09/04 1:55 PM' }
+static String deviceProfileLibStamp() { '2025/09/05 4:55 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -49,6 +49,7 @@ metadata {
             [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
     ]
     */
+    /*
     preferences {
         if (device) {
             input(name: 'forcedProfile', type: 'enum', title: '<b>Device Profile</b>', description: 'Manually change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!',  options: getDeviceProfilesMap())
@@ -63,15 +64,130 @@ metadata {
             }
         }
     }
+    */
 }
 
 private boolean is2in1() { return getDeviceProfile().startsWith('TS0601_2IN1')  }   // patch!
 
 public String  getDeviceProfile()       { state?.deviceProfile ?: 'UNKNOWN' }
 public Map     getDEVICE()              { 
-    if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
-    return deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : [:] 
+    // Use V4 approach if available, fallback to V3
+//    if (this.hasProperty('currentProfilesV4')) {
+//        ensureCurrentProfileLoaded()
+        return getCurrentDeviceProfile()
+//    } else {
+        // V3 fallback
+        //if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
+       // return deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : [:] 
+//    }
 }
+
+// ---- V4 Profile Management Methods ----
+
+/**
+ * Gets the current device's profile data from currentProfilesV4 map
+ * Falls back to deviceProfilesV3 if currentProfilesV4 entry doesn't exist
+ * @return Map containing the device profile data
+ */
+private Map getCurrentDeviceProfile() {
+    /*
+    if (!this.hasProperty('currentProfilesV4')) { 
+        return getDEVICE()  // fallback to V3 method
+    }
+    */
+    
+    String dni = device?.deviceNetworkId
+    Map currentProfile = currentProfilesV4[dni]
+    
+//    if (currentProfile != null) {
+        return currentProfile
+//    } else {
+        // Profile not loaded yet, use V3 fallback
+//        return getDEVICE()
+//    }
+}
+
+/**
+ * Ensures the current device's profile is loaded in currentProfilesV4
+ * Should be called before accessing device-specific profile data
+ */
+private void ensureCurrentProfileLoaded() {
+    if (!this.hasProperty('currentProfilesV4')) { 
+        return  // V4 not available, stick with V3
+    }
+    
+    String dni = device?.deviceNetworkId
+    if (!currentProfilesV4.containsKey(dni)) {
+        populateCurrentProfile(dni)
+    }
+}
+
+/**
+ * Populates currentProfilesV4 entry for the specified device
+ * Extracts complete profile data from deviceProfilesV3 (excluding fingerprints)
+ * @param dni Device Network ID to use as key
+ */
+private void populateCurrentProfile(String dni) {
+    logDebug "populateCurrentProfile: populating profile for device ${dni}"
+    if (!this.hasProperty('currentProfilesV4') || !this.hasProperty('deviceProfilesV3')) { 
+        return
+    }
+    
+    String profileName = getDeviceProfile()
+    if (!profileName || profileName == 'UNKNOWN') {
+        logWarn "populateCurrentProfile: cannot populate profile for ${dni} - profile name is ${profileName}"
+        return
+    }
+    
+    if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
+    
+    Map sourceProfile = deviceProfilesV3[profileName]
+    if (sourceProfile) {
+        // Clone the profile data and remove fingerprints (already in deviceFingerprintsV4)
+        Map profileData = sourceProfile.clone()
+        profileData.remove('fingerprints')
+        currentProfilesV4[dni] = profileData
+        logDebug "populateCurrentProfile: loaded profile '${profileName}' for device ${dni}"
+    } else {
+        logWarn "populateCurrentProfile: profile '${profileName}' not found in deviceProfilesV3 for device ${dni}"
+    }
+}
+
+/**
+ * Disposes of V3 profile data to free memory once all devices have their profiles loaded
+ * Should only be called when it's safe to remove V3 data
+ */
+void disposeV3ProfilesIfReady() {
+    if (!this.hasProperty('currentProfilesV4') || !this.hasProperty('deviceProfilesV3')) { 
+        return
+    }
+    
+    String dni = device?.deviceNetworkId
+    if (currentProfilesV4.containsKey(dni)) {
+        // This device has its profile loaded, it's safe to dispose V3 for this device
+        logDebug "disposeV3ProfilesIfReady: device ${dni} has current profile loaded - V3 can be disposed"
+        // Note: In a production environment, you might want more sophisticated logic
+        // to check if ALL active devices have their profiles loaded before disposing V3
+    } else {
+        logDebug "disposeV3ProfilesIfReady: device ${dni} does not have current profile loaded - keeping V3"
+    }
+}
+
+/**
+ * Forces disposal of V3 profiles to free memory
+ * Use with caution - only when you're sure all needed profiles are in currentProfilesV4
+ */
+void forceDisposeV3Profiles() {
+    if (!this.hasProperty('deviceProfilesV3')) { 
+        return
+    }
+    
+    int sizeBefore = deviceProfilesV3?.size() ?: 0
+    deviceProfilesV3.clear()
+    if (this.hasProperty('profilesLoaded')) { profilesLoaded = false }
+    logInfo "forceDisposeV3Profiles: disposed ${sizeBefore} V3 profiles to free memory"
+}
+
 public Set     getDeviceProfiles()      { deviceProfilesV3 != null ? deviceProfilesV3?.keySet() : [] }
 
 public List<String> getDeviceProfilesMap()   {
@@ -871,6 +987,10 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
 // called from  initializeVars( fullInit = true)
 public void setDeviceNameAndProfile(String model=null, String manufacturer=null) {
     if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
+    
+    // Store previous profile for change detection
+    String previousProfile = getDeviceProfile()
+    
     def (String deviceName, String deviceProfile) = getDeviceNameAndProfile(model, manufacturer)
     if (deviceProfile == null || deviceProfile == UNKNOWN) {
         logInfo "unknown model ${deviceModel} manufacturer ${deviceManufacturer}"
@@ -884,6 +1004,20 @@ public void setDeviceNameAndProfile(String model=null, String manufacturer=null)
         state.deviceProfile = deviceProfile
         device.updateSetting('forcedProfile', [value:deviceProfilesV3[deviceProfile]?.description, type:'enum'])
         logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was set to : <b>deviceProfile=${deviceProfile} : deviceName=${deviceName}</b>"
+        
+        // V4 Profile Management: Handle profile loading and changes
+        if (this.hasProperty('currentProfilesV4')) {
+            String dni = device?.deviceNetworkId
+            
+            // Detect profile change
+            if (previousProfile != deviceProfile && previousProfile != 'UNKNOWN') {
+                logInfo "Profile changed from '${previousProfile}' to '${deviceProfile}' - clearing old profile data for device ${dni}"
+                currentProfilesV4.remove(dni)
+            }
+            
+            // Ensure current profile is loaded
+            ensureCurrentProfileLoaded()
+        }
     } else {
         logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was not found!"
     }
@@ -992,7 +1126,8 @@ public boolean isSpammyDPsToIgnore(Map descMap) {
     if (!(descMap?.clusterId == 'EF00' && (descMap?.command in ['01', '02']))) { return false }
     if (descMap?.data?.size <= 2) { return false }
     int dp =  zigbee.convertHexToInt(descMap.data[2])
-    List spammyList = deviceProfilesV3[getDeviceProfile()]?.spammyDPsToIgnore as List
+    Map currentProfile = getCurrentDeviceProfile()
+    List spammyList = currentProfile?.spammyDPsToIgnore as List
     return (spammyList != null && (dp in spammyList) && ((settings?.ignoreDistance ?: false) == true))
 }
 
@@ -1007,14 +1142,16 @@ public boolean isSpammyDPsToNotTrace(Map descMap) {
     if (!(descMap?.clusterId == 'EF00' && (descMap?.command in ['01', '02']))) { return false }
     if (descMap?.data?.size <= 2) { return false }
     int dp = zigbee.convertHexToInt(descMap.data[2])
-    List spammyList = deviceProfilesV3[getDeviceProfile()]?.spammyDPsToNotTrace as List
+    Map currentProfile = getCurrentDeviceProfile()
+    List spammyList = currentProfile?.spammyDPsToNotTrace as List
     return (spammyList != null && (dp in spammyList))
 }
 
 // all DPs are spammy - sent periodically! (this function is not used?)
 public boolean isSpammyDeviceProfile() {
-    if (deviceProfilesV3 == null || deviceProfilesV3[getDeviceProfile()] == null) { return false }
-    Boolean isSpammy = deviceProfilesV3[getDeviceProfile()]?.device?.isSpammy ?: false
+    Map currentProfile = getCurrentDeviceProfile()
+    if (!currentProfile) { return false }
+    Boolean isSpammy = currentProfile?.device?.isSpammy ?: false
     return isSpammy
 }
 
@@ -1226,7 +1363,8 @@ public boolean processClusterAttributeFromDeviceProfile(final Map descMap) {
     if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return false }
 
     if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
-    List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes
+    Map currentProfile = getCurrentDeviceProfile()
+    List<Map> attribMap = currentProfile?.attributes
     if (attribMap == null || attribMap?.isEmpty()) { return false }    // no any attributes are defined in the Device Profile
 
     String clusterAttribute = "0x${descMap.cluster}:0x${descMap.attrId}"
@@ -1268,7 +1406,8 @@ public boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, f
     if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status)
 
     if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
-    List<Map> tuyaDPsMap = deviceProfilesV3[state.deviceProfile]?.tuyaDPs
+    Map currentProfile = getCurrentDeviceProfile()
+    List<Map> tuyaDPsMap = currentProfile?.tuyaDPs
     if (tuyaDPsMap == null || tuyaDPsMap == [:]) { return false }    // no any Tuya DPs defined in the Device Profile
 
     Map foundItem = tuyaDPsMap.find { it['dp'] == (dp as int) }

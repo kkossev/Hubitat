@@ -4,13 +4,13 @@
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 655
+      "version": 662
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLib.groovy",
       "id": 142,
       "codeType": "library",
-      "version": 620
+      "version": 658
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/batteryLib.groovy",
@@ -28,7 +28,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLibV4.groovy",
       "codeType": "library",
       "id": 197,
-      "version": 40
+      "version": 55
     }
   ]
 }
