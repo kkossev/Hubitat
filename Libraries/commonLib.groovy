@@ -40,7 +40,7 @@ library(
 */
 
 String commonLibVersion() { '4.0.0' }
-String commonLibStamp() { '2025/09/04 4:42 PM' }
+String commonLibStamp() { '2025/09/04 11:01 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -1458,6 +1458,7 @@ void logDebug(final String msg) { if (settings?.logEnable)   { log.debug "${devi
 void logInfo(final String msg)  { if (settings?.txtEnable)   { log.info  "${device.displayName} " + msg } }
 void logWarn(final String msg)  { if (settings?.logEnable)   { log.warn  "${device.displayName} " + msg } }
 void logTrace(final String msg) { if (settings?.traceEnable) { log.trace "${device.displayName} " + msg } }
+void logError(final String msg) { if (settings?.txtEnable)   { log.error "${device.displayName} " + msg } }
 
 // _DEBUG mode only
 void getAllProperties() {

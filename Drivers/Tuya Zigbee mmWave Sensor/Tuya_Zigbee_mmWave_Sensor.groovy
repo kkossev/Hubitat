@@ -1,4 +1,5 @@
-/* groovylint-disable NglParseError, ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnusedImport, VariableName *//**
+/* groovylint-disable NglParseError, ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnusedImport, VariableName */ 
+ /*
  *  Tuya Zigbee Button Dimmer - driver for Hubitat Elevation
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
@@ -23,7 +24,7 @@
 */
 
 static String version() { "4.0.0" }
-static String timeStamp() {"2025/09/04 5:32 PM"}
+static String timeStamp() {"2025/09/05 10:12 AM"}
 
 @Field static final Boolean _DEBUG = true           // debug logging
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -100,7 +101,9 @@ metadata {
             // testParse is defined in the common library
             // tuyaTest is defined in the common library
             command 'cacheTest', [[name: "action", type: "ENUM", description: "Cache action", constraints: ["Info", "Initialize", "Clear"], defaultValue: "Info"]]
+            command 'testFingerprints', [[name: "par", type: "STRING", description: "Test fingerprints", defaultValue: ""]]
         }
+        /*
         // itterate through all the figerprints and add them on the fly
         deviceProfilesV3.each { profileName, profileMap ->
             if (profileMap.fingerprints != null) {
@@ -108,7 +111,8 @@ metadata {
                     fingerprintIt(profileMap, it) // changed 01/25/2025
                 }
             }
-        }        
+        }
+        */      
     }
 
     preferences {
@@ -164,7 +168,7 @@ metadata {
                 [dp:101, name:'detectionDelay',     type:'decimal', rw: 'rw', min:0.0, max:10.0,  defVal:0.2,  scale:10,   unit:'seconds',  title:'<b>Detection delay</b>',            description:'<i>Presence detection delay timer</i>'],
                 [dp:102, name:'fadingTime',         type:'decimal', rw: 'rw', min:0.5, max:500.0, defVal:60.0, scale:10,   unit:'seconds',  title:'<b>Fading time</b>',                description:'<i>Presence inactivity delay timer</i>'],                                  // aka 'nobody time'
                 [dp:103, name:'debugCLI',           type:'number',  rw: 'ro', min:0,   max:99999, defVal:0,    scale:1,    unit:'?',        title:'<b>debugCLI</b>',                   description:'<i>debug CLI</i>'],
-                [dp:104, name:'illuminance',        type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,    scale:1,    unit:'lx',       title:'<b>illuminance</b>',                description:'<i>illuminance</i>'],
+                [dp:104, name:'illuminance',        type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,    scale:1,    unit:'lx',       title:'<b>illuminance</b>',                description:'<i>illuminance</i>',
 
             ],
             refresh: ['queryAllTuyaDP'],
@@ -228,9 +232,9 @@ metadata {
                 [dp:112, name:'radarReset',                      type:'enum',    rw: 'rw', min:0,    max:1,    defVal:'0',  map:[0:'0 - disabled', 1:'1 - enabled'],     description:'Radar reset'],
                 [dp:113, name:'breatheFalseDetection',           type:'enum',    rw: 'rw', min:0,    max:1,    defVal:'0',  map:[0:'0 - disabled', 1:'1 - enabled'],     title:'<b>Breathe false detection</b>',    description:'<i>Disable/enable Breathe false detection</i>'],
                 [dp:114, name:'checkingTime',                    type:'decimal', rw: 'ro',                     scale:10,  unit:'seconds',   description:'Checking time'],
-                [dp:115, name:'radarAlarmTime',                  type:'number',  rw: 'rw', min:0,    max:60 ,  defVal:1,     scale:1,   unit:'seconds',   title:'<b>Alarm time</b>',                         description:'<i>Alarm time</i>'],
-                [dp:116, name:'radarAlarmVolume',                type:'enum',    rw: 'rw', min:0,    max:3,    defVal:'3',  map:[0:'0 - low', 1:'1 - medium', 2:'2 - high', 3:'3 - mute'],    title:'<b>Alarm volume</b>',          description:'<i>Alarm volume</i>'],
-                [dp:117, name:'radarAlarmMode',                  type:'enum',    rw: 'rw', min:0,    max:3,    defVal:'1',  map:[0:'0 - arm', 1:'1 - off', 2:'2 - alarm', 3:'3 - doorbell'],  title:'<b>Alarm mode</b>',            description:'<i>Alarm mode</i>'],
+                [dp:115, name:'radarAlarmTime',                  type:'number',  rw: 'rw', min:0,    max:60 ,  defVal:1,     scale:1,   unit:'seconds',   title:'<b>Alarm time</b>',                         description:'<i>Alarm time</i>'},
+                [dp:116, name:'radarAlarmVolume',                type:'enum',    rw: 'rw', min:0,    max:3,    defVal:'3',  map:[0:'0 - low', 1:'1 - medium', 2:'2 - high', 3:'3 - mute'],    title:'<b>Alarm volume</b>',          description:'<i>Alarm volume</i>'},
+                [dp:117, name:'radarAlarmMode',                  type:'enum',    rw: 'rw', min:0,    max:3,    defVal:'1',  map:[0:'0 - arm', 1:'1 - off', 2:'2 - alarm', 3:'3 - doorbell'],  title:'<b>Alarm mode</b>',            description:'<i>Alarm mode</i>'},
                 [dp:118, name:'radarStatus',                     type:'enum',    rw: 'rw', min:0,    max:1,    defVal:'0',  map:[0:'0 - disabled', 1:'1 - enabled'], description:'Radar small move self-test'],
                 [dp:119, name:'radarStatus',                     type:'enum',    rw: 'rw', min:0,    max:1,    defVal:'0',  map:[0:'0 - disabled', 1:'1 - enabled'], description:'Radar breathe self-test'],
                 [dp:120, name:'radarStatus',                     type:'enum',    rw: 'rw', min:0,    max:1,    defVal:'0',  map:[0:'0 - disabled', 1:'1 - enabled'], description:'Radar move self-test']
@@ -259,19 +263,31 @@ metadata {
                 // # "3":"Minimum detection distance", (near_detection, Integer, 0-1000, unit=cm, step=1) (NOT AVAILABLE IN TUYA SMART LIFE APP)
                 [dp:4,   name:'staticDetectionDistance',         type:'decimal', rw: 'rw', min:0.0,  max:10.0,  defVal:5.0,   scale:100, unit:'meters',    title:'<b>Static detection distance</b>',          description:'<i>Static detection distance</i>'],
                 [dp:101, name:'humanMotionState',                type:'enum',    rw: 'ro', min:0,    max:3,     defVal:'0',  map:[0:'none', 1:'moving', 2:'small', 3:'static'],       description:'Human motion state'],
-                [dp:102, name:'fadingTime',                      type:'number',  rw: 'rw', min:0,    max:28800, defVal:30,    scale:1,   unit:'seconds',   title:'<b>Presence keep time</b>',                 description:'<i>Presence keep time</i>'],
+                [dp:102, name:'fadingTime',                      type:'number',  rw: 'rw', min:0,    max:28800, defVal:30,    scale:1,   unit:'seconds',   title:'<b>Presence keep time</b>',                 description:'<i>Presence keep time</i>' },
+                [dp:103, name:'motionFalseDetection',            type:'enum',    rw: 'rw', min:0,    max:1,    defVal:'0',  map:[0:'0 - disabled', 1:'1 - enabled'],     title:'<b>Motion false detection</b>',     description:'<i>Disable/enable Motion false detection</i>'],
+                [dp:104, name:'smallMotionDetectionDistance',    type:'decimal', rw: 'rw', min:0.0,  max:6.0,  defVal:5.0,   scale:100, unit:'meters',    title:'<b>Small motion detection distance</b>',    description:'<i>Small motion detection distance</i>'},
+                [dp:105, name:'smallMotionDetectionSensitivity', type:'number',  rw: 'rw', min:0,    max:10 ,  defVal:7,     scale:1,   unit:'',         title:'<b>Small motion detection sensitivity</b>', description:'<i>Small motion detection sensitivity</i>'},
                 [dp:106, name:'illuminance',                     type:'number',  rw: 'ro', scale:10,  unit:'lx',        description:'Illuminance'],
-                [dp:107, name:'ledIndicator',                    type:'enum',    rw: 'rw', min:0,    max:1,     defVal:'0',  map:[0:'0 - OFF', 1:'1 - ON'],               title:'<b>LED indicator</b>',              description:'<i>LED indicator mode</i>'],
-                // # "112":"Reset setting", (reset_setting, Boolean)
-                [dp:121, name:'battery',                         type:'number',  rw: 'ro', min:0,    max:100,   defVal:100,  scale:1,   unit:'%',          title:'<b>Battery level</b>',              description:'<i>Battery level</i>'],
-                [dp:122, name:'motionDetectionMode',             type:'enum',    rw: 'rw', min:0,    max:2,     defVal:'1',  map:[0:'0 - onlyPIR', 1:'1 - PIRandRadar', 2:'2 - onlyRadar'],     title:'<b>Motion detection mode</b>',       description:'<i>Motion detection mode</i>'],
-                [dp:123, name:'radarSensitivity',                type:'number',  rw: 'rw', min:1,   max:9,     defVal:5,     scale:1,    unit:'',        title:'<b>Motion Detection sensitivity</b>',     description:'<i>Motion detection sensitivity</i>'],  // motion_detection_sensitivity
-                // # "124":"ver" (ver, Integer, 0-100, step=1) (NOT AVAILABLE IN TUYA SMART LIFE APP)
+                [dp:107, name:'ledIndicator',                    type:'enum',    rw: 'rw', min:0,    max:1,     defVal:'0',  map:[0:'0 - OFF', 1:'1 - ON'],               title:'<b>LED indicator</b>',              description:'<i>LED indicator mode</i>'},
+                [dp:108, name:'staticDetectionDistance',         type:'decimal', rw: 'rw', min:0.0,  max:6.0,  defVal:4.0,   scale:100, unit:'meters',    title:'<b>Static detection distance</b>,          description:'<i>Static detection distance</i>'],
+                [dp:109, name:'staticDetectionSensitivity',      type:'number',  rw: 'rw', min:0,    max:10,   defVal:7,     scale:1,   unit:'',         title:'<b>Static Detection Sensitivity</b>',       description:'<i>Static detection sensitivity</i>'],                 //  dt: "UINT8", aka Motionless Detection Sensitivity
+                [dp:110, name:'smallMotionMinimumDistance',      type:'decimal', rw: 'rw', min:0.0,  max:6.0,  defVal:0.5,   scale:100, unit:'meters',    title:'<b>Small Motion Minimum Distance</b>',      description:'<i>Small Motion Minimum Distance</i>'],
+                //[dp:111, name:'staticDetectionMinimumDistance',  type:"decimal", rw: "rw", min:0.0,  max:6.0,   defVal:0.5,  scale:100, unit:"meters",    title:'<b>Static detection minimum distance</b>',  description:'<i>Static detection minimum distance</i>'],
+                [dp:112, name:'radarReset',                      type:'enum',    rw: 'rw', min:0,    max:1,    defVal:'0',  map:[0:'0 - disabled', 1:'1 - enabled'],     description:'Radar reset'],
+                [dp:113, name:'breatheFalseDetection',           type:'enum',    rw: 'rw', min:0,    max:1,    defVal:'0',  map:[0:'0 - disabled', 1:'1 - enabled'],     title:'<b>Breathe false detection</b>',    description:'<i>Disable/enable Breathe false detection</i>'],
+                [dp:114, name:'checkingTime',                    type:'decimal', rw: 'ro',                     scale:10,  unit:'seconds',   description:'Checking time'],
+                [dp:115, name:'radarAlarmTime',                  type:'number',  rw: 'rw', min:0,    max:60 ,  defVal:1,     scale:1,   unit:'seconds',   title:'<b>Alarm time</b>',                         description:'<i>Alarm time</i>'},
+                [dp:116, name:'radarAlarmVolume',                type:'enum',    rw: 'rw', min:0,    max:3,    defVal:'3',  map:[0:'0 - low', 1:'1 - medium', 2:'2 - high', 3:'3 - mute'],    title:'<b>Alarm volume</b>',          description:'<i>Alarm volume</i>'},
+                [dp:117, name:'radarAlarmMode',                  type:'enum',    rw: 'rw', min:0,    max:3,    defVal:'1',  map:[0:'0 - arm', 1:'1 - off', 2:'2 - alarm', 3:'3 - doorbell'],  title:'<b>Alarm mode</b>',            description:'<i>Alarm mode</i>'},
+                [dp:118, name:'radarStatus',                     type:'enum',    rw: 'rw', min:0,    max:1,    defVal:'0',  map:[0:'0 - disabled', 1:'1 - enabled'], description:'Radar small move self-test'],
+                [dp:119, name:'radarStatus',                     type:'enum',    rw: 'rw', min:0,    max:1,    defVal:'0',  map:[0:'0 - disabled', 1:'1 - enabled'], description:'Radar breathe self-test'],
+                [dp:120, name:'radarStatus',                     type:'enum',    rw: 'rw', min:0,    max:1,    defVal:'0',  map:[0:'0 - disabled', 1:'1 - enabled'], description:'Radar move self-test']
+                //[dp:116, name:'occupiedTime',                  type:"number",  rw: "ro", min:0, max:60 ,   scale:1,   unit:"seconds",   description:'Radar presence duration'],    // not received
+                //[dp:117, name:'absenceTime',                      type:"number",  rw: "ro", min:0, max:60 ,   scale:1,   unit:"seconds",   description:'Radar absence duration'],     // not received
+                //[dp:118, name:'radarDurationStatus',             type:"number",  rw: "ro", min:0, max:60 ,   scale:1,   unit:"seconds",   description:'Radar duration status']       // not received
             ],
             refresh: ['queryAllTuyaDP'],
-
     ],
-
     
     // isLINPTECHradar()
     'TS0225_LINPTECH_RADAR'   : [                                      // https://github.com/Koenkk/zigbee2mqtt/issues/18637
@@ -295,7 +311,6 @@ metadata {
                 [at:'0xE002:0xE00A', name:'distance',  preProc:'skipIfDisabled', type:'decimal', dt: '0x21', rw: 'ro', min:0.0,    max:6.0,    defVal:0.0, scale:100, unit:'meters', title: '<b>Distance</b>', description:'<i>Measured distance</i>'],                            // aka Current Distance
                 [at:'0xE002:0xE00B', name:'motionDetectionDistance',    type:'enum',   dt: '0x21', rw: 'rw', min:0.75, max:6.00,   defVal:'450', step:75, scale:100, map:['75': '0.75 meters', '150': '1.50 meters', '225': '2.25 meters', '300': '3.00 meters', '375': '3.75 meters', '450': '4.50 meters', '525': '5.25 meters', '600' : '6.00 meters'], unit:'meters', title: '<b>Motion Detection Distance</b>', description:'<i>Large motion detection distance, meters</i>']               // aka Far Detection
             ],
-            // returns zeroes !!!refresh: ['motion', 'occupiedTime', 'motionDetectionSensitivity', 'staticDetectionSensitivity', 'ledIndicator', 'motionDetectionDistance'],
             refresh: ['queryAllTuyaDP'],
             configuration : [:]
     ],
@@ -414,6 +429,9 @@ metadata {
         { "dp": 4, "name": "staticDetectionDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 10.0, "defVal": 5.0, "scale": 100, "unit": "meters", "title": "<b>Static detection distance</b>", "description": "<i>Static detection distance</i>" },
         { "dp": 101, "name": "humanMotionState", "type": "enum", "rw": "ro", "min": 0, "max": 3, "defVal": "0", "map": { "0": "none", "1": "moving", "2": "small", "3": "static" }, "description": "Human motion state" },
         { "dp": 102, "name": "fadingTime", "type": "number", "rw": "rw", "min": 0, "max": 28800, "defVal": 30, "scale": 1, "unit": "seconds", "title": "<b>Presence keep time</b>", "description": "<i>Presence keep time</i>" },
+        { "dp": 103, "name": "motionFalseDetection", "type": "enum", "rw": "rw", "min": 0, "max": 1, "defVal": "0", "map": { "0": "0 - disabled", "1": "1 - enabled" }, "title": "<b>Motion false detection</b>", "description": "<i>Disable/enable Motion false detection</i>" },
+        { "dp": 104, "name": "smallMotionDetectionDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 6.0, "defVal": 5.0, "scale": 100, "unit": "meters", "title": "<b>Small motion detection distance</b>", "description": "<i>Small motion detection distance</i>" },
+        { "dp": 105, "name": "smallMotionDetectionSensitivity", "type": "number", "rw": "rw", "min": 0, "max": 10, "defVal": 7, "scale": 1, "unit": "", "title": "<b>Small motion detection sensitivity</b>", "description": "<i>Small motion detection sensitivity</i>" },
         { "dp": 106, "name": "illuminance", "type": "number", "rw": "ro", "scale": 10, "unit": "lx", "description": "Illuminance" },
         { "dp": 107, "name": "ledIndicator", "type": "enum", "rw": "rw", "min": 0, "max": 1, "defVal": "0", "map": { "0": "0 - OFF", "1": "1 - ON" }, "title": "<b>LED indicator</b>", "description": "<i>LED indicator mode</i>" },
         { "dp": 121, "name": "battery", "type": "number", "rw": "ro", "min": 0, "max": 100, "defVal": 100, "scale": 1, "unit": "%", "title": "<b>Battery level</b>", "description": "<i>Battery level</i>" },
@@ -440,7 +458,7 @@ metadata {
         { "at": "0xE002:0xE004", "name": "motionDetectionSensitivity", "type": "enum", "dt": "0x20", "rw": "rw", "min": 1, "max": 5, "defVal": "4", "scale": 1, "map": { "1": "1 - low", "2": "2 - medium low", "3": "3 - medium", "4": "4 - medium high", "5": "5 - high" }, "unit": "", "title": "<b>Motion Detection Sensitivity</b>", "description": "<i>Large motion detection sensitivity</i>" },
         { "at": "0xE002:0xE005", "name": "staticDetectionSensitivity", "type": "enum", "dt": "0x20", "rw": "rw", "min": 1, "max": 5, "defVal": "3", "scale": 1, "map": { "1": "1 - low", "2": "2 - medium low", "3": "3 - medium", "4": "4 - medium high", "5": "5 - high" }, "unit": "", "title": "<b>Static Detection Sensitivity</b>", "description": "<i>Static detection sensitivity</i>" },
         { "at": "0xE002:0xE009", "name": "ledIndicator", "type": "enum", "dt": "0x10", "rw": "rw", "min": 0, "max": 1, "defVal": "0", "map": { "0": "0 - OFF", "1": "1 - ON" }, "title": "<b>LED indicator mode</b>", "description": "<i>LED indicator mode<br>Requires firmware version 1.0.6 (application:46)!</i>" },
-        { "at": "0xE002:0xE00A", "name": "distance", "type": "decimal", "dt": "0x21", "rw": "ro", "min": 0.0, "max": 6.0, "defVal": 0.0, "scale": 100, "unit": "meters", "title": "<b>Distance</b>", "description": "<i>Measured distance</i>" },
+        { "at": "0xE002:0xE00A", "name": "distance", "type": "decimal", "dt": "0x21", "rw": "ro", "min": 0.0, "max": 6.0, "defVal:": 0.0, "scale": 100, "unit": "meters", "title": "<b>Distance</b>", "description": "<i>Measured distance</i>" },
         { "at": "0xE002:0xE00B", "name": "motionDetectionDistance", "type": "enum", "dt": "0x21", "rw": "rw", "min": 0.75, "max": 6.00, "defVal": "450", "step": 75, "scale": 100, "map": { "75": "0.75 meters", "150": "1.50 meters", "225": "2.25 meters", "300": "3.00 meters", "375": "3.75 meters", "450": "4.50 meters", "525": "5.25 meters", "600": "6.00 meters" }, "unit": "meters", "title": "<b>Motion Detection Distance</b>", "description": "<i>Large motion detection distance, meters</i>" }
       ],
       "refresh": ["queryAllTuyaDP"],
@@ -702,13 +720,13 @@ void testFunc( par) {
 }
 
 
-@Field static final Map deviceProfilesV3 = [:]
-@Field static volatile boolean profilesLoading = false
-@Field static volatile boolean profilesLoaded = false
-
 void test(String par) {
     long startTime = now()
-    logDebug "test() started at ${startTime}"
+    logWarn "test() started at ${startTime}"
+
+    def xx = getDeviceProfilesMap()
+    logDebug "test() getDeviceProfilesMap() returned ${xx?.size() ?: 0} profiles"
+    /*
 
     boolean loaded = ensureProfilesLoaded()
     if (!loaded) {
@@ -717,10 +735,11 @@ void test(String par) {
     }
     List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes
     logDebug "test() attribMap: ${attribMap}"
+    */
 
     /*
-    //parse('catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100')
-    def parpar = 'catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100'
+    //parse('catchall: 0104 EF00 01 01 0040 00 E03B 01 00 0000 02 01 00556701000100')
+    def parpar = 'catchall: 0104 EF00 01 01 0040 00 E03B 01 00 0000 02 01 00556701000100'
     catchall: 0104 EF00 01 01 0040 00 E03B 01 00 0000 02 01 00EB0104000100
 
     for (int i=0; i<100; i++) { 
@@ -728,7 +747,27 @@ void test(String par) {
     }
 */
     long endTime = now()
-    logDebug "test() ended at ${endTime} (duration ${endTime - startTime}ms)"
+    logWarn "test() ended at ${endTime} (duration ${endTime - startTime}ms)"
+}
+
+void testFingerprints(String par) {
+    logWarn "testFingerprints() started"
+
+    boolean loaded = ensureProfilesLoaded()
+    if (!loaded) {
+        logWarn "testFingerprints(): profiles not loaded, aborting test"
+        return
+    }
+    
+    logInfo "testFingerprints: deviceFingerprintsV3 size = ${deviceFingerprintsV3.size()}"
+    deviceFingerprintsV3.each { profileKey, profileData ->
+        logInfo "Profile: ${profileKey} - Description: '${profileData.description}'"
+        logInfo "  Fingerprints count: ${profileData.fingerprints?.size() ?: 0}"
+        profileData.fingerprints?.each { fingerprint ->
+            logInfo "    Model: ${fingerprint.model}, Manufacturer: ${fingerprint.manufacturer}, DeviceJoinName: ${fingerprint.deviceJoinName ?: 'N/A'}"
+        }
+    }
+    logWarn "testFingerprints() completed"
 }
 
 // cacheTest command - manage and inspect cached data structures (currently deviceProfilesV3)
@@ -737,8 +776,11 @@ void cacheTest(String action) {
     switch(act) {
         case 'Info':
             int size = deviceProfilesV3?.size() ?: 0
+            int fingerprintSize = deviceFingerprintsV3?.size() ?: 0
             List keys = deviceProfilesV3 ? new ArrayList(deviceProfilesV3.keySet()) : []
+            List fingerprintKeys = deviceFingerprintsV3 ? new ArrayList(deviceFingerprintsV3.keySet()) : []
             logInfo "cacheTest Info: deviceProfilesV3 size=${size} keys=${keys}"
+            logInfo "cacheTest Info: deviceFingerprintsV3 size=${fingerprintSize} keys=${fingerprintKeys}"
             break
         case 'Initialize':
             boolean ok = ensureProfilesLoaded()
@@ -746,10 +788,12 @@ void cacheTest(String action) {
             break
         case 'Clear':
             int before = deviceProfilesV3.size()
+            int beforeFingerprints = deviceFingerprintsV3.size()
             deviceProfilesV3.clear()
+            deviceFingerprintsV3.clear()
             profilesLoaded = false
             profilesLoading = false
-            logInfo "cacheTest Clear: cleared ${before} entries; size now ${deviceProfilesV3.size()}"
+            logInfo "cacheTest Clear: cleared ${before} profiles and ${beforeFingerprints} fingerprint entries"
             break
         default:
             logWarn "cacheTest: unknown action '${action}'"
@@ -757,16 +801,24 @@ void cacheTest(String action) {
 }
 
 
+@Field static  Map deviceProfilesV3 = [:]
+@Field static  boolean profilesLoading = false
+@Field static  boolean profilesLoaded = false
+@Field static  Map deviceFingerprintsV3 = [:]
+
 // -------------- new test functions - add here !!! -------------------------
 
 
 boolean loadProfilesFromJSON() {
+    long startTime = now()
+    
     // idempotent : don't re-parse if already populated
     if (!deviceProfilesV3.isEmpty()) {
         logDebug "loadProfilesFromJSON: already loaded (${deviceProfilesV3.size()} profiles)"
         return true
     }
     try {
+        logDebug "loadProfilesFromJSON: start loading device profiles from JSON..."
         if (!testJSON) {
             logWarn "loadProfilesFromJSON: testJSON is empty/null"
             return false
@@ -777,12 +829,37 @@ boolean loadProfilesFromJSON() {
             logWarn "loadProfilesFromJSON: parsed deviceProfiles missing or empty"
             return false
         }
+        // !!!!!!!!!!!!!!!!!!!!!!!
+        // Populate deviceProfilesV3
         deviceProfilesV3.putAll(dp as Map)
-        profilesLoaded = true
+        logDebug "loadProfilesFromJSON: deviceProfilesV3 populated with ${deviceProfilesV3.size()} profiles"
+
+        // Populate deviceFingerprintsV3 using bulk assignment for better performance
+        Map localFingerprints = [:]
+        
+        deviceProfilesV3.each { profileKey, profileMap ->
+            localFingerprints[profileKey] = [
+                description: profileMap.description ?: '',
+                fingerprints: profileMap.fingerprints ?: []
+            ]
+        }
+        
+        deviceFingerprintsV3.clear()
+        deviceFingerprintsV3.putAll(localFingerprints)
+
+        // NOTE: profilesLoaded flag is managed by ensureProfilesLoaded(), not here
+        // This keeps loadProfilesFromJSON() as a pure function
+        long endTime = now()
+        long executionTime = endTime - startTime
+        
         logDebug "loadProfilesFromJSON: loaded ${deviceProfilesV3.size()} profiles: ${deviceProfilesV3.keySet()}"
+        logDebug "loadProfilesFromJSON: populated ${deviceFingerprintsV3.size()} fingerprint entries"
+        logDebug "loadProfilesFromJSON: execution time: ${executionTime}ms"
         return true
     } catch (Exception e) {
-        logError "loadProfilesFromJSON: error converting JSON: ${e.message}"
+        long endTime = now()
+        long executionTime = endTime - startTime
+        logError "loadProfilesFromJSON: error converting JSON: ${e.message} (execution time: ${executionTime}ms)"
         return false
     }
 }
@@ -802,13 +879,16 @@ private boolean ensureProfilesLoaded() {
     if (profilesLoading) {
         // Wait briefly for other thread to finish
         for (int i = 0; i < 10; i++) {
+            logDebug "ensureProfilesLoaded: waiting <b>100ms</b> for other thread to finish loading..."
             pauseExecution(100)
             if (profilesLoaded && !deviceProfilesV3.isEmpty()) {
+                logDebug "ensureProfilesLoaded: other thread finished loading"
                 return true
             }
         }
-        // If still loading after wait, proceed anyway
-        logDebug "ensureProfilesLoaded: timeout waiting for other thread, proceeding"
+        // If still loading after wait, return false - don't interfere with other thread
+        logWarn "ensureProfilesLoaded: timeout waiting for other thread, returning false"
+        return false
     }
     
     // Acquire loading lock
@@ -816,14 +896,15 @@ private boolean ensureProfilesLoaded() {
     try {
         // Double-check after acquiring lock
         if (deviceProfilesV3.isEmpty() || !profilesLoaded) {
-            logDebug "ensureProfilesLoaded: loading device profiles..."
+            logWarn "ensureProfilesLoaded: loading device profiles...(deviceProfilesV3.isEmpty()=${deviceProfilesV3.isEmpty()}, profilesLoaded=${profilesLoaded})"
             boolean result = loadProfilesFromJSON()
             if (result) {
                 profilesLoaded = true
-                logDebug "ensureProfilesLoaded: successfully loaded ${deviceProfilesV3.size()} profiles"
+                logInfo "ensureProfilesLoaded: successfully loaded ${deviceProfilesV3.size()} deviceProfilesV3 profiles"
             } else {
                 logWarn "ensureProfilesLoaded: failed to load device profiles"
             }
+            profilesLoading = false
             return result
         }
         return true
@@ -831,7 +912,6 @@ private boolean ensureProfilesLoaded() {
         profilesLoading = false
     }
 }
-
 
 
 

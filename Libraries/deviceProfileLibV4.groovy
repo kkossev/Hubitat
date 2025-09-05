@@ -26,7 +26,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '4.0.0' }
-static String deviceProfileLibStamp() { '2025/09/04 4:09 PM' }
+static String deviceProfileLibStamp() { '2025/09/04 11:06 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -75,7 +75,8 @@ public Map     getDEVICE()              {
 public Set     getDeviceProfiles()      { deviceProfilesV3 != null ? deviceProfilesV3?.keySet() : [] }
 
 public List<String> getDeviceProfilesMap()   {
-    if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
+    // if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
+    // better don't ...
     if (deviceProfilesV3 == null) { return [] }
     List<String> activeProfiles = []
     deviceProfilesV3.each { profileName, profileMap ->
@@ -87,6 +88,15 @@ public List<String> getDeviceProfilesMap()   {
 }
 
 // ---------------------------------- deviceProfilesV3 helper functions --------------------------------------------
+
+/**
+ * Returns the device fingerprints map
+ * @return The deviceFingerprintsV3 map containing description and fingerprints for each profile
+ */
+public Map getDeviceFingerprintsV3() {
+    if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
+    return this.hasProperty('deviceFingerprintsV3') ? deviceFingerprintsV3 : [:]
+}
 
 /**
  * Returns the profile key for a given profile description.
@@ -826,13 +836,29 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
     String deviceName = UNKNOWN, deviceProfile = UNKNOWN
     String deviceModel        = model != null ? model : device.getDataValue('model') ?: UNKNOWN
     String deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
-    deviceProfilesV3.each { profileName, profileMap ->
-        profileMap.fingerprints.each { fingerprint ->
-            if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
-                deviceProfile = profileName
-                deviceName = fingerprint.deviceJoinName ?: deviceProfilesV3[deviceProfile].description ?: UNKNOWN
-                logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
-                return [deviceName, deviceProfile]
+    
+    // Use deviceFingerprintsV3 for more efficient fingerprint matching
+    if (this.hasProperty('deviceFingerprintsV3') && deviceFingerprintsV3 != null) {
+        deviceFingerprintsV3.each { profileName, profileData ->
+            profileData.fingerprints.each { fingerprint ->
+                if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
+                    deviceProfile = profileName
+                    deviceName = fingerprint.deviceJoinName ?: profileData.description ?: UNKNOWN
+                    logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
+                    return [deviceName, deviceProfile]
+                }
+            }
+        }
+    } else {
+        // Fallback to deviceProfilesV3 if deviceFingerprintsV3 is not available
+        deviceProfilesV3.each { profileName, profileMap ->
+            profileMap.fingerprints.each { fingerprint ->
+                if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
+                    deviceProfile = profileName
+                    deviceName = fingerprint.deviceJoinName ?: deviceProfilesV3[deviceProfile].description ?: UNKNOWN
+                    logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
+                    return [deviceName, deviceProfile]
+                }
             }
         }
     }
