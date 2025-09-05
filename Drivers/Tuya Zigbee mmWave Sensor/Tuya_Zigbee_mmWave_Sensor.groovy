@@ -103,10 +103,10 @@ metadata {
             command 'cacheTest', [[name: "action", type: "ENUM", description: "Cache action", constraints: ["Info", "Initialize", "ReconstructedFingerprints", "Clear"], defaultValue: "Info"]]
         }
         
-        // Generate fingerprints from optimized deviceFingerprintsV3 map (fast access!)
+        // Generate fingerprints from optimized deviceFingerprintsV4 map (fast access!)
         // Uses pre-loaded fingerprint data instead of processing deviceProfilesV3
-        if (deviceFingerprintsV3 && !deviceFingerprintsV3.isEmpty()) {
-            deviceFingerprintsV3.each { profileName, fingerprintData ->
+        if (deviceFingerprintsV4 && !deviceFingerprintsV4.isEmpty()) {
+            deviceFingerprintsV4.each { profileName, fingerprintData ->
                 fingerprintData.fingerprints?.each { fingerprintMap ->
                     fingerprint fingerprintMap
                 }
@@ -756,18 +756,18 @@ void cacheTest(String action) {
     switch(act) {
         case 'Info':
             int size = deviceProfilesV3?.size() ?: 0
-            int fingerprintSize = deviceFingerprintsV3?.size() ?: 0
+            int fingerprintSize = deviceFingerprintsV4?.size() ?: 0
             List keys = deviceProfilesV3 ? new ArrayList(deviceProfilesV3.keySet()) : []
-            List fingerprintKeys = deviceFingerprintsV3 ? new ArrayList(deviceFingerprintsV3.keySet()) : []
+            List fingerprintKeys = deviceFingerprintsV4 ? new ArrayList(deviceFingerprintsV4.keySet()) : []
             
             // Count computed fingerprints
             int totalComputedFingerprints = 0
-            deviceFingerprintsV3.each { key, value ->
+            deviceFingerprintsV4.each { key, value ->
                 totalComputedFingerprints += value.computedFingerprints?.size() ?: 0
             }
             
             logInfo "cacheTest Info: deviceProfilesV3 size=${size} keys=${keys}"
-            logInfo "cacheTest Info: deviceFingerprintsV3 size=${fingerprintSize} keys=${fingerprintKeys}"
+            logInfo "cacheTest Info: deviceFingerprintsV4 size=${fingerprintSize} keys=${fingerprintKeys}"
             logInfo "cacheTest Info: total computed fingerprint strings=${totalComputedFingerprints}"
             break
         case 'Initialize':
@@ -775,10 +775,10 @@ void cacheTest(String action) {
             logInfo "cacheTest Initialize: ensureProfilesLoaded() -> ${ok}; size now ${deviceProfilesV3.size()}"
             break
         case 'ReconstructedFingerprints':
-            if (deviceFingerprintsV3.isEmpty()) {
+            if (deviceFingerprintsV4.isEmpty()) {
                 logInfo "cacheTest ReconstructedFingerprints: no fingerprints loaded - run Initialize first"
             } else {
-                deviceFingerprintsV3.each { profileName, fingerprintData ->
+                deviceFingerprintsV4.each { profileName, fingerprintData ->
                     int fpCount = fingerprintData.computedFingerprints?.size() ?: 0
                     if (fpCount > 0) {
                         StringBuilder allFingerprints = new StringBuilder()
@@ -797,9 +797,9 @@ void cacheTest(String action) {
             break
         case 'Clear':
             int before = deviceProfilesV3.size()
-            int beforeFingerprints = deviceFingerprintsV3.size()
+            int beforeFingerprints = deviceFingerprintsV4.size()
             deviceProfilesV3.clear()
-            deviceFingerprintsV3.clear()
+            deviceFingerprintsV4.clear()
             profilesLoaded = false
             profilesLoading = false
             logInfo "cacheTest Clear: cleared ${before} profiles and ${beforeFingerprints} fingerprint entries"
@@ -813,7 +813,7 @@ void cacheTest(String action) {
 @Field static  Map deviceProfilesV3 = [:]
 @Field static  boolean profilesLoading = false
 @Field static  boolean profilesLoaded = false
-@Field static  Map deviceFingerprintsV3 = [:]
+@Field static  Map deviceFingerprintsV4 = [:]
 
 // -------------- new test functions - add here !!! -------------------------
 
@@ -873,7 +873,7 @@ boolean loadProfilesFromJSON() {
         deviceProfilesV3.putAll(dp as Map)
         logDebug "loadProfilesFromJSON: deviceProfilesV3 populated with ${deviceProfilesV3.size()} profiles"
 
-        // Populate deviceFingerprintsV3 using bulk assignment for better performance
+        // Populate deviceFingerprintsV4 using bulk assignment for better performance
         // Use fingerprintIt() logic to reconstruct complete fingerprint data
         Map localFingerprints = [:]
         
@@ -903,8 +903,8 @@ boolean loadProfilesFromJSON() {
             ]
         }
         
-        deviceFingerprintsV3.clear()
-        deviceFingerprintsV3.putAll(localFingerprints)
+        deviceFingerprintsV4.clear()
+        deviceFingerprintsV4.putAll(localFingerprints)
 
         // Count total computed fingerprint strings
         int totalComputedFingerprints = 0
@@ -918,7 +918,7 @@ boolean loadProfilesFromJSON() {
         long executionTime = endTime - startTime
         
         logDebug "loadProfilesFromJSON: loaded ${deviceProfilesV3.size()} profiles: ${deviceProfilesV3.keySet()}"
-        logDebug "loadProfilesFromJSON: populated ${deviceFingerprintsV3.size()} fingerprint entries"
+        logDebug "loadProfilesFromJSON: populated ${deviceFingerprintsV4.size()} fingerprint entries"
         logDebug "loadProfilesFromJSON: pre-computed ${totalComputedFingerprints} fingerprint strings"
         logDebug "loadProfilesFromJSON: execution time: ${executionTime}ms"
         return true

@@ -26,7 +26,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '4.0.0' }
-static String deviceProfileLibStamp() { '2025/09/04 11:06 PM' }
+static String deviceProfileLibStamp() { '2025/09/04 1:55 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -91,11 +91,11 @@ public List<String> getDeviceProfilesMap()   {
 
 /**
  * Returns the device fingerprints map
- * @return The deviceFingerprintsV3 map containing description and fingerprints for each profile
+ * @return The deviceFingerprintsV4 map containing description and fingerprints for each profile
  */
-public Map getDeviceFingerprintsV3() {
+public Map getDeviceFingerprintsV4() {
     if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
-    return this.hasProperty('deviceFingerprintsV3') ? deviceFingerprintsV3 : [:]
+    return this.hasProperty('deviceFingerprintsV4') ? deviceFingerprintsV4 : [:]
 }
 
 /**
@@ -837,9 +837,9 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
     String deviceModel        = model != null ? model : device.getDataValue('model') ?: UNKNOWN
     String deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
     
-    // Use deviceFingerprintsV3 for more efficient fingerprint matching
-    if (this.hasProperty('deviceFingerprintsV3') && deviceFingerprintsV3 != null) {
-        deviceFingerprintsV3.each { profileName, profileData ->
+    // Use deviceFingerprintsV4 for more efficient fingerprint matching
+    if (this.hasProperty('deviceFingerprintsV4') && deviceFingerprintsV4 != null) {
+        deviceFingerprintsV4.each { profileName, profileData ->
             profileData.fingerprints.each { fingerprint ->
                 if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
                     deviceProfile = profileName
@@ -850,7 +850,7 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
             }
         }
     } else {
-        // Fallback to deviceProfilesV3 if deviceFingerprintsV3 is not available
+        // Fallback to deviceProfilesV3 if deviceFingerprintsV4 is not available
         deviceProfilesV3.each { profileName, profileMap ->
             profileMap.fingerprints.each { fingerprint ->
                 if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
