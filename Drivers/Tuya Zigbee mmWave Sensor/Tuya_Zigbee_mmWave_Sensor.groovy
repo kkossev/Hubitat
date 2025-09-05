@@ -24,7 +24,7 @@
 */
 
 static String version() { "4.0.0" }
-static String timeStamp() {"2025/09/05 1:04 PM"}
+static String timeStamp() {"2025/09/05 1:29 PM"}
 
 @Field static final Boolean _DEBUG = true           // debug logging
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -100,7 +100,7 @@ metadata {
             command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]] 
             // testParse is defined in the common library
             // tuyaTest is defined in the common library
-            command 'cacheTest', [[name: "action", type: "ENUM", description: "Cache action", constraints: ["Info", "Initialize", "ShowFingerprints", "TestFingerprints", "Clear"], defaultValue: "Info"]]
+            command 'cacheTest', [[name: "action", type: "ENUM", description: "Cache action", constraints: ["Info", "Initialize", "ReconstructedFingerprints", "Clear"], defaultValue: "Info"]]
         }
         
         // Generate fingerprints from optimized deviceFingerprintsV3 map (fast access!)
@@ -112,15 +112,6 @@ metadata {
                 }
             }
         }
-        else {
-            // Fallback: ensure profiles are loaded if not already available
-            ensureProfilesLoaded()
-            deviceFingerprintsV3.each { profileName, fingerprintData ->
-                fingerprintData.fingerprints?.each { fingerprintMap ->
-                    fingerprint fingerprintMap
-                }
-            }
-        }      
     }
 
     preferences {
@@ -783,9 +774,9 @@ void cacheTest(String action) {
             boolean ok = ensureProfilesLoaded()
             logInfo "cacheTest Initialize: ensureProfilesLoaded() -> ${ok}; size now ${deviceProfilesV3.size()}"
             break
-        case 'ShowFingerprints':
+        case 'ReconstructedFingerprints':
             if (deviceFingerprintsV3.isEmpty()) {
-                logInfo "cacheTest ShowFingerprints: no fingerprints loaded - run Initialize first"
+                logInfo "cacheTest ReconstructedFingerprints: no fingerprints loaded - run Initialize first"
             } else {
                 deviceFingerprintsV3.each { profileName, fingerprintData ->
                     int fpCount = fingerprintData.computedFingerprints?.size() ?: 0
@@ -796,31 +787,13 @@ void cacheTest(String action) {
                             allFingerprints.append(" [${index + 1}] ${fpString}")
                             if (index < fpCount - 1) allFingerprints.append(" <br>")  // add line break except after last
                         }
-                        logInfo "cacheTest ShowFingerprints: ${allFingerprints.toString()}"
+                        logInfo "cacheTest ReconstructedFingerprints: ${allFingerprints.toString()}"
                     } else {
-                        logInfo "cacheTest ShowFingerprints: Profile ${profileName} has no computed fingerprints"
+                        logInfo "cacheTest ReconstructedFingerprints: Profile ${profileName} has no computed fingerprints"
                     }
                 }
-                logInfo "cacheTest ShowFingerprints: completed"
+                logInfo "cacheTest ReconstructedFingerprints: completed"
             }
-            break
-        case 'TestFingerprints':
-            logWarn "cacheTest TestFingerprints: started"
-            boolean loaded = ensureProfilesLoaded()
-            if (!loaded) {
-                logWarn "cacheTest TestFingerprints: profiles not loaded, aborting test"
-                return
-            }
-            
-            logInfo "cacheTest TestFingerprints: deviceFingerprintsV3 size = ${deviceFingerprintsV3.size()}"
-            deviceFingerprintsV3.each { profileKey, profileData ->
-                logInfo "Profile: ${profileKey} - Description: '${profileData.description}'"
-                logInfo "  Fingerprints count: ${profileData.fingerprints?.size() ?: 0}"
-                profileData.fingerprints?.each { fingerprint ->
-                    logInfo "    Model: ${fingerprint.model}, Manufacturer: ${fingerprint.manufacturer}, DeviceJoinName: ${fingerprint.deviceJoinName ?: 'N/A'}"
-                }
-            }
-            logWarn "cacheTest TestFingerprints: completed"
             break
         case 'Clear':
             int before = deviceProfilesV3.size()
