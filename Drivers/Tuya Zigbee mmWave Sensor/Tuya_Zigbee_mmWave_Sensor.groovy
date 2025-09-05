@@ -24,7 +24,7 @@
 */
 
 static String version() { "4.0.0" }
-static String timeStamp() {"2025/09/05 6:51 PM"}
+static String timeStamp() {"2025/09/05 10:41 PM"}
 
 @Field static final Boolean _DEBUG = true           // debug logging
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -102,7 +102,7 @@ metadata {
             // tuyaTest is defined in the common library
             command 'cacheTest', [[name: "action", type: "ENUM", description: "Cache action", constraints: ["Info", "Initialize", "ReconstructedFingerprints", "CurrentProfilesV4", "currentProfilesV4 Dump", "LoadCurrentProfile", "DisposeV3", "Clear"], defaultValue: "Info"]]
         }
-        /*
+        
         // Generate fingerprints from optimized deviceFingerprintsV4 map (fast access!)
         // Uses pre-loaded fingerprint data instead of processing deviceProfilesV3
         if (deviceFingerprintsV4 && !deviceFingerprintsV4.isEmpty()) {
@@ -112,7 +112,7 @@ metadata {
                 }
             }
         }
-        */
+        
     }
 
     preferences {
