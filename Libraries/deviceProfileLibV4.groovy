@@ -26,7 +26,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '4.0.0' }
-static String deviceProfileLibStamp() { '2025/09/05 4:55 PM' }
+static String deviceProfileLibStamp() { '2025/09/05 5:18 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -49,7 +49,7 @@ metadata {
             [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
     ]
     */
-    /*
+    
     preferences {
         if (device) {
             input(name: 'forcedProfile', type: 'enum', title: '<b>Device Profile</b>', description: 'Manually change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!',  options: getDeviceProfilesMap())
@@ -64,22 +64,19 @@ metadata {
             }
         }
     }
-    */
+    
 }
 
 private boolean is2in1() { return getDeviceProfile().startsWith('TS0601_2IN1')  }   // patch!
 
 public String  getDeviceProfile()       { state?.deviceProfile ?: 'UNKNOWN' }
 public Map     getDEVICE()              { 
-    // Use V4 approach if available, fallback to V3
-//    if (this.hasProperty('currentProfilesV4')) {
-//        ensureCurrentProfileLoaded()
+    // Use V4 approach only. Backward compatibility with V3 is dropped
+    if (this.hasProperty('currentProfilesV4')) {
+        ensureCurrentProfileLoaded()
         return getCurrentDeviceProfile()
-//    } else {
-        // V3 fallback
-        //if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
-       // return deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : [:] 
-//    }
+    } 
+    return [ : ]
 }
 
 // ---- V4 Profile Management Methods ----
@@ -90,21 +87,19 @@ public Map     getDEVICE()              {
  * @return Map containing the device profile data
  */
 private Map getCurrentDeviceProfile() {
-    /*
     if (!this.hasProperty('currentProfilesV4')) { 
-        return getDEVICE()  // fallback to V3 method
+        return [:]  // NO fallback to V3 method
     }
-    */
     
     String dni = device?.deviceNetworkId
     Map currentProfile = currentProfilesV4[dni]
     
-//    if (currentProfile != null) {
+    if (currentProfile != null) {
         return currentProfile
-//    } else {
+    } else {
         // Profile not loaded yet, use V3 fallback
-//        return getDEVICE()
-//    }
+        return [:]
+    }
 }
 
 /**

@@ -25,6 +25,8 @@ library(
   * ver. 3.5.2  2025-08-13 kkossev  - Status attribute renamed to _status_
   * ver. 4.0.0  2025-09-03 kkossev  - deviceProfileV4 BRANCH created
   *
+  *                                   TODO: 
+  *                                   TODO: 
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
   *                                   TODO: make the configure() without parameter smart - analyze the State variables and call delete states.... call ActiveAndpoints() or/amd initialize() or/and configure()
   *                                   TODO: check - offlineCtr is not increasing? (ZBMicro);
@@ -40,7 +42,7 @@ library(
 */
 
 String commonLibVersion() { '4.0.0' }
-String commonLibStamp() { '2025/09/04 3:12 PM' }
+String commonLibStamp() { '2025/09/04 6:50 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -244,7 +246,6 @@ private static void updateRxStats(final Map state) {
 }
 
 public boolean isChattyDeviceReport(final Map descMap)  {  // when @CompileStatis is slower?
-return false
     if (_TRACE_ALL == true) { return false }
     if (this.respondsTo('isSpammyDPsToNotTrace')) {  // defined in deviceProfileLib
         return isSpammyDPsToNotTrace(descMap)
@@ -253,20 +254,9 @@ return false
 }
 
 public boolean isSpammyDeviceReport(final Map descMap) {
-    return false
     if (_TRACE_ALL == true) { return false }
     if (this.respondsTo('isSpammyDPsToIgnore')) {   // defined in deviceProfileLib
         return isSpammyDPsToIgnore(descMap)
-    }
-    return false
-}
-
-// not used?
-public boolean isSpammyTuyaRadar() {
-    return false
-    if (_TRACE_ALL == true) { return false }
-    if (this.respondsTo('isSpammyDeviceProfile'())) {   // defined in deviceProfileLib
-        return isSpammyDeviceProfile()
     }
     return false
 }
