@@ -608,11 +608,124 @@
       "spammyDPsToIgnore": [103],
       "spammyDPsToNotTrace": [103],
       "configuration": { "battery": false }
+    },
+
+    "SONOFF_SNZB-06P_RADAR": {
+      "description": "SONOFF SNZB-06P RADAR",
+      "device": { "powerSource": "battery", "ignoreIAS": true },
+      "capabilities": { "MotionSensor": true, "Battery": true },
+      "preferences": { "keepTime": "0x0406:0x0020", "sensitivity": "0x0406:0x0022" },
+      "fingerprints": [
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0003,0406,0001", "outClusters": "0003,0019", "model": "SNZB-06P", "manufacturer": "SONOFF", "deviceJoinName": "SONOFF SNZB-06P" }
+      ],
+      "attributes": [
+        { "at": "0x0406:0x0020", "name": "keepTime", "type": "number", "dt": "0x21", "rw": "rw", "min": 5, "max": 7200, "defVal": 30, "scale": 1, "unit": "seconds", "title": "<b>Keep Time</b>", "description": "<i>PIR keep time in seconds</i>" },
+        { "at": "0x0406:0x0022", "name": "sensitivity", "type": "enum", "dt": "0x20", "rw": "rw", "min": 1, "max": 3, "defVal": "2", "scale": 1, "map": { "1": "low", "2": "medium", "3": "high" }, "unit": "", "title": "<b>Sensitivity</b>", "description": "<i>PIR sensor sensitivity (update at the time motion is activated)</i>" }
+      ],
+      "refresh": ["pollBatteryPercentage"],
+      "configuration": { "0x0406": "bind" }
+    },
+
+    "TS0601_MUVJRJR5_RADAR": {
+      "description": "Tuya Human Presence Detector MUVJRJR5",
+      "device": { "powerSource": "dc" },
+      "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement": true },
+      "preferences": { "radarSensitivity": "106", "staticDetectionSensitivity": "111", "fadingTime": "110", "maximumDistance": "107" },
+      "commands": { "resetStats": "" },
+      "fingerprints": [
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_muvjrjr5", "deviceJoinName": "Tuya Human Presence Detector MUVJRJR5" }
+      ],
+      "tuyaDPs": [
+        { "dp": 104, "name": "illuminance", "type": "number", "rw": "ro", "scale": 1, "unit": "lx", "description": "illuminance" },
+        { "dp": 105, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "map": { "0": "inactive", "1": "active" }, "description": "Presence state" },
+        { "dp": 106, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 1, "max": 10, "defVal": 7, "scale": 1, "unit": "", "title": "<b>Motion sensitivity</b>", "description": "<i>Motion sensitivity</i>" },
+        { "dp": 107, "name": "maximumDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 9.5, "defVal": 6.0, "scale": 100, "unit": "meters", "title": "<b>Maximum distance</b>", "description": "<i>Max detection distance</i>" },
+        { "dp": 108, "name": "minimumDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 9.5, "defVal": 0.5, "scale": 100, "unit": "meters", "title": "<b>Minimum distance</b>", "description": "Min detection distance" },
+        { "dp": 109, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 10.0, "scale": 100, "unit": "meters", "description": "Distance" },
+        { "dp": 110, "name": "fadingTime", "type": "decimal", "rw": "rw", "min": 0.5, "max": 150.0, "defVal": 60.0, "step": 5, "scale": 10, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Presence inactivity timer</i>" },
+        { "dp": 111, "name": "staticDetectionSensitivity", "type": "number", "rw": "rw", "min": 1, "max": 10, "defVal": 7, "scale": 1, "unit": "", "title": "<b>Static Detection sensitivity</b>", "description": "<i>Static detection sensitivity</i>" }
+      ],
+      "refresh": ["queryAllTuyaDP"],
+      "spammyDPsToIgnore": [109],
+      "spammyDPsToNotTrace": [109]
+    },
+
+    "TS0601_NBKSHS6K_RADAR": {
+      "description": "5GHz Tuya Generic White Square Basic",
+      "device": { "powerSource": "dc" },
+      "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true },
+      "preferences": { "radarSensitivity": "101", "fadingTime": "102" },
+      "fingerprints": [
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_nbkshs6k", "deviceJoinName": "Tuya 5.8GHz Human Presence Detector" }
+      ],
+      "tuyaDPs": [
+        { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "map": { "0": "inactive", "1": "active" }, "description": "Presence state" },
+        { "dp": 101, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 1, "max": 9, "defVal": 6, "scale": 1, "unit": "", "title": "<b>Motion sensitivity</b>", "description": "<i>Motion sensitivity</i>" },
+        { "dp": 102, "name": "fadingTime", "type": "number", "rw": "rw", "min": 5, "max": 3600, "defVal": 15, "scale": 1, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Fading time</i>" },
+        { "dp": 103, "name": "illuminance", "type": "number", "rw": "ro", "scale": 1, "unit": "lx", "description": "illuminance" }
+      ],
+      "refresh": ["queryAllTuyaDP"]
+    },
+
+    "TS0601_DAPWRYY7_RADAR": {
+      "description": "5GHz Tuya Thick White Square with Sqr Button",
+      "device": { "powerSource": "dc" },
+      "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement": true },
+      "preferences": { "radarSensitivity": "101", "detectionDelay": "103", "fadingTime": "102", "minimumDistance": "106", "maximumDistance": "105" },
+      "commands": { "resetStats": "" },
+      "fingerprints": [
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_dapwryy7", "deviceJoinName": "Tuya 5.8GHz Thick White Square Human Presence Detector" }
+      ],
+      "tuyaDPs": [
+        { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "map": { "0": "inactive", "1": "active" }, "description": "Presence state" },
+        { "dp": 101, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 1, "max": 9, "defVal": 7, "scale": 1, "unit": "", "title": "<b>Motion sensitivity</b>", "description": "<i>Motion sensitivity</i>" },
+        { "dp": 102, "name": "fadingTime", "type": "number", "rw": "rw", "min": 5, "max": 3600, "defVal": 15, "scale": 1, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Fading time</i>" },
+        { "dp": 103, "name": "detectionDelay", "type": "decimal", "rw": "rw", "min": 0.5, "max": 10.0, "defVal": 1.0, "scale": 10, "unit": "seconds", "title": "<b>Detection delay</b>", "description": "<i>Detection delay</i>" },
+        { "dp": 104, "name": "illuminance", "type": "number", "rw": "ro", "scale": 1, "unit": "lx", "description": "illuminance" },
+        { "dp": 105, "name": "maximumDistance", "type": "decimal", "rw": "rw", "min": 1.5, "max": 6.0, "defVal": 6.0, "scale": 100, "unit": "meters", "title": "<b>Maximum distance</b>", "description": "<i>Max detection distance</i>" },
+        { "dp": 106, "name": "minimumDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 6.0, "defVal": 0.5, "scale": 100, "unit": "meters", "title": "<b>Minimum distance</b>", "description": "Min detection distance" },
+        { "dp": 107, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 10.0, "scale": 100, "unit": "meters", "description": "Distance" }
+      ],
+      "refresh": ["queryAllTuyaDP"],
+      "spammyDPsToIgnore": [107],
+      "spammyDPsToNotTrace": [107]
+    },
+
+    "TS0601_EX3RCDHA_RADAR": {
+      "description": "Tuya mmWave Radar ZHPS01",
+      "device": { "powerSource": "dc" },
+      "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true },
+      "preferences": { "radarSensitivity": "101", "fadingTime": "102" },
+      "fingerprints": [
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_ex3rcdha", "deviceJoinName": "Tuya mmWave Radar ZHPS01" }
+      ],
+      "tuyaDPs": [
+        { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "map": { "0": "inactive", "1": "active" }, "description": "Presence state" },
+        { "dp": 101, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 1, "max": 9, "defVal": 7, "scale": 1, "unit": "", "title": "<b>Motion sensitivity</b>", "description": "<i>Motion sensitivity</i>" },
+        { "dp": 102, "name": "fadingTime", "type": "number", "rw": "rw", "min": 5, "max": 3600, "defVal": 15, "scale": 1, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Fading time</i>" },
+        { "dp": 103, "name": "illuminance", "type": "number", "rw": "ro", "scale": 1, "unit": "lx", "description": "illuminance" }
+      ],
+      "refresh": ["queryAllTuyaDP"]
+    },
+
+    "TS0601_HEIMAN_RADAR": {
+      "description": "Heiman mmWave Presence Sensor HS8OS",
+      "device": { "powerSource": "dc" },
+      "capabilities": { "MotionSensor": true },
+      "preferences": { "radarSensitivity": "2", "fadingTime": "102" },
+      "fingerprints": [
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_ttcovhgx", "deviceJoinName": "Heiman mmWave Presence Sensor HS8OS" }
+      ],
+      "tuyaDPs": [
+        { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "map": { "0": "inactive", "1": "active" }, "description": "Presence state" },
+        { "dp": 2, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 1, "max": 9, "defVal": 7, "scale": 1, "unit": "", "title": "<b>Motion sensitivity</b>", "description": "<i>Motion sensitivity</i>" },
+        { "dp": 102, "name": "fadingTime", "type": "number", "rw": "rw", "min": 5, "max": 3600, "defVal": 15, "scale": 1, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Fading time</i>" }
+      ],
+      "refresh": ["queryAllTuyaDP"]
     }
   },
-
-  "version": "4.0.0",
-  "timestamp": "2025-09-03T00:00:00Z",
+  "version": "4.0.1",
+  "timestamp": "2025-09-06T20:47:00Z",
   "description": "Device profiles for Tuya Zigbee mmWave Sensor",
   "author": "kkossev"
 }

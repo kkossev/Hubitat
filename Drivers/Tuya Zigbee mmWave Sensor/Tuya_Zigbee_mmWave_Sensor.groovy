@@ -100,7 +100,7 @@ metadata {
             command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]] 
             // testParse is defined in the common library
             // tuyaTest is defined in the common library
-            command 'cacheTest', [[name: "action", type: "ENUM", description: "Cache action", constraints: ["Info", "Initialize", "ReconstructedFingerprints", "CurrentProfilesV4", "currentProfilesV4 Dump", "LoadCurrentProfile", "DisposeV3", "Clear"], defaultValue: "Info"]]
+            command 'cacheTest', [[name: "action", type: "ENUM", description: "Cache action", constraints: ["Info", "Initialize", "ReconstructedFingerprints", "CurrentProfilesV4", "currentProfilesV4 Dump", "LoadCurrentProfile", "DisposeV3", "TestFileRead", "Clear"], defaultValue: "Info"]]
         }
         
         // Generate fingerprints from optimized deviceFingerprintsV4 map (fast access!)
@@ -994,6 +994,21 @@ void cacheTest(String action) {
                 logInfo "cacheTest DisposeV3: disposed V3 profiles (was ${v3SizeBefore}) - currentProfilesV4 still has ${currentSizeCheck} entries"
             }
             break
+        case 'TestFileRead':
+            // Test just the file we know exists first
+            logInfo "cacheTest TestFileRead: Testing known file 'deviceProfilesV4_mmWave.json'"
+            //String content = readFile("deviceProfilesV4_mmWave.json")
+            // big_json_test.json
+            String content = readFile("big_json_test.json")
+            if (content != null) {
+                logInfo "cacheTest TestFileRead: ✅ SUCCESS - 'big_json_test.json' (${content.length()} chars)"
+                // Show first 200 chars as preview
+                String preview = content.length() > 2000 ? content.substring(0, 2000) + "..." : content
+                logInfo "cacheTest TestFileRead: Preview: ${preview}"
+            } else {
+                logWarn "cacheTest TestFileRead: ❌ FAILED - 'big_json_test.json' returned null"
+            }
+            break
         case 'Clear':
             int before = deviceProfilesV3.size()
             int beforeFingerprints = deviceFingerprintsV4.size()
@@ -1010,7 +1025,67 @@ void cacheTest(String action) {
     }
 }
 
+//////// https://community.hubitat.com/t/release-file-manager-device/91092 ///////
+// credits @thebearmay
+/////// https://github.com/thebearmay/hubitat/blob/main/fileMgr.groovy 
 
+@Field static String mmWaveFileName = "deviceProfilesV4_mmWave.json"
+
+def readFile(fName, Closure closure) {
+    closure(readFile(fName))
+}
+
+String readFile(fName){
+    long startTime = now()
+    uri = "http://${location.hub.localIP}:8080/local/${fName}"
+    logDebug "Reading file ${fName} from hub at ${uri}"
+
+    def params = [
+        uri: uri,
+        contentType: "application/json",
+        headers: ["Accept": "application/json"]
+    ]
+
+    try {
+        long httpStartTime = now()
+        httpGet(params) { resp ->
+            long httpEndTime = now()
+            long httpDuration = httpEndTime - httpStartTime
+            
+            if(resp?.data != null) {
+                logDebug "Response status: ${resp.status}"
+                
+                long contentStartTime = now()
+                // Extract content - we know data.toString() works for Hubitat
+                String content = resp.data.toString()
+                long contentEndTime = now()
+                long contentDuration = contentEndTime - contentStartTime
+                long totalTime = contentEndTime - startTime
+                
+                if (content != null && content.length() > 0) {
+                    logInfo "File Read SUCCESS - ${fName}: ${content.length()} chars"
+                    logInfo "Performance: HTTP=${httpDuration}ms, Content=${contentDuration}ms, Total=${totalTime}ms"
+                    return content
+                } else {
+                    log.error "Content is null or empty (Total: ${now() - startTime}ms)"
+                    return null
+                }
+            } else {
+                log.error "Null Response Data (Total: ${now() - startTime}ms)"
+                return null
+            }
+        }
+    } catch (exception) {
+        log.error "Read Error: ${exception.message} (${now() - startTime}ms)"
+        return null
+    }
+}
+
+
+
+
+
+////////
 
 
 void testFunc( par) {
@@ -1022,14 +1097,17 @@ void test(String par) {
     long startTime = now()
     logWarn "test() started at ${startTime}"
 
+
     /*
     def xx = getDeviceProfilesMap()
     logDebug "test() getDeviceProfilesMap() returned ${xx?.size() ?: 0} profiles"
     */
+    /*
      String dni = device?.deviceNetworkId
     if (!currentProfilesV4.containsKey(dni)) {
         populateCurrentProfile(dni)
     }
+    */
     /*
 
     boolean loaded = ensureProfilesLoaded()
