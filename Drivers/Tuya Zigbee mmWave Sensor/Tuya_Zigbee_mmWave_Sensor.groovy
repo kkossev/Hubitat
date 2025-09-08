@@ -20,7 +20,7 @@
  * ..............................
  * ver. 4.0.0  2025-09-04 kkossev  - deviceProfileV4 BRANCH created
  *                                   
- *                                   TODO:
+ *                                   TODO: change offlineCheck to 15 minutes
 */
 
 static String version() { "4.0.0" }
@@ -58,6 +58,7 @@ deviceType = "mmWaveSensor"
 @Field static  Map deviceFingerprintsV4 = [:]
 @Field static  Map currentProfilesV4 = [:]  // Key: device?.deviceNetworkId, Value: complete profile data
 
+@Field static String defaultGitHubURL = 'https://raw.githubusercontent.com/kkossev/Hubitat/deviceProfileV4/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/deviceProfilesV4_mmWave.json'
 
 metadata {
     definition (
@@ -113,6 +114,7 @@ metadata {
             // testParse is defined in the common library
             // tuyaTest is defined in the common library
             command 'cacheTest', [[name: "action", type: "ENUM", description: "Cache action", constraints: ["Info", "Initialize", "ReconstructedFingerprints", "CurrentProfilesV4", "currentProfilesV4 Dump", "LoadCurrentProfile", "DisposeV3", "TestFileRead", "Clear"], defaultValue: "Info"]]
+            command 'updateFromGitHub', [[name: "url", type: "STRING", description: "GitHub URL (optional)", defaultValue: ""]]
         }
         
         // Generate fingerprints from optimized deviceFingerprintsV4 map (fast access!)
@@ -848,6 +850,115 @@ void cacheTest(String action) {
     }
 }
 
+// updateFromGitHub command - download JSON profiles from GitHub and store to Hubitat local storage
+void updateFromGitHub(String url = '') {
+    long startTime = now()
+    String gitHubUrl = url?.trim() ?: defaultGitHubURL
+    String fileName = DEFAULT_PROFILES_FILENAME
+    
+    logInfo "updateFromGitHub: downloading from ${gitHubUrl}"
+    // uri: raw.githubusercontent.com/kkossev/Hubitat/...
+    // https://raw.githubusercontent.com/kkossev/Hubitat/...
+
+    
+    try {
+        // Download JSON content from GitHub
+        long downloadStartTime = now()
+        def params = [
+            uri: gitHubUrl,
+            //textParser: true  // This is the key! Same as working readFile method
+        ]
+        
+        logDebug "updateFromGitHub: HTTP params: ${params}"
+        
+        httpGet(params) { resp ->
+            logDebug "updateFromGitHub: Response status: ${resp?.status}"
+            
+            if (resp?.status == 200 && resp?.data) {
+                // Fix StringReader issue - get actual text content without explicit class references
+                String jsonContent = ""
+                def responseData = resp.getData()
+                
+                if (responseData instanceof String) {
+                    jsonContent = responseData
+                } else if (responseData?.hasProperty('text')) {
+                    // Handle StringReader without explicit class reference
+                    jsonContent = responseData.text
+                } else {
+                    jsonContent = responseData.toString()
+                }
+                
+                long downloadEndTime = now()
+                long downloadDuration = downloadEndTime - downloadStartTime
+                logInfo "updateFromGitHub: downloaded ${jsonContent.length()} characters"
+                logDebug "updateFromGitHub: first 100 chars: ${jsonContent.take(100)}"
+                logInfo "updateFromGitHub: Performance - Download: ${downloadDuration}ms"
+                
+                // Validate it's actually JSON content
+                if (jsonContent.length() < 100 || !jsonContent.trim().startsWith("{")) {
+                    logWarn "updateFromGitHub: ❌ Downloaded content doesn't appear to be valid JSON"
+                    logWarn "updateFromGitHub: Content preview: ${jsonContent.take(200)}"
+                    return
+                }
+                
+                // Parse and extract version/timestamp information for debugging
+                try {
+                    def jsonSlurper = new groovy.json.JsonSlurper()
+                    def parsedJson = jsonSlurper.parseText(jsonContent)
+                    
+                    def version = parsedJson?.version ?: "unknown"
+                    def timestamp = parsedJson?.timestamp ?: "unknown"
+                    def author = parsedJson?.author ?: "unknown"
+                    def profileCount = parsedJson?.deviceProfiles?.size() ?: 0
+                    
+                    logDebug "updateFromGitHub: JSON Metadata - Version: ${version}, Timestamp: ${timestamp}"
+                    logDebug "updateFromGitHub: JSON Metadata - Author: ${author}, Device Profiles: ${profileCount}"
+                    
+                } catch (Exception jsonException) {
+                    logWarn "updateFromGitHub: Could not parse JSON metadata: ${jsonException.message}"
+                }
+                
+                // Store the content to Hubitat local storage using uploadHubFile
+                try {
+                    long uploadStartTime = now()
+                    // Use uploadHubFile to save content directly to local storage (correct API method)
+                    def fileBytes = jsonContent.getBytes("UTF-8")
+                    uploadHubFile(fileName, fileBytes)  // void method - no return value
+                    
+                    long uploadEndTime = now()
+                    long uploadDuration = uploadEndTime - uploadStartTime
+                    
+                    logInfo "updateFromGitHub: ✅ Successfully updated ${fileName} in Hubitat local storage"
+                    logInfo "updateFromGitHub: File size: ${jsonContent.length()} characters"
+                    logInfo "updateFromGitHub: Performance - Upload: ${uploadDuration}ms"
+                    
+                    // Optional: Clear current profiles to force reload on next access
+                    deviceProfilesV4.clear()
+                    deviceFingerprintsV4.clear()
+                    currentProfilesV4.clear()
+                    profilesLoaded = false
+                    profilesLoading = false
+                    
+                    logInfo "updateFromGitHub: Cleared cached profiles - they will be reloaded on next access"
+                    
+                    long endTime = now()
+                    long totalDuration = endTime - startTime
+                    logInfo "updateFromGitHub: Performance - Total: ${totalDuration}ms"
+                } catch (Exception fileException) {
+                    logWarn "updateFromGitHub: ❌ Error saving file: ${fileException.message}"
+                    logDebug "updateFromGitHub: File save exception: ${fileException}"
+                }
+            } else {
+                logWarn "updateFromGitHub: ❌ Failed to download from GitHub. HTTP status: ${resp?.status}"
+            }
+        }
+        
+    } catch (Exception e) {
+        logWarn "updateFromGitHub: ❌ Error: ${e.message}"
+        logDebug "updateFromGitHub: Full exception: ${e}"
+    }
+}
+
 //////// https://community.hubitat.com/t/release-file-manager-device/91092 ///////
 // credits @thebearmay
 /////// https://github.com/thebearmay/hubitat/blob/main/fileMgr.groovy 
@@ -886,51 +997,6 @@ def readFile(fName) {
         log.error "Connection Exception: ${exception.message}"
         return null;
     }
-
-/*    
-    uri = "http://${location.hub.localIP}:8080/local/${fName}"
-    logDebug "Reading file ${fName} from hub at ${uri}"
-
-    def params = [
-        uri: uri,
-        contentType: "application/json",
-        headers: ["Accept": "application/json"]
-    ]
-
-    try {
-        long httpStartTime = now()
-        httpGet(params) { resp ->
-            long httpEndTime = now()
-            long httpDuration = httpEndTime - httpStartTime
-            
-            if(resp?.data != null) {
-                logDebug "Response status: ${resp.status}"
-                
-                long contentStartTime = now()
-                // Extract content - we know data.toString() works for Hubitat
-                String content = resp.data.toString()
-                long contentEndTime = now()
-                long contentDuration = contentEndTime - contentStartTime
-                long totalTime = contentEndTime - startTime
-                
-                if (content != null && content.length() > 0) {
-                    logInfo "File Read SUCCESS - ${fName}: ${content.length()} chars"
-                    logInfo "Performance: HTTP=${httpDuration}ms, Content=${contentDuration}ms, Total=${totalTime}ms"
-                    return content
-                } else {
-                    log.error "Content is null or empty (Total: ${now() - startTime}ms)"
-                    return null
-                }
-            } else {
-                log.error "Null Response Data (Total: ${now() - startTime}ms)"
-                return null
-            }
-        }
-    } catch (exception) {
-        log.error "Read Error: ${exception.message} (${now() - startTime}ms)"
-        return null
-    }
-*/    
 }
 
 
