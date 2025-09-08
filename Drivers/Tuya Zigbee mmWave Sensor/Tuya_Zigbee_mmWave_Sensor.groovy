@@ -24,7 +24,7 @@
 */
 
 static String version() { "4.0.0" }
-static String timeStamp() {"2025/09/06 11:59 PM"}
+static String timeStamp() {"2025/09/08 9:37 AM"}
 
 @Field static final Boolean _DEBUG = true           // debug logging
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -51,6 +51,13 @@ import groovy.json.JsonOutput
 
 deviceType = "mmWaveSensor"
 @Field static final String DEVICE_TYPE = "mmWaveSensor"
+
+@Field static  Map deviceProfilesV4 = [:]
+@Field static  boolean profilesLoading = false
+@Field static  boolean profilesLoaded = false
+@Field static  Map deviceFingerprintsV4 = [:]
+@Field static  Map currentProfilesV4 = [:]  // Key: device?.deviceNetworkId, Value: complete profile data
+
 
 metadata {
     definition (
@@ -109,7 +116,7 @@ metadata {
         }
         
         // Generate fingerprints from optimized deviceFingerprintsV4 map (fast access!)
-        // Uses pre-loaded fingerprint data instead of processing deviceProfilesV3
+        // Uses pre-loaded fingerprint data instead of processing deviceProfilesV4
         if (deviceFingerprintsV4 && !deviceFingerprintsV4.isEmpty()) {
             deviceFingerprintsV4.each { profileName, fingerprintData ->
                 fingerprintData.fingerprints?.each { fingerprintMap ->
@@ -509,11 +516,6 @@ def pageDeviceConfiguration(params) {
 // ------------------------- end of Simon's tooltips methods -------------------------
 
 
-@Field static  Map deviceProfilesV3 = [:]
-@Field static  boolean profilesLoading = false
-@Field static  boolean profilesLoaded = false
-@Field static  Map deviceFingerprintsV4 = [:]
-@Field static  Map currentProfilesV4 = [:]  // Key: device?.deviceNetworkId, Value: complete profile data
 
 // -------------- new test functions - add here !!! -------------------------
 
@@ -559,8 +561,8 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
     long startTime = now()
     
     // idempotent : don't re-parse if already populated
-    if (!deviceProfilesV3.isEmpty()) {
-        logDebug "loadProfilesFromJSON: already loaded (${deviceProfilesV3.size()} profiles)"
+    if (!deviceProfilesV4.isEmpty()) {
+        logDebug "loadProfilesFromJSON: already loaded (${deviceProfilesV4.size()} profiles)"
         return true
     }
     try {
@@ -569,13 +571,9 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
             logWarn "loadProfilesFromJSON: stringifiedJSON is empty/null"
             return false
         }
-        //def parsed = new groovy.json.JsonSlurper().parseText(stringifiedJSON.trim())
-        //logDebug "loadProfilesFromJSON: parsed JSON successfully"
 
-                def jsonSlurper = new JsonSlurper();
-                def parsed = jsonSlurper.parseText("${stringifiedJSON}");
-
-
+        def jsonSlurper = new JsonSlurper();
+        def parsed = jsonSlurper.parseText("${stringifiedJSON}");
 
         def dp = parsed?.deviceProfiles
         if (!(dp instanceof Map) || dp.isEmpty()) {
@@ -583,15 +581,15 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
             return false
         }
         // !!!!!!!!!!!!!!!!!!!!!!!
-        // Populate deviceProfilesV3
-        deviceProfilesV3.putAll(dp as Map)
-        logDebug "loadProfilesFromJSON: deviceProfilesV3 populated with ${deviceProfilesV3.size()} profiles"
+        // Populate deviceProfilesV4
+        deviceProfilesV4.putAll(dp as Map)
+        logInfo "loadProfilesFromJSON: deviceProfilesV4 populated with ${deviceProfilesV4.size()} profiles"
 
         // Populate deviceFingerprintsV4 using bulk assignment for better performance
         // Use fingerprintIt() logic to reconstruct complete fingerprint data
         Map localFingerprints = [:]
         
-        deviceProfilesV3.each { profileKey, profileMap ->
+        deviceProfilesV4.each { profileKey, profileMap ->
             // Reconstruct complete fingerprint Maps and pre-compute strings
             List<Map> reconstructedFingerprints = []
             List<String> computedFingerprintStrings = []
@@ -619,6 +617,7 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
         
         deviceFingerprintsV4.clear()
         deviceFingerprintsV4.putAll(localFingerprints)
+        logInfo "loadProfilesFromJSON: deviceFingerprintsV4 populated with ${deviceFingerprintsV4.size()} entries"
 
         // Count total computed fingerprint strings
         int totalComputedFingerprints = 0
@@ -631,7 +630,7 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
         long endTime = now()
         long executionTime = endTime - startTime
         
-        logDebug "loadProfilesFromJSON: loaded ${deviceProfilesV3.size()} profiles: ${deviceProfilesV3.keySet()}"
+        logDebug "loadProfilesFromJSON: loaded ${deviceProfilesV4.size()} profiles: ${deviceProfilesV4.keySet()}"
         logDebug "loadProfilesFromJSON: populated ${deviceFingerprintsV4.size()} fingerprint entries"
         logDebug "loadProfilesFromJSON: pre-computed ${totalComputedFingerprints} fingerprint strings"
         logDebug "loadProfilesFromJSON: execution time: ${executionTime}ms"
@@ -648,12 +647,13 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
 
 /**
  * Ensures that device profiles are loaded with thread-safe lazy loading
- * This is the main function that should be called before accessing deviceProfilesV3
+ * This is the main function that should be called before accessing deviceProfilesV4
  * @return true if profiles are loaded successfully, false otherwise
  */
 private boolean ensureProfilesLoaded() {
     // Fast path: already loaded
-    if (!deviceProfilesV3.isEmpty() && profilesLoaded) {
+//    if (!deviceProfilesV4.isEmpty() && profilesLoaded) {
+    if (profilesLoaded && !currentProfilesV4.isEmpty()) {       // !!!!!!!!!!!!!!!!!!!!!!!! TODO - check !!!!!!!!!!!!!!!!!!!!!!!!!!
         return true
     }
     
@@ -663,7 +663,7 @@ private boolean ensureProfilesLoaded() {
         for (int i = 0; i < 10; i++) {
             logDebug "ensureProfilesLoaded: waiting <b>100ms</b> for other thread to finish loading..."
             pauseExecution(100)
-            if (profilesLoaded && !deviceProfilesV3.isEmpty()) {
+            if (profilesLoaded && !deviceProfilesV4.isEmpty()) {
                 logDebug "ensureProfilesLoaded: other thread finished loading"
                 return true
             }
@@ -677,12 +677,12 @@ private boolean ensureProfilesLoaded() {
     profilesLoading = true
     try {
         // Double-check after acquiring lock
-        if (deviceProfilesV3.isEmpty() || !profilesLoaded) {
-            logWarn "ensureProfilesLoaded: loading device profiles...(deviceProfilesV3.isEmpty()=${deviceProfilesV3.isEmpty()}, profilesLoaded=${profilesLoaded})"
+        if (deviceProfilesV4.isEmpty() || !profilesLoaded) {
+            logWarn "ensureProfilesLoaded: loading device profiles...(deviceProfilesV4.isEmpty()=${deviceProfilesV4.isEmpty()}, profilesLoaded=${profilesLoaded})"
             boolean result = loadProfilesFromJSON()
             if (result) {
                 profilesLoaded = true
-                logInfo "ensureProfilesLoaded: successfully loaded ${deviceProfilesV3.size()} deviceProfilesV3 profiles"
+                logInfo "ensureProfilesLoaded: successfully loaded ${deviceProfilesV4.size()} deviceProfilesV4 profiles"
             } else {
                 logWarn "ensureProfilesLoaded: failed to load device profiles"
             }
@@ -698,15 +698,15 @@ private boolean ensureProfilesLoaded() {
 
 
 
-// cacheTest command - manage and inspect cached data structures (currently deviceProfilesV3)
+// cacheTest command - manage and inspect cached data structures (currently deviceProfilesV4)
 void cacheTest(String action) {
     String act = (action ?: 'Info').trim()
     switch(act) {
         case 'Info':
-            int size = deviceProfilesV3?.size() ?: 0
+            int size = deviceProfilesV4?.size() ?: 0
             int fingerprintSize = deviceFingerprintsV4?.size() ?: 0
             int currentProfileSize = currentProfilesV4?.size() ?: 0
-            List keys = deviceProfilesV3 ? new ArrayList(deviceProfilesV3.keySet()) : []
+            List keys = deviceProfilesV4 ? new ArrayList(deviceProfilesV4.keySet()) : []
             List fingerprintKeys = deviceFingerprintsV4 ? new ArrayList(deviceFingerprintsV4.keySet()) : []
             List currentProfileKeys = currentProfilesV4 ? new ArrayList(currentProfilesV4.keySet()) : []
             
@@ -719,15 +719,21 @@ void cacheTest(String action) {
             String dni = device?.deviceNetworkId
             boolean hasCurrentProfile = currentProfilesV4.containsKey(dni)
             
-            logInfo "cacheTest Info: deviceProfilesV3 size=${size} keys=${keys}"
+            logInfo "cacheTest Info: deviceProfilesV4 size=${size} keys=${keys}"
             logInfo "cacheTest Info: deviceFingerprintsV4 size=${fingerprintSize} keys=${fingerprintKeys}"
             logInfo "cacheTest Info: currentProfilesV4 size=${currentProfileSize} keys=${currentProfileKeys}"
             logInfo "cacheTest Info: total computed fingerprint strings=${totalComputedFingerprints}"
-            logInfo "cacheTest Info: this device (${dni}) has current profile loaded=${hasCurrentProfile}"
+            if (hasCurrentProfile) {
+                Map currentProfile = currentProfilesV4[dni]
+                logInfo "cacheTest Info: current profile for this device (${dni}) has ${currentProfile?.keySet()?.size() ?: 0} sections"
+            }
+            else {
+                logWarn "cacheTest Info: this device (${dni}) has no current profile loaded"
+            }
             break
         case 'Initialize':
             boolean ok = ensureProfilesLoaded()
-            logInfo "cacheTest Initialize: ensureProfilesLoaded() -> ${ok}; size now ${deviceProfilesV3.size()}"
+            logInfo "cacheTest Initialize: ensureProfilesLoaded() -> ${ok}; size now ${deviceProfilesV4.size()}"
             break
         case 'ReconstructedFingerprints':
             if (deviceFingerprintsV4.isEmpty()) {
@@ -791,17 +797,17 @@ void cacheTest(String action) {
             }
             break
         case 'DisposeV3':
-            int v3SizeBefore = deviceProfilesV3?.size() ?: 0
+            int v4SizeBefore = deviceProfilesV4?.size() ?: 0
             int currentSizeCheck = currentProfilesV4?.size() ?: 0
             String dni = device?.deviceNetworkId
             boolean hasCurrentProfile = currentProfilesV4.containsKey(dni)
             
             if (!hasCurrentProfile) {
-                logWarn "cacheTest DisposeV3: current device profile not loaded - cannot dispose V3 safely"
+                logWarn "cacheTest DisposeV3: current device profile not loaded - cannot dispose V4 safely"
             } else {
-                deviceProfilesV3.clear()
+                deviceProfilesV4.clear()
                 profilesLoaded = false
-                logInfo "cacheTest DisposeV3: disposed V3 profiles (was ${v3SizeBefore}) - currentProfilesV4 still has ${currentSizeCheck} entries"
+                logInfo "cacheTest DisposeV3: disposed V4 profiles (was ${v4SizeBefore}) - currentProfilesV4 still has ${currentSizeCheck} entries"
             }
             break
         case 'TestFileRead':
@@ -820,22 +826,22 @@ void cacheTest(String action) {
                 logWarn "cacheTest TestFileRead: ❌ FAILED - '${DEFAULT_PROFILES_FILENAME}' returned null"
             }
             logInfo "clearing existing profiles and re-loading from the read content..."
-            deviceProfilesV3.clear()
+            deviceProfilesV4.clear()
             profilesLoaded = false
             logInfo "now trying to parse the content as JSON..."
             loadProfilesFromJSONstring(content)
             logInfo "cacheTest TestFileRead: completed"
             break
         case 'Clear':
-            int before = deviceProfilesV3.size()
+            int before = deviceProfilesV4.size()
             int beforeFingerprints = deviceFingerprintsV4.size()
             int beforeCurrentProfiles = currentProfilesV4.size()
-            deviceProfilesV3.clear()
+            deviceProfilesV4.clear()
             deviceFingerprintsV4.clear()
             currentProfilesV4.clear()
             profilesLoaded = false
             profilesLoading = false
-            logInfo "cacheTest Clear: cleared ${before} V3 profiles, ${beforeFingerprints} fingerprint entries, and ${beforeCurrentProfiles} current profiles"
+            logInfo "cacheTest Clear: cleared ${before} V4 profiles, ${beforeFingerprints} fingerprint entries, and ${beforeCurrentProfiles} current profiles"
             break
         default:
             logWarn "cacheTest: unknown action '${action}'"
@@ -961,7 +967,7 @@ void test(String par) {
         logWarn "test(): profiles not loaded, aborting test()"
         return
     }
-    List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes
+    List<Map> attribMap = deviceProfilesV4[state.deviceProfile]?.attributes
     logDebug "test() attribMap: ${attribMap}"
     */
 

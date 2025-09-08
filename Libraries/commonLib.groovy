@@ -23,9 +23,9 @@ library(
   * ver. 1.0.0  2022-06-18 kkossev  - first beta version
   * ..............................
   * ver. 3.5.2  2025-08-13 kkossev  - Status attribute renamed to _status_
-  * ver. 4.0.0  2025-09-03 kkossev  - deviceProfileV4 BRANCH created
+  * ver. 4.0.0  2025-09-08 kkossev  - deviceProfileV4
   *
-  *                                   TODO: 
+  *                                   TODO: change the offline threshold to 2 
   *                                   TODO: 
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
   *                                   TODO: make the configure() without parameter smart - analyze the State variables and call delete states.... call ActiveAndpoints() or/amd initialize() or/and configure()
@@ -42,7 +42,7 @@ library(
 */
 
 String commonLibVersion() { '4.0.0' }
-String commonLibStamp() { '2025/09/04 6:50 PM' }
+String commonLibStamp() { '2025/09/08 8:21 AM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -810,6 +810,9 @@ public void standardParseTuyaCluster(final Map descMap) {
 // called from the standardParseTuyaCluster method for each DP chunk in the messages (usually one, but could be multiple DPs in one message)
 void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
     logTrace "standardProcessTuyaDP: <b> checking customProcessTuyaDp</b> dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
+    if (this.respondsTo('ensureCurrentProfileLoaded')) {
+        ensureCurrentProfileLoaded()
+    }
     if (this.respondsTo('customProcessTuyaDp')) {
         //logTrace 'standardProcessTuyaDP: customProcessTuyaDp exists, calling it...'
         if (customProcessTuyaDp(descMap, dp, dp_id, fncmd, dp_len) == true) {
@@ -823,7 +826,8 @@ void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, fin
             return      // sucessfuly processed the new way - we are done.  (version 3.0)
         }
     }
-    logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data} (deviceProfile = ${state.deviceProfile}, deviceProfilesV3 count = ${deviceProfilesV3?.size() ?: 0})"
+    logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data} (deviceProfile = ${state.deviceProfile}, deviceProfilesV4 count = ${deviceProfilesV4?.size() ?: 0}) currentProfilesV4 = ${currentProfilesV4?.size() ?: 0} dni=${device?.deviceNetworkId} currentProfilesV4[device.deviceNetworkId]=${currentProfilesV4?."${device?.deviceNetworkId}"}"
+//    ensureCurrentProfileLoaded()
 }
 
 public int getTuyaAttributeValue(final List<String> _data, final int index) {
@@ -1386,7 +1390,7 @@ void initializeVars( boolean fullInit = false ) {
         state.clear()
         unschedule()
         resetStats()
-        if (deviceProfilesV3 != null && this.respondsTo('setDeviceNameAndProfile')) { setDeviceNameAndProfile() }
+        if (this.respondsTo('setDeviceNameAndProfile')) { setDeviceNameAndProfile() }
         //state.comment = 'Works with Tuya Zigbee Devices'
         logInfo 'all states and scheduled jobs cleared!'
         state.driverVersion = driverVersionAndTimeStamp()
