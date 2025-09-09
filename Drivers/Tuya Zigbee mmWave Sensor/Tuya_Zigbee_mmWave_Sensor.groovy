@@ -24,9 +24,9 @@
 */
 
 static String version() { "4.0.0" }
-static String timeStamp() {"2025/09/08 9:37 AM"}
+static String timeStamp() {"2025/09/09 7:00 AM"}
 
-@Field static final Boolean _DEBUG = true           // debug logging
+@Field static final Boolean _DEBUG = false           // debug logging
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true 
 
@@ -109,12 +109,12 @@ metadata {
                 [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
                 [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
         ]
+        command 'updateFromGitHub', [[name: "url", type: "STRING", description: "GitHub URL (optional)", defaultValue: ""]]
         if (_DEBUG) {
             command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]] 
             // testParse is defined in the common library
             // tuyaTest is defined in the common library
             command 'cacheTest', [[name: "action", type: "ENUM", description: "Cache action", constraints: ["Info", "Initialize", "ReconstructedFingerprints", "CurrentProfilesV4", "currentProfilesV4 Dump", "LoadCurrentProfile", "DisposeV3", "TestFileRead", "Clear"], defaultValue: "Info"]]
-            command 'updateFromGitHub', [[name: "url", type: "STRING", description: "GitHub URL (optional)", defaultValue: ""]]
         }
         
         // Generate fingerprints from optimized deviceFingerprintsV4 map (fast access!)
