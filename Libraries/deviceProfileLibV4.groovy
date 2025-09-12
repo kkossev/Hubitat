@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLibV4', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/deviceProfileLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-deviceProfileLib',
-    version: '4.0.0'
+    version: '4.0.1'
 )
 /*
  *  Device Profile Library V4
@@ -20,13 +20,14 @@ library(
  * ...................................
  * ver. 3.5.0  2025-08-14 kkossev  - zclWriteAttribute() support for forced destinationEndpoint in the attributes map
  * ver. 4.0.0  2025-09-03 kkossev  - deviceProfileV4 BRANCH created; deviceProfilesV2 support is dropped; 
+ * ver. 4.0.1  2025-09-12 kkossev  - (dev. branch) added debug commands to sendCommand(); 
  *
  *                                   TODO - 
  *
 */
 
-static String deviceProfileLibVersion()   { '4.0.0' }
-static String deviceProfileLibStamp() { '2025/09/05 5:18 PM' }
+static String deviceProfileLibVersion()   { '4.0.1' }
+static String deviceProfileLibStamp() { '2025/09/12 11:27 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -802,6 +803,8 @@ public boolean sendAttribute(String par=null, val=null ) {
     return true
 }
 
+@Field static Map debugCommandsMap = ['printFingerprintsV4':'printFingerprintsV4', 'printDeviceInfo': 'printDeviceInfo', 'printTuyaDps': 'printTuyaDps', 'printAttributes': 'printAttributes', 'printCommands': 'printCommands', 'resetPreferencesToDefaults': 'resetPreferencesToDefaults']
+
 /**
  * SENDS a list of Zigbee commands to be sent to the device.
  * @param command - The command to send. Must be one of the commands defined in the DEVICE.commands map.
@@ -813,23 +816,41 @@ public boolean sendCommand(final String command_orig=null, final String val_orig
     final String command = command_orig?.trim()
     final String val = val_orig?.trim()
     List<String> cmds = []
-    Map supportedCommandsMap = DEVICE?.commands as Map
+    Map supportedCommandsMap = DEVICE?.commands as Map ?: [:]
+    
+    // Only add debug commands if debug is enabled
+    if (_DEBUG || settings.logEnable) {
+        logDebug "sendCommand: original supportedCommandsMap = ${supportedCommandsMap}"
+        // add the debug commands to the supported commands map
+        supportedCommandsMap += debugCommandsMap
+        logDebug "sendCommand: updated supportedCommandsMap = ${supportedCommandsMap}"
+    }
+    
     if (supportedCommandsMap == null || supportedCommandsMap?.isEmpty()) {
         logInfo "sendCommand: no commands defined for device profile ${getDeviceProfile()} !"
         return false
     }
-    // TODO: compare ignoring the upper/lower case of the command.
-    List supportedCommandsList =  DEVICE?.commands?.keySet() as List
-    // check if the command is defined in the DEVICE commands map
+    
+    // Create supportedCommandsList based on the same condition
+    List supportedCommandsList
+    if (_DEBUG || settings.logEnable) {
+        supportedCommandsList = supportedCommandsMap.keySet() as List
+    } else {
+        supportedCommandsList = DEVICE?.commands?.keySet() as List ?: []
+    }
+    
+    // check if the command is defined in the supported commands
     if (command == null || !(command in supportedCommandsList)) {
         logInfo "sendCommand: the command <b>${(command ?: '')}</b> for device profile '${DEVICE?.description}' must be one of these : ${supportedCommandsList}"
         return false
     }
+    
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def func, funcResult
     try {
-        func = DEVICE?.commands.find { it.key == command }.value
-        // added 01/25/2025 : the commands now can be shorted : instead of a map kay and value 'printFingerprints':'printFingerprints' we can skip the value when it is the same:  'printFingerprints:'  - the value is the same as the key
+        // Search in the merged supportedCommandsMap (includes debug commands when enabled)
+        func = supportedCommandsMap.find { it.key == command }.value
+        // added 01/25/2025 : the commands now can be shortened
         if (func == null || func == '') {
             func = command
         }
@@ -1343,7 +1364,7 @@ public Integer preProc(final Map foundItem, int fncmd_orig) {
         fncmd = "$preProcFunction"(fncmd_orig)
     }
     catch (e) {
-        logWarn "preProc: Exception '${e}' caught while processing <b>$preProcFunction</b>(<b>$fncmd_orig</b>) (val=${fncmd}))"
+        logWarn "preProc: Exception '${e}' caught while processing <b>$preProcFunction</b>(<b>$fncmd_orig</b>) (val=${fncmd_orig})"
         return fncmd_orig
     }
     //logDebug "setFunction result is ${fncmd}"
@@ -1374,7 +1395,7 @@ public boolean processClusterAttributeFromDeviceProfile(final Map descMap) {
     }
     Map foundItem = attribMap.find { it['at'] == clusterAttribute }
     if (foundItem == null || foundItem == [:]) {
-        // clusterAttribute was not found into the attributes list for this particular deviceProfile
+        // clusterAttribute was not found in the attributes list for this particular deviceProfile
         // updateStateUnknownclusterAttribute(descMap)
         // continue processing the descMap report in the old code ...
         logTrace "processClusterAttributeFromDeviceProfile: clusterAttribute ${clusterAttribute} was not found in the attributes list for this deviceProfile ${DEVICE?.description}"
@@ -1634,16 +1655,25 @@ public String fingerprintIt(Map profileMap, Map fingerprint) {
     return fingerprintStr
 }
 
-public void printFingerprints() {
+// debug/test method - prints all fingerprints in the deviceFingerprintsV4 map
+public void printFingerprintsV4() {
     int count = 0
-    deviceProfilesV4.each { profileName, profileMap ->
-        logInfo "Device Profile: ${profileName}"
-        profileMap.fingerprints?.each { fingerprint ->
-            log.info "${fingerprintIt(profileMap, fingerprint)}"
-            count++
+    String fingerprintsText = "printFingerprintsV4: <br>"
+    
+    if (deviceFingerprintsV4 != null && !deviceFingerprintsV4.isEmpty()) {
+        deviceFingerprintsV4.each { profileName, profileData ->
+            profileData.fingerprints?.each { fingerprint ->
+                fingerprintsText += "  ${fingerprint}<br>"
+                //fingerprintsText = "  ${fingerprint}<br>";  logInfo fingerprintsText
+                count++
+            }
         }
+    } else {
+        fingerprintsText += "<b>No deviceFingerprintsV4 available!</b><br>"
     }
-    logInfo "Total fingerprints: ${count}"
+    logDebug "printFingerprintsV4: total fingerprints = ${count} size of fingerprintsText=${fingerprintsText.length()}"
+    fingerprintsText += "<br><b>Total fingerprints: ${count}</b> size of fingerprintsText=${fingerprintsText.length()}"
+    logInfo fingerprintsText
 }
 
 public void printPreferences() {
