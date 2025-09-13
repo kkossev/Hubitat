@@ -22,12 +22,12 @@ library(
  * ver. 4.0.0  2025-09-03 kkossev  - deviceProfileV4 BRANCH created; deviceProfilesV2 support is dropped; 
  * ver. 4.0.1  2025-09-12 kkossev  - (dev. branch) added debug commands to sendCommand(); 
  *
- *                                   TODO - 
+ *                                   TODO - updateStateUnknownDPs() from the earlier versions of 4 in 1 driver
  *
 */
 
 static String deviceProfileLibVersion()   { '4.0.1' }
-static String deviceProfileLibStamp() { '2025/09/12 11:27 PM' }
+static String deviceProfileLibStamp() { '2025/09/13 10:33 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -803,7 +803,7 @@ public boolean sendAttribute(String par=null, val=null ) {
     return true
 }
 
-@Field static Map debugCommandsMap = ['printFingerprintsV4':'printFingerprintsV4', 'printDeviceInfo': 'printDeviceInfo', 'printTuyaDps': 'printTuyaDps', 'printAttributes': 'printAttributes', 'printCommands': 'printCommands', 'resetPreferencesToDefaults': 'resetPreferencesToDefaults']
+@Field static Map debugCommandsMap = ['printFingerprintsV4':'', 'printPreferences':'', 'resetStats':'', 'updateAllPreferences': '', 'resetPreferencesToDefaults': '', 'initialize': '', 'validateAndFixPreferences': '', 'profilesV4info': '', 'clearProfilesCache': 'clearProfilesCacheInfo']
 
 /**
  * SENDS a list of Zigbee commands to be sent to the device.
@@ -1664,14 +1664,12 @@ public void printFingerprintsV4() {
         deviceFingerprintsV4.each { profileName, profileData ->
             profileData.fingerprints?.each { fingerprint ->
                 fingerprintsText += "  ${fingerprint}<br>"
-                //fingerprintsText = "  ${fingerprint}<br>";  logInfo fingerprintsText
                 count++
             }
         }
     } else {
         fingerprintsText += "<b>No deviceFingerprintsV4 available!</b><br>"
     }
-    logDebug "printFingerprintsV4: total fingerprints = ${count} size of fingerprintsText=${fingerprintsText.length()}"
     fingerprintsText += "<br><b>Total fingerprints: ${count}</b> size of fingerprintsText=${fingerprintsText.length()}"
     logInfo fingerprintsText
 }
@@ -1687,3 +1685,52 @@ public void printPreferences() {
         }
     }
 }
+
+void profilesV4info() {
+    int size = deviceProfilesV4?.size() ?: 0
+    int fingerprintSize = deviceFingerprintsV4?.size() ?: 0
+    int currentProfileSize = currentProfilesV4?.size() ?: 0
+    List keys = deviceProfilesV4 ? new ArrayList(deviceProfilesV4.keySet()) : []
+    List fingerprintKeys = deviceFingerprintsV4 ? new ArrayList(deviceFingerprintsV4.keySet()) : []
+    List currentProfileKeys = currentProfilesV4 ? new ArrayList(currentProfilesV4.keySet()) : []
+    
+    // Count computed fingerprints
+    int totalComputedFingerprints = 0
+    deviceFingerprintsV4.each { key, value ->
+        totalComputedFingerprints += value.computedFingerprints?.size() ?: 0
+    }
+    
+    String dni = device?.deviceNetworkId
+    boolean hasCurrentProfile = currentProfilesV4.containsKey(dni)
+    
+    logInfo "profilesV4info: deviceProfilesV4 size=${size} keys=${keys}"
+    logInfo "profilesV4info: deviceFingerprintsV4 size=${fingerprintSize}"
+    logInfo "profilesV4info: currentProfilesV4 size=${currentProfileSize} keys=${currentProfileKeys}"
+    logInfo "profilesV4info: total computed fingerprint strings=${totalComputedFingerprints}"
+    if (hasCurrentProfile) {
+        Map currentProfile = currentProfilesV4[dni]
+        logInfo "profilesV4info: current profile for this device (${dni}) has ${currentProfile?.keySet()?.size() ?: 0} sections"
+        logInfo "profilesV4info: current profile JSON data: ${JsonOutput.toJson(currentProfile)}"
+    }
+    else {
+        logWarn "profilesV4info: this device (${dni}) has no current profile loaded"
+    }
+}
+
+void clearProfilesCache() {
+    deviceProfilesV4.clear()
+    deviceFingerprintsV4.clear()
+    currentProfilesV4.clear()
+    profilesLoaded = false
+    profilesLoading = false
+}
+
+void clearProfilesCacheInfo() {
+    int before = deviceProfilesV4.size()
+    int beforeFingerprints = deviceFingerprintsV4.size()
+    int beforeCurrentProfiles = currentProfilesV4.size()
+    clearProfilesCache()
+    logInfo "clearProfilesCache: cleared ${before} V4 profiles, ${beforeFingerprints} fingerprint entries, and ${beforeCurrentProfiles} current profiles"
+}
+
+

@@ -19,8 +19,9 @@
  * ver. 3.0.6  2024-04-06 kkossev  - first version (derived from Tuya 4 In 1 driver)
  * ..............................
  * ver. 4.0.0  2025-09-04 kkossev  - deviceProfileV4 BRANCH created
- * ver. 4.0.1  2025-09-12 kkossev  - (dev.branch)
+ * ver. 4.0.1  2025-09-12 kkossev  - (dev.branch) added debug commands printFingerprintsV4
  *                                   
+ *                                   TODO: add state.profilesV4 statistics
  *                                   TODO: C-7: !!!!!!!!!!!!!!!! MyRoom UNKNOWN mmWave model/manufacturer TS0601/_TZE204_ztc6ggyl
  *                                   TODO: test the state. after reboot 
  *                                   TODO: change the default offlineCheck to 30 minutes
@@ -194,6 +195,7 @@ boolean customProcessTuyaDp(final Map descMap, final int dp, final int dp_id, fi
 */
 
 void customParseE002Cluster(final Map descMap) {
+    if (this.respondsTo('ensureCurrentProfileLoaded')) { ensureCurrentProfileLoaded() }
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "customParseE002Cluster: zigbee received 0xE002 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
@@ -203,6 +205,7 @@ void customParseE002Cluster(final Map descMap) {
 }
 
 void customParseFC11Cluster(final Map descMap) {
+    if (this.respondsTo('ensureCurrentProfileLoaded')) { ensureCurrentProfileLoaded() }
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "customParseFC11Cluster: zigbee received 0xFC11 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
@@ -211,6 +214,7 @@ void customParseFC11Cluster(final Map descMap) {
     }
 }
 void customParseOccupancyCluster(final Map descMap) {
+    if (this.respondsTo('ensureCurrentProfileLoaded')) { ensureCurrentProfileLoaded() } 
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "customParseOccupancyCluster: zigbee received cluster 0x0406 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
@@ -220,6 +224,7 @@ void customParseOccupancyCluster(final Map descMap) {
 }
 
 void customParseEC03Cluster(final Map descMap) {
+    if (this.respondsTo('ensureCurrentProfileLoaded')) { ensureCurrentProfileLoaded() }
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "customParseEC03Cluster: zigbee received unknown cluster 0xEC03 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
 }
@@ -537,40 +542,12 @@ private boolean ensureProfilesLoaded() {
 }
 
 
-
-
 // cacheTest command - manage and inspect cached data structures (currently deviceProfilesV4)
 void cacheTest(String action) {
     String act = (action ?: 'Info').trim()
     switch(act) {
         case 'Info':
-            int size = deviceProfilesV4?.size() ?: 0
-            int fingerprintSize = deviceFingerprintsV4?.size() ?: 0
-            int currentProfileSize = currentProfilesV4?.size() ?: 0
-            List keys = deviceProfilesV4 ? new ArrayList(deviceProfilesV4.keySet()) : []
-            List fingerprintKeys = deviceFingerprintsV4 ? new ArrayList(deviceFingerprintsV4.keySet()) : []
-            List currentProfileKeys = currentProfilesV4 ? new ArrayList(currentProfilesV4.keySet()) : []
-            
-            // Count computed fingerprints
-            int totalComputedFingerprints = 0
-            deviceFingerprintsV4.each { key, value ->
-                totalComputedFingerprints += value.computedFingerprints?.size() ?: 0
-            }
-            
-            String dni = device?.deviceNetworkId
-            boolean hasCurrentProfile = currentProfilesV4.containsKey(dni)
-            
-            logInfo "cacheTest Info: deviceProfilesV4 size=${size} keys=${keys}"
-            logInfo "cacheTest Info: deviceFingerprintsV4 size=${fingerprintSize} keys=${fingerprintKeys}"
-            logInfo "cacheTest Info: currentProfilesV4 size=${currentProfileSize} keys=${currentProfileKeys}"
-            logInfo "cacheTest Info: total computed fingerprint strings=${totalComputedFingerprints}"
-            if (hasCurrentProfile) {
-                Map currentProfile = currentProfilesV4[dni]
-                logInfo "cacheTest Info: current profile for this device (${dni}) has ${currentProfile?.keySet()?.size() ?: 0} sections"
-            }
-            else {
-                logWarn "cacheTest Info: this device (${dni}) has no current profile loaded"
-            }
+            profilesV4info()    // in deviceProfileLib
             break
         case 'Initialize':
             boolean ok = ensureProfilesLoaded()
@@ -674,15 +651,7 @@ void cacheTest(String action) {
             logInfo "cacheTest TestFileRead: completed"
             break
         case 'Clear':
-            int before = deviceProfilesV4.size()
-            int beforeFingerprints = deviceFingerprintsV4.size()
-            int beforeCurrentProfiles = currentProfilesV4.size()
-            deviceProfilesV4.clear()
-            deviceFingerprintsV4.clear()
-            currentProfilesV4.clear()
-            profilesLoaded = false
-            profilesLoading = false
-            logInfo "cacheTest Clear: cleared ${before} V4 profiles, ${beforeFingerprints} fingerprint entries, and ${beforeCurrentProfiles} current profiles"
+            clearProfilesCacheInfo()    // in deviceProfileLib
             break
         default:
             logWarn "cacheTest: unknown action '${action}'"
@@ -853,28 +822,6 @@ void testFunc( par) {
 void test(String par) {
     long startTime = now()
     logWarn "test() started at ${startTime}"
-
-
-    /*
-    def xx = getDeviceProfilesMap()
-    logDebug "test() getDeviceProfilesMap() returned ${xx?.size() ?: 0} profiles"
-    */
-    /*
-     String dni = device?.deviceNetworkId
-    if (!currentProfilesV4.containsKey(dni)) {
-        populateCurrentProfile(dni)
-    }
-    */
-    /*
-
-    boolean loaded = ensureProfilesLoaded()
-    if (!loaded) {
-        logWarn "test(): profiles not loaded, aborting test()"
-        return
-    }
-    List<Map> attribMap = deviceProfilesV4[state.deviceProfile]?.attributes
-    logDebug "test() attribMap: ${attribMap}"
-    */
 
     /*
     //parse('catchall: 0104 EF00 01 01 0040 00 E03B 01 00 0000 02 01 00556701000100')
