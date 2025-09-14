@@ -19,25 +19,21 @@
  * ver. 3.0.6  2024-04-06 kkossev  - first version (derived from Tuya 4 In 1 driver)
  * ..............................
  * ver. 4.0.0  2025-09-04 kkossev  - deviceProfileV4 BRANCH created
- * ver. 4.0.1  2025-09-12 kkossev  - (dev.branch) added debug commands printFingerprintsV4
+ * ver. 4.0.1  2025-09-14 kkossev  - (dev.branch) added new debug commands; added debug info in states gitHubV4 and profilesV4;
  *                                   
- *                                   TODO: add state.profilesV4 statistics
- *                                   TODO: C-7: !!!!!!!!!!!!!!!! MyRoom UNKNOWN mmWave model/manufacturer TS0601/_TZE204_ztc6ggyl
  *                                   TODO: test the state. after reboot 
  *                                   TODO: change the default offlineCheck to 30 minutes
 */
 
 static String version() { "4.0.1" }
-static String timeStamp() {"2025/09/12 10:27 PM"}
+static String timeStamp() {"2025/09/14 8:16 AM"}
 
 @Field static final Boolean _DEBUG = true           // debug logging
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true 
 
 @Field static final String DEFAULT_PROFILES_FILENAME = "deviceProfilesV4_mmWave.json"
-//@Field static final String DEFAULT_PROFILES_FILENAME = "deviceProfilesV4_mmWave.minimal.json"
-//@Field static final String DEFAULT_PROFILES_FILENAME = "deviceProfilesV4_mmWave_TS0601_TUYA_RADAR.json"
-//@Field static final String DEFAULT_PROFILES_FILENAME = "deviceProfilesV4_mmWave-test.json"
+@Field static String defaultGitHubURL = 'https://raw.githubusercontent.com/kkossev/Hubitat/deviceProfileV4/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/deviceProfilesV4_mmWave.json'
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -45,6 +41,7 @@ import hubitat.device.Protocol
 import hubitat.helper.HexUtils
 import hubitat.zigbee.zcl.DataType
 import java.util.concurrent.ConcurrentHashMap
+import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 
 #include kkossev.illuminanceLib
@@ -56,13 +53,12 @@ import groovy.json.JsonOutput
 deviceType = "mmWaveSensor"
 @Field static final String DEVICE_TYPE = "mmWaveSensor"
 
-@Field static  Map deviceProfilesV4 = [:]
-@Field static  boolean profilesLoading = false
-@Field static  boolean profilesLoaded = false
-@Field static  Map deviceFingerprintsV4 = [:]
-@Field static  Map currentProfilesV4 = [:]  // Key: device?.deviceNetworkId, Value: complete profile data
+@Field static  Map g_deviceProfilesV4 = [:]
+@Field static  boolean g_profilesLoading = false
+@Field static  boolean g_profilesLoaded = false
+@Field static  Map g_deviceFingerprintsV4 = [:]
+@Field static  Map g_currentProfilesV4 = [:]  // Key: device?.deviceNetworkId, Value: complete profile data
 
-@Field static String defaultGitHubURL = 'https://raw.githubusercontent.com/kkossev/Hubitat/deviceProfileV4/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/deviceProfilesV4_mmWave.json'
 
 metadata {
     definition (
@@ -118,13 +114,13 @@ metadata {
             command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]] 
             // testParse is defined in the common library
             // tuyaTest is defined in the common library
-            command 'cacheTest', [[name: "action", type: "ENUM", description: "Cache action", constraints: ["Info", "Initialize", "ReconstructedFingerprints", "CurrentProfilesV4", "currentProfilesV4 Dump", "LoadCurrentProfile", "DisposeV3", "TestFileRead", "Clear"], defaultValue: "Info"]]
+            command 'cacheTest', [[name: "action", type: "ENUM", description: "Cache action", constraints: ["Info", "Initialize", "currentProfilesV4 Dump", "Clear"], defaultValue: "Info"]]
         }
         
-        // Generate fingerprints from optimized deviceFingerprintsV4 map (fast access!)
-        // Uses pre-loaded fingerprint data instead of processing deviceProfilesV4
-        if (deviceFingerprintsV4 && !deviceFingerprintsV4.isEmpty()) {
-            deviceFingerprintsV4.each { profileName, fingerprintData ->
+        // Generate fingerprints from optimized g_deviceFingerprintsV4 map (fast access!)
+        // Uses pre-loaded fingerprint data instead of processing g_deviceProfilesV4
+        if (g_deviceFingerprintsV4 && !g_deviceFingerprintsV4.isEmpty()) {
+            g_deviceFingerprintsV4.each { profileName, fingerprintData ->
                 fingerprintData.fingerprints?.each { fingerprintMap ->
                     fingerprint fingerprintMap
                 }
@@ -297,6 +293,12 @@ void customUpdated() {
     }
 }
 
+void customResetStats() {
+    logDebug "customResetStats()"
+    state.gitHubV4 = [:]
+    state.profilesV4 = [:]
+}
+
 void customInitializeVars(final boolean fullInit=false) {
     logDebug "customInitializeVars(${fullInit})"
     if (state.deviceProfile == null) {
@@ -307,7 +309,8 @@ void customInitializeVars(final boolean fullInit=false) {
     }
     if (fullInit == true || settings?.ignoreDistance == null) { device.updateSetting('ignoreDistance', true) }
     if (fullInit == true || state.motionStarted == null) { state.motionStarted = unix2formattedDate(now()) }
-
+    if (fullInit == true || state.gitHubV4 == null) { state.gitHubV4 = [:] }
+    if (fullInit == true || state.profilesV4 == null) { state.profilesV4 = [:] }
 }
 
 void customInitEvents(final boolean fullInit=false) {
@@ -323,6 +326,13 @@ void customInitEvents(final boolean fullInit=false) {
         logInfo unknown
         logWarn unknown
     }
+    if (fullInit == true || device.currentValue('motion') == null) {
+        sendEvent(name: 'motion', value: 'unknown', descriptionText: 'Motion state is unknown', type: 'digital', isStateChange: true)
+    }
+}
+
+void customcheckDriverVersion(final Map stateCopy) {
+    logDebug "customcheckDriverVersion()"
 }
 
 void updateIndicatorLight() {
@@ -401,14 +411,13 @@ boolean loadProfilesFromJSON() {
     return loadProfilesFromJSONstring(readFile(DEFAULT_PROFILES_FILENAME))
 }
 
-import groovy.json.JsonSlurper
 
 boolean loadProfilesFromJSONstring(stringifiedJSON) {
     long startTime = now()
     
     // idempotent : don't re-parse if already populated
-    if (!deviceProfilesV4.isEmpty()) {
-        logDebug "loadProfilesFromJSON: already loaded (${deviceProfilesV4.size()} profiles)"
+    if (!g_deviceProfilesV4.isEmpty()) {
+        logDebug "loadProfilesFromJSON: already loaded (${g_deviceProfilesV4.size()} profiles)"
         return true
     }
     try {
@@ -427,15 +436,15 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
             return false
         }
         // !!!!!!!!!!!!!!!!!!!!!!!
-        // Populate deviceProfilesV4
-        deviceProfilesV4.putAll(dp as Map)
-        logInfo "loadProfilesFromJSON: deviceProfilesV4 populated with ${deviceProfilesV4.size()} profiles"
+        // Populate g_deviceProfilesV4
+        g_deviceProfilesV4.putAll(dp as Map)
+        logInfo "loadProfilesFromJSON: g_deviceProfilesV4 populated with ${g_deviceProfilesV4.size()} profiles"
 
-        // Populate deviceFingerprintsV4 using bulk assignment for better performance
+        // Populate g_deviceFingerprintsV4 using bulk assignment for better performance
         // Use fingerprintIt() logic to reconstruct complete fingerprint data
         Map localFingerprints = [:]
         
-        deviceProfilesV4.each { profileKey, profileMap ->
+        g_deviceProfilesV4.each { profileKey, profileMap ->
             // Reconstruct complete fingerprint Maps and pre-compute strings
             List<Map> reconstructedFingerprints = []
             List<String> computedFingerprintStrings = []
@@ -461,9 +470,9 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
             ]
         }
         
-        deviceFingerprintsV4.clear()
-        deviceFingerprintsV4.putAll(localFingerprints)
-        logInfo "loadProfilesFromJSON: deviceFingerprintsV4 populated with ${deviceFingerprintsV4.size()} entries"
+        g_deviceFingerprintsV4.clear()
+        g_deviceFingerprintsV4.putAll(localFingerprints)
+        logInfo "loadProfilesFromJSON: g_deviceFingerprintsV4 populated with ${g_deviceFingerprintsV4.size()} entries"
 
         // Count total computed fingerprint strings
         int totalComputedFingerprints = 0
@@ -471,13 +480,13 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
             totalComputedFingerprints += value.computedFingerprints?.size() ?: 0
         }
 
-        // NOTE: profilesLoaded flag is managed by ensureProfilesLoaded(), not here
+        // NOTE: g_profilesLoaded flag is managed by ensureProfilesLoaded(), not here
         // This keeps loadProfilesFromJSON() as a pure function
         long endTime = now()
         long executionTime = endTime - startTime
         
-        logDebug "loadProfilesFromJSON: loaded ${deviceProfilesV4.size()} profiles: ${deviceProfilesV4.keySet()}"
-        logDebug "loadProfilesFromJSON: populated ${deviceFingerprintsV4.size()} fingerprint entries"
+        logDebug "loadProfilesFromJSON: loaded ${g_deviceProfilesV4.size()} profiles: ${g_deviceProfilesV4.keySet()}"
+        logDebug "loadProfilesFromJSON: populated ${g_deviceFingerprintsV4.size()} fingerprint entries"
         logDebug "loadProfilesFromJSON: pre-computed ${totalComputedFingerprints} fingerprint strings"
         logDebug "loadProfilesFromJSON: execution time: ${executionTime}ms"
         return true
@@ -485,7 +494,7 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
     } catch (Exception e) {
         long endTime = now()
         long executionTime = endTime - startTime
-        logError "loadProfilesFromJSON: error converting JSON: ${e.message} (execution time: ${executionTime}ms)"
+        logError "loadProfilesFromJSON exception: error converting JSON: ${e.message} (execution time: ${executionTime}ms)"
         return false
     }
     
@@ -493,56 +502,60 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
 
 /**
  * Ensures that device profiles are loaded with thread-safe lazy loading
- * This is the main function that should be called before accessing deviceProfilesV4
+ * This is the main function that should be called before accessing g_deviceProfilesV4
  * @return true if profiles are loaded successfully, false otherwise
  */
 private boolean ensureProfilesLoaded() {
     // Fast path: already loaded
-//    if (!deviceProfilesV4.isEmpty() && profilesLoaded) {
-    if (profilesLoaded && !currentProfilesV4.isEmpty()) {       // !!!!!!!!!!!!!!!!!!!!!!!! TODO - check !!!!!!!!!!!!!!!!!!!!!!!!!!
+//    if (!g_deviceProfilesV4.isEmpty() && g_profilesLoaded) {
+    if (g_profilesLoaded && !g_currentProfilesV4.isEmpty()) {       // !!!!!!!!!!!!!!!!!!!!!!!! TODO - check !!!!!!!!!!!!!!!!!!!!!!!!!!
         return true
     }
-    
+    if (state.profilesV4 == null) { state.profilesV4 = [:] }   // initialize state variable if not present
     // Check if another thread is already loading
-    if (profilesLoading) {
+    if (g_profilesLoading) {
         // Wait briefly for other thread to finish
         for (int i = 0; i < 10; i++) {
-            logDebug "ensureProfilesLoaded: waiting <b>100ms</b> for other thread to finish loading..."
+            state.profilesV4['waitForOtherThreadCtr'] = (state.profilesV4['waitForOtherThreadCtr'] ?: 0) + 1
+            sendInfoEvent "ensureProfilesLoaded: waiting <b>100ms</b> for other thread to finish loading... try ${i+1}/10"
             pauseExecution(100)
-            if (profilesLoaded && !deviceProfilesV4.isEmpty()) {
-                logDebug "ensureProfilesLoaded: other thread finished loading"
+            if (g_profilesLoaded && !g_deviceProfilesV4.isEmpty()) {
+                sendInfoEvent "ensureProfilesLoaded: other thread finished loading"
                 return true
             }
         }
         // If still loading after wait, return false - don't interfere with other thread
-        logWarn "ensureProfilesLoaded: timeout waiting for other thread, returning false"
+        sendInfoEvent "ensureProfilesLoaded: timeout waiting for other thread, returning false"
+        state.profilesV4['waitForOtherThreadTimeouts'] = (state.profilesV4['waitForOtherThreadTimeouts'] ?: 0) + 1
         return false
     }
     
     // Acquire loading lock
-    profilesLoading = true
+    g_profilesLoading = true
     try {
         // Double-check after acquiring lock
-        if (deviceProfilesV4.isEmpty() || !profilesLoaded) {
-            logWarn "ensureProfilesLoaded: loading device profiles...(deviceProfilesV4.isEmpty()=${deviceProfilesV4.isEmpty()}, profilesLoaded=${profilesLoaded})"
+        if (g_deviceProfilesV4.isEmpty() || !g_profilesLoaded) {
+            state.profilesV4['loadProfilesCtr'] = (state.profilesV4['loadProfilesCtr'] ?: 0) + 1
+            sendInfoEvent "ensureProfilesLoaded: loading device profiles...(g_deviceProfilesV4.isEmpty()=${g_deviceProfilesV4.isEmpty()}, g_profilesLoaded=${g_profilesLoaded})"
             boolean result = loadProfilesFromJSON()
             if (result) {
-                profilesLoaded = true
-                logInfo "ensureProfilesLoaded: successfully loaded ${deviceProfilesV4.size()} deviceProfilesV4 profiles"
+                g_profilesLoaded = true
+                sendInfoEvent "ensureProfilesLoaded: successfully loaded ${g_deviceProfilesV4.size()} g_deviceProfilesV4 profiles"
             } else {
-                logWarn "ensureProfilesLoaded: failed to load device profiles"
+                sendInfoEvent "ensureProfilesLoaded: failed to load device profiles"
             }
-            profilesLoading = false
+            g_profilesLoading = false
             return result
         }
         return true
     } finally {
-        profilesLoading = false
+        state.profilesV4['loadProfilesExceptionsCtr'] = (state.profilesV4['loadProfilesExceptionsCtr'] ?: 0) + 1
+        g_profilesLoading = false
     }
 }
 
 
-// cacheTest command - manage and inspect cached data structures (currently deviceProfilesV4)
+// cacheTest command - manage and inspect cached data structures (currently g_deviceProfilesV4)
 void cacheTest(String action) {
     String act = (action ?: 'Info').trim()
     switch(act) {
@@ -551,104 +564,18 @@ void cacheTest(String action) {
             break
         case 'Initialize':
             boolean ok = ensureProfilesLoaded()
-            logInfo "cacheTest Initialize: ensureProfilesLoaded() -> ${ok}; size now ${deviceProfilesV4.size()}"
-            break
-        case 'ReconstructedFingerprints':
-            if (deviceFingerprintsV4.isEmpty()) {
-                logInfo "cacheTest ReconstructedFingerprints: no fingerprints loaded - run Initialize first"
-            } else {
-                deviceFingerprintsV4.each { profileName, fingerprintData ->
-                    int fpCount = fingerprintData.computedFingerprints?.size() ?: 0
-                    if (fpCount > 0) {
-                        StringBuilder allFingerprints = new StringBuilder()
-                        allFingerprints.append("Profile ${profileName} has ${fpCount} computed fingerprints:<br>")
-                        fingerprintData.computedFingerprints.eachWithIndex { fpString, index ->
-                            allFingerprints.append(" [${index + 1}] ${fpString}")
-                            if (index < fpCount - 1) allFingerprints.append(" <br>")  // add line break except after last
-                        }
-                        logInfo "cacheTest ReconstructedFingerprints: ${allFingerprints.toString()}"
-                    } else {
-                        logInfo "cacheTest ReconstructedFingerprints: Profile ${profileName} has no computed fingerprints"
-                    }
-                }
-                logInfo "cacheTest ReconstructedFingerprints: completed"
-            }
-            break
-        case 'CurrentProfilesV4':
-            int currentSize = currentProfilesV4?.size() ?: 0
-            List currentKeys = currentProfilesV4 ? new ArrayList(currentProfilesV4.keySet()) : []
-            String dni = device?.deviceNetworkId
-            boolean hasCurrentProfile = currentProfilesV4.containsKey(dni)
-            
-            logInfo "cacheTest CurrentProfilesV4: size=${currentSize} keys=${currentKeys}"
-            logInfo "cacheTest CurrentProfilesV4: this device (${dni}) has profile loaded=${hasCurrentProfile}"
-            
-            if (hasCurrentProfile) {
-                Map currentProfile = currentProfilesV4[dni]
-                List profileKeys = currentProfile ? new ArrayList(currentProfile.keySet()) : []
-                logInfo "cacheTest CurrentProfilesV4: current profile keys=${profileKeys}"
-            }
+            logInfo "cacheTest Initialize: ensureProfilesLoaded() -> ${ok}; size now ${g_deviceProfilesV4.size()}"
             break
         case 'currentProfilesV4 Dump':
-            if (currentProfilesV4.isEmpty()) {
-                logInfo "cacheTest currentProfilesV4 Dump: currentProfilesV4 is empty"
+            if (g_currentProfilesV4.isEmpty()) {
+                logInfo "cacheTest g_currentProfilesV4 Dump: g_currentProfilesV4 is empty"
             } else {
-                logInfo "cacheTest currentProfilesV4 Dump: dumping entire currentProfilesV4 map:"
-                currentProfilesV4.each { dni, profileData ->
-                    logInfo "cacheTest currentProfilesV4 Dump: DNI '${dni}' -> ${profileData}"
+                logInfo "cacheTest g_currentProfilesV4 Dump: dumping entire g_currentProfilesV4 map:"
+                g_currentProfilesV4.each { dni, profileData ->
+                    logInfo "cacheTest g_currentProfilesV4 Dump: DNI '${dni}' -> ${profileData}"
                 }
-                logInfo "cacheTest currentProfilesV4 Dump: completed"
+                logInfo "cacheTest g_currentProfilesV4 Dump: completed"
             }
-            break
-        case 'LoadCurrentProfile':
-            String dni = device?.deviceNetworkId
-            String profileName = getDeviceProfile()
-            logInfo "cacheTest LoadCurrentProfile: attempting to load profile '${profileName}' for device ${dni}"
-            
-            ensureCurrentProfileLoaded()
-            
-            boolean loaded = currentProfilesV4.containsKey(dni)
-            logInfo "cacheTest LoadCurrentProfile: profile loaded=${loaded}"
-            if (loaded) {
-                Map profile = currentProfilesV4[dni]
-                logInfo "cacheTest LoadCurrentProfile: profile contains ${profile?.keySet()?.size() ?: 0} sections"
-            }
-            break
-        case 'DisposeV3':
-            int v4SizeBefore = deviceProfilesV4?.size() ?: 0
-            int currentSizeCheck = currentProfilesV4?.size() ?: 0
-            String dni = device?.deviceNetworkId
-            boolean hasCurrentProfile = currentProfilesV4.containsKey(dni)
-            
-            if (!hasCurrentProfile) {
-                logWarn "cacheTest DisposeV3: current device profile not loaded - cannot dispose V4 safely"
-            } else {
-                deviceProfilesV4.clear()
-                profilesLoaded = false
-                logInfo "cacheTest DisposeV3: disposed V4 profiles (was ${v4SizeBefore}) - currentProfilesV4 still has ${currentSizeCheck} entries"
-            }
-            break
-        case 'TestFileRead':
-            // Test just the file we know exists first
-            logInfo "cacheTest TestFileRead: Testing known file '${DEFAULT_PROFILES_FILENAME}'..."
-            //String content = readFile("deviceProfilesV4_mmWave.json")
-            // big_json_test.json
-            def content = readFile(DEFAULT_PROFILES_FILENAME)
-            if (content != null) {
-                logInfo "cacheTest TestFileRead: ✅ SUCCESS - '${DEFAULT_PROFILES_FILENAME}' (${content.length} chars)"
-                //logDebug "TestFileRead parse has ${content?.keySet()?.size() ?: 0} top-level keys: ${content?.keySet() ?: 'null'}"
-                // Show first 200 chars as preview
-                //String preview = content.length > 2000 ? content.substring(0, 2000) + "..." : content
-                //logInfo "cacheTest TestFileRead: Preview: ${preview}"
-            } else {
-                logWarn "cacheTest TestFileRead: ❌ FAILED - '${DEFAULT_PROFILES_FILENAME}' returned null"
-            }
-            logInfo "clearing existing profiles and re-loading from the read content..."
-            deviceProfilesV4.clear()
-            profilesLoaded = false
-            logInfo "now trying to parse the content as JSON..."
-            loadProfilesFromJSONstring(content)
-            logInfo "cacheTest TestFileRead: completed"
             break
         case 'Clear':
             clearProfilesCacheInfo()    // in deviceProfileLib
@@ -663,8 +590,8 @@ void updateFromGitHub(String url = '') {
     long startTime = now()
     String gitHubUrl = url?.trim() ?: defaultGitHubURL
     String fileName = DEFAULT_PROFILES_FILENAME
-    
-    logInfo "updateFromGitHub: downloading from ${gitHubUrl}"
+
+    sendInfoEvent "updateFromGitHub: downloading ${fileName} from ${gitHubUrl}"
     // uri: raw.githubusercontent.com/kkossev/Hubitat/...
     // https://raw.githubusercontent.com/kkossev/Hubitat/...
 
@@ -681,6 +608,8 @@ void updateFromGitHub(String url = '') {
         
         httpGet(params) { resp ->
             logDebug "updateFromGitHub: Response status: ${resp?.status}"
+            state.gitHubV4['httpGetCallsCtr'] = (state.gitHubV4['httpGetCallsCtr'] ?: 0) + 1
+            state.gitHubV4['httpGetLastStatus'] = resp?.status
             
             if (resp?.status == 200 && resp?.data) {
                 // Fix StringReader issue - get actual text content without explicit class references
@@ -701,13 +630,20 @@ void updateFromGitHub(String url = '') {
                 logInfo "updateFromGitHub: downloaded ${jsonContent.length()} characters"
                 logDebug "updateFromGitHub: first 100 chars: ${jsonContent.take(100)}"
                 logInfo "updateFromGitHub: Performance - Download: ${downloadDuration}ms"
+                sendInfoEvent "downloaded ${jsonContent.length()} characters from GitHub in ${downloadDuration}ms"
+                state.gitHubV4['lastDownloadSize'] = jsonContent.length()
+                state.gitHubV4['lastDownloadTime'] = now()
+                state.gitHubV4['lastDownloadDuration'] = downloadDuration
                 
                 // Validate it's actually JSON content
                 if (jsonContent.length() < 100 || !jsonContent.trim().startsWith("{")) {
-                    logWarn "updateFromGitHub: ❌ Downloaded content doesn't appear to be valid JSON"
+                    //logWarn "updateFromGitHub: ❌ Downloaded content doesn't appear to be valid JSON"
                     logWarn "updateFromGitHub: Content preview: ${jsonContent.take(200)}"
+                    state.gitHubV4['lastDownloadError'] = "Invalid JSON"
+                    sendInfoEvent "updateFromGitHub: ❌ Downloaded content doesn't appear to be valid JSON"
                     return
                 }
+                state.gitHubV4['lastDownloadError'] = null
                 
                 // Parse and extract version/timestamp information for debugging
                 try {
@@ -721,9 +657,15 @@ void updateFromGitHub(String url = '') {
                     
                     logDebug "updateFromGitHub: JSON Metadata - Version: ${version}, Timestamp: ${timestamp}"
                     logDebug "updateFromGitHub: JSON Metadata - Author: ${author}, Device Profiles: ${profileCount}"
+                    state.gitHubV4['lastDownloadVersion'] = version
+                    state.gitHubV4['lastDownloadTimestamp'] = timestamp
                     
                 } catch (Exception jsonException) {
                     logWarn "updateFromGitHub: Could not parse JSON metadata: ${jsonException.message}"
+                    state.gitHubV4['lastDownloadVersion'] = null
+                    state.gitHubV4['lastDownloadTimestamp'] = null
+                    sendInfoEvent "updateFromGitHub: ❌ Could not parse JSON metadata: ${jsonException.message}"
+                    return
                 }
                 
                 // Store the content to Hubitat local storage using uploadHubFile
@@ -739,13 +681,14 @@ void updateFromGitHub(String url = '') {
                     logInfo "updateFromGitHub: ✅ Successfully updated ${fileName} in Hubitat local storage"
                     logInfo "updateFromGitHub: File size: ${jsonContent.length()} characters"
                     logInfo "updateFromGitHub: Performance - Upload: ${uploadDuration}ms"
+                    sendInfoEvent "Successfully updated ${fileName} (${jsonContent.length()} characters) in Hubitat local storage"
                     
                     // Optional: Clear current profiles to force reload on next access
-                    deviceProfilesV4.clear()
-                    deviceFingerprintsV4.clear()
-                    currentProfilesV4.clear()
-                    profilesLoaded = false
-                    profilesLoading = false
+                    g_deviceProfilesV4.clear()
+                    g_deviceFingerprintsV4.clear()
+                    g_currentProfilesV4.clear()
+                    g_profilesLoaded = false
+                    g_profilesLoading = false
                     
                     logInfo "updateFromGitHub: Cleared cached profiles - they will be reloaded on next access"
                     
@@ -755,15 +698,24 @@ void updateFromGitHub(String url = '') {
                 } catch (Exception fileException) {
                     logWarn "updateFromGitHub: ❌ Error saving file: ${fileException.message}"
                     logDebug "updateFromGitHub: File save exception: ${fileException}"
+                    sendInfoEvent "Error saving file: ${fileException.message}"
+                    state.gitHubV4['lastDownloadError'] = "File save error"
                 }
             } else {
                 logWarn "updateFromGitHub: ❌ Failed to download from GitHub. HTTP status: ${resp?.status}"
+                state.gitHubV4['lastDownloadError'] = "HTTP status ${resp?.status}"
+                sendInfoEvent "Failed to download from GitHub. HTTP status: ${resp?.status}"
             }
         }
         
     } catch (Exception e) {
+        if (state.gitHubV4 == null) { state.gitHubV4 = [:] }
+        state.gitHubV4['catchedExceptionsCtr'] = (state.gitHubV4['catchedExceptionsCtr'] ?: 0) + 1
+        state.gitHubV4['lastException'] = e.message
+        state.gitHubV4['lastExceptionTime'] = now()
         logWarn "updateFromGitHub: ❌ Error: ${e.message}"
         logDebug "updateFromGitHub: Full exception: ${e}"
+        sendInfoEvent "updateFromGitHub: ❌ Error: ${e.message}"
     }
 }
 
@@ -771,11 +723,11 @@ void updateFromGitHub(String url = '') {
 // credits @thebearmay
 /////// https://github.com/thebearmay/hubitat/blob/main/fileMgr.groovy 
 
-//@Field static String mmWaveFileName = "deviceProfilesV4_mmWave.json"
-
+/*
 def readFile(fName, Closure closure) {
     closure(readFile(fName))
 }
+*/
 
 def readFile(fName) {
     long contentStartTime = now()
@@ -791,7 +743,7 @@ def readFile(fName) {
         httpGet(params) { resp ->
             if(resp!= null) {
                 def data = resp.getData();
-                logDebug "test() read ${data.length} chars from ${uri}"
+                logDebug "readFile: read ${data.length} chars from ${uri}"
                 long contentEndTime = now()
                 long contentDuration = contentEndTime - contentStartTime
                 logInfo "Performance: Content=${contentDuration}ms"

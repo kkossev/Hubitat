@@ -73,7 +73,7 @@ private boolean is2in1() { return getDeviceProfile().startsWith('TS0601_2IN1')  
 public String  getDeviceProfile()       { state?.deviceProfile ?: 'UNKNOWN' }
 public Map     getDEVICE()              { 
     // Use V4 approach only. Backward compatibility with V3 is dropped
-    if (this.hasProperty('currentProfilesV4')) {
+    if (this.hasProperty('g_currentProfilesV4')) {
         ensureCurrentProfileLoaded()
         return getCurrentDeviceProfile()
     } 
@@ -83,17 +83,17 @@ public Map     getDEVICE()              {
 // ---- V4 Profile Management Methods ----
 
 /**
- * Gets the current device's profile data from currentProfilesV4 map
- * Falls back to deviceProfilesV4 if currentProfilesV4 entry doesn't exist
+ * Gets the current device's profile data from g_currentProfilesV4 map
+ * Falls back to g_deviceProfilesV4 if g_currentProfilesV4 entry doesn't exist
  * @return Map containing the device profile data
  */
 private Map getCurrentDeviceProfile() {
-    if (!this.hasProperty('currentProfilesV4')) { 
+    if (!this.hasProperty('g_currentProfilesV4')) { 
         return [:]  // NO fallback to V3 method
     }
     
     String dni = device?.deviceNetworkId
-    Map currentProfile = currentProfilesV4[dni]
+    Map currentProfile = g_currentProfilesV4[dni]
     
     if (currentProfile != null && currentProfile != [:]) {
         return currentProfile
@@ -104,28 +104,28 @@ private Map getCurrentDeviceProfile() {
 }
 
 /**
- * Ensures the current device's profile is loaded in currentProfilesV4
+ * Ensures the current device's profile is loaded in g_currentProfilesV4
  * Should be called before accessing device-specific profile data
  */
 private void ensureCurrentProfileLoaded() {
-    if (!this.hasProperty('currentProfilesV4')) { 
+    if (!this.hasProperty('g_currentProfilesV4')) { 
         return  // V4 not available, stick with V3
     }
     
     String dni = device?.deviceNetworkId
-    if (!currentProfilesV4.containsKey(dni)) {
+    if (!g_currentProfilesV4 || !g_currentProfilesV4.containsKey(dni)) {
         populateCurrentProfile(dni)
     }
 }
 
 /**
- * Populates currentProfilesV4 entry for the specified device
- * Extracts complete profile data from deviceProfilesV4 (excluding fingerprints)
+ * Populates g_currentProfilesV4 entry for the specified device
+ * Extracts complete profile data from g_deviceProfilesV4 (excluding fingerprints)
  * @param dni Device Network ID to use as key
  */
 private void populateCurrentProfile(String dni) {
     logDebug "populateCurrentProfile: populating profile for device ${dni}"
-    if (!this.hasProperty('currentProfilesV4') || !this.hasProperty('deviceProfilesV4')) { 
+    if (!this.hasProperty('g_currentProfilesV4') || !this.hasProperty('g_deviceProfilesV4')) { 
         return
     }
     
@@ -137,15 +137,15 @@ private void populateCurrentProfile(String dni) {
     logDebug "ensuring profiles loaded for device ${dni}"
     if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
     
-    Map sourceProfile = deviceProfilesV4[profileName]
+    Map sourceProfile = g_deviceProfilesV4[profileName]
     if (sourceProfile) {
-        // Clone the profile data and remove fingerprints (already in deviceFingerprintsV4)
+        // Clone the profile data and remove fingerprints (already in g_deviceFingerprintsV4)
         Map profileData = sourceProfile.clone()
         profileData.remove('fingerprints')
-        currentProfilesV4[dni] = profileData
-        logInfo "populateCurrentProfile: loaded profile '${profileName}' for device ${dni}"
+        g_currentProfilesV4[dni] = profileData
+        sendInfoEvent "populateCurrentProfile: loaded profile '${profileName}' for device ${dni}"
     } else {
-        logWarn "populateCurrentProfile: profile '${profileName}' not found in deviceProfilesV4 for device ${dni}"
+        logWarn "populateCurrentProfile: profile '${profileName}' not found in g_deviceProfilesV4 for device ${dni}"
     }
 }
 
@@ -154,12 +154,12 @@ private void populateCurrentProfile(String dni) {
  * Should only be called when it's safe to remove V3 data
  */
 void disposeV3ProfilesIfReady() {
-    if (!this.hasProperty('currentProfilesV4') || !this.hasProperty('deviceProfilesV4')) { 
+    if (!this.hasProperty('g_currentProfilesV4') || !this.hasProperty('g_deviceProfilesV4')) { 
         return
     }
     
     String dni = device?.deviceNetworkId
-    if (currentProfilesV4.containsKey(dni)) {
+    if (g_currentProfilesV4.containsKey(dni)) {
         // This device has its profile loaded, it's safe to dispose V3 for this device
         logDebug "disposeV3ProfilesIfReady: device ${dni} has current profile loaded - V3 can be disposed"
         // Note: In a production environment, you might want more sophisticated logic
@@ -171,28 +171,28 @@ void disposeV3ProfilesIfReady() {
 
 /**
  * Forces disposal of V4 profiles to free memory
- * Use with caution - only when you're sure all needed profiles are in currentProfilesV4
+ * Use with caution - only when you're sure all needed profiles are in g_currentProfilesV4
  */
 void forceDisposeV4Profiles() {
-    if (!this.hasProperty('deviceProfilesV4')) { 
+    if (!this.hasProperty('g_deviceProfilesV4')) { 
         return
     }
     
-    int sizeBefore = deviceProfilesV4?.size() ?: 0
-    deviceProfilesV4.clear()
-    if (this.hasProperty('profilesLoaded')) { profilesLoaded = false }
+    int sizeBefore = g_deviceProfilesV4?.size() ?: 0
+    g_deviceProfilesV4.clear()
+    if (this.hasProperty('g_profilesLoaded')) { g_profilesLoaded = false }
     logInfo "forceDisposeV3Profiles: disposed ${sizeBefore} V3 profiles to free memory"
 }
 
-public Set     getDeviceProfiles()      { deviceProfilesV4 != null ? deviceProfilesV4?.keySet() : [] }
+public Set     getDeviceProfiles()      { g_deviceProfilesV4 != null ? g_deviceProfilesV4?.keySet() : [] }
 
 // TODO - check why it returns list instead of set or map ??? TODO
 public List<String> getDeviceProfilesMap()   {
     // if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
     // better don't ...
-    if (deviceProfilesV4 == null || deviceProfilesV4.isEmpty()) { return [] }
+    if (g_deviceProfilesV4 == null || g_deviceProfilesV4.isEmpty()) { return [] }
     List<String> activeProfiles = []
-    deviceProfilesV4.each { profileName, profileMap ->
+    g_deviceProfilesV4.each { profileName, profileMap ->
         if ((profileMap.device?.isDepricated ?: false) != true) {
             activeProfiles.add(profileMap.description ?: '---')
         }
@@ -200,15 +200,15 @@ public List<String> getDeviceProfilesMap()   {
     return activeProfiles
 }
 
-// ---------------------------------- deviceProfilesV4 helper functions --------------------------------------------
+// ---------------------------------- g_deviceProfilesV4 helper functions --------------------------------------------
 
 /**
  * Returns the device fingerprints map
- * @return The deviceFingerprintsV4 map containing description and fingerprints for each profile
+ * @return The g_deviceFingerprintsV4 map containing description and fingerprints for each profile
  */
 public Map getDeviceFingerprintsV4() {
     if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
-    return this.hasProperty('deviceFingerprintsV4') ? deviceFingerprintsV4 : [:]
+    return this.hasProperty('g_deviceFingerprintsV4') ? g_deviceFingerprintsV4 : [:]
 }
 
 /**
@@ -218,7 +218,7 @@ public Map getDeviceFingerprintsV4() {
  */
 public String getProfileKey(final String valueStr) {
     if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
-    if (deviceProfilesV4 != null) { return deviceProfilesV4.find { _, profileMap -> profileMap.description == valueStr }?.key }
+    if (g_deviceProfilesV4 != null) { return g_deviceProfilesV4.find { _, profileMap -> profileMap.description == valueStr }?.key }
     else { return null }
 }
 
@@ -970,9 +970,9 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
     String deviceModel        = model != null ? model : device.getDataValue('model') ?: UNKNOWN
     String deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
     
-    // Use deviceFingerprintsV4 for more efficient fingerprint matching
-    if (this.hasProperty('deviceFingerprintsV4') && deviceFingerprintsV4 != null) {
-        deviceFingerprintsV4.each { profileName, profileData ->
+    // Use g_deviceFingerprintsV4 for more efficient fingerprint matching
+    if (this.hasProperty('g_deviceFingerprintsV4') && g_deviceFingerprintsV4 != null) {
+        g_deviceFingerprintsV4.each { profileName, profileData ->
             profileData.fingerprints.each { fingerprint ->
                 if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
                     deviceProfile = profileName
@@ -983,12 +983,12 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
             }
         }
     } else {    // TODO - check if this is needed
-        // Fallback to deviceProfilesV4 if deviceFingerprintsV4 is not available
-        deviceProfilesV4.each { profileName, profileMap ->
+        // Fallback to g_deviceProfilesV4 if g_deviceFingerprintsV4 is not available
+        g_deviceProfilesV4.each { profileName, profileMap ->
             profileMap.fingerprints.each { fingerprint ->
                 if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
                     deviceProfile = profileName
-                    deviceName = fingerprint.deviceJoinName ?: deviceProfilesV4[deviceProfile].description ?: UNKNOWN
+                    deviceName = fingerprint.deviceJoinName ?: g_deviceProfilesV4[deviceProfile].description ?: UNKNOWN
                     logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
                     return [deviceName, deviceProfile]
                 }
@@ -1019,17 +1019,17 @@ public void setDeviceNameAndProfile(String model=null, String manufacturer=null)
     if (deviceName != NULL && deviceName != UNKNOWN) {
         device.setName(deviceName)
         state.deviceProfile = deviceProfile
-        device.updateSetting('forcedProfile', [value:deviceProfilesV4[deviceProfile]?.description, type:'enum'])
+        device.updateSetting('forcedProfile', [value:g_deviceProfilesV4[deviceProfile]?.description, type:'enum'])
         logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was set to : <b>deviceProfile=${deviceProfile} : deviceName=${deviceName}</b>"
         
         // V4 Profile Management: Handle profile loading and changes
-        if (this.hasProperty('currentProfilesV4')) {
+        if (this.hasProperty('g_currentProfilesV4')) {
             String dni = device?.deviceNetworkId
             
             // Detect profile change
             if (previousProfile != deviceProfile && previousProfile != 'UNKNOWN') {
                 logInfo "Profile changed from '${previousProfile}' to '${deviceProfile}' - clearing old profile data for device ${dni}"
-                currentProfilesV4.remove(dni)
+                g_currentProfilesV4.remove(dni)
             }
             
             // Ensure current profile is loaded
@@ -1320,7 +1320,7 @@ private List<Object> compareAndConvertTuyaToHubitatEventValue(Map foundItem, int
             // if the attribute is of a type enum, the value is a string. Compare the string values!
             if (dataType == null || dataType == 'ENUM') {
                 //logTrace "compareAndConvertTuyaToHubitatEventValue: comparing as string fncmd=${fncmd} foundItem.name=${foundItem.name} foundItem.map=${foundItem.map}"
-                String foundItemMapValue = foundItem.map[fncmd as String] ?: 'unknown'      // map indexes are of a type String in deviceProfilesV4 !!!
+                String foundItemMapValue = foundItem.map[fncmd as String] ?: 'unknown'      // map indexes are of a type String in g_deviceProfilesV4 !!!
                 //String foundItemMapValue = 'unknown'
                 //logTrace "foundItem.map[fncmd as String] = ${foundItemMapValue}"
                 //logTrace "device.currentValue(${foundItem.name}) = ${device.currentValue(foundItem.name) ?: 'unknown'}"
@@ -1655,20 +1655,20 @@ public String fingerprintIt(Map profileMap, Map fingerprint) {
     return fingerprintStr
 }
 
-// debug/test method - prints all fingerprints in the deviceFingerprintsV4 map
+// debug/test method - prints all fingerprints in the g_deviceFingerprintsV4 map
 public void printFingerprintsV4() {
     int count = 0
     String fingerprintsText = "printFingerprintsV4: <br>"
     
-    if (deviceFingerprintsV4 != null && !deviceFingerprintsV4.isEmpty()) {
-        deviceFingerprintsV4.each { profileName, profileData ->
+    if (g_deviceFingerprintsV4 != null && !g_deviceFingerprintsV4.isEmpty()) {
+        g_deviceFingerprintsV4.each { profileName, profileData ->
             profileData.fingerprints?.each { fingerprint ->
                 fingerprintsText += "  ${fingerprint}<br>"
                 count++
             }
         }
     } else {
-        fingerprintsText += "<b>No deviceFingerprintsV4 available!</b><br>"
+        fingerprintsText += "<b>No g_deviceFingerprintsV4 available!</b><br>"
     }
     fingerprintsText += "<br><b>Total fingerprints: ${count}</b> size of fingerprintsText=${fingerprintsText.length()}"
     logInfo fingerprintsText
@@ -1687,28 +1687,28 @@ public void printPreferences() {
 }
 
 void profilesV4info() {
-    int size = deviceProfilesV4?.size() ?: 0
-    int fingerprintSize = deviceFingerprintsV4?.size() ?: 0
-    int currentProfileSize = currentProfilesV4?.size() ?: 0
-    List keys = deviceProfilesV4 ? new ArrayList(deviceProfilesV4.keySet()) : []
-    List fingerprintKeys = deviceFingerprintsV4 ? new ArrayList(deviceFingerprintsV4.keySet()) : []
-    List currentProfileKeys = currentProfilesV4 ? new ArrayList(currentProfilesV4.keySet()) : []
+    int size = g_deviceProfilesV4?.size() ?: 0
+    int fingerprintSize = g_deviceFingerprintsV4?.size() ?: 0
+    int currentProfileSize = g_currentProfilesV4?.size() ?: 0
+    List keys = g_deviceProfilesV4 ? new ArrayList(g_deviceProfilesV4.keySet()) : []
+    List fingerprintKeys = g_deviceFingerprintsV4 ? new ArrayList(g_deviceFingerprintsV4.keySet()) : []
+    List currentProfileKeys = g_currentProfilesV4 ? new ArrayList(g_currentProfilesV4.keySet()) : []
     
     // Count computed fingerprints
     int totalComputedFingerprints = 0
-    deviceFingerprintsV4.each { key, value ->
+    g_deviceFingerprintsV4.each { key, value ->
         totalComputedFingerprints += value.computedFingerprints?.size() ?: 0
     }
     
     String dni = device?.deviceNetworkId
-    boolean hasCurrentProfile = currentProfilesV4.containsKey(dni)
+    boolean hasCurrentProfile = g_currentProfilesV4.containsKey(dni)
     
-    logInfo "profilesV4info: deviceProfilesV4 size=${size} keys=${keys}"
-    logInfo "profilesV4info: deviceFingerprintsV4 size=${fingerprintSize}"
-    logInfo "profilesV4info: currentProfilesV4 size=${currentProfileSize} keys=${currentProfileKeys}"
+    logInfo "profilesV4info: g_deviceProfilesV4 size=${size} keys=${keys}"
+    logInfo "profilesV4info: g_deviceFingerprintsV4 size=${fingerprintSize}"
+    logInfo "profilesV4info: g_currentProfilesV4 size=${currentProfileSize} keys=${currentProfileKeys}"
     logInfo "profilesV4info: total computed fingerprint strings=${totalComputedFingerprints}"
     if (hasCurrentProfile) {
-        Map currentProfile = currentProfilesV4[dni]
+        Map currentProfile = g_currentProfilesV4[dni]
         logInfo "profilesV4info: current profile for this device (${dni}) has ${currentProfile?.keySet()?.size() ?: 0} sections"
         logInfo "profilesV4info: current profile JSON data: ${JsonOutput.toJson(currentProfile)}"
     }
@@ -1718,17 +1718,17 @@ void profilesV4info() {
 }
 
 void clearProfilesCache() {
-    deviceProfilesV4.clear()
-    deviceFingerprintsV4.clear()
-    currentProfilesV4.clear()
-    profilesLoaded = false
-    profilesLoading = false
+    g_deviceProfilesV4.clear()
+    g_deviceFingerprintsV4.clear()
+    g_currentProfilesV4.clear()
+    g_profilesLoaded = false
+    g_profilesLoading = false
 }
 
 void clearProfilesCacheInfo() {
-    int before = deviceProfilesV4.size()
-    int beforeFingerprints = deviceFingerprintsV4.size()
-    int beforeCurrentProfiles = currentProfilesV4.size()
+    int before = g_deviceProfilesV4.size()
+    int beforeFingerprints = g_deviceFingerprintsV4.size()
+    int beforeCurrentProfiles = g_currentProfilesV4.size()
     clearProfilesCache()
     logInfo "clearProfilesCache: cleared ${before} V4 profiles, ${beforeFingerprints} fingerprint entries, and ${beforeCurrentProfiles} current profiles"
 }

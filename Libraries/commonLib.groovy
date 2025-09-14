@@ -826,7 +826,7 @@ void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, fin
             return      // sucessfuly processed the new way - we are done.  (version 3.0)
         }
     }
-    logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data} (deviceProfile = ${state.deviceProfile}, deviceProfilesV4 count = ${deviceProfilesV4?.size() ?: 0}) currentProfilesV4 = ${currentProfilesV4?.size() ?: 0} dni=${device?.deviceNetworkId} currentProfilesV4[device.deviceNetworkId]=${currentProfilesV4?."${device?.deviceNetworkId}"}"
+    logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data} (deviceProfile = ${state.deviceProfile}, g_deviceProfilesV4 count = ${g_deviceProfilesV4?.size() ?: 0}) g_currentProfilesV4 = ${g_currentProfilesV4?.size() ?: 0} dni=${device?.deviceNetworkId} g_currentProfilesV4[device.deviceNetworkId]=${g_currentProfilesV4?."${device?.deviceNetworkId}"}"
 //    ensureCurrentProfileLoaded()
 }
 
@@ -1326,11 +1326,12 @@ public String getDestinationEP() {    // [destEndpoint:safeToInt(getDestinationE
 public void checkDriverVersion(final Map stateCopy) {
     if (stateCopy.driverVersion == null || driverVersionAndTimeStamp() != stateCopy.driverVersion) {
         logDebug "checkDriverVersion: updating the settings from the current driver version ${stateCopy.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
-        sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()}")
+        sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()} from version ${stateCopy.driverVersion ?: 'unknown'}")
         state.driverVersion = driverVersionAndTimeStamp()
         initializeVars(false)
         updateTuyaVersion()
         updateAqaraVersion()
+        if (this.respondsTo('customcheckDriverVersion')) { customcheckDriverVersion(stateCopy) }
     }
     if (state.states == null) { state.states = [:] } ; if (state.lastRx == null) { state.lastRx = [:] } ; if (state.lastTx == null) { state.lastTx = [:] } ; if (state.stats  == null) { state.stats =  [:] }
 }
@@ -1382,6 +1383,8 @@ void resetStats() {
     state.stats.rxCtr = 0 ; state.stats.txCtr = 0
     state.states['isDigital'] = false ; state.states['isRefresh'] = false ; state.states['isPing'] = false
     state.health['offlineCtr'] = 0 ; state.health['checkCtr3'] = 0
+    if (this.respondsTo('customResetStats')) { customResetStats() }
+    logInfo 'statistics reset!'
 }
 
 void initializeVars( boolean fullInit = false ) {

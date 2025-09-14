@@ -88,7 +88,7 @@ public void standardParseThermostatCluster(final Map descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "standardParseThermostatCluster: zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
-    if (deviceProfilesV3 != null || deviceProfilesV4 != null) {
+    if (deviceProfilesV3 != null || g_deviceProfilesV4 != null) {
         boolean result = processClusterAttributeFromDeviceProfile(descMap)
         if ( result == false ) {
             logWarn "standardParseThermostatCluster: received unknown Thermostat cluster (0x0201) attribute 0x${descMap.attrId} (value ${descMap.value})"
