@@ -1,8 +1,8 @@
 /* groovylint-disable NglParseError, ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnusedImport, VariableName */ 
  /*
- *  Tuya Zigbee Button Dimmer - driver for Hubitat Elevation
+ *  Tuya Zigbee mmWave Sensor - driver for Hubitat Elevation
  *
- *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
+ *  https://community.hubitat.com/t/w-i-p-tuya-zigbee-mmwave-sensors/137410/1
  *
  * 	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * 	in compliance with the License. You may obtain a copy of the License at:
@@ -13,8 +13,7 @@
  * 	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  * 	for the specific language governing permissions and limitations under the License.
  *
- * This driver is inspired by @w35l3y work on Tuya device driver (Edge project).
- * For a big portions of code all credits go to Jonathan Bradshaw.
+ * Credits: Hubitat and Zigbee2MQTT community, Jonathan Bradshaw, @w35l3y and many others.
  *
  * ver. 3.0.6  2024-04-06 kkossev  - first version (derived from Tuya 4 In 1 driver)
  * ..............................
@@ -29,10 +28,10 @@
  *                                   TODO: change the default offlineCheck to 30 minutes
 */
 
-static String version() { "4.0.1" }
-static String timeStamp() {"2025/09/14 9:21 AM"}
+static String version() { "4.0.2" }
+static String timeStamp() {"2025/09/14 9:57 AM"}
 
-@Field static final Boolean _DEBUG = false           // debug commands
+@Field static final Boolean _DEBUG = true           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true 
 
