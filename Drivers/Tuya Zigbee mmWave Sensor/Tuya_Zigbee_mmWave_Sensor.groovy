@@ -19,16 +19,20 @@
  * ver. 3.0.6  2024-04-06 kkossev  - first version (derived from Tuya 4 In 1 driver)
  * ..............................
  * ver. 4.0.0  2025-09-04 kkossev  - deviceProfileV4 BRANCH created
- * ver. 4.0.1  2025-09-14 kkossev  - (dev.branch) added new debug commands; added debug info in states gitHubV4 and profilesV4;
+ * ver. 4.0.1  2025-09-14 kkossev  - (dev.branch) added new debug commands; added debug info in states gitHubV4 and profilesV4; added g_loadProfilesCooldown logic - prevent multiple profile loading attempts after JSON parsing errors within short time
  *                                   
+ *                                   TODO: handle the Unprocessed ZDO command: cluster=8032 after hub reboot
+ *                                   TODO: go to the bottom of the reason for : loadProfilesFromJSON exception: error converting JSON: Unable to determine the current character, it is not a string, number, array, or object
+ *                                   TODO: do not load profiles when metadata is not available (device just paired)
+ *                                   TODO: load the JSON file from GitHub automatically if not present locally
  *                                   TODO: test the state. after reboot 
  *                                   TODO: change the default offlineCheck to 30 minutes
 */
 
 static String version() { "4.0.1" }
-static String timeStamp() {"2025/09/14 8:16 AM"}
+static String timeStamp() {"2025/09/14 9:21 AM"}
 
-@Field static final Boolean _DEBUG = true           // debug logging
+@Field static final Boolean _DEBUG = false           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true 
 
@@ -58,6 +62,8 @@ deviceType = "mmWaveSensor"
 @Field static  boolean g_profilesLoaded = false
 @Field static  Map g_deviceFingerprintsV4 = [:]
 @Field static  Map g_currentProfilesV4 = [:]  // Key: device?.deviceNetworkId, Value: complete profile data
+@Field static  boolean g_loadProfilesCooldown = false
+@Field static  int LOAD_PROFILES_COOLDOWN_MS = 30000  // 30 seconds cooldown to prevent multiple profile loading within short time
 
 
 metadata {
@@ -311,6 +317,7 @@ void customInitializeVars(final boolean fullInit=false) {
     if (fullInit == true || state.motionStarted == null) { state.motionStarted = unix2formattedDate(now()) }
     if (fullInit == true || state.gitHubV4 == null) { state.gitHubV4 = [:] }
     if (fullInit == true || state.profilesV4 == null) { state.profilesV4 = [:] }
+    resetCooldownFlag()
 }
 
 void customInitEvents(final boolean fullInit=false) {
@@ -408,6 +415,10 @@ private Map reconstructFingerprint(Map profileMap, Map fingerprint) {
 
 boolean loadProfilesFromJSON() {
     //return loadProfilesFromJSONstring(testJSON)
+    if (isInCooldown()) {
+        logDebug "loadProfilesFromJSON: in cooldown period, skipping profile load attempt"
+        return false
+    }
     return loadProfilesFromJSONstring(readFile(DEFAULT_PROFILES_FILENAME))
 }
 
@@ -433,8 +444,10 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
         def dp = parsed?.deviceProfiles
         if (!(dp instanceof Map) || dp.isEmpty()) {
             logWarn "loadProfilesFromJSON: parsed deviceProfiles missing or empty"
+            startCooldownTimer()
             return false
         }
+        resetCooldownFlag()
         // !!!!!!!!!!!!!!!!!!!!!!!
         // Populate g_deviceProfilesV4
         g_deviceProfilesV4.putAll(dp as Map)
@@ -495,9 +508,27 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
         long endTime = now()
         long executionTime = endTime - startTime
         logError "loadProfilesFromJSON exception: error converting JSON: ${e.message} (execution time: ${executionTime}ms)"
+        startCooldownTimer()
         return false
     }
-    
+}
+
+void startCooldownTimer() {
+    if (g_loadProfilesCooldown) {
+        return
+    }
+    g_loadProfilesCooldown = true
+    runInMillis(LOAD_PROFILES_COOLDOWN_MS, resetCooldownFlag, [overwrite: true])
+    logWarn "startCooldownTimer: starting cooldown timer for ${LOAD_PROFILES_COOLDOWN_MS} ms to prevent multiple profile loading attempts"
+}
+
+void resetCooldownFlag() {
+    g_loadProfilesCooldown = false
+    logInfo "resetCooldownFlag: cooldown period ended, can attempt profile loading again"
+}
+
+boolean isInCooldown() {
+    return g_loadProfilesCooldown
 }
 
 /**
@@ -512,6 +543,11 @@ private boolean ensureProfilesLoaded() {
         return true
     }
     if (state.profilesV4 == null) { state.profilesV4 = [:] }   // initialize state variable if not present
+    if (isInCooldown()) {
+        state.profilesV4['cooldownSkipsCtr'] = (state.profilesV4['cooldownSkipsCtr'] ?: 0) + 1
+        logDebug "ensureProfilesLoaded: in cooldown period, skipping profile load attempt"
+        return false
+    }
     // Check if another thread is already loading
     if (g_profilesLoading) {
         // Wait briefly for other thread to finish
@@ -719,16 +755,6 @@ void updateFromGitHub(String url = '') {
     }
 }
 
-//////// https://community.hubitat.com/t/release-file-manager-device/91092 ///////
-// credits @thebearmay
-/////// https://github.com/thebearmay/hubitat/blob/main/fileMgr.groovy 
-
-/*
-def readFile(fName, Closure closure) {
-    closure(readFile(fName))
-}
-*/
-
 def readFile(fName) {
     long contentStartTime = now()
     //uri = "http://${location.hub.localIP}:8080/local/deviceProfilesV4_mmWave.json"
@@ -803,6 +829,7 @@ void test(String par) {
                 logDebug "test() parse has ${parse?.keySet()?.size() ?: 0} top-level keys: ${parse?.keySet() ?: 'null'}"
                 if (parse?.deviceProfiles != null) {
                     logDebug "test() parse.deviceProfiles has ${parse.deviceProfiles?.size() ?: 0} profiles: ${parse.deviceProfiles?.keySet() ?: 'null'}"
+                    resetCooldownFlag()
                 } else {
                     logWarn "test() parse.deviceProfiles is null"
                 }
