@@ -84,7 +84,7 @@ void handleIlluminanceEvent(int illuminance, boolean isDigital=false) {
     }
     else {         // queue the event
         eventMap.type = 'delayed'
-        logDebug "${device.displayName} <b>delaying ${timeRamaining} seconds</b> event : ${eventMap}"
+        logDebug "${device.displayName} delaying ${timeRamaining} seconds event : ${eventMap}"
         runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap])
     }
 }

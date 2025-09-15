@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/commonLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-commonLib',
-    version: '3.5.1'
+    version: '4.0.0'
 )
 /*
   *  Common ZCL Library
@@ -21,32 +21,12 @@ library(
   *
   *
   * ver. 1.0.0  2022-06-18 kkossev  - first beta version
-  * ver. 2.0.0  2023-05-08 kkossev  - first published version 2.x.x
-  * ver. 2.1.6  2023-11-06 kkossev  - last update on version 2.x.x
-  * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x
-  * ver. 3.0.1  2023-12-06 kkossev  - info event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
-  * ver. 3.0.2  2023-12-17 kkossev  - configure() changes; Groovy Lint, Format and Fix v3.0.0
-  * ver. 3.0.3  2024-03-17 kkossev  - more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
-  * ver. 3.0.4  2024-04-02 kkossev  - removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
-  * ver. 3.0.5  2024-04-05 kkossev  - button methods bug fix; configure() bug fix; handlePm25Event bug fix;
-  * ver. 3.0.6  2024-04-08 kkossev  - removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups and level and battery methods to dedicated libs + setLevel bug fix;
-  * ver. 3.0.7  2024-04-23 kkossev  - tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr, activeEpRqCtr; trace ZDO commands; added 0x0406 OccupancyCluster; reduced debug for chatty devices;
-  * ver. 3.1.0  2024-04-28 kkossev  - unnecesery unschedule() speed optimization; added syncTuyaDateTime(); tuyaBlackMagic() initialization bug fix.
-  * ver. 3.1.1  2024-05-05 kkossev  - getTuyaAttributeValue bug fix; added customCustomParseIlluminanceCluster method
-  * ver. 3.2.0  2024-05-23 kkossev  - standardParse____Cluster and customParse___Cluster methods; moved onOff methods to a new library; rename all custom handlers in the libs to statdndardParseXXX
-  * ver. 3.2.1  2024-06-05 kkossev  - 4 in 1 V3 compatibility; added IAS cluster; setDeviceNameAndProfile() fix;
-  * ver. 3.2.2  2024-06-12 kkossev  - removed isAqaraTRV_OLD() and isAqaraTVOC_OLD() dependencies from the lib; added timeToHMS(); metering and electricalMeasure clusters swapped bug fix; added cluster 0x0204;
-  * ver. 3.3.0  2024-06-25 kkossev  - fixed exception for unknown clusters; added cluster 0xE001; added powerSource - if 5 minutes after initialize() the powerSource is still unknown, query the device for the powerSource
-  * ver. 3.3.1  2024-07-06 kkossev  - removed isFingerbot() dependancy; added FC03 cluster (Frient); removed noDef from the linter; added customParseIasMessage and standardParseIasMessage; powerSource set to unknown on initialize(); add 0x0007 onOffConfiguration cluster';
-  * ver. 3.3.2  2024-07-12 kkossev  - added PollControl (0x0020) cluster; ping for SONOFF
-  * ver. 3.3.3  2024-09-15 kkossev  - added queryAllTuyaDP(); 2 minutes healthCheck option;
-  * ver. 3.3.4  2025-01-29 kkossev  - 'LOAD ALL DEFAULTS' is the default Configure command.
-  * ver. 3.3.5  2025-03-05 kkossev  - getTuyaAttributeValue made public; fixed checkDriverVersion bug on hub reboot.
-  * ver. 3.4.0  2025-03-23 kkossev  - healthCheck by pinging the device; updateRxStats() replaced with inline code; added state.lastRx.timeStamp; added activeEndpoints() handler call; documentation improvements
-  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
-  * ver. 3.5.1  2025-07-23 kkossev  - Aqara W100 destEndpoint: 0x01 patch
-  * ver. 3.5.2  2025-08-13 kkossev  - (dev.branch) Status attribute renamed to _status_
+  * ..............................
+  * ver. 3.5.2  2025-08-13 kkossev  - Status attribute renamed to _status_
+  * ver. 4.0.0  2025-09-08 kkossev  - deviceProfileV4
   *
+  *                                   TODO: change the offline threshold to 2 
+  *                                   TODO: 
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
   *                                   TODO: make the configure() without parameter smart - analyze the State variables and call delete states.... call ActiveAndpoints() or/amd initialize() or/and configure()
   *                                   TODO: check - offlineCtr is not increasing? (ZBMicro);
@@ -61,8 +41,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.5.2' }
-String commonLibStamp() { '2025/08/13 8:18 PM' }
+String commonLibVersion() { '4.0.0' }
+String commonLibStamp() { '2025/09/08 8:21 AM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -157,6 +137,7 @@ public boolean isVirtual() { device.controllerType == null || device.controllerT
  * @param description Zigbee message in hex format
  */
 public void parse(final String description) {
+    
     Map stateCopy = state            // .clone() throws java.lang.CloneNotSupportedException in HE platform version 2.4.1.155 !
     checkDriverVersion(stateCopy)    // +1 ms
     if (state.stats != null) { state.stats?.rxCtr= (state.stats?.rxCtr ?: 0) + 1 } else { state.stats = [:] }  // updateRxStats(state) // +1 ms
@@ -276,15 +257,6 @@ public boolean isSpammyDeviceReport(final Map descMap) {
     if (_TRACE_ALL == true) { return false }
     if (this.respondsTo('isSpammyDPsToIgnore')) {   // defined in deviceProfileLib
         return isSpammyDPsToIgnore(descMap)
-    }
-    return false
-}
-
-// not used?
-public boolean isSpammyTuyaRadar() {
-    if (_TRACE_ALL == true) { return false }
-    if (this.respondsTo('isSpammyDeviceProfile'())) {   // defined in deviceProfileLib
-        return isSpammyDeviceProfile()
     }
     return false
 }
@@ -838,14 +810,18 @@ public void standardParseTuyaCluster(final Map descMap) {
 // called from the standardParseTuyaCluster method for each DP chunk in the messages (usually one, but could be multiple DPs in one message)
 void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
     logTrace "standardProcessTuyaDP: <b> checking customProcessTuyaDp</b> dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
+    if (this.respondsTo('ensureCurrentProfileLoaded')) {
+        ensureCurrentProfileLoaded()
+    }
     if (this.respondsTo('customProcessTuyaDp')) {
-        logTrace 'standardProcessTuyaDP: customProcessTuyaDp exists, calling it...'
+        //logTrace 'standardProcessTuyaDP: customProcessTuyaDp exists, calling it...'
         if (customProcessTuyaDp(descMap, dp, dp_id, fncmd, dp_len) == true) {
             return       // EF00 DP has been processed in the custom handler - we are done!
         }
     }
     // check if DeviceProfile processing method exists (deviceProfieLib should be included in the main driver)
     if (this.respondsTo(processTuyaDPfromDeviceProfile)) {
+        //logTrace 'standardProcessTuyaDP: processTuyaDPfromDeviceProfile exists, calling it...'
         if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {
             return      // sucessfuly processed the new way - we are done.  (version 3.0)
         }
@@ -1349,11 +1325,12 @@ public String getDestinationEP() {    // [destEndpoint:safeToInt(getDestinationE
 public void checkDriverVersion(final Map stateCopy) {
     if (stateCopy.driverVersion == null || driverVersionAndTimeStamp() != stateCopy.driverVersion) {
         logDebug "checkDriverVersion: updating the settings from the current driver version ${stateCopy.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
-        sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()}")
+        sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()} from version ${stateCopy.driverVersion ?: 'unknown'}")
         state.driverVersion = driverVersionAndTimeStamp()
         initializeVars(false)
         updateTuyaVersion()
         updateAqaraVersion()
+        if (this.respondsTo('customcheckDriverVersion')) { customcheckDriverVersion(stateCopy) }
     }
     if (state.states == null) { state.states = [:] } ; if (state.lastRx == null) { state.lastRx = [:] } ; if (state.lastTx == null) { state.lastTx = [:] } ; if (state.stats  == null) { state.stats =  [:] }
 }
@@ -1405,6 +1382,8 @@ void resetStats() {
     state.stats.rxCtr = 0 ; state.stats.txCtr = 0
     state.states['isDigital'] = false ; state.states['isRefresh'] = false ; state.states['isPing'] = false
     state.health['offlineCtr'] = 0 ; state.health['checkCtr3'] = 0
+    if (this.respondsTo('customResetStats')) { customResetStats() }
+    logInfo 'statistics reset!'
 }
 
 void initializeVars( boolean fullInit = false ) {
@@ -1413,7 +1392,7 @@ void initializeVars( boolean fullInit = false ) {
         state.clear()
         unschedule()
         resetStats()
-        if (deviceProfilesV3 != null && this.respondsTo('setDeviceNameAndProfile')) { setDeviceNameAndProfile() }
+        if (this.respondsTo('setDeviceNameAndProfile')) { setDeviceNameAndProfile() }
         //state.comment = 'Works with Tuya Zigbee Devices'
         logInfo 'all states and scheduled jobs cleared!'
         state.driverVersion = driverVersionAndTimeStamp()
@@ -1479,6 +1458,7 @@ void logDebug(final String msg) { if (settings?.logEnable)   { log.debug "${devi
 void logInfo(final String msg)  { if (settings?.txtEnable)   { log.info  "${device.displayName} " + msg } }
 void logWarn(final String msg)  { if (settings?.logEnable)   { log.warn  "${device.displayName} " + msg } }
 void logTrace(final String msg) { if (settings?.traceEnable) { log.trace "${device.displayName} " + msg } }
+void logError(final String msg) { if (settings?.txtEnable)   { log.error "${device.displayName} " + msg } }
 
 // _DEBUG mode only
 void getAllProperties() {

@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Thermostat Library', name: 'thermostatLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy', documentationLink: '',
-    version: '3.5.1')
+    version: '4.0.0')
 /*
  *  Zigbee Thermostat Library
  *
@@ -20,14 +20,15 @@ library(
  * ver. 3.3.2  2024-07-09 kkossev  - release 3.3.2
  * ver. 3.3.4  2024-10-23 kkossev  - fixed exception in sendDigitalEventIfNeeded when the attribute is not found (level)
  * ver. 3.5.0  2025-02-16 kkossev  - added setpointReceiveCheck() and modeReceiveCheck() retries
- * ver. 3.5.1  2025-03-04 kkossev  - (dev. branch) == false bug fix; disabled switching to 'cool' mode.
+ * ver. 3.5.1  2025-03-04 kkossev  - == false bug fix; disabled switching to 'cool' mode.
+ * ver. 4.0.0  2025-09-08 kkossev  - deviceProfileLibV4 alignment
  *
  *                                   TODO: add eco() method
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
-public static String thermostatLibVersion()   { '3.5.1' }
-public static String thermostatLibStamp() { '2025/03/04 9:11 PM' }
+public static String thermostatLibVersion()   { '4.0.0' }
+public static String thermostatLibStamp() { '2025/09/08 8:35 AM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib
@@ -87,7 +88,7 @@ public void standardParseThermostatCluster(final Map descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "standardParseThermostatCluster: zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
-    if (deviceProfilesV3 != null) {
+    if (deviceProfilesV3 != null || g_deviceProfilesV4 != null) {
         boolean result = processClusterAttributeFromDeviceProfile(descMap)
         if ( result == false ) {
             logWarn "standardParseThermostatCluster: received unknown Thermostat cluster (0x0201) attribute 0x${descMap.attrId} (value ${descMap.value})"
