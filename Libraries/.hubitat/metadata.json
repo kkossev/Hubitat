@@ -10,7 +10,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLib.groovy",
       "id": 142,
       "codeType": "library",
-      "version": 620
+      "version": 663
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/batteryLib.groovy",
@@ -22,7 +22,19 @@
       "filepath": "/c:/Work/Hubitat/Libraries/humidityLib.groovy",
       "id": 173,
       "codeType": "library",
-      "version": 18
+      "version": 21
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/thermostatLib.groovy",
+      "id": 179,
+      "codeType": "library",
+      "version": 56
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/temperatureLib.groovy",
+      "id": 172,
+      "codeType": "library",
+      "version": 38
     }
   ]
 }
