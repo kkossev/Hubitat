@@ -19,13 +19,13 @@
  * ver. 2.1.5  2023-09-02 kkossev  - VINDSTYRKA: removed airQualityLevel, added thresholds; airQualityIndex replaced by sensirionVOCindex
  * ver. 3.0.5  2024-04-05 kkossev  - commonLib 3.0.5 check; Groovy lint;
  * ver. 3.1.0  2024-04-24 kkossev  - commonLib 3.1.0 speed optimization
- * ver. 4.0.0  2025-09-15 kkossev  - (dev. branch) commonLib 4.0.0 allignment
+ * ver. 3.2.0  2025-09-15 kkossev  - (dev. branch) commonLib 4.0.0 allignment; added temperatureOffset and humidityOffset;
  *
  *                                   TODO: 
  */
 
-static String version() { "4.0.0" }
-static String timeStamp() {"2025/09/15 12:43 PM"}
+static String version() { "3.2.0" }
+static String timeStamp() {"2025/09/15 7:57 PM"}
 
 @Field static final boolean _DEBUG = false
 
