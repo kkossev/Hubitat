@@ -20,12 +20,13 @@
  * ver. 3.4.1  2025-03-04 kkossev  - disabled 'cool' mode for the Aqara E1 thermostat
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  * ver. 3.5.2  2025-05-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
+ * ver. 3.6.0  2025-09-15 kkossev  - (dev. branch) commonLib 4.0.0 allignment;
  *
  *                                   TODO: 
  */
 
-static String version() { '3.5.2' }
-static String timeStamp() { '2025/05/25 9:33 AM' }
+static String version() { '3.6.0' }
+static String timeStamp() { '2025/09/15 8:11 PM' }
 
 @Field static final Boolean _DEBUG = false
 
