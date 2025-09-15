@@ -1734,3 +1734,387 @@ void clearProfilesCacheInfo() {
 }
 
 
+/**
+ * Reconstructs a complete fingerprint Map by merging original fingerprint with defaultFingerprint values
+ * This is similar to fingerprintIt() but returns a Map instead of a formatted String
+ */
+private Map reconstructFingerprint(Map profileMap, Map fingerprint) {
+    if (profileMap == null || fingerprint == null) { 
+        return fingerprint ?: [:] 
+    }
+    
+    Map defaultFingerprint = profileMap.defaultFingerprint ?: [:]
+    // if there is no defaultFingerprint, use the fingerprint as is
+    if (defaultFingerprint == [:]) {
+        return fingerprint
+    }
+    
+    // Create a new Map with default values, then overlay with actual fingerprint values
+    Map reconstructed = [:]
+    defaultFingerprint.each { key, defaultValue ->
+        reconstructed[key] = fingerprint[key] ?: defaultValue
+    }
+    
+    // Add any additional keys that exist in fingerprint but not in defaultFingerprint
+    fingerprint.each { key, value ->
+        if (!reconstructed.containsKey(key)) {
+            reconstructed[key] = value
+        }
+    }
+    
+    return reconstructed
+}
+
+
+
+
+boolean loadProfilesFromJSON() {
+    //return loadProfilesFromJSONstring(testJSON)
+    if (isInCooldown()) {
+        logDebug "loadProfilesFromJSON: in cooldown period, skipping profile load attempt"
+        return false
+    }
+    return loadProfilesFromJSONstring(readFile(DEFAULT_PROFILES_FILENAME))
+}
+
+
+boolean loadProfilesFromJSONstring(stringifiedJSON) {
+    long startTime = now()
+    
+    // idempotent : don't re-parse if already populated
+    if (!g_deviceProfilesV4.isEmpty()) {
+        logDebug "loadProfilesFromJSON: already loaded (${g_deviceProfilesV4.size()} profiles)"
+        return true
+    }
+    try {
+        logDebug "loadProfilesFromJSON: start loading device profiles from JSON..."
+        if (!stringifiedJSON) {
+            logWarn "loadProfilesFromJSON: stringifiedJSON is empty/null"
+            return false
+        }
+
+        def jsonSlurper = new JsonSlurper();
+        def parsed = jsonSlurper.parseText("${stringifiedJSON}");
+
+        def dp = parsed?.deviceProfiles
+        if (!(dp instanceof Map) || dp.isEmpty()) {
+            logWarn "loadProfilesFromJSON: parsed deviceProfiles missing or empty"
+            startCooldownTimer()
+            return false
+        }
+        resetCooldownFlag()
+        // !!!!!!!!!!!!!!!!!!!!!!!
+        // Populate g_deviceProfilesV4
+        g_deviceProfilesV4.putAll(dp as Map)
+        logInfo "loadProfilesFromJSON: g_deviceProfilesV4 populated with ${g_deviceProfilesV4.size()} profiles"
+
+        // Populate g_deviceFingerprintsV4 using bulk assignment for better performance
+        // Use fingerprintIt() logic to reconstruct complete fingerprint data
+        Map localFingerprints = [:]
+        
+        g_deviceProfilesV4.each { profileKey, profileMap ->
+            // Reconstruct complete fingerprint Maps and pre-compute strings
+            List<Map> reconstructedFingerprints = []
+            List<String> computedFingerprintStrings = []
+            
+            if (profileMap.fingerprints != null) {
+                profileMap.fingerprints.each { fingerprint ->
+                    // Reconstruct complete fingerprint using fingerprintIt logic
+                    Map reconstructedFingerprint = reconstructFingerprint(profileMap, fingerprint)
+                    reconstructedFingerprints.add(reconstructedFingerprint)
+                    
+                    // Also create formatted string for debugging
+                    String fpString = fingerprintIt(profileMap, fingerprint)
+                    if (fpString && fpString != 'profileMap is null' && fpString != 'fingerprint is null') {
+                        computedFingerprintStrings.add(fpString)
+                    }
+                }
+            }
+            
+            localFingerprints[profileKey] = [
+                description: profileMap.description ?: '',
+                fingerprints: reconstructedFingerprints, // Use reconstructed complete fingerprints
+                computedFingerprints: computedFingerprintStrings
+            ]
+        }
+        
+        g_deviceFingerprintsV4.clear()
+        g_deviceFingerprintsV4.putAll(localFingerprints)
+        logInfo "loadProfilesFromJSON: g_deviceFingerprintsV4 populated with ${g_deviceFingerprintsV4.size()} entries"
+
+        // Count total computed fingerprint strings
+        int totalComputedFingerprints = 0
+        localFingerprints.each { key, value ->
+            totalComputedFingerprints += value.computedFingerprints?.size() ?: 0
+        }
+
+        // NOTE: g_profilesLoaded flag is managed by ensureProfilesLoaded(), not here
+        // This keeps loadProfilesFromJSON() as a pure function
+        long endTime = now()
+        long executionTime = endTime - startTime
+        
+        logDebug "loadProfilesFromJSON: loaded ${g_deviceProfilesV4.size()} profiles: ${g_deviceProfilesV4.keySet()}"
+        logDebug "loadProfilesFromJSON: populated ${g_deviceFingerprintsV4.size()} fingerprint entries"
+        logDebug "loadProfilesFromJSON: pre-computed ${totalComputedFingerprints} fingerprint strings"
+        logDebug "loadProfilesFromJSON: execution time: ${executionTime}ms"
+        return true
+        
+    } catch (Exception e) {
+        long endTime = now()
+        long executionTime = endTime - startTime
+        logError "loadProfilesFromJSON exception: error converting JSON: ${e.message} (execution time: ${executionTime}ms)"
+        startCooldownTimer()
+        return false
+    }
+}
+
+
+void startCooldownTimer() {
+    if (g_loadProfilesCooldown) {
+        return
+    }
+    g_loadProfilesCooldown = true
+    runInMillis(LOAD_PROFILES_COOLDOWN_MS, resetCooldownFlag, [overwrite: true])
+    logWarn "startCooldownTimer: starting cooldown timer for ${LOAD_PROFILES_COOLDOWN_MS} ms to prevent multiple profile loading attempts"
+}
+
+void resetCooldownFlag() {
+    g_loadProfilesCooldown = false
+    logInfo "resetCooldownFlag: cooldown period ended, can attempt profile loading again"
+}
+
+boolean isInCooldown() {
+    return g_loadProfilesCooldown
+}
+
+
+
+/**
+ * Ensures that device profiles are loaded with thread-safe lazy loading
+ * This is the main function that should be called before accessing g_deviceProfilesV4
+ * @return true if profiles are loaded successfully, false otherwise
+ */
+private boolean ensureProfilesLoaded() {
+    // Fast path: already loaded
+//    if (!g_deviceProfilesV4.isEmpty() && g_profilesLoaded) {
+    if (g_profilesLoaded && !g_currentProfilesV4.isEmpty()) {       // !!!!!!!!!!!!!!!!!!!!!!!! TODO - check !!!!!!!!!!!!!!!!!!!!!!!!!!
+        return true
+    }
+    if (state.profilesV4 == null) { state.profilesV4 = [:] }   // initialize state variable if not present
+    if (isInCooldown()) {
+        state.profilesV4['cooldownSkipsCtr'] = (state.profilesV4['cooldownSkipsCtr'] ?: 0) + 1
+        logDebug "ensureProfilesLoaded: in cooldown period, skipping profile load attempt"
+        return false
+    }
+    // Check if another thread is already loading
+    if (g_profilesLoading) {
+        // Wait briefly for other thread to finish
+        for (int i = 0; i < 10; i++) {
+            state.profilesV4['waitForOtherThreadCtr'] = (state.profilesV4['waitForOtherThreadCtr'] ?: 0) + 1
+            sendInfoEvent "ensureProfilesLoaded: waiting <b>100ms</b> for other thread to finish loading... try ${i+1}/10"
+            pauseExecution(100)
+            if (g_profilesLoaded && !g_deviceProfilesV4.isEmpty()) {
+                sendInfoEvent "ensureProfilesLoaded: other thread finished loading"
+                return true
+            }
+        }
+        // If still loading after wait, return false - don't interfere with other thread
+        sendInfoEvent "ensureProfilesLoaded: timeout waiting for other thread, returning false"
+        state.profilesV4['waitForOtherThreadTimeouts'] = (state.profilesV4['waitForOtherThreadTimeouts'] ?: 0) + 1
+        return false
+    }
+    
+    // Acquire loading lock
+    g_profilesLoading = true
+    try {
+        // Double-check after acquiring lock
+        if (g_deviceProfilesV4.isEmpty() || !g_profilesLoaded) {
+            state.profilesV4['loadProfilesCtr'] = (state.profilesV4['loadProfilesCtr'] ?: 0) + 1
+            sendInfoEvent "ensureProfilesLoaded: loading device profiles...(g_deviceProfilesV4.isEmpty()=${g_deviceProfilesV4.isEmpty()}, g_profilesLoaded=${g_profilesLoaded})"
+            boolean result = loadProfilesFromJSON()
+            if (result) {
+                g_profilesLoaded = true
+                sendInfoEvent "ensureProfilesLoaded: successfully loaded ${g_deviceProfilesV4.size()} g_deviceProfilesV4 profiles"
+            } else {
+                sendInfoEvent "ensureProfilesLoaded: failed to load device profiles"
+            }
+            g_profilesLoading = false
+            return result
+        }
+        return true
+    } finally {
+        state.profilesV4['loadProfilesExceptionsCtr'] = (state.profilesV4['loadProfilesExceptionsCtr'] ?: 0) + 1
+        g_profilesLoading = false
+    }
+}
+
+
+
+
+// updateFromGitHub command - download JSON profiles from GitHub and store to Hubitat local storage
+void updateFromGitHub(String url = '') {
+    long startTime = now()
+    String gitHubUrl = url?.trim() ?: defaultGitHubURL
+    String fileName = DEFAULT_PROFILES_FILENAME
+
+    sendInfoEvent "updateFromGitHub: downloading ${fileName} from ${gitHubUrl}"
+    // uri: raw.githubusercontent.com/kkossev/Hubitat/...
+    // https://raw.githubusercontent.com/kkossev/Hubitat/...
+
+    
+    try {
+        // Download JSON content from GitHub
+        long downloadStartTime = now()
+        def params = [
+            uri: gitHubUrl,
+            //textParser: true  // This is the key! Same as working readFile method
+        ]
+        
+        logDebug "updateFromGitHub: HTTP params: ${params}"
+        
+        httpGet(params) { resp ->
+            logDebug "updateFromGitHub: Response status: ${resp?.status}"
+            state.gitHubV4['httpGetCallsCtr'] = (state.gitHubV4['httpGetCallsCtr'] ?: 0) + 1
+            state.gitHubV4['httpGetLastStatus'] = resp?.status
+            
+            if (resp?.status == 200 && resp?.data) {
+                // Fix StringReader issue - get actual text content without explicit class references
+                String jsonContent = ""
+                def responseData = resp.getData()
+                
+                if (responseData instanceof String) {
+                    jsonContent = responseData
+                } else if (responseData?.hasProperty('text')) {
+                    // Handle StringReader without explicit class reference
+                    jsonContent = responseData.text
+                } else {
+                    jsonContent = responseData.toString()
+                }
+                
+                long downloadEndTime = now()
+                long downloadDuration = downloadEndTime - downloadStartTime
+                logInfo "updateFromGitHub: downloaded ${jsonContent.length()} characters"
+                logDebug "updateFromGitHub: first 100 chars: ${jsonContent.take(100)}"
+                logInfo "updateFromGitHub: Performance - Download: ${downloadDuration}ms"
+                sendInfoEvent "downloaded ${jsonContent.length()} characters from GitHub in ${downloadDuration}ms"
+                state.gitHubV4['lastDownloadSize'] = jsonContent.length()
+                state.gitHubV4['lastDownloadTime'] = now()
+                state.gitHubV4['lastDownloadDuration'] = downloadDuration
+                
+                // Validate it's actually JSON content
+                if (jsonContent.length() < 100 || !jsonContent.trim().startsWith("{")) {
+                    //logWarn "updateFromGitHub: ❌ Downloaded content doesn't appear to be valid JSON"
+                    logWarn "updateFromGitHub: Content preview: ${jsonContent.take(200)}"
+                    state.gitHubV4['lastDownloadError'] = "Invalid JSON"
+                    sendInfoEvent "updateFromGitHub: ❌ Downloaded content doesn't appear to be valid JSON"
+                    return
+                }
+                state.gitHubV4['lastDownloadError'] = null
+                
+                // Parse and extract version/timestamp information for debugging
+                try {
+                    def jsonSlurper = new groovy.json.JsonSlurper()
+                    def parsedJson = jsonSlurper.parseText(jsonContent)
+                    
+                    def version = parsedJson?.version ?: "unknown"
+                    def timestamp = parsedJson?.timestamp ?: "unknown"
+                    def author = parsedJson?.author ?: "unknown"
+                    def profileCount = parsedJson?.deviceProfiles?.size() ?: 0
+                    
+                    logDebug "updateFromGitHub: JSON Metadata - Version: ${version}, Timestamp: ${timestamp}"
+                    logDebug "updateFromGitHub: JSON Metadata - Author: ${author}, Device Profiles: ${profileCount}"
+                    state.gitHubV4['lastDownloadVersion'] = version
+                    state.gitHubV4['lastDownloadTimestamp'] = timestamp
+                    
+                } catch (Exception jsonException) {
+                    logWarn "updateFromGitHub: Could not parse JSON metadata: ${jsonException.message}"
+                    state.gitHubV4['lastDownloadVersion'] = null
+                    state.gitHubV4['lastDownloadTimestamp'] = null
+                    sendInfoEvent "updateFromGitHub: ❌ Could not parse JSON metadata: ${jsonException.message}"
+                    return
+                }
+                
+                // Store the content to Hubitat local storage using uploadHubFile
+                try {
+                    long uploadStartTime = now()
+                    // Use uploadHubFile to save content directly to local storage (correct API method)
+                    def fileBytes = jsonContent.getBytes("UTF-8")
+                    uploadHubFile(fileName, fileBytes)  // void method - no return value
+                    
+                    long uploadEndTime = now()
+                    long uploadDuration = uploadEndTime - uploadStartTime
+                    
+                    logInfo "updateFromGitHub: ✅ Successfully updated ${fileName} in Hubitat local storage"
+                    logInfo "updateFromGitHub: File size: ${jsonContent.length()} characters"
+                    logInfo "updateFromGitHub: Performance - Upload: ${uploadDuration}ms"
+                    sendInfoEvent "Successfully updated ${fileName} (${jsonContent.length()} characters) in Hubitat local storage"
+                    
+                    // Optional: Clear current profiles to force reload on next access
+                    g_deviceProfilesV4.clear()
+                    g_deviceFingerprintsV4.clear()
+                    g_currentProfilesV4.clear()
+                    g_profilesLoaded = false
+                    g_profilesLoading = false
+                    
+                    logInfo "updateFromGitHub: Cleared cached profiles - they will be reloaded on next access"
+                    
+                    long endTime = now()
+                    long totalDuration = endTime - startTime
+                    logInfo "updateFromGitHub: Performance - Total: ${totalDuration}ms"
+                } catch (Exception fileException) {
+                    logWarn "updateFromGitHub: ❌ Error saving file: ${fileException.message}"
+                    logDebug "updateFromGitHub: File save exception: ${fileException}"
+                    sendInfoEvent "Error saving file: ${fileException.message}"
+                    state.gitHubV4['lastDownloadError'] = "File save error"
+                }
+            } else {
+                logWarn "updateFromGitHub: ❌ Failed to download from GitHub. HTTP status: ${resp?.status}"
+                state.gitHubV4['lastDownloadError'] = "HTTP status ${resp?.status}"
+                sendInfoEvent "Failed to download from GitHub. HTTP status: ${resp?.status}"
+            }
+        }
+        
+    } catch (Exception e) {
+        if (state.gitHubV4 == null) { state.gitHubV4 = [:] }
+        state.gitHubV4['catchedExceptionsCtr'] = (state.gitHubV4['catchedExceptionsCtr'] ?: 0) + 1
+        state.gitHubV4['lastException'] = e.message
+        state.gitHubV4['lastExceptionTime'] = now()
+        logWarn "updateFromGitHub: ❌ Error: ${e.message}"
+        logDebug "updateFromGitHub: Full exception: ${e}"
+        sendInfoEvent "updateFromGitHub: ❌ Error: ${e.message}"
+    }
+}
+
+
+
+def readFile(fName) {
+    long contentStartTime = now()
+    //uri = "http://${location.hub.localIP}:8080/local/deviceProfilesV4_mmWave.json"
+    uri = "http://${location.hub.localIP}:8080/local/${fName}"
+
+    def params = [
+        uri: uri,
+        textParser: true,
+    ]
+
+    try {
+        httpGet(params) { resp ->
+            if(resp!= null) {
+                def data = resp.getData();
+                logDebug "readFile: read ${data.length} chars from ${uri}"
+                long contentEndTime = now()
+                long contentDuration = contentEndTime - contentStartTime
+                logInfo "Performance: Content=${contentDuration}ms"
+                return data
+            }
+            else {
+                log.error "Null Response"
+            }
+        }
+    } catch (exception) {
+        log.error "Connection Exception: ${exception.message}"
+        return null;
+    }
+}
+
+
