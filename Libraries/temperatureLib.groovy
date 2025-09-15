@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Temperature Library', name: 'temperatureLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/temperatureLib.groovy', documentationLink: '',
-    version: '3.2.3'
+    version: '3.3.0'
 )
 /*
  *  Zigbee Temperature Library
@@ -15,15 +15,14 @@ library(
  * ver. 3.2.1  2024-06-07 kkossev  - excluded maxReportingTime for mmWaveSensor and Thermostat
  * ver. 3.2.2  2024-07-06 kkossev  - fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
  * ver. 3.2.3  2024-07-18 kkossev  - added 'ReportingConfiguration' capability check for minReportingTime and maxReportingTime
+ * ver. 3.3.0  2025-09-15 kkossev  - (dev. branch) commonLib 4.0.0 allignment; added temperatureOffset
  *
- *                                   TODO:
- *                                   TODO: add temperatureOffset
  *                                   TODO: unschedule('sendDelayedTempEvent') only if needed (add boolean flag to sendDelayedTempEvent())
  *                                   TODO: check for negative temperature values in standardParseTemperatureCluster()
 */
 
-static String temperatureLibVersion()   { '3.2.3' }
-static String temperatureLibStamp() { '2024/07/18 3:08 PM' }
+static String temperatureLibVersion()   { '3.3.0' }
+static String temperatureLibStamp() { '2025/09/15 7:54 PM' }
 
 metadata {
     capability 'TemperatureMeasurement'
@@ -37,7 +36,8 @@ metadata {
                 }
             }
         }
-    }
+        input name: 'temperatureOffset', type: 'decimal', title: '<b>Temperature Offset</b>', description: '<i>Adjust temperature by this many degrees</i>', range: '-100..100', defaultValue: 0
+   }
 }
 
 void standardParseTemperatureCluster(final Map descMap) {
