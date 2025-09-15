@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/deviceProfileLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-deviceProfileLib',
-    version: '3.4.2'
+    version: '3.5.1'
 )
 /*
  *  Device Profile Library
@@ -37,6 +37,7 @@ library(
  * ver. 3.4.2  2025-03-24 kkossev  - added refreshFromConfigureReadList() method; documentation update; getDeviceNameAndProfile uses DEVICE.description instead of deviceJoinName
  * ver. 3.4.3  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
  * ver. 3.5.0  2025-08-14 kkossev  - zclWriteAttribute() support for forced destinationEndpoint in the attributes map
+ * ver. 3.5.1  2025-09-15 kkossev  - (dev. branch)commonLib ver 4.0.0 allignment; log.trace leftover removed; 
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
@@ -48,8 +49,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.5.0' }
-static String deviceProfileLibStamp() { '2025/08/14 11:17 PM' }
+static String deviceProfileLibVersion()   { '3.5.1' }
+static String deviceProfileLibStamp() { '2025/09/15 1:23 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -462,7 +463,7 @@ public boolean setPar(final String parPar=null, final String val=null ) {
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def scaledValue = validateAndScaleParameterValue(dpMap, val as String)      // convert the val to the correct type and scale it if needed
     if (scaledValue == null) {
-        log.trace "$dpMap  ${dpMap.map}"
+        logTrace "$dpMap  ${dpMap.map}"
         String helpTxt = "setPar: invalid parameter ${par} value <b>${val}</b>."
         if (dpMap.min != null && dpMap.max != null) { helpTxt += " Must be in the range ${dpMap.min} to ${dpMap.max}" }
         if (dpMap.map != null) { helpTxt += " Must be one of ${dpMap.map}" }

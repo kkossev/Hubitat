@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Thermostat Library', name: 'thermostatLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy', documentationLink: '',
-    version: '4.0.0')
+    version: '3.6.0')
 /*
  *  Zigbee Thermostat Library
  *
@@ -17,18 +17,18 @@ library(
  *
  * ver. 3.3.0  2024-06-09 kkossev  - added thermostatLib.groovy
  * ver. 3.3.1  2024-06-16 kkossev  - added factoryResetThermostat() command
- * ver. 3.3.2  2024-07-09 kkossev  - release 3.3
+ * ver. 3.3.2  2024-07-09 kkossev  - release 3.3.2
  * ver. 3.3.4  2024-10-23 kkossev  - fixed exception in sendDigitalEventIfNeeded when the attribute is not found (level)
  * ver. 3.5.0  2025-02-16 kkossev  - added setpointReceiveCheck() and modeReceiveCheck() retries
  * ver. 3.5.1  2025-03-04 kkossev  - == false bug fix; disabled switching to 'cool' mode.
- * ver. 4.0.0  2025-09-08 kkossev  - deviceProfileLibV4 alignment
+ * ver. 3.6.0  2025-09-15 kkossev  - deviceProfileLibV4 alignment
  *
  *                                   TODO: add eco() method
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
-public static String thermostatLibVersion()   { '4.0.0' }
-public static String thermostatLibStamp() { '2025/09/08 8:35 AM' }
+public static String thermostatLibVersion()   { '3.6.0' }
+public static String thermostatLibStamp() { '2025/09/15 8:10 PM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib

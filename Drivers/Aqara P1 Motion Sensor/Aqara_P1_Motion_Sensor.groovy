@@ -46,13 +46,14 @@
  * ver. 1.7.2 2024-11-28 kkossev  - HE platfrom 2.4.0.x compatibility fixes;
  * ver. 1.7.3 2025-01-16 kkossev  - first ping() throwing exception bug fix tnx@user2428 
  * ver. 1.7.4 2025-05-24 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
+ * ver. 1.7.5 2025-09-15 bbholthome  - light sensor GZCGQ01LM maximum illuminance capped to 65500 lux
  * 
  *                                 TODO: 
  *
  */
 
-static String version() { "1.7.4" }
-static String timeStamp() {"2025/05/24 5:49 PM"}
+static String version() { "1.7.5" }
+static String timeStamp() {"2025/09/15 12:35 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -929,7 +930,7 @@ void illuminanceEventLux( Integer lux ) {
         logWarn "ignored lux reading ${lux}"
         return
     }
-    if ( lux > 0xFFDC ) lux = 0    // maximum value is 0xFFDC !
+    if ( lux > 0xFFDC ) lux = 0xFFDC    // maximum value is 0xFFDC !
     handleIlluminanceEvent(lux)
 }
 

@@ -42,7 +42,7 @@ library(
 */
 
 String commonLibVersion() { '4.0.0' }
-String commonLibStamp() { '2025/09/08 8:21 AM' }
+String commonLibStamp() { '2025/09/15 12:44 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -282,13 +282,13 @@ private void parseZdoClusters(final Map descMap) {
             state.stats['activeEpRqCtr'] = (state.stats['activeEpRqCtr'] ?: 0) + 1
             if (settings?.logEnable) { log.debug "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, data:${descMap.data})" }
             // send the active endpoint response
-            cmds += ["he raw ${device?.deviceNetworkId} 0 0 0x8005 {00 00 00 00 01 01} {0x0000}"]
+            cmds += ["he raw ${device.deviceNetworkId} 0 0 0x8005 {00 00 00 00 01 01} {0x0000}"]
             sendZigbeeCommands(cmds)
             break
         case 0x0006 :
             state.stats['matchDescCtr'] = (state.stats['matchDescCtr'] ?: 0) + 1
             if (settings?.logEnable) { log.debug "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7] + descMap.data[6]})" }
-            cmds += ["he raw ${device?.deviceNetworkId} 0 0 0x8006 {00 00 00 00 00} {0x0000}"]
+            cmds += ["he raw ${device.deviceNetworkId} 0 0 0x8006 {00 00 00 00 00} {0x0000}"]
             sendZigbeeCommands(cmds)
             break
         case 0x0013 : // device announcement
@@ -826,8 +826,7 @@ void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, fin
             return      // sucessfuly processed the new way - we are done.  (version 3.0)
         }
     }
-    logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data} (deviceProfile = ${state.deviceProfile}, g_deviceProfilesV4 count = ${g_deviceProfilesV4?.size() ?: 0}) g_currentProfilesV4 = ${g_currentProfilesV4?.size() ?: 0} dni=${device?.deviceNetworkId} g_currentProfilesV4[device.deviceNetworkId]=${g_currentProfilesV4?."${device?.deviceNetworkId}"}"
-//    ensureCurrentProfileLoaded()
+    logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
 }
 
 public int getTuyaAttributeValue(final List<String> _data, final int index) {

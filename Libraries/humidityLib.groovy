@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Humidity Library', name: 'humidityLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/humidityLib.groovy', documentationLink: '',
-    version: '3.2.3'
+    version: '3.3.0'
 )
 /*
  *  Zigbee Humidity Library
@@ -13,18 +13,20 @@ library(
  * ver. 3.2.0  2024-05-29 kkossev  - commonLib 3.2.0 allignment; added humidityRefresh()
  * ver. 3.2.2  2024-07-02 kkossev  - fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
  * ver. 3.2.3  2024-07-24 kkossev  - added humidity delta filtering to prevent duplicate events for unchanged values
+ * ver. 3.3.0  2025-09-15 kkossev  - (dev. branch) commonLib 4.0.0 allignment; added humidityOffset;
  *
  *                                   TODO: add humidityOffset
 */
 
-static String humidityLibVersion()   { '3.2.3' }
-static String humidityLibStamp() { '2024/07/24 7:45 PM' }
+static String humidityLibVersion()   { '3.3.0' }
+static String humidityLibStamp() { '2025/09/15 7:56 PM' }
 
 metadata {
     capability 'RelativeHumidityMeasurement'
     // no commands
     preferences {
         // the minReportingTime and maxReportingTime are already defined in the temperatureLib.groovy
+        input name: 'humidityOffset', type: 'decimal', title: '<b>Humidity Offset</b>', description: '<i>Adjust humidity by this many percent</i>', range: '-100..100', defaultValue: 0
     }
 }
 

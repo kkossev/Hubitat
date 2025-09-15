@@ -30,12 +30,14 @@
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  * ver. 3.5.1  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
  * ver. 3.5.2  2025-07-14 kkossev  - bug fix: 'sendDelayedBatteryEvent' exception
- *                                   
+ * ver. 3.5.3  2025-09-15 kkossev  - (dev. branch) alligned with commonLib 4.0.0
+ *
+ *                                   TODO: check why no preferences : updateAllPreferences: no preferences defined for device profile SIHAS_USM-300Z_4_IN_1
  *                                   TODO: update documentation : https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1 
  */
 
-static String version() { "3.5.2" }
-static String timeStamp() {"2025/07/14 7:56 AM"}
+static String version() { "3.5.3" }
+static String timeStamp() {"2025/09/15 1:51 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
