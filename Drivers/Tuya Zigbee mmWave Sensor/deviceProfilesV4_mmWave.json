@@ -724,8 +724,51 @@
       "refresh": ["queryAllTuyaDP"]
     }
   },
-  "version": "4.0.1",
-  "timestamp": "2025-09-06T20:47:00Z",
+
+    "TS0601_HOBEIAN_RADAR": {
+    "description": "HOBEIAN ZG-204ZV Millimeter wave motion detection",
+    "device": { "powerSource": "battery" },
+    "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "TemperatureMeasurement": true, "RelativeHumidityMeasurement": true, "Battery": true },
+    "preferences": { 
+      "radarSensitivity": "2", 
+      "fadingTime": "102", 
+      "ledIndicator": "108", 
+      "illuminanceInterval": "107",
+      "temperatureCalibration": "105",
+      "humidityCalibration": "104",
+      "temperatureUnit": "109"
+    },
+    "fingerprints": [
+      { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_uli8wasj", "deviceJoinName": "HOBEIAN ZG-204ZV Millimeter wave motion detection" },
+      { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_grgol3xp", "deviceJoinName": "HOBEIAN ZG-204ZV Millimeter wave motion detection" },
+      { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_rhgsbacq", "deviceJoinName": "HOBEIAN ZG-204ZV Millimeter wave motion detection" },
+      { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_y8jijhba", "deviceJoinName": "HOBEIAN ZG-204ZV Millimeter wave motion detection" },
+      { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0003,0500,EF00,0402,0405,0001,0400", "outClusters": "0003", "model": "ZG-204ZV", "manufacturer": "HOBEIAN", "deviceJoinName": "HOBEIAN ZG-204ZV Millimeter wave motion detection" }
+    ],
+    "tuyaDPs": [
+      { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "map": { "0": "inactive", "1": "active" }, "description": "Presence state" },
+      { "dp": 2, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 0, "max": 19, "defVal": 10, "scale": 1, "unit": "x", "title": "<b>Radar sensitivity</b>", "description": "<i>The larger the value, the more sensitive it is (refresh and update only while active)</i>" },
+      { "dp": 101, "name": "humidity", "type": "number", "rw": "ro", "scale": 1, "unit": "%", "description": "Humidity" },
+      { "dp": 102, "name": "fadingTime", "type": "number", "rw": "rw", "min": 0, "max": 28800, "defVal": 30, "scale": 1, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Motion keep time</i>" },
+      { "dp": 104, "name": "humidityCalibration", "type": "number", "rw": "rw", "min": -50, "max": 50, "defVal": 0, "scale": 1, "unit": "%", "title": "<b>Humidity calibration</b>", "description": "<i>Humidity calibration</i>" },
+      { "dp": 105, "name": "temperatureCalibration", "type": "decimal", "rw": "rw", "min": -5.0, "max": 5.0, "defVal": 0.0, "scale": 10, "unit": "°C", "title": "<b>Temperature calibration</b>", "description": "<i>Temperature calibration</i>" },
+      { "dp": 106, "name": "illuminance", "type": "number", "rw": "ro", "scale": 1, "unit": "lx", "description": "Illuminance" },
+      { "dp": 107, "name": "illuminanceInterval", "type": "number", "rw": "rw", "min": 1, "max": 720, "defVal": 10, "scale": 1, "unit": "minutes", "title": "<b>Illuminance interval</b>", "description": "<i>Light sensing sampling (refresh and update only while active)</i>" },
+      { "dp": 108, "name": "ledIndicator", "type": "enum", "rw": "rw", "map": { "0": "OFF", "1": "ON" }, "defVal": "1", "title": "<b>LED indicator</b>", "description": "<i>LED indicator mode</i>" },
+      { "dp": 109, "name": "temperatureUnit", "type": "enum", "rw": "rw", "map": { "0": "celsius", "1": "fahrenheit" }, "defVal": "0", "title": "<b>Temperature unit</b>", "description": "<i>Temperature unit</i>" },
+      { "dp": 110, "name": "battery", "type": "number", "rw": "ro", "scale": 1, "unit": "%", "description": "Battery percentage" },
+      { "dp": 111, "name": "temperature", "type": "decimal", "rw": "ro", "scale": 10, "unit": "°C", "description": "Temperature" }
+    ],
+    "refresh": ["queryAllTuyaDP"],
+    "configuration": { "battery": true },
+    "comments": ["HOBEIAN ZG-204ZV Millimeter wave motion detection, Tuya mmWave Radar Sensor, 24GHz Radar Sensor, PIR Motion Sensor with Temperature Humidity Light Sensor",
+      "https://community.hubitat.com/t/w-i-p-tuya-zigbee-mmwave-sensors/137410/346?u=kkossev",
+      "https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/tuya.ts#L18405-L18460"
+      ] 
+  },
+
+  "version": "4.0.2",
+  "timestamp": "2025-09-15T05:23:00Z",
   "description": "Device profiles for Tuya Zigbee mmWave Sensor",
   "author": "kkossev"
 }
