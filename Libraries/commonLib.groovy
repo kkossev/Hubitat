@@ -23,7 +23,7 @@ library(
   * ver. 1.0.0  2022-06-18 kkossev  - first beta version
   * ..............................
   * ver. 3.5.2  2025-08-13 kkossev  - Status attribute renamed to _status_
-  * ver. 4.0.0  2025-09-08 kkossev  - deviceProfileV4
+  * ver. 4.0.0  2025-09-17 kkossev  - deviceProfileV4; HOBEIAN as Tuya device; customInitialize() hook;
   *
   *                                   TODO: change the offline threshold to 2 
   *                                   TODO: 
@@ -42,7 +42,7 @@ library(
 */
 
 String commonLibVersion() { '4.0.0' }
-String commonLibStamp() { '2025/09/15 12:44 PM' }
+String commonLibStamp() { '2025/09/17 10:42 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -1264,11 +1264,12 @@ private void queryPowerSource() {
  // Invoked from 'LoadAllDefaults'
 private void initialize() {
     if (state.stats == null) { state.stats = [:] } ; state.stats.initCtr = (state.stats.initCtr ?: 0) + 1
-    logInfo "initialize()... initCtr=${state.stats.initCtr}"
+    logDebug "initialize()... initCtr=${state.stats.initCtr}"
     if (device.getDataValue('powerSource') == null) {
-        logInfo "initializing device powerSource 'unknown'"
+        logDebug "initializing device powerSource 'unknown'"
         sendEvent(name: 'powerSource', value: 'unknown', type: 'digital')
     }
+    if (this.respondsTo('customInitialize')) { customInitialize() } 
     initializeVars(fullInit = true)
     updateTuyaVersion()
     updateAqaraVersion()
@@ -1550,7 +1551,7 @@ boolean isTuya() {
     String model = device.getDataValue('model')
     String manufacturer = device.getDataValue('manufacturer')
     /* groovylint-disable-next-line UnnecessaryTernaryExpression */
-    return (model?.startsWith('TS') && manufacturer?.startsWith('_T')) ? true : false
+    return ((model?.startsWith('TS') && manufacturer?.startsWith('_T')) || model == 'HOBEIAN') ? true : false
 }
 
 void updateTuyaVersion() {

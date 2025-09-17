@@ -13,14 +13,17 @@
  * 	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  * 	for the specific language governing permissions and limitations under the License.
  *
- * Credits: Hubitat and Zigbee2MQTT community, Jonathan Bradshaw, @w35l3y and many others.
+ * Credits: Hubitat and Zigbee2MQTT communities, Jonathan Bradshaw, w35l3y and many others.
  *
  * ver. 3.0.6  2024-04-06 kkossev  - first version (derived from Tuya 4 In 1 driver)
  * ..............................
  * ver. 4.0.0  2025-09-04 kkossev  - deviceProfileV4 BRANCH created
  * ver. 4.0.1  2025-09-14 kkossev  - added new debug commands; added debug info in states gitHubV4 and profilesV4; added g_loadProfilesCooldown logic - prevent multiple profile loading attempts after JSON parsing errors within short time
- * ver. 4.0.2  2025-09-15 kkossev  - (dev.branch) added HOBEIAN ZG-204ZV and TS0601 _TZE200_uli8wasj _TZE200_grgol3xp _TZE200_rhgsbacq _TZE200_y8jijhba into TS0601_HOBEIAN_RADAR profile; profilesV4 code moved to the library
+ * ver. 4.0.2  2025-09-17 kkossev  - (dev.branch) added HOBEIAN ZG-204ZV and TS0601 _TZE200_uli8wasj _TZE200_grgol3xp _TZE200_rhgsbacq _TZE200_y8jijhba into TS0601_HOBEIAN_RADAR profile; profilesV4 code moved to the library; temperature and humidity as custom attributes; 
+ *                                   changed the default offlineCheck for mmWave sensors to 60 minutes; LoadAllDefaults reloades the profilesV4 cache from Hubitat storage;
+ *                                   moved TS0601 _TZE284_iadro9bf _TZE204_iadro9bf _TZE204_qasjif9e _TZE204_ztqnh5cg into a new TS0601_TUYA_RADAR_2 profile
  *                                   
+ *                                   TODO: load custom JSON file
  *                                   TODO: Force device profile is not reflected in the Preferences page!
  *                                   TODO: Show both the profile key and the profile name in the Preferences page!
  *                                   TODO: On 'Update from GitHub' - show the JSON version, timestamp in the sendInfoEvent
@@ -29,13 +32,13 @@
  *                                   TODO: do not load profiles when metadata is not available (device just paired)
  *                                   TODO: load the JSON file from GitHub automatically if not present locally
  *                                   TODO: test the state. after reboot 
- *                                   TODO: change the default offlineCheck to 30 minutes
+ *                                   TODO: 
 */
 
 static String version() { "4.0.2" }
-static String timeStamp() {"2025/09/15 11:21 AM"}
+static String timeStamp() {"2025/09/17 10:59 PM"}
 
-@Field static final Boolean _DEBUG = true           // debug commands
+@Field static final Boolean _DEBUG = false           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true 
 
@@ -51,23 +54,14 @@ import java.util.concurrent.ConcurrentHashMap
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 
-#include kkossev.illuminanceLib
+#include kkossev.commonLib
+#include kkossev.deviceProfileLibV4
 #include kkossev.motionLib
 #include kkossev.batteryLib
-#include kkossev.deviceProfileLibV4
-#include kkossev.commonLib
+#include kkossev.illuminanceLib
 
 deviceType = "mmWaveSensor"
 @Field static final String DEVICE_TYPE = "mmWaveSensor"
-
-@Field static  Map g_deviceProfilesV4 = [:]
-@Field static  boolean g_profilesLoading = false
-@Field static  boolean g_profilesLoaded = false
-@Field static  Map g_deviceFingerprintsV4 = [:]
-@Field static  Map g_currentProfilesV4 = [:]  // Key: device?.deviceNetworkId, Value: complete profile data
-@Field static  boolean g_loadProfilesCooldown = false
-@Field static  int LOAD_PROFILES_COOLDOWN_MS = 30000  // 30 seconds cooldown to prevent multiple profile loading within short time
-
 
 metadata {
     definition (
@@ -109,6 +103,8 @@ metadata {
         attribute 'ledIndicator', 'number'
         attribute 'WARNING', 'string'
         attribute 'tamper', 'enum', ['clear', 'detected']
+        attribute 'temperature', 'number'                       // TS0601_HOBEIAN_RADAR
+        attribute 'humidity', 'number'                          // TS0601_HOBEIAN_RADAR
 
         command 'sendCommand', [
             [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
@@ -135,7 +131,6 @@ metadata {
                 }
             }
         }
-        
     }
 
     preferences {
@@ -308,6 +303,13 @@ void customResetStats() {
     state.profilesV4 = [:]
 }
 
+void customInitialize() {
+    logDebug "customInitialize()"
+    clearProfilesCache()    // deviceProfileLib
+    ensureProfilesLoaded()
+    ensureCurrentProfileLoaded()
+}
+
 void customInitializeVars(final boolean fullInit=false) {
     logDebug "customInitializeVars(${fullInit})"
     if (state.deviceProfile == null) {
@@ -320,6 +322,8 @@ void customInitializeVars(final boolean fullInit=false) {
     if (fullInit == true || state.motionStarted == null) { state.motionStarted = unix2formattedDate(now()) }
     if (fullInit == true || state.gitHubV4 == null) { state.gitHubV4 = [:] }
     if (fullInit == true || state.profilesV4 == null) { state.profilesV4 = [:] }
+    if (fullInit || settings?.healthCheckInterval == null) { device.updateSetting('healthCheckInterval', [value: '60', type: 'enum']) }
+    if (fullInit || settings?.customJSON == null) { device.updateSetting('customJSON', [value: '', type: 'text']) }
     resetCooldownFlag()
 }
 
@@ -394,11 +398,14 @@ void cacheTest(String action) {
             profilesV4info()    // in deviceProfileLib
             break
         case 'Initialize':
+            clearProfilesCacheInfo()  
             boolean ok = ensureProfilesLoaded()
-            logInfo "cacheTest Initialize: ensureProfilesLoaded() -> ${ok}; size now ${g_deviceProfilesV4.size()}"
+            logInfo "cacheTest Initialize: ensureProfilesLoaded(${getProfilesFilename()}) -> ${ok}; size now ${g_deviceProfilesV4.size()}"
+            ok = ensureCurrentProfileLoaded()
+            logInfo "cacheTest Initialize: ensureCurrentProfileLoaded() -> ${ok}; current profile now ${state.deviceProfile}"
             break
         case 'currentProfilesV4 Dump':
-            if (g_currentProfilesV4.isEmpty()) {
+            if (g_currentProfilesV4?.isEmpty()) {
                 logInfo "cacheTest g_currentProfilesV4 Dump: g_currentProfilesV4 is empty"
             } else {
                 logInfo "cacheTest g_currentProfilesV4 Dump: dumping entire g_currentProfilesV4 map:"
@@ -415,11 +422,6 @@ void cacheTest(String action) {
             logWarn "cacheTest: unknown action '${action}'"
     }
 }
-
-
-
-
-////////
 
 
 void testFunc( par) {
@@ -473,9 +475,6 @@ void test(String par) {
         log.error "Connection Exception: ${exception.message}"
         return null;
     }
-
-
-
 
     long endTime = now()
     logWarn "test() ended at ${endTime} (duration ${endTime - startTime}ms)"
