@@ -22,9 +22,10 @@
  * ver. 4.0.2  2025-09-17 kkossev  - added HOBEIAN ZG-204ZV and TS0601 _TZE200_uli8wasj _TZE200_grgol3xp _TZE200_rhgsbacq _TZE200_y8jijhba into TS0601_HOBEIAN_RADAR profile; profilesV4 code moved to the library; temperature and humidity as custom attributes; 
  *                                   changed the default offlineCheck for mmWave sensors to 60 minutes; LoadAllDefaults reloades the profilesV4 cache from Hubitat storage;
  *                                   moved TS0601 _TZE284_iadro9bf _TZE204_iadro9bf _TZE204_qasjif9e _TZE204_ztqnh5cg into a new TS0601_TUYA_RADAR_2 profile
- * ver. 4.0.3  2025-09-18 kkossev  - (dev. branch) cooldwown timer is started on JSON local storage read or parsing error; importUrl updated
+ * ver. 4.0.3  2025-09-18 kkossev  - (dev. branch) cooldwown timer is started on JSON local storage read or parsing error; importUrl updated; added _TZE204_muvkrjr5 into TS0601_TUYA_RADAR_2 profile; 
+ *                                   automatically load the standard JSON file from GitHub on driver installation if not present locally (one time action after installation or hub reboot)
  *                                   
- *                                   TODO: automatically load the standard JSON file from GitHub on driver installation if not present locally
+ *                                   TODO: 
  *                                   TODO: On 'Update from GitHub' - show the JSON version, timestamp in the sendInfoEvent (WIP)
  *                                   TODO: load custom JSON file (WIP)
  *                                   TODO: Force device profile is not reflected in the Preferences page!
@@ -37,7 +38,7 @@
 */
 
 static String version() { "4.0.3" }
-static String timeStamp() {"2025/09/18 2:58 PM"}
+static String timeStamp() {"2025/09/18 10:22 PM"}
 
 @Field static final Boolean _DEBUG = false           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -306,9 +307,12 @@ void customResetStats() {
 
 void customInitialize() {
     logDebug "customInitialize()"
+    g_OneTimeProfileLoadAttempted = false
+    /*
     clearProfilesCache()    // deviceProfileLib
     ensureProfilesLoaded()
     ensureCurrentProfileLoaded()
+    */
 }
 
 void customInitializeVars(final boolean fullInit=false) {

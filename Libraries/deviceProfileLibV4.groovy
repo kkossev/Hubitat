@@ -1794,6 +1794,7 @@ String getProfilesFilename() {
     return (settings.customJSON == null || settings.customJSON.trim().isEmpty()) ? DEFAULT_PROFILES_FILENAME : settings.customJSON
 }
 
+@Field static boolean g_OneTimeProfileLoadAttempted = false
 
 boolean loadProfilesFromJSON() {
     if (isInCooldown()) {
@@ -1802,11 +1803,33 @@ boolean loadProfilesFromJSON() {
     }
     String fileName = getProfilesFilename()
     state.profilesV4['lastUsedHeFile'] = fileName
-    return loadProfilesFromJSONstring(readFile(fileName))
+    def data = readFile(fileName)
+    if (data == null) {
+        logWarn "loadProfilesFromJSON: readFile returned null for ${fileName}"
+        String lastError = state.profilesV4['lastReadFileError'] ?: 'unknown error'
+        logWarn "loadProfilesFromJSON: lastReadFileError = ${lastError} for ${fileName} g_OneTimeProfileLoadAttempted=${g_OneTimeProfileLoadAttempted}"
+        // if the file was not found, and we have not yet attempted to download it from GitHub, do it now
+        if ((lastError.contains('Not Found') || lastError.contains('404')) && !g_OneTimeProfileLoadAttempted) {
+            sendInfoEvent "loadProfilesFromJSON: file ${fileName} not found - one-time attempt to download from GitHub..."
+            g_OneTimeProfileLoadAttempted = true
+            clearProfilesCache()   // clear any partially loaded profiles
+            runIn(2, 'oneTimeUpdateFromGitHub', [data: [fileName: fileName]])
+        }
+        startCooldownTimer()
+        return false
+    }
+    return loadProfilesFromJSONstring(data)
+}
+
+void oneTimeUpdateFromGitHub(Map data) {
+    String gitHubUrl = url?.trim() ?: defaultGitHubURL
+    String fileName = DEFAULT_PROFILES_FILENAME
+    logDebug "oneTimeUpdateFromGitHub: attempting to download ${fileName} and update product profiles from GitHub url ${gitHubUrl}..."
+    updateFromGitHub(gitHubUrl)
 }
 
 
-
+// called froloadProfilesFromJSON 
 def readFile(fName) {
     long contentStartTime = now()
     //uri = "http://${location.hub.localIP}:8080/local/deviceProfilesV4_mmWave.json"
@@ -1817,6 +1840,7 @@ def readFile(fName) {
         textParser: true,
     ]
     if (state.profilesV4 == null) { state.profilesV4 = [:] }
+    state.profilesV4['lastReadFileError'] = ''
     try {
         httpGet(params) { resp ->
             if(resp!= null) {
@@ -2003,7 +2027,7 @@ private boolean ensureProfilesLoaded() {
                 g_profilesLoaded = true
                 sendInfoEvent "Successfully loaded ${g_deviceProfilesV4.size()} deviceProfilesV4 profiles"
             } else {
-                sendInfoEvent "ensureProfilesLoaded: failed to load device profiles"
+                sendInfoEvent "ensureProfilesLoaded: failed to load device profiles (loadProfilesFromJSON() failed)"
                 startCooldownTimer()
             }
             g_profilesLoading = false
