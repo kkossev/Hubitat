@@ -452,7 +452,23 @@
         { "model": "TS0601", "manufacturer": "_TZE204_mtoaryre", "deviceJoinName": "Tuya Human Presence Detector MTG035-ZB2-RL" },
         { "model": "TS0601", "manufacturer": "_TZE200_mp902om5", "deviceJoinName": "Tuya Human Presence Detector MTG075-ZB" },
         { "model": "TS0601", "manufacturer": "_TZE204_pfayrzcw", "deviceJoinName": "Tuya Human Presence Detector MTG035-ZB-RL" },
-        { "model": "TS0601", "manufacturer": "_TZE284_4qznlkbu", "deviceJoinName": "Tuya 24Ghz Human Presence Detector QASZ24R" }
+        { "model": "TS0601", "manufacturer": "_TZE284_4qznlkbu", "deviceJoinName": "Tuya 24Ghz Human Presence Detector QASZ24R" },
+        { "model": "TS0601", "manufacturer": "_TZE200_clrdrnya", "deviceJoinName": "Tuya Human Presence Detector MTG235-ZB-RL" },
+        { "model": "TS0601", "manufacturer": "_TZE204_cfcznfbz", "deviceJoinName": "Tuya Human Presence Detector MTG075-ZB2" },
+        { "model": "TS0601", "manufacturer": "_TZE204_8s6jtscb", "deviceJoinName": "Tuya Human Presence Detector MTG035-ZB2" },
+        { "model": "TS0601", "manufacturer": "_TZE204_rktkuel1", "deviceJoinName": "Tuya Human Presence Detector MTD065-ZB2" },
+        { "model": "TS0601", "manufacturer": "_TZE204_mp902om5", "deviceJoinName": "Tuya Human Presence Detector MTG075-ZB" },
+        { "model": "TS0601", "manufacturer": "_TZE200_w5y5slkq", "deviceJoinName": "Tuya Human Presence Detector MTG275-ZB" },
+        { "model": "TS0601", "manufacturer": "_TZE204_w5y5slkq", "deviceJoinName": "Tuya Human Presence Detector MTG275-ZB" },
+        { "model": "TS0601", "manufacturer": "_TZE200_xnaqu2pc", "deviceJoinName": "Tuya Human Presence Detector MTD065-ZB" },
+        { "model": "TS0601", "manufacturer": "_TZE204_xnaqu2pc", "deviceJoinName": "Tuya Human Presence Detector MTD065-ZB" },
+        { "model": "TS0601", "manufacturer": "_TZE200_wk7seszg", "deviceJoinName": "Tuya Human Presence Detector MTG235-ZB" },
+        { "model": "TS0601", "manufacturer": "_TZE204_wk7seszg", "deviceJoinName": "Tuya Human Presence Detector MTG235-ZB" },
+        { "model": "TS0601", "manufacturer": "_TZE200_0wfzahlw", "deviceJoinName": "Tuya Human Presence Detector MTD021-ZB" },
+        { "model": "TS0601", "manufacturer": "_TZE204_0wfzahlw", "deviceJoinName": "Tuya Human Presence Detector MTD021-ZB" },
+        { "model": "TS0601", "manufacturer": "_TZE200_pfayrzcw", "deviceJoinName": "Tuya Human Presence Detector MTG035-ZB-RL" },
+        { "model": "TS0601", "manufacturer": "_TZE200_z4tzr0rg", "deviceJoinName": "Tuya Human Presence Detector MTG035-ZB" },
+        { "model": "TS0601", "manufacturer": "_TZE204_z4tzr0rg", "deviceJoinName": "Tuya Human Presence Detector MTG035-ZB" }
       ],
       "tuyaDPs": [
         { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "scale": 1, "map": { "0": "inactive", "1": "active" }, "unit": "", "title": "<b>Presence state</b>", "description": "<i>Presence state</i>" },
@@ -797,10 +813,33 @@
         "https://community.hubitat.com/t/w-i-p-tuya-zigbee-mmwave-sensors/137410/346?u=kkossev",
         "https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/tuya.ts#L18405-L18460"
         ] 
-    }
+    },
+
+    "TS0601_MUVKRJR5_2_RADAR": {
+      "description": "Tuya Presence Sensor 24GHz MUVKRJR5_2",
+      "device": { "powerSource": "dc" },
+      "capabilities": { "MotionSensor": true, "DistanceMeasurement": true, "Switch": true },
+      "preferences": { "radarSensitivity": "16", "maximumDistance": "13", "fadingTime": "103", "ledIndicator": "101" },
+      "commands": { "resetStats": "" },
+      "fingerprints": [
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_muvkrjr5", "deviceJoinName": "Tuya Presence Sensor 24GHz MUVKRJR5_2" }
+      ],
+      "tuyaDPs": [
+        { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "map": { "0": "inactive", "1": "active" }, "description": "Presence state" },
+        { "dp": 13, "name": "maximumDistance", "type": "decimal", "rw": "rw", "min": 1.5, "max": 6.0, "defVal": 6.0, "step": 1, "scale": 1, "unit": "meters", "title": "<b>Detection distance</b>", "description": "<i>Detection distance</i>" },
+        { "dp": 16, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 68, "max": 90, "defVal": 75, "scale": 1, "unit": "", "title": "<b>Radar sensitivity</b>", "description": "<i>Presence sensitivity</i>" },
+        { "dp": 19, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 10.0, "defVal": 0.0, "scale": 100, "unit": "meters", "description": "Distance to target" },
+        { "dp": 101, "name": "ledIndicator", "type": "enum", "rw": "rw", "map": { "0": "OFF", "1": "ON" }, "defVal": "1", "title": "<b>LED indicator</b>", "description": "<i>Power LED indicator</i>" },
+        { "dp": 102, "name": "switch", "type": "enum", "rw": "rw", "map": { "0": "OFF", "1": "ON" }, "defVal": "1", "title": "<b>Switch</b>", "description": "<i>Switch state</i>" },
+        { "dp": 103, "name": "fadingTime", "type": "number", "rw": "rw", "min": 3, "max": 1799, "defVal": 30, "scale": 1, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Presence timeout</i>" }
+      ],
+      "refresh": ["queryAllTuyaDP"],
+      "spammyDPsToIgnore": [19],
+      "spammyDPsToNotTrace": [19]
+    } 
   },
-  "version": "4.0.4",
-  "timestamp": "2025-09-17 8:50 PM",
+  "version": "4.0.5",
+  "timestamp": "2025-09-18 10:02 PM",
   "description": "Device profiles for Tuya Zigbee mmWave Sensor",
   "author": "kkossev"
 }
