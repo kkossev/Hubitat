@@ -810,9 +810,6 @@ public void standardParseTuyaCluster(final Map descMap) {
 // called from the standardParseTuyaCluster method for each DP chunk in the messages (usually one, but could be multiple DPs in one message)
 void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
     logTrace "standardProcessTuyaDP: <b> checking customProcessTuyaDp</b> dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
-    if (this.respondsTo('ensureCurrentProfileLoaded')) {
-        ensureCurrentProfileLoaded()
-    }
     if (this.respondsTo('customProcessTuyaDp')) {
         //logTrace 'standardProcessTuyaDP: customProcessTuyaDp exists, calling it...'
         if (customProcessTuyaDp(descMap, dp, dp_id, fncmd, dp_len) == true) {
@@ -822,6 +819,13 @@ void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, fin
     // check if DeviceProfile processing method exists (deviceProfieLib should be included in the main driver)
     if (this.respondsTo(processTuyaDPfromDeviceProfile)) {
         //logTrace 'standardProcessTuyaDP: processTuyaDPfromDeviceProfile exists, calling it...'
+        if (this.respondsTo('isInCooldown') && isInCooldown()) {
+            logDebug "standardProcessTuyaDP: device is in cooldown, skipping processing of dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
+            return
+        }
+        if (this.respondsTo('ensureCurrentProfileLoaded')) {
+            ensureCurrentProfileLoaded()
+        }
         if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {
             return      // sucessfuly processed the new way - we are done.  (version 3.0)
         }

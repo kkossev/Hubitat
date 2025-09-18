@@ -19,24 +19,25 @@
  * ..............................
  * ver. 4.0.0  2025-09-04 kkossev  - deviceProfileV4 BRANCH created
  * ver. 4.0.1  2025-09-14 kkossev  - added new debug commands; added debug info in states gitHubV4 and profilesV4; added g_loadProfilesCooldown logic - prevent multiple profile loading attempts after JSON parsing errors within short time
- * ver. 4.0.2  2025-09-17 kkossev  - (dev.branch) added HOBEIAN ZG-204ZV and TS0601 _TZE200_uli8wasj _TZE200_grgol3xp _TZE200_rhgsbacq _TZE200_y8jijhba into TS0601_HOBEIAN_RADAR profile; profilesV4 code moved to the library; temperature and humidity as custom attributes; 
+ * ver. 4.0.2  2025-09-17 kkossev  - added HOBEIAN ZG-204ZV and TS0601 _TZE200_uli8wasj _TZE200_grgol3xp _TZE200_rhgsbacq _TZE200_y8jijhba into TS0601_HOBEIAN_RADAR profile; profilesV4 code moved to the library; temperature and humidity as custom attributes; 
  *                                   changed the default offlineCheck for mmWave sensors to 60 minutes; LoadAllDefaults reloades the profilesV4 cache from Hubitat storage;
  *                                   moved TS0601 _TZE284_iadro9bf _TZE204_iadro9bf _TZE204_qasjif9e _TZE204_ztqnh5cg into a new TS0601_TUYA_RADAR_2 profile
+ * ver. 4.0.3  2025-09-18 kkossev  - (dev. branch) cooldwown timer is started on JSON local storage read or parsing error; importUrl updated
  *                                   
- *                                   TODO: load custom JSON file
+ *                                   TODO: automatically load the standard JSON file from GitHub on driver installation if not present locally
+ *                                   TODO: On 'Update from GitHub' - show the JSON version, timestamp in the sendInfoEvent (WIP)
+ *                                   TODO: load custom JSON file (WIP)
  *                                   TODO: Force device profile is not reflected in the Preferences page!
  *                                   TODO: Show both the profile key and the profile name in the Preferences page!
- *                                   TODO: On 'Update from GitHub' - show the JSON version, timestamp in the sendInfoEvent
  *                                   TODO: handle the Unprocessed ZDO command: cluster=8032 after hub reboot
  *                                   TODO: go to the bottom of the reason for : loadProfilesFromJSON exception: error converting JSON: Unable to determine the current character, it is not a string, number, array, or object
  *                                   TODO: do not load profiles when metadata is not available (device just paired)
- *                                   TODO: load the JSON file from GitHub automatically if not present locally
  *                                   TODO: test the state. after reboot 
  *                                   TODO: 
 */
 
-static String version() { "4.0.2" }
-static String timeStamp() {"2025/09/17 10:59 PM"}
+static String version() { "4.0.3" }
+static String timeStamp() {"2025/09/18 2:58 PM"}
 
 @Field static final Boolean _DEBUG = false           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -66,7 +67,7 @@ deviceType = "mmWaveSensor"
 metadata {
     definition (
         name: 'Tuya Zigbee mmWave Sensor',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/Tuya_Zigbee_mmWave_Sensor_lib_included.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/deviceProfileV4/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/Tuya_Zigbee_mmWave_Sensor_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
 

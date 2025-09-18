@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLibV4', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/deviceProfileLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-deviceProfileLib',
-    version: '4.0.1'
+    version: '4.0.2'
 )
 /*
  *  Device Profile Library V4
@@ -20,14 +20,15 @@ library(
  * ...................................
  * ver. 3.5.0  2025-08-14 kkossev  - zclWriteAttribute() support for forced destinationEndpoint in the attributes map
  * ver. 4.0.0  2025-09-03 kkossev  - deviceProfileV4 BRANCH created; deviceProfilesV2 support is dropped; 
- * ver. 4.0.1  2025-09-15 kkossev  - (dev. branch) added debug commands to sendCommand(); 
+ * ver. 4.0.1  2025-09-15 kkossev  - added debug commands to sendCommand(); 
+ * ver. 4.0.2  2025-09-18 kkossev  - (dev. branch) cooldown timer is started on JSON local storage read or parsing error;
  *
  *                                   TODO - updateStateUnknownDPs() from the earlier versions of 4 in 1 driver
  *
 */
 
-static String deviceProfileLibVersion()   { '4.0.1' }
-static String deviceProfileLibStamp() { '2025/09/17 10:24 PM' }
+static String deviceProfileLibVersion()   { '4.0.2' }
+static String deviceProfileLibStamp() { '2025/09/18 2:31 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -122,6 +123,10 @@ private Map getCurrentDeviceProfile() {
 private void ensureCurrentProfileLoaded() {
     if (!this.hasProperty('g_currentProfilesV4')) { 
         return  // V4 not available, stick with V3
+    }
+    if (isInCooldown()) {
+        logTrace "ensureCurrentProfileLoaded: in cooldown period, skipping profile load"
+        return
     }
     
     String dni = device?.deviceNetworkId
@@ -1437,6 +1442,7 @@ public boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, f
     int fncmd = fncmd_orig
     if (state.deviceProfile == null)  { return false }
     if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status)
+    if (isInCooldown()) { logDebug "processTuyaDPfromDeviceProfile: in cooldown period, skipping DP processing"; return true }               // do not perform any further processing, if we are in the cooldown period
 
     if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
     Map currentProfile = getCurrentDeviceProfile()
@@ -1790,13 +1796,12 @@ String getProfilesFilename() {
 
 
 boolean loadProfilesFromJSON() {
-    //return loadProfilesFromJSONstring(testJSON)
     if (isInCooldown()) {
         logDebug "loadProfilesFromJSON: in cooldown period, skipping profile load attempt"
         return false
     }
     String fileName = getProfilesFilename()
-    state.profilesV4['lastUsedFile'] = fileName
+    state.profilesV4['lastUsedHeFile'] = fileName
     return loadProfilesFromJSONstring(readFile(fileName))
 }
 
@@ -1811,7 +1816,7 @@ def readFile(fName) {
         uri: uri,
         textParser: true,
     ]
-
+    if (state.profilesV4 == null) { state.profilesV4 = [:] }
     try {
         httpGet(params) { resp ->
             if(resp!= null) {
@@ -1820,14 +1825,17 @@ def readFile(fName) {
                 long contentEndTime = now()
                 long contentDuration = contentEndTime - contentStartTime
                 logDebug "Performance: Content=${contentDuration}ms"
+                state.profilesV4['lastReadFileError'] = 'OK'
                 return data
             }
             else {
-                log.error "Null Response"
+                log.error "${device?.displayName}  Null Response"
+                state.profilesV4['lastReadFileError'] = 'null response'
             }
         }
     } catch (exception) {
-        log.error "Connection Exception: ${exception.message}"
+        log.error "${device?.displayName} Connection Exception: ${exception.message}"
+        state.profilesV4['lastReadFileError'] = exception.message
         return null;
     }
 }
@@ -1969,7 +1977,7 @@ private boolean ensureProfilesLoaded() {
         // Wait briefly for other thread to finish
         for (int i = 0; i < 10; i++) {
             state.profilesV4['waitForOtherThreadCtr'] = (state.profilesV4['waitForOtherThreadCtr'] ?: 0) + 1
-            sendInfoEvent "ensureProfilesLoaded: waiting <b>100ms</b> for other thread to finish loading... try ${i+1}/10"
+            logInfo "ensureProfilesLoaded: waiting <b>100ms</b> for other thread to finish loading... try ${i+1}/10"
             pauseExecution(100)
             if (g_profilesLoaded && !g_deviceProfilesV4?.isEmpty()) {
                 sendInfoEvent "ensureProfilesLoaded: other thread finished loading"
@@ -1977,7 +1985,7 @@ private boolean ensureProfilesLoaded() {
             }
         }
         // If still loading after wait, return false - don't interfere with other thread
-        sendInfoEvent "ensureProfilesLoaded: timeout waiting for other thread, returning false"
+        sendInfoEvent "ensureProfilesLoaded: timeout waiting for other thread, giving up!"
         state.profilesV4['waitForOtherThreadTimeouts'] = (state.profilesV4['waitForOtherThreadTimeouts'] ?: 0) + 1
         return false
     }
@@ -1996,6 +2004,7 @@ private boolean ensureProfilesLoaded() {
                 sendInfoEvent "Successfully loaded ${g_deviceProfilesV4.size()} deviceProfilesV4 profiles"
             } else {
                 sendInfoEvent "ensureProfilesLoaded: failed to load device profiles"
+                startCooldownTimer()
             }
             g_profilesLoading = false
             return result
