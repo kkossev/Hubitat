@@ -53,6 +53,7 @@
         "model": "TS0601", "manufacturer": "_TZE284_iadro9bf", "deviceJoinName": "Tuya ZigBee Breath Presence Sensor ZY-M100-S_2"
       },
       "fingerprints": [
+        { "model": "TS0601", "manufacturer": "_TZE284_iadro9bf", "deviceJoinName": "Tuya ZigBee Breath Presence Sensor ZY-M100-S_2" },
         { "model": "TS0601", "manufacturer": "_TZE204_iadro9bf", "deviceJoinName": "Tuya ZigBee Breath Presence Sensor ZY-M100-S_2" },
         { "model": "TS0601", "manufacturer": "_TZE204_qasjif9e" },
         { "model": "TS0601", "manufacturer": "_TZE204_ztqnh5cg" }
@@ -114,8 +115,8 @@
         "model": "TS0601", "manufacturer": "_TZE200_lu01t0zl", "deviceJoinName": "Tuya Human presence sensor with fall function"
       },
       "fingerprints": [
+        { "model": "TS0601", "manufacturer": "_TZE200_lu01t0zl", "deviceJoinName": "Tuya Human presence sensor with fall function" },
         { "model": "TS0601", "manufacturer": "_TZE200_vrfecyku", "deviceJoinName": "Tuya Human presence sensor MIR-HE200-TY" },
-        { "model": "TS0601", "manufacturer": "_TZE200_lu01t0zl" },
         { "model": "TS0601", "manufacturer": "_TZE200_ypprdwsl" },
         { "model": "TS0601", "manufacturer": "_TZE200_jkbljri7" }
       ],
@@ -141,7 +142,7 @@
         "model": "TS0601", "manufacturer": "_TZE200_0u3bj3rc", "deviceJoinName": "24GHz Black Square Human Presence Radar w/ LED"
       },
       "fingerprints": [
-        { "model": "TS0601", "manufacturer": "_TZE200_0u3bj3rc" },
+        { "model": "TS0601", "manufacturer": "_TZE200_0u3bj3rc", "deviceJoinName": "24GHz Black Square Human Presence Radar w/ LED" },
         { "model": "TS0601", "manufacturer": "_TZE200_v6ossqfy" },
         { "model": "TS0601", "manufacturer": "_TZE200_mx6u6l4y" }
       ],
@@ -838,8 +839,8 @@
       "spammyDPsToNotTrace": [19]
     } 
   },
-  "version": "4.0.5",
-  "timestamp": "2025-09-18 10:02 PM",
+  "version": "4.0.6",
+  "timestamp": "2025-09-19 2:42 PM",
   "description": "Device profiles for Tuya Zigbee mmWave Sensor",
   "author": "kkossev"
 }
