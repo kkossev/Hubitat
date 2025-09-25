@@ -28,7 +28,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '4.0.2' }
-static String deviceProfileLibStamp() { '2025/09/18 2:31 PM' }
+static String deviceProfileLibStamp() { '2025/09/19 1:02 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -317,7 +317,7 @@ public void resetPreferencesToDefaults(boolean debug=false) {
     if (preferences == null || preferences == [:]) { logDebug 'Preferences not found!' ; return }
     Map parMap = [:]
     preferences.each { parName, mapValue ->
-        if (debug) { log.trace "$parName $mapValue" }
+        //if (debug) { log.trace "$parName $mapValue" }
         if ((mapValue in [true, false]) || (mapValue in ['true', 'false'])) {
             logDebug "Preference ${parName} is predefined -> (${mapValue})"     // what was the idea here?
             return // continue
@@ -990,27 +990,33 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
     String deviceName = UNKNOWN, deviceProfile = UNKNOWN
     String deviceModel        = model != null ? model : device.getDataValue('model') ?: UNKNOWN
     String deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
+    logDebug "getDeviceNameAndProfile: model=${deviceModel} manufacturer=${deviceManufacturer} g_deviceFingerprintsV4=${g_deviceFingerprintsV4 != null} g_deviceProfilesV4=${g_deviceProfilesV4 != null}"
     
     // Use g_deviceFingerprintsV4 for more efficient fingerprint matching
-    if (this.hasProperty('g_deviceFingerprintsV4') && g_deviceFingerprintsV4 != null) {
+    /*if (this.hasProperty('g_deviceFingerprintsV4') && g_deviceFingerprintsV4 != null) {
         g_deviceFingerprintsV4.each { profileName, profileData ->
+            log.trace "getDeviceNameAndProfile: checking profileName=${profileName} profileData=${profileData}"
             profileData.fingerprints.each { fingerprint ->
                 if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
                     deviceProfile = profileName
                     deviceName = fingerprint.deviceJoinName ?: profileData.description ?: UNKNOWN
-                    logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
+                    logDebug "getDeviceNameAndProfile->g_deviceFingerprintsV4: <b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
                     return [deviceName, deviceProfile]
                 }
             }
         }
-    } else if (g_deviceProfilesV4 != null && !g_deviceProfilesV4.isEmpty()) {
+    } else */
+    if (g_deviceProfilesV4 != null && !g_deviceProfilesV4.isEmpty()) {
         // Fallback to g_deviceProfilesV4 if g_deviceFingerprintsV4 is not available
+        logDebug "getDeviceNameAndProfile: using g_deviceProfilesV4 = ${g_deviceProfilesV4 != null}"
         g_deviceProfilesV4.each { profileName, profileMap ->
+            //log.trace "getDeviceNameAndProfile: checking profileName=${profileName} profileMap=${profileMap}"
             profileMap.fingerprints.each { fingerprint ->
+                //log.trace "getDeviceNameAndProfile: checking fingerprint=${fingerprint}"
                 if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
                     deviceProfile = profileName
                     deviceName = fingerprint.deviceJoinName ?: g_deviceProfilesV4[deviceProfile].description ?: UNKNOWN
-                    logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
+                    logDebug "getDeviceNameAndProfile->g_deviceProfilesV4: <b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
                     return [deviceName, deviceProfile]
                 }
             }
@@ -1028,15 +1034,17 @@ public void setDeviceNameAndProfile(String model=null, String manufacturer=null)
     
     // Store previous profile for change detection
     String previousProfile = getDeviceProfile()
-    
+    logDebug "setDeviceNameAndProfile: calling getDeviceNameAndProfile(${model}, ${manufacturer}) previousProfile = ${previousProfile}"
     def (String deviceName, String deviceProfile) = getDeviceNameAndProfile(model, manufacturer)
+    logDebug "setDeviceNameAndProfile: returned deviceName=${deviceName} deviceProfile=${deviceProfile} previousProfile = ${previousProfile}"
     if (deviceProfile == null || deviceProfile == UNKNOWN) {
-        logInfo "unknown model ${deviceModel} manufacturer ${deviceManufacturer}"
+        logInfo "setDeviceNameAndProfile: unknown model ${deviceModel} manufacturer ${deviceManufacturer} previousProfile = ${previousProfile} -> setting state.deviceProfile = UNKNOWN"
         // don't change the device name when unknown
         state.deviceProfile = UNKNOWN
     }
     String dataValueModel = model != null ? model : device.getDataValue('model') ?: UNKNOWN
     String dataValueManufacturer  = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
+    logDebug "setDeviceNameAndProfile: deviceName=${deviceName} model=${dataValueModel} manufacturer=${dataValueManufacturer} previousProfile = ${previousProfile}"
     if (deviceName != NULL && deviceName != UNKNOWN) {
         device.setName(deviceName)
         state.deviceProfile = deviceProfile
@@ -1057,7 +1065,7 @@ public void setDeviceNameAndProfile(String model=null, String manufacturer=null)
             ensureCurrentProfileLoaded()
         }
     } else {
-        logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was not found!"
+        logInfo "setDeviceNameAndProfile: deviceName=${deviceName} : device model ${dataValueModel} manufacturer ${dataValueManufacturer} was not found!"
     }
 }
 
