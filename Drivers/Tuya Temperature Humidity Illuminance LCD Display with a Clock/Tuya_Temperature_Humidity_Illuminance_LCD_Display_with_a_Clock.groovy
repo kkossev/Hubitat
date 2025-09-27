@@ -66,13 +66,14 @@
  *                                  added TS0201 variants (_TZ3210_alxkwn0h _TZ3000_0s1izerx _TZ3000_v1w2k9dd _TZ3000_lqmvrwa2 _TZ3000_f2bw0b6k _TZ3000_mxzo5rhf _TZ3000_1twfmkcc _TZ3000_fie1dpkm _TZ3000_saiqcn0y _TZ3000_akqdg6g7 _TZE200_iq4ygaai _TZE200_01fvxamo);
  *                                  added TS0601 _TZE284_33bwcga2 to TS0601_Soil_II group; added missing model map _TZE200_bjawzodf.
  *                                  added missing model map _TZE200_bjawzodf; added Nous devices _TZE200_qrztc3ev, _TZE200_snloy4rw, _TZE200_eanjj2pa, _TZE200_ydrdfkim
- * ver. 1.9.1  2025-09-02 kkossev - (dev. branch) added TS0601 _TZE284_oitavov2 and _TZE200_2se8efxh to 'TS0601_Soil' group; added TS0601 _TZE284_ap9owrsa to 'TS0601_Soil_2' group
+ * ver. 1.9.1  2025-09-02 kkossev - added TS0601 _TZE284_oitavov2 and _TZE200_2se8efxh to 'TS0601_Soil' group; added TS0601 _TZE284_ap9owrsa to 'TS0601_Soil_2' group
+ * ver. 1.9.2  2025-09-27 kkossev - (dev. branch) temperature and humidity offset bug fix
  *
  *                                  TODO: update GitHub documentation
 */
 
-@Field static final String VERSION = '1.9.1'
-@Field static final String TIME_STAMP = '2025/09/02 4:55 PM'
+@Field static final String VERSION = '1.9.2'
+@Field static final String TIME_STAMP = '2025/09/27 11:21 AM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -241,8 +242,8 @@ metadata {
     preferences {
         input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: 'Display measured values in HE log page. <br>The recommended setting is <b>enabled</b>.', defaultValue: true)
         input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: 'Debug information, useful for troubleshooting. <br>The recommended value is <b>disabled</b>.', defaultValue: true)
-        input(name: 'temperatureOffset', type: 'decimal', title: '<b>Temperature offset</b>', description: 'Select how many degrees to adjust the temperature.', defaultValue: 0.0, range: '-100.0..100.0')
-        input(name: 'humidityOffset', type: 'decimal', title: '<b>Humidity offset</b>', description: 'Enter a percentage to adjust the humidity.', defaultValue: 0.0, range: '-100.0..100.0')
+        input(name: 'temperatureOffset', type: 'decimal', title: '<b>Temperature offset</b>', description: 'Select how many degrees to adjust the temperature.', defaultValue: 0.0, range: '-100..100')
+        input(name: 'humidityOffset', type: 'decimal', title: '<b>Humidity offset</b>', description: 'Enter a percentage to adjust the humidity.', defaultValue: 0.0, range: '-100..100')
         input(name: 'modelGroupPreference', type: 'enum', title: '<b>Model Group</b>', description:'The recommended setting is <b>Auto detect</b>.', defaultValue: 0, options:
                ['Auto detect':'Auto detect', 'TS0601_Tuya':'TS0601_Tuya', 'TS0601_Tuya_2':'TS0601_Tuya_2', 'TS0601_Haozee':'TS0601_Haozee', 'TS0601_AUBESS':'TS0601_AUBESS', 'TS0601_AVATTO_Ink':'TS0601_AVATTO_Ink', 'TS0201':'TS0201', 'TS0222':'TS0222', 'TS0201_LCZ030': 'TS0201_LCZ030',
                 'TS0222_2':'TS0222_2', 'TS0222_Soil':'TS0222_Soil', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', , 'TS0601_Soil_II':'TS0601_Soil_II', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
