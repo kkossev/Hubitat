@@ -23,7 +23,7 @@ library(
   * ver. 1.0.0  2022-06-18 kkossev  - first beta version
   * ..............................
   * ver. 3.5.2  2025-08-13 kkossev  - Status attribute renamed to _status_
-  * ver. 4.0.0  2025-09-08 kkossev  - deviceProfileV4
+  * ver. 4.0.0  2025-09-17 kkossev  - deviceProfileV4; HOBEIAN as Tuya device; customInitialize() hook;
   *
   *                                   TODO: change the offline threshold to 2 
   *                                   TODO: 
@@ -42,7 +42,7 @@ library(
 */
 
 String commonLibVersion() { '4.0.0' }
-String commonLibStamp() { '2025/09/15 12:44 PM' }
+String commonLibStamp() { '2025/09/17 10:42 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -810,9 +810,6 @@ public void standardParseTuyaCluster(final Map descMap) {
 // called from the standardParseTuyaCluster method for each DP chunk in the messages (usually one, but could be multiple DPs in one message)
 void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
     logTrace "standardProcessTuyaDP: <b> checking customProcessTuyaDp</b> dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
-    if (this.respondsTo('ensureCurrentProfileLoaded')) {
-        ensureCurrentProfileLoaded()
-    }
     if (this.respondsTo('customProcessTuyaDp')) {
         //logTrace 'standardProcessTuyaDP: customProcessTuyaDp exists, calling it...'
         if (customProcessTuyaDp(descMap, dp, dp_id, fncmd, dp_len) == true) {
@@ -822,6 +819,13 @@ void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, fin
     // check if DeviceProfile processing method exists (deviceProfieLib should be included in the main driver)
     if (this.respondsTo(processTuyaDPfromDeviceProfile)) {
         //logTrace 'standardProcessTuyaDP: processTuyaDPfromDeviceProfile exists, calling it...'
+        if (this.respondsTo('isInCooldown') && isInCooldown()) {
+            logDebug "standardProcessTuyaDP: device is in cooldown, skipping processing of dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
+            return
+        }
+        if (this.respondsTo('ensureCurrentProfileLoaded')) {
+            ensureCurrentProfileLoaded()
+        }
         if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {
             return      // sucessfuly processed the new way - we are done.  (version 3.0)
         }
@@ -1264,11 +1268,12 @@ private void queryPowerSource() {
  // Invoked from 'LoadAllDefaults'
 private void initialize() {
     if (state.stats == null) { state.stats = [:] } ; state.stats.initCtr = (state.stats.initCtr ?: 0) + 1
-    logInfo "initialize()... initCtr=${state.stats.initCtr}"
+    logDebug "initialize()... initCtr=${state.stats.initCtr}"
     if (device.getDataValue('powerSource') == null) {
-        logInfo "initializing device powerSource 'unknown'"
+        logDebug "initializing device powerSource 'unknown'"
         sendEvent(name: 'powerSource', value: 'unknown', type: 'digital')
     }
+    if (this.respondsTo('customInitialize')) { customInitialize() } 
     initializeVars(fullInit = true)
     updateTuyaVersion()
     updateAqaraVersion()
@@ -1550,7 +1555,7 @@ boolean isTuya() {
     String model = device.getDataValue('model')
     String manufacturer = device.getDataValue('manufacturer')
     /* groovylint-disable-next-line UnnecessaryTernaryExpression */
-    return (model?.startsWith('TS') && manufacturer?.startsWith('_T')) ? true : false
+    return ((model?.startsWith('TS') && manufacturer?.startsWith('_T')) || model == 'HOBEIAN') ? true : false
 }
 
 void updateTuyaVersion() {
