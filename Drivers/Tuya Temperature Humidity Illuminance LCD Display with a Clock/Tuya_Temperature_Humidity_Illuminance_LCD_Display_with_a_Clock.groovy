@@ -67,13 +67,13 @@
  *                                  added TS0601 _TZE284_33bwcga2 to TS0601_Soil_II group; added missing model map _TZE200_bjawzodf.
  *                                  added missing model map _TZE200_bjawzodf; added Nous devices _TZE200_qrztc3ev, _TZE200_snloy4rw, _TZE200_eanjj2pa, _TZE200_ydrdfkim
  * ver. 1.9.1  2025-09-02 kkossev - added TS0601 _TZE284_oitavov2 and _TZE200_2se8efxh to 'TS0601_Soil' group; added TS0601 _TZE284_ap9owrsa to 'TS0601_Soil_2' group
- * ver. 1.9.2  2025-09-27 kkossev - (dev. branch) temperature and humidity offset bug fix
+ * ver. 1.9.2  2025-09-27 kkossev - (dev. branch) temperature and humidity offset bug fix; invalid humidity values are corrected to 0% or 100% instead of ignored
  *
  *                                  TODO: update GitHub documentation
 */
 
 @Field static final String VERSION = '1.9.2'
-@Field static final String TIME_STAMP = '2025/09/27 11:21 AM'
+@Field static final String TIME_STAMP = '2025/09/27 11:37 AM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1067,9 +1067,13 @@ def humidityEvent( humidity, isDigital=false ) {
     def map = [:]
     Map statsMap = stringToJsonMap(state.stats); try { statsMap['humiCtr']++ } catch (e) { statsMap['humiCtr'] = 1 }; state.stats = mapToJsonString(statsMap)
     double humidityAsDouble = safeToDouble(humidity) + safeToDouble(settings?.humidityOffset)
-    if (humidityAsDouble <= 0.0 || humidityAsDouble > 100.0) {
-        logWarn "ignored invalid humidity ${humidity} (${humidityAsDouble})"
-        return
+    if (humidityAsDouble > 100.0) {
+        logWarn "correcting invalid humidity ${humidity} (${humidityAsDouble}) to 100%"
+        humidityAsDouble = 100.0
+    }
+    else if (humidityAsDouble < 0.0) {
+        logWarn "correcting invalid humidity ${humidity} (${humidityAsDouble}) to 0%"
+        humidityAsDouble = 0.0
     }
     map.value = Math.round(humidityAsDouble)
     map.name = 'humidity'
