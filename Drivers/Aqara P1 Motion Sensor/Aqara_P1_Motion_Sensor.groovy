@@ -47,13 +47,14 @@
  * ver. 1.7.3 2025-01-16 kkossev  - first ping() throwing exception bug fix tnx@user2428 
  * ver. 1.7.4 2025-05-24 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
  * ver. 1.7.5 2025-09-15 bbholthome  - light sensor GZCGQ01LM maximum illuminance capped to 65500 lux
+ * ver. 1.8.0 2025-09-28 kkossev  - (dev. branch) added Aqara FP1 Spatial Learning Mode; added resetPresence() command for FP1/FP1E
  * 
  *                                 TODO: 
  *
  */
 
-static String version() { "1.7.5" }
-static String timeStamp() {"2025/09/15 12:35 PM"}
+static String version() { "1.8.0" }
+static String timeStamp() {"2025/09/28 9:45 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -66,6 +67,11 @@ import java.util.concurrent.ConcurrentHashMap
 @Field static final Boolean deviceSimulation = false
 @Field static final Boolean _REGIONS = false
 @Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, FP1E, Aqara/Xiaomi/Mija other motion and illuminance sensors'
+
+// FP1E Spatial Learning (minimal constants)
+@Field static final int CLUSTER_AQARA_FCC0 = 0xFCC0
+@Field static final int MFG_AQARA_FP1E = 0x115F
+@Field static final int ATTR_SPATIAL_LEARNING = 0x0157   // FP1E: trigger AI Spatial Learning
 
 @Field static final Map<Integer, Map> DynamicSettingsMap = new ConcurrentHashMap<>().withDefault {
     new ConcurrentHashMap<String, String>()
@@ -107,6 +113,7 @@ metadata {
         attribute "targetDistance", "number"    // FP1E
         attribute "detectionRange", "decimal"   // FP1E
         attribute "motionSensitivity", "enum", ["low", "medium", "high"]   // FP1E
+    attribute "spatialLearning", "enum", ["idle","started"]
        
         if (_REGIONS) {
             attribute "region_last_enter", "number"
@@ -118,6 +125,8 @@ metadata {
         command "configure", [[name: "Initialize the device after switching drivers. Will load device default values!" ]]
         command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["active", "inactive"], description: "Use for tests"]]
         command "ping",      [[name: "Check device online status and measure the Round-Trip Time (ms)"]]
+    command "resetPresence", [[name: "Reset Presence (FP1/FP1E)" ]]
+    command "startSpatialLearning", [[name: "Start FP1E Spatial Learning (experimental)" ]]
 
         if (_DEBUG) {
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "FCC0"]]
@@ -1194,6 +1203,10 @@ void sendHealthStatusEvent(String value) {
 }
 
 void resetPresence() {
+    if (!(isFP1() || isFP1E())) {
+        logWarn 'resetPresence() is supported only for FP1/FP1E devices.'
+        return
+    }
     logInfo 'reset presence'
     //resetRegions()
     sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x0157, DataType.UINT8, 0x01, [mfgCode: 0x115F], 0))
@@ -1215,6 +1228,33 @@ void refresh() {
     else {
         logDebug 'no refresh required'
     }
+}
+
+// Start Spatial Learning - FP1E only. Sends a single write to ATTR_SPATIAL_LEARNING with value 0x01.
+void startSpatialLearning() {
+    if (!isFP1E()) {
+        logWarn 'startSpatialLearning() is supported only for FP1E devices.'
+        return
+    }
+    logInfo 'Starting FP1E Spatial Learning...'
+    List<String> cmds = []
+    cmds += zigbee.writeAttribute(
+        CLUSTER_AQARA_FCC0,
+        ATTR_SPATIAL_LEARNING,
+        hubitat.zigbee.zcl.DataType.UINT8,
+        0x01,
+        [mfgCode: MFG_AQARA_FP1E],
+       100
+    )
+    sendZigbeeCommands(cmds)
+    // transient indicator
+    sendEvent(name: 'spatialLearning', value: 'started', type: 'digital', descriptionText: 'Spatial Learning started')
+    runIn(35, 'spatialLearningReset', [overwrite: true])
+}
+
+private void spatialLearningReset() {
+    sendEvent(name: 'spatialLearning', value: 'idle', type: 'digital', descriptionText: 'Spatial Learning idle')
+    logInfo 'Spatial Learning state reset to idle'
 }
 
 
