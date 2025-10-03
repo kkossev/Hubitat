@@ -386,7 +386,8 @@
       "commands": { "resetSettings": "", "resetStats": "" },
       "fingerprints": [
         { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0003,0500,0001,0400", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_2aaelwxk", "deviceJoinName": "Tuya 2AAELWXK 24 GHz + PIR Radar" },
-        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0003,0500,0001,0400", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_kb5noeto", "deviceJoinName": "Tuya KB5NOETO 24 GHz + PIR Radar" }
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0003,0500,0001,0400", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_kb5noeto", "deviceJoinName": "Tuya KB5NOETO 24 GHz + PIR Radar" },
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0003,0500,EF00,0001,0400", "outClusters": "0019,000A", "model": "ZG-204ZM", "manufacturer": "HOBEIAN", "deviceJoinName": "HOBEIAN ZG-204ZM 24 GHz + PIR Radar" }
       ],
       "tuyaDPs": [
         { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "scale": 1, "map": { "0": "inactive", "1": "active" }, "unit": "", "title": "<b>Presence state</b>", "description": "<i>Presence state</i>" },
@@ -839,8 +840,8 @@
       "spammyDPsToNotTrace": [19]
     } 
   },
-  "version": "4.0.6",
-  "timestamp": "2025-09-19 2:42 PM",
+  "version": "4.0.7",
+  "timestamp": "2025-10-03 3:43 PM",
   "description": "Device profiles for Tuya Zigbee mmWave Sensor",
   "author": "kkossev"
 }
