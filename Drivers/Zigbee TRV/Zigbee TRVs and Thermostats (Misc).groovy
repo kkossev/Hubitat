@@ -36,14 +36,15 @@
  * ver. 3.4.0  2024-10-05 kkossev  - driver renamed to Zigbee TRVs and Thermostats (Misc); code cleanup; added to HPM
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  * ver. 3.5.2  2025-05-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
+ * ver. 3.5.3  2025-10-03 kkossev  - (dev. branch)
  *
  *                                   TODO:
  */
 
-static String version() { '3.5.2' }
-static String timeStamp() { '2025/05/25 9:24 AM' }
+static String version() { '3.5.3' }
+static String timeStamp() { '2025/10/03 8:31 AM' }
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
 
 import groovy.transform.Field
