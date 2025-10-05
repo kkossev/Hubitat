@@ -350,6 +350,33 @@ void parse(String description) {
             else if (descMap.command == '03') { buttonState = 'released' }
             else { buttonState = 'unknown' }
         }
+        else if (descMap.clusterInt == 0x0006 && descMap.command in ['00', '01', '02']) {
+            // Tuya Single Button (TS0041 or similar) uses On/Off cluster commands for scene events:
+            // 02 = Toggle (Single Push)
+            // 01 = Off (Double Tap)
+            // 00 = On (Held/Released)
+
+            buttonNumber = 1
+
+            switch (descMap.command) {
+                case '02':
+                    buttonState = 'pushed'
+                    if (logEnable) { log.debug "${device.displayName} **TS0041 Single Pushed** via Cluster 0006/Command 02" }
+                    break
+                case '01':
+                    buttonState = 'doubleTapped'
+                    if (logEnable) { log.debug "${device.displayName} **TS0041 Double Tapped** via Cluster 0006/Command 01" }
+                    break
+                case '00':
+                    buttonState = 'held'
+                    if (logEnable) { log.debug "${device.displayName} **TS0041 Held** via Cluster 0006/Command 00" }
+                    break
+                default:
+                    buttonState = 'unknown'
+                    if (logEnable) { log.warn "${device.displayName} Unknown command 0006/${descMap.command}" }
+                    break
+            }
+        }
         else if (descMap.clusterInt == 0x0501) {
             // TODO: Make the button numbers compatible with Muxa's driver : 1 - Arm Away (left); 2 - Disarm (right); 3 - Arm Home (top); 4 - Panic (bottom) // https://community.hubitat.com/t/release-heiman-zigbee-key-fob-driver/27002
             if (descMap.command == '02' && descMap.data.size() == 0)  {
