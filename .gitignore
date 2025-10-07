@@ -48,3 +48,7 @@ Drivers/Tuya Zigbee Metering Plug/scratchpad.txt
 Drivers/Aqara Climate Sensor W100/scratchPad.txt
 Drivers/Tuya Zigbee mmWave Sensor/docs/cntop_zigbee_sensor.js
 Drivers/Aqara TVOC Air Quality Monitor/scratchPad.txt
+.github/copilot-instructions.md
+Drivers/Tuya Zigbee mmWave Sensor/V4_Implementation_Summary.md
+Drivers/Tuya Zigbee mmWave Sensor/tools/validate-defaultFingerprint.ps1
+Drivers/Tuya Zigbee mmWave Sensor/tools/validate-integrity.ps1
