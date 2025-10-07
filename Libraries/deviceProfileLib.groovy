@@ -2,10 +2,10 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/deviceProfileLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-deviceProfileLib',
-    version: '3.5.1'
+    version: '3.5.2'
 )
 /*
- *  Device Profile Library
+ *  Device Profile Library (V3)
  *
  *  Licensed Virtual the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -37,7 +37,8 @@ library(
  * ver. 3.4.2  2025-03-24 kkossev  - added refreshFromConfigureReadList() method; documentation update; getDeviceNameAndProfile uses DEVICE.description instead of deviceJoinName
  * ver. 3.4.3  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
  * ver. 3.5.0  2025-08-14 kkossev  - zclWriteAttribute() support for forced destinationEndpoint in the attributes map
- * ver. 3.5.1  2025-09-15 kkossev  - (dev. branch)commonLib ver 4.0.0 allignment; log.trace leftover removed; 
+ * ver. 3.5.1  2025-09-15 kkossev  - commonLib ver 4.0.0 allignment; log.trace leftover removed; 
+ * ver. 3.5.2  2025-10-04 kkossev  - (dev. branch) SIMULATED_DEVICE_MODEL and SIMULATED_DEVICE_MANUFACTURER added (for testing with simulated devices)
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
@@ -49,8 +50,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.5.1' }
-static String deviceProfileLibStamp() { '2025/09/15 1:23 PM' }
+static String deviceProfileLibVersion()   { '3.5.2' }
+static String deviceProfileLibStamp() { '2025/10/04 1:07 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -848,6 +849,11 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
     String deviceName = UNKNOWN, deviceProfile = UNKNOWN
     String deviceModel        = model != null ? model : device.getDataValue('model') ?: UNKNOWN
     String deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
+    if (_DEBUG && SIMULATED_DEVICE_MODEL != null && SIMULATED_DEVICE_MANUFACTURER != null) {
+        deviceModel = SIMULATED_DEVICE_MODEL
+        deviceManufacturer = SIMULATED_DEVICE_MANUFACTURER
+        logWarn "<b>getDeviceNameAndProfile: using SIMULATED_DEVICE_MODEL ${SIMULATED_DEVICE_MODEL} and SIMULATED_DEVICE_MANUFACTURER ${SIMULATED_DEVICE_MANUFACTURER} in _DEBUG mode</b>"
+    }
     deviceProfilesV3.each { profileName, profileMap ->
         profileMap.fingerprints.each { fingerprint ->
             if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
