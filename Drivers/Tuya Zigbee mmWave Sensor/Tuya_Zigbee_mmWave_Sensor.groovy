@@ -18,16 +18,18 @@
  * ver. 3.0.6  2024-04-06 kkossev  - first version (derived from Tuya 4 In 1 driver)
  * ..............................
  * ver. 4.0.0  2025-09-04 kkossev  - deviceProfileV4 BRANCH created
- * ver. 4.0.1  2025-09-14 kkossev  - added new debug commands; added debug info in states gitHubV4 and profilesV4; added g_loadProfilesCooldown logic - prevent multiple profile loading attempts after JSON parsing errors within short time
- * ver. 4.0.2  2025-09-17 kkossev  - added HOBEIAN ZG-204ZV and TS0601 _TZE200_uli8wasj _TZE200_grgol3xp _TZE200_rhgsbacq _TZE200_y8jijhba into TS0601_HOBEIAN_RADAR profile; profilesV4 code moved to the library; temperature and humidity as custom attributes; 
+ * ver. 4.0.1  2025-09-14 kkossev  - (deviceProfileV4 dev. branch) added new debug commands; added debug info in states gitHubV4 and profilesV4; added g_loadProfilesCooldown logic - prevent multiple profile loading attempts after JSON parsing errors within short time
+ * ver. 4.0.2  2025-09-17 kkossev  - (deviceProfileV4 dev. branch) added HOBEIAN ZG-204ZV and TS0601 _TZE200_uli8wasj _TZE200_grgol3xp _TZE200_rhgsbacq _TZE200_y8jijhba into TS0601_HOBEIAN_RADAR profile; profilesV4 code moved to the library; temperature and humidity as custom attributes; 
  *                                   changed the default offlineCheck for mmWave sensors to 60 minutes; LoadAllDefaults reloades the profilesV4 cache from Hubitat storage;
  *                                   moved TS0601 _TZE284_iadro9bf _TZE204_iadro9bf _TZE204_qasjif9e _TZE204_ztqnh5cg into a new TS0601_TUYA_RADAR_2 profile
  * ver. 4.0.3  2025-09-19 kkossev  - (deviceProfileV4 dev. branch) cooldwown timer is started on JSON local storage read or parsing error; importUrl updated; added _TZE204_muvkrjr5 into TS0601_TUYA_RADAR_2 profile; 
  *                                   automatically load the standard JSON file from GitHub on driver installation if not present locally (one time action after installation or hub reboot)
+ * ver. 4.1.0  2025-10-11 kkossev  - (development  branch) - changed the default URLs to the development branch; added 'Update From Local Storage' command, show the JSON version and timestamp in the sendInfoEvent; 
  *                                   
  *                                   TODO: 
- *                                   TODO: On 'Update from GitHub' - show the JSON version, timestamp in the sendInfoEvent (WIP)
- *                                   TODO: load custom JSON file (WIP)
+ *                                   TODO:
+ *                                   TODO: 
+ *                                   TODO: APPEND custom JSON file (TODO)
  *                                   TODO: Force device profile is not reflected in the Preferences page!
  *                                   TODO: Show both the profile key and the profile name in the Preferences page!
  *                                   TODO: handle the Unprocessed ZDO command: cluster=8032 after hub reboot
@@ -37,15 +39,15 @@
  *                                   TODO: 
 */
 
-static String version() { "4.0.3" }
-static String timeStamp() {"2025/09/19 3:41 PM"}
+static String version() { "4.1.0" }
+static String timeStamp() {"2025/10/11 1:02 PM"}
 
 @Field static final Boolean _DEBUG = false           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true 
 
 @Field static final String DEFAULT_PROFILES_FILENAME = "deviceProfilesV4_mmWave.json"
-@Field static String defaultGitHubURL = 'https://raw.githubusercontent.com/kkossev/Hubitat/deviceProfileV4/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/deviceProfilesV4_mmWave.json'
+@Field static String defaultGitHubURL = 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/deviceProfilesV4_mmWave.json'
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -68,7 +70,7 @@ deviceType = "mmWaveSensor"
 metadata {
     definition (
         name: 'Tuya Zigbee mmWave Sensor',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/deviceProfileV4/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/Tuya_Zigbee_mmWave_Sensor_lib_included.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/Tuya_Zigbee_mmWave_Sensor_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
 
@@ -116,7 +118,8 @@ metadata {
                 [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
                 [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
         ]
-        command 'updateFromGitHub', [[name: "url", type: "STRING", description: "GitHub URL (optional)", defaultValue: ""]]
+        command 'updateFromGitHub', [[name: '⚠️ WARNING: This will download the latest JSON file from GitHub and OVERWRITE your Hubitat local storage! <br>Any manual changes you made will be LOST!']]
+        command 'updateFromLocalStorage', [[name: 'This will reload the deviceProfiles from Hubitat local storage<br>Use it after manual changes to the local JSON file.']]
         if (_DEBUG) {
             command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]] 
             // testParse is defined in the common library

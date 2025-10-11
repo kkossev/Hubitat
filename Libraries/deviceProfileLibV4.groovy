@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLibV4', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/deviceProfileLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-deviceProfileLib',
-    version: '4.0.2'
+    version: '4.1.0'
 )
 /*
  *  Device Profile Library V4
@@ -21,14 +21,15 @@ library(
  * ver. 3.5.0  2025-08-14 kkossev  - zclWriteAttribute() support for forced destinationEndpoint in the attributes map
  * ver. 4.0.0  2025-09-03 kkossev  - deviceProfileV4 BRANCH created; deviceProfilesV2 support is dropped; 
  * ver. 4.0.1  2025-09-15 kkossev  - added debug commands to sendCommand(); 
- * ver. 4.0.2  2025-09-18 kkossev  - (dev. branch) cooldown timer is started on JSON local storage read or parsing error;
+ * ver. 4.0.2  2025-09-18 kkossev  - (deviceProfileV4 branch) cooldown timer is started on JSON local storage read or parsing error;
+ * ver. 4.1.0  2025-10-11 kkossev  - (development branch) WIP
  *
  *                                   TODO - updateStateUnknownDPs() from the earlier versions of 4 in 1 driver
  *
 */
 
-static String deviceProfileLibVersion()   { '4.0.2' }
-static String deviceProfileLibStamp() { '2025/09/19 1:02 PM' }
+static String deviceProfileLibVersion()   { '4.1.0' }
+static String deviceProfileLibStamp() { '2025/10/11 1:02 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -1899,6 +1900,13 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
             return false
         }
         resetCooldownFlag()
+        
+        // Extract version and timestamp metadata
+        if (state.profilesV4 == null) { state.profilesV4 = [:] }
+        state.profilesV4['version'] = parsed?.version ?: 'unknown'
+        state.profilesV4['timestamp'] = parsed?.timestamp ?: 'unknown'
+        logDebug "loadProfilesFromJSON: JSON version=${state.profilesV4['version']}, timestamp=${state.profilesV4['timestamp']}"
+        
         // !!!!!!!!!!!!!!!!!!!!!!!
         // Populate g_deviceProfilesV4
         if (g_deviceProfilesV4 == null) { g_deviceProfilesV4 = [:] }   // initialize if null
@@ -2033,7 +2041,9 @@ private boolean ensureProfilesLoaded() {
             boolean result = loadProfilesFromJSON()
             if (result) {
                 g_profilesLoaded = true
-                sendInfoEvent "Successfully loaded ${g_deviceProfilesV4.size()} deviceProfilesV4 profiles"
+                String version = state.profilesV4?.version ?: 'unknown'
+                String timestamp = state.profilesV4?.timestamp ?: 'unknown'
+                sendInfoEvent "Successfully loaded ${g_deviceProfilesV4.size()} deviceProfilesV4 profiles (version: ${version}, timestamp: ${timestamp})  ⚠️ Refresh this page to see updated profiles in the dropdown!"
             } else {
                 sendInfoEvent "ensureProfilesLoaded: failed to load device profiles (loadProfilesFromJSON() failed)"
                 startCooldownTimer()
@@ -2048,18 +2058,32 @@ private boolean ensureProfilesLoaded() {
     }
 }
 
-void updateFromGitHub(String url = '') {
-    dwownloadFromGitHubAndSaveToHE(url)
+void updateFromGitHub() {
+    downloadFromGitHubAndSaveToHE(defaultGitHubURL)
     clearProfilesCache()
     ensureProfilesLoaded()
     ensureCurrentProfileLoaded()
 }
 
+void updateFromLocalStorage() {
+    logInfo "updateFromLocalStorage: reloading device profiles from Hubitat local storage (${DEFAULT_PROFILES_FILENAME})"
+    clearProfilesCache()
+    boolean result = ensureProfilesLoaded()
+    if (result) {
+        ensureCurrentProfileLoaded()
+        String version = state.profilesV4?.version ?: 'unknown'
+        String timestamp = state.profilesV4?.timestamp ?: 'unknown'
+        sendInfoEvent "Successfully reloaded ${g_deviceProfilesV4?.size() ?: 0} device profiles from local storage (version: ${version}, timestamp: ${timestamp}). ⚠️ Refresh this page to see updated profiles in the dropdown!"
+    } else {
+        sendInfoEvent "❌ Failed to reload device profiles from local storage"
+    }
+}
+
 
 // updateFromGitHub command - download JSON profiles from GitHub and store to Hubitat local storage
-void dwownloadFromGitHubAndSaveToHE(String url = '') {
+void downloadFromGitHubAndSaveToHE(String url) {
     long startTime = now()
-    String gitHubUrl = url?.trim() ?: defaultGitHubURL
+    String gitHubUrl = url
     String fileName = DEFAULT_PROFILES_FILENAME
     
     // If URL is provided, try to extract filename from it
