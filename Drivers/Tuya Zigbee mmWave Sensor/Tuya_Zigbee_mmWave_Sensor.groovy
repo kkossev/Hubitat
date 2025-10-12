@@ -24,23 +24,18 @@
  *                                   moved TS0601 _TZE284_iadro9bf _TZE204_iadro9bf _TZE204_qasjif9e _TZE204_ztqnh5cg into a new TS0601_TUYA_RADAR_2 profile
  * ver. 4.0.3  2025-09-19 kkossev  - (deviceProfileV4 dev. branch) cooldwown timer is started on JSON local storage read or parsing error; importUrl updated; added _TZE204_muvkrjr5 into TS0601_TUYA_RADAR_2 profile; 
  *                                   automatically load the standard JSON file from GitHub on driver installation if not present locally (one time action after installation or hub reboot)
- * ver. 4.1.0  2025-10-11 kkossev  - (development  branch) - changed the default URLs to the development branch; added 'Update From Local Storage' command, show the JSON version and timestamp in the sendInfoEvent; 
+ * ver. 4.1.0  2025-10-11 kkossev  - changed the default URLs to the development branch; added 'Update From Local Storage' command, show the JSON version and timestamp in the sendInfoEvent; 
+ * ver. 4.2.0  2025-10-12 kkossev  - (development  branch) - added 'Load User Custom Profiles From Local Storage' command and functionality (per device); show the currently loaded profile filename in the deviceProfileFile attribute;
  *                                   
- *                                   TODO: 
- *                                   TODO:
- *                                   TODO: 
- *                                   TODO: APPEND custom JSON file (TODO)
- *                                   TODO: Force device profile is not reflected in the Preferences page!
  *                                   TODO: Show both the profile key and the profile name in the Preferences page!
  *                                   TODO: handle the Unprocessed ZDO command: cluster=8032 after hub reboot
  *                                   TODO: go to the bottom of the reason for : loadProfilesFromJSON exception: error converting JSON: Unable to determine the current character, it is not a string, number, array, or object
  *                                   TODO: do not load profiles when metadata is not available (device just paired)
- *                                   TODO: test the state. after reboot 
  *                                   TODO: 
 */
 
-static String version() { "4.1.0" }
-static String timeStamp() {"2025/10/11 1:02 PM"}
+static String version() { "4.2.0" }
+static String timeStamp() {"2025/10/12 9:23 PM"}
 
 @Field static final Boolean _DEBUG = false           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -109,17 +104,19 @@ metadata {
         attribute 'tamper', 'enum', ['clear', 'detected']
         attribute 'temperature', 'number'                       // TS0601_HOBEIAN_RADAR
         attribute 'humidity', 'number'                          // TS0601_HOBEIAN_RADAR
+        attribute 'deviceProfileFile', 'string'                 // shows the currently loaded profile filename
 
         command 'sendCommand', [
-            [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
+            [name:'command', type: 'STRING', description: '⚡ Send a device-specific command with optional parameter value • Click the Run button to see the list of available commands', constraints: ['STRING']],
             [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
         ]
         command 'setPar', [
-                [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
+                [name:'par', type: 'STRING', description: '⚙️ Update a device preference parameter and send it to the device • Click the Run button to see the list of available parameters', constraints: ['STRING']],
                 [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
         ]
-        command 'updateFromGitHub', [[name: '⚠️ WARNING: This will download the latest JSON file from GitHub and OVERWRITE your Hubitat local storage! <br>Any manual changes you made will be LOST!']]
-        command 'updateFromLocalStorage', [[name: 'This will reload the deviceProfiles from Hubitat local storage<br>Use it after manual changes to the local JSON file.']]
+        command 'loadStandardProfilesFromGitHub', [[name: '📥 Download and load STANDARD device profiles from GitHub<br>• Downloads latest official profiles<br>• Overwrites local file: deviceProfilesV4.json<br>• Clears any custom profiles for this device<br>• This choice persists after hub reboot']]
+        command 'loadStandardProfilesFromLocalStorage', [[name: '📂 Load STANDARD device profiles from local storage<br>• Reloads from: deviceProfilesV4.json<br>• Clears any custom profiles for this device<br>• Use after manual edits to local standard JSON file<br>• This choice persists after hub reboot']]
+        command 'loadUserCustomProfilesFromLocalStorage', [[name: 'filename', type: 'STRING', description: '📝 Custom JSON filename (e.g., deviceProfilesV4_custom.json)<br>• Loads CUSTOM device profiles from local storage<br>• This choice persists after hub reboot', constraints: ['STRING']]]
         if (_DEBUG) {
             command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]] 
             // testParse is defined in the common library
@@ -331,7 +328,7 @@ void customInitializeVars(final boolean fullInit=false) {
     if (fullInit == true || state.gitHubV4 == null) { state.gitHubV4 = [:] }
     if (fullInit == true || state.profilesV4 == null) { state.profilesV4 = [:] }
     if (fullInit || settings?.healthCheckInterval == null) { device.updateSetting('healthCheckInterval', [value: '60', type: 'enum']) }
-    if (fullInit || settings?.customJSON == null) { device.updateSetting('customJSON', [value: '', type: 'text']) }
+    if (fullInit || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', [value: true, type: 'bool']) } // since ver 4.1.0
     resetCooldownFlag()
 }
 

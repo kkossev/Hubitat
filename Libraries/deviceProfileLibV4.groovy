@@ -22,14 +22,14 @@ library(
  * ver. 4.0.0  2025-09-03 kkossev  - deviceProfileV4 BRANCH created; deviceProfilesV2 support is dropped; 
  * ver. 4.0.1  2025-09-15 kkossev  - added debug commands to sendCommand(); 
  * ver. 4.0.2  2025-09-18 kkossev  - (deviceProfileV4 branch) cooldown timer is started on JSON local storage read or parsing error;
- * ver. 4.1.0  2025-10-11 kkossev  - (development branch) WIP
+ * ver. 4.1.0  2025-10-12 kkossev  - (development branch) WIP
  *
  *                                   TODO - updateStateUnknownDPs() from the earlier versions of 4 in 1 driver
  *
 */
 
 static String deviceProfileLibVersion()   { '4.1.0' }
-static String deviceProfileLibStamp() { '2025/10/11 1:02 PM' }
+static String deviceProfileLibStamp() { '2025/10/12 9:23 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -43,13 +43,14 @@ import groovy.transform.CompileStatic
 @Field static  boolean g_profilesLoaded = false
 @Field static  Map g_deviceFingerprintsV4 = [:]
 @Field static  Map g_currentProfilesV4 = [:]            // Key: device?.deviceNetworkId, Value: complete profile data
+@Field static  Map g_customProfilesV4 = [:]             // Key: device?.deviceNetworkId, Value: custom profiles for THIS device only
 @Field static  boolean g_loadProfilesCooldown = false
 @Field static  int LOAD_PROFILES_COOLDOWN_MS = 30000  // 30 seconds cooldown to prevent multiple profile loading within short time
 
 
 metadata {
     // no capabilities
-    // no attributes
+    attribute 'customJSON', 'string'        // Custom JSON profile filename (if loaded)
     /*
     // copy the following commands to the main driver, if needed
     command 'sendCommand', [
@@ -74,9 +75,7 @@ metadata {
                 }
             }
             input(name: 'forcedProfile', type: 'enum', title: '<b>Device Profile</b>', description: 'Manually change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!',  options: getDeviceProfilesMap())
-            if (settings?.advancedOptions == true) {
-                input name: 'customJSON', type: 'text', title: '<b>Custom Device Profiles JSON</b>', description: 'Paste here a custom JSON file with device profiles. The format must be the same as the standard JSON file.<br>Warning! Incorrectly formatted JSON may cause problems when loading device profiles!', defaultValue: ''
-            }
+            // Note: Custom JSON profiles are now managed via loadCustomProfiles() command, not preferences
         }
     }
     
@@ -137,6 +136,80 @@ private void ensureCurrentProfileLoaded() {
 }
 
 /**
+ * Returns the appropriate profiles map for this device
+ * Uses custom profiles if loaded for this device, otherwise standard profiles
+ * @return Map of device profiles (either custom or standard)
+ */
+private Map getDeviceProfilesSource() {
+    if (!this.hasProperty('g_customProfilesV4')) {
+        return g_deviceProfilesV4  // Fallback if custom profiles not available
+    }
+    
+    String dni = device?.deviceNetworkId
+    
+    // If this device has custom profiles loaded, use them
+    if (g_customProfilesV4?.containsKey(dni) && g_customProfilesV4[dni] != null) {
+        logDebug "getDeviceProfilesSource: using CUSTOM profiles for device ${dni}"
+        return g_customProfilesV4[dni]
+    }
+    
+    // Otherwise use standard shared profiles
+    logTrace "getDeviceProfilesSource: using STANDARD profiles for device ${dni}"
+    return g_deviceProfilesV4
+}
+
+/**
+ * Loads custom profiles from a specific JSON file for a specific device
+ * @param dni Device Network ID
+ * @param filename Custom JSON filename
+ * @return true if loaded successfully, false otherwise
+ */
+private boolean loadCustomProfilesForDevice(String dni, String filename) {
+    logDebug "loadCustomProfilesForDevice: loading ${filename} for device ${dni}"
+    
+    try {
+        // Read custom JSON file
+        def data = readFile(filename)
+        if (data == null) {
+            logWarn "loadCustomProfilesForDevice: failed to read ${filename}"
+            return false
+        }
+        
+        // Parse JSON
+        def jsonSlurper = new JsonSlurper()
+        def parsed = jsonSlurper.parseText("${data}")
+        
+        def customProfiles = parsed?.deviceProfiles
+        if (!(customProfiles instanceof Map) || customProfiles.isEmpty()) {
+            logWarn "loadCustomProfilesForDevice: no deviceProfiles found in ${filename}"
+            return false
+        }
+        
+        // Store in g_customProfilesV4[dni]
+        if (g_customProfilesV4 == null) { g_customProfilesV4 = [:] }
+        g_customProfilesV4[dni] = customProfiles
+        
+        // Also store metadata in state
+        if (state.profilesV4 == null) { state.profilesV4 = [:] }
+        state.profilesV4['lastJSONSource'] = 'custom'
+        state.profilesV4['customFilename'] = filename
+        state.profilesV4['customVersion'] = parsed?.version ?: 'unknown'
+        state.profilesV4['customTimestamp'] = parsed?.timestamp ?: 'unknown'
+        state.profilesV4['customProfileCount'] = customProfiles.size()
+        
+        // Send deviceProfileFile attribute event
+        sendEvent(name: 'deviceProfileFile', value: filename, descriptionText: "Custom profile loaded from ${filename}", type: 'digital')
+        
+        logInfo "loadCustomProfilesForDevice: loaded ${customProfiles.size()} custom profiles from ${filename} (version: ${parsed?.version}, timestamp: ${parsed?.timestamp})"
+        return true
+        
+    } catch (Exception e) {
+        logError "loadCustomProfilesForDevice: exception loading ${filename}: ${e.message}"
+        return false
+    }
+}
+
+/**
  * Populates g_currentProfilesV4 entry for the specified device
  * Extracts complete profile data from g_deviceProfilesV4 (excluding fingerprints)
  * @param dni Device Network ID to use as key
@@ -154,20 +227,38 @@ private void populateCurrentProfile(String dni) {
     }
     logDebug "ensuring profiles loaded for device ${dni}"
     if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
-    if (g_deviceProfilesV4 == null || g_deviceProfilesV4?.isEmpty()) {
-        logWarn "populateCurrentProfile: cannot populate profile for ${dni} - g_deviceProfilesV4 is null or empty"
+    
+    Map profiles = getDeviceProfilesSource()  // Use custom or standard profiles
+    String source = (this.hasProperty('g_customProfilesV4') && g_customProfilesV4?.containsKey(dni)) ? "CUSTOM" : "STANDARD"
+    
+    logDebug "populateCurrentProfile: using ${source} profiles source"
+    logDebug "populateCurrentProfile: profiles map has ${profiles?.size() ?: 0} entries: ${profiles?.keySet()}"
+    
+    if (profiles == null || profiles.isEmpty()) {
+        logWarn "populateCurrentProfile: cannot populate profile for ${dni} - profiles source is null or empty"
         return
     }
-    Map sourceProfile = g_deviceProfilesV4[profileName]
+    
+    Map sourceProfile = profiles[profileName]
+    logDebug "populateCurrentProfile: looking for profile '${profileName}' in ${source} profiles"
+    logDebug "populateCurrentProfile: sourceProfile is ${sourceProfile == null ? 'NULL' : 'FOUND with ' + sourceProfile.keySet().size() + ' keys'}"
+    
     if (sourceProfile) {
         // Clone the profile data and remove fingerprints (already in g_deviceFingerprintsV4)
         Map profileData = sourceProfile.clone()
-        profileData.remove('fingerprints')
+        logDebug "populateCurrentProfile: cloned profile has ${profileData?.keySet()?.size() ?: 0} keys: ${profileData?.keySet()}"
+        profileData?.remove('fingerprints')
         if (g_currentProfilesV4 == null) { g_currentProfilesV4 = [:] }   // initialize if null
         g_currentProfilesV4[dni] = profileData
-        sendInfoEvent "Successfully loaded profile '${profileName}' for device ${dni}"
+        logDebug "populateCurrentProfile: stored profile in g_currentProfilesV4[${dni}]"
+        
+        sendInfoEvent "Successfully loaded profile '${profileName}' from ${source} profiles for device ${dni}"
+        
+        // Clear any stale WARNING attribute since we successfully loaded the profile
+        device.deleteCurrentState('WARNING')
     } else {
-        logWarn "populateCurrentProfile: profile '${profileName}' not found in g_deviceProfilesV4 for device ${dni}"
+        logWarn "populateCurrentProfile: profile '${profileName}' not found in ${source} profiles for device ${dni}"
+        logWarn "populateCurrentProfile: available profiles: ${profiles?.keySet()}"
     }
 }
 
@@ -212,9 +303,10 @@ public Set     getDeviceProfiles()      { g_deviceProfilesV4 != null ? g_deviceP
 public List<String> getDeviceProfilesMap()   {
     // if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
     // better don't ...
-    if (g_deviceProfilesV4 == null || g_deviceProfilesV4?.isEmpty()) { return [] }
+    Map profiles = getDeviceProfilesSource()  // Use custom or standard profiles
+    if (profiles == null || profiles.isEmpty()) { return [] }
     List<String> activeProfiles = []
-    g_deviceProfilesV4.each { profileName, profileMap ->
+    profiles.each { profileName, profileMap ->
         if ((profileMap.device?.isDepricated ?: false) != true) {
             activeProfiles.add(profileMap.description ?: '---')
         }
@@ -240,7 +332,8 @@ public Map getDeviceFingerprintsV4() {
  */
 public String getProfileKey(final String valueStr) {
     if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
-    if (g_deviceProfilesV4 != null) { return g_deviceProfilesV4.find { _, profileMap -> profileMap.description == valueStr }?.key }
+    Map profiles = getDeviceProfilesSource()  // Use custom or standard profiles
+    if (profiles != null) { return profiles.find { _, profileMap -> profileMap.description == valueStr }?.key }
     else { return null }
 }
 
@@ -838,21 +931,18 @@ public boolean sendCommand(final String command_orig=null, final String val_orig
     final String command = command_orig?.trim()
     final String val = val_orig?.trim()
     List<String> cmds = []
+    
+    // Hidden command to enable/disable debug commands dynamically
+    if (command == '_DEBUG') {
+        if (val in ['true', '1']) { _DEBUG = true; logInfo "Debug commands ENABLED via _DEBUG command"; return true }
+        else if (val in ['false', '0']) { _DEBUG = false; logInfo "Debug commands DISABLED via _DEBUG command"; return true }
+        else { logWarn "_DEBUG command requires value: true/false or 1/0"; return false }
+    }
     Map supportedCommandsMap = DEVICE?.commands as Map ?: [:]
     
-    // Only add debug commands if debug is enabled
-    if (_DEBUG || settings.logEnable) {
-        logDebug "sendCommand: original supportedCommandsMap = ${supportedCommandsMap}"
-        // add the debug commands to the supported commands map
-        supportedCommandsMap += debugCommandsMap
-        logDebug "sendCommand: updated supportedCommandsMap = ${supportedCommandsMap}"
-    }
-    
-    if (supportedCommandsMap == null || supportedCommandsMap?.isEmpty()) {
-        logInfo "sendCommand: no commands defined for device profile ${getDeviceProfile()} !"
-        return false
-    }
-    
+    if (_DEBUG || settings.logEnable) { supportedCommandsMap += debugCommandsMap }
+    if (supportedCommandsMap?.isEmpty()) { logInfo "sendCommand: no commands defined for device profile ${getDeviceProfile()} !"; return false }
+
     // Create supportedCommandsList based on the same condition
     List supportedCommandsList
     if (_DEBUG || settings.logEnable) {
@@ -991,33 +1081,18 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
     String deviceName = UNKNOWN, deviceProfile = UNKNOWN
     String deviceModel        = model != null ? model : device.getDataValue('model') ?: UNKNOWN
     String deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
-    logDebug "getDeviceNameAndProfile: model=${deviceModel} manufacturer=${deviceManufacturer} g_deviceFingerprintsV4=${g_deviceFingerprintsV4 != null} g_deviceProfilesV4=${g_deviceProfilesV4 != null}"
+    Map profiles = getDeviceProfilesSource()  // Use custom or standard profiles
+    logDebug "getDeviceNameAndProfile: model=${deviceModel} manufacturer=${deviceManufacturer} profiles=${profiles != null}"
     
-    // Use g_deviceFingerprintsV4 for more efficient fingerprint matching
-    /*if (this.hasProperty('g_deviceFingerprintsV4') && g_deviceFingerprintsV4 != null) {
-        g_deviceFingerprintsV4.each { profileName, profileData ->
-            log.trace "getDeviceNameAndProfile: checking profileName=${profileName} profileData=${profileData}"
-            profileData.fingerprints.each { fingerprint ->
-                if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
-                    deviceProfile = profileName
-                    deviceName = fingerprint.deviceJoinName ?: profileData.description ?: UNKNOWN
-                    logDebug "getDeviceNameAndProfile->g_deviceFingerprintsV4: <b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
-                    return [deviceName, deviceProfile]
-                }
-            }
-        }
-    } else */
-    if (g_deviceProfilesV4 != null && !g_deviceProfilesV4.isEmpty()) {
-        // Fallback to g_deviceProfilesV4 if g_deviceFingerprintsV4 is not available
-        logDebug "getDeviceNameAndProfile: using g_deviceProfilesV4 = ${g_deviceProfilesV4 != null}"
-        g_deviceProfilesV4.each { profileName, profileMap ->
+    if (profiles != null && !profiles.isEmpty()) {
+        profiles.each { profileName, profileMap ->
             //log.trace "getDeviceNameAndProfile: checking profileName=${profileName} profileMap=${profileMap}"
             profileMap.fingerprints.each { fingerprint ->
                 //log.trace "getDeviceNameAndProfile: checking fingerprint=${fingerprint}"
                 if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
                     deviceProfile = profileName
-                    deviceName = fingerprint.deviceJoinName ?: g_deviceProfilesV4[deviceProfile].description ?: UNKNOWN
-                    logDebug "getDeviceNameAndProfile->g_deviceProfilesV4: <b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
+                    deviceName = fingerprint.deviceJoinName ?: profiles[deviceProfile].description ?: UNKNOWN
+                    logDebug "getDeviceNameAndProfile: <b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
                     return [deviceName, deviceProfile]
                 }
             }
@@ -1051,6 +1126,9 @@ public void setDeviceNameAndProfile(String model=null, String manufacturer=null)
         state.deviceProfile = deviceProfile
         device.updateSetting('forcedProfile', [value:g_deviceProfilesV4[deviceProfile]?.description, type:'enum'])
         logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was set to : <b>deviceProfile=${deviceProfile} : deviceName=${deviceName}</b>"
+        
+        // Clear any stale WARNING attribute since we successfully set the profile
+        device.deleteCurrentState('WARNING')
         
         // V4 Profile Management: Handle profile loading and changes
         if (this.hasProperty('g_currentProfilesV4')) {
@@ -1141,6 +1219,19 @@ List<String> initializeDeviceProfile() {
     logDebug "initializeDeviceProfile() : ${cmds}"
     if (cmds == []) { cmds = ['delay 299',] }
     return cmds
+}
+
+/**
+ * Clears the customJSON attribute if custom profile is not being used
+ * Should be called when reverting to standard profiles
+ */
+private void clearCustomJSONAttribute() {
+    String dni = device?.deviceNetworkId
+    // Only clear if this device doesn't have custom profiles loaded
+    if (!g_customProfilesV4?.containsKey(dni) || g_customProfilesV4[dni] == null) {
+        device.deleteCurrentState('customJSON')
+        logDebug "clearCustomJSONAttribute: cleared customJSON attribute for device ${dni}"
+    }
 }
 
 public void deviceProfileInitializeVars(boolean fullInit=false) {
@@ -1734,37 +1825,95 @@ void profilesV4info() {
     String dni = device?.deviceNetworkId
     boolean hasCurrentProfile = g_currentProfilesV4.containsKey(dni)
     
+    // Check for custom profiles
+    boolean hasCustomProfiles = (dni && this.hasProperty('g_customProfilesV4') && g_customProfilesV4?.containsKey(dni))
+    int customProfileCount = hasCustomProfiles ? (g_customProfilesV4[dni]?.size() ?: 0) : 0
+    
+    // Get profile source information from state
+    String lastJSONSource = state.profilesV4?.get('lastJSONSource') ?: 'unknown'
+    String customFilename = state.profilesV4?.get('customFilename')
+    String customVersion = state.profilesV4?.get('customVersion')
+    String customTimestamp = state.profilesV4?.get('customTimestamp')
+    String standardVersion = state.profilesV4?.get('version')
+    String standardTimestamp = state.profilesV4?.get('timestamp')
+    
+    // Determine current source
+    String currentSource = hasCustomProfiles ? "CUSTOM" : "STANDARD"
+    
+    logInfo "profilesV4info: ========== STANDARD PROFILES =========="
     logInfo "profilesV4info: g_deviceProfilesV4 size=${size} keys=${keys}"
+    if (standardVersion) {
+        logInfo "profilesV4info: Standard JSON version=${standardVersion}, timestamp=${standardTimestamp}"
+    }
     logInfo "profilesV4info: g_deviceFingerprintsV4 size=${fingerprintSize}"
-    logInfo "profilesV4info: g_currentProfilesV4 size=${currentProfileSize} keys=${currentProfileKeys}"
     logInfo "profilesV4info: total computed fingerprint strings=${totalComputedFingerprints}"
+    
+    if (hasCustomProfiles) {
+        logInfo "profilesV4info: ========== CUSTOM PROFILES =========="
+        logInfo "profilesV4info: g_customProfilesV4 for device ${dni}: ${customProfileCount} profiles"
+        List customKeys = g_customProfilesV4[dni] ? new ArrayList(g_customProfilesV4[dni].keySet()) : []
+        logInfo "profilesV4info: Custom profile keys=${customKeys}"
+        if (customFilename) {
+            logInfo "profilesV4info: Custom filename='${customFilename}'"
+        }
+        if (customVersion) {
+            logInfo "profilesV4info: Custom version=${customVersion}, timestamp=${customTimestamp}"
+        }
+    }
+    
+    logInfo "profilesV4info: ========== CURRENT DEVICE STATUS =========="
+    logInfo "profilesV4info: Device ${dni} is using <b>${currentSource}</b> profiles"
+    logInfo "profilesV4info: Last JSON source: ${lastJSONSource}"
+    logInfo "profilesV4info: Current device profile name: ${state.deviceProfile ?: 'UNKNOWN'}"
+    logInfo "profilesV4info: g_currentProfilesV4 size=${currentProfileSize} keys=${currentProfileKeys}"
+    
     if (hasCurrentProfile) {
         Map currentProfile = g_currentProfilesV4[dni]
-        logInfo "profilesV4info: current profile for this device (${dni}) has ${currentProfile?.keySet()?.size() ?: 0} sections"
-        logInfo "profilesV4info: current profile JSON data: ${JsonOutput.toJson(currentProfile)}"
+        logInfo "profilesV4info: Current profile for this device (${dni}) has ${currentProfile?.keySet()?.size() ?: 0} sections"
+        if (currentProfile != null && !currentProfile.isEmpty()) {
+            logInfo "profilesV4info: Current profile sections: ${currentProfile?.keySet()}"
+            logInfo "profilesV4info: Current profile JSON data: ${JsonOutput.toJson(currentProfile)}"
+        } else {
+            logWarn "profilesV4info: Current profile is NULL or EMPTY"
+        }
     }
     else {
-        logWarn "profilesV4info: this device (${dni}) has no current profile loaded"
+        logWarn "profilesV4info: This device (${dni}) has NO current profile loaded"
     }
 }
 
 void clearProfilesCache() {
-//    g_deviceProfilesV4.clear()
-//    g_deviceFingerprintsV4.clear()
-//    g_currentProfilesV4.clear()
     g_deviceProfilesV4 = null
     g_deviceFingerprintsV4 = null
     g_currentProfilesV4 = null
     g_profilesLoaded = false
     g_profilesLoading = false
+    
+    // Also clear custom profiles for this device if any
+    String dni = device?.deviceNetworkId
+    if (dni && this.hasProperty('g_customProfilesV4') && g_customProfilesV4?.containsKey(dni)) {
+        g_customProfilesV4.remove(dni)
+        logDebug "clearProfilesCache: also cleared custom profiles for device ${dni}"
+    }
 }
 
 void clearProfilesCacheInfo() {
-    int before = g_deviceProfilesV4.size()
-    int beforeFingerprints = g_deviceFingerprintsV4.size()
-    int beforeCurrentProfiles = g_currentProfilesV4.size()
+    int before = g_deviceProfilesV4?.size() ?: 0
+    int beforeFingerprints = g_deviceFingerprintsV4?.size() ?: 0
+    int beforeCurrentProfiles = g_currentProfilesV4?.size() ?: 0
+    
+    // Check for custom profiles before clearing
+    String dni = device?.deviceNetworkId
+    boolean hadCustomProfiles = (dni && this.hasProperty('g_customProfilesV4') && g_customProfilesV4?.containsKey(dni))
+    int customProfileCount = hadCustomProfiles ? (g_customProfilesV4[dni]?.size() ?: 0) : 0
+    
     clearProfilesCache()
-    logInfo "clearProfilesCache: cleared ${before} V4 profiles, ${beforeFingerprints} fingerprint entries, and ${beforeCurrentProfiles} current profiles"
+    
+    if (hadCustomProfiles) {
+        logInfo "clearProfilesCache: cleared ${before} V4 profiles, ${beforeFingerprints} fingerprint entries, ${beforeCurrentProfiles} current profiles, and ${customProfileCount} CUSTOM profiles for device ${dni}"
+    } else {
+        logInfo "clearProfilesCache: cleared ${before} V4 profiles, ${beforeFingerprints} fingerprint entries, and ${beforeCurrentProfiles} current profiles"
+    }
 }
 
 
@@ -1799,8 +1948,25 @@ private Map reconstructFingerprint(Map profileMap, Map fingerprint) {
     return reconstructed
 }
 
+/**
+ * Returns the appropriate JSON filename based on state-based persistence
+ * Checks state.profilesV4['lastJSONSource'] to determine standard vs custom
+ * @return Filename to load (standard or custom)
+ */
 String getProfilesFilename() {
-    return (settings.customJSON == null || settings.customJSON.trim().isEmpty()) ? DEFAULT_PROFILES_FILENAME : settings.customJSON
+    // Check state-based persistence instead of preference
+    if (state.profilesV4 == null) { state.profilesV4 = [:] }
+    
+    String lastSource = state.profilesV4['lastJSONSource']
+    String customFilename = state.profilesV4['customJSONFilename']
+    
+    if (lastSource == 'custom' && customFilename != null && customFilename != '') {
+        logDebug "getProfilesFilename: using CUSTOM JSON: ${customFilename} (lastJSONSource=${lastSource})"
+        return customFilename
+    } else {
+        logDebug "getProfilesFilename: using STANDARD JSON: ${DEFAULT_PROFILES_FILENAME} (lastJSONSource=${lastSource})"
+        return DEFAULT_PROFILES_FILENAME
+    }
 }
 
 @Field static boolean g_OneTimeProfileLoadAttempted = false
@@ -1831,10 +1997,10 @@ boolean loadProfilesFromJSON() {
 }
 
 void oneTimeUpdateFromGitHub(Map data) {
-    String gitHubUrl = url?.trim() ?: defaultGitHubURL
-    String fileName = DEFAULT_PROFILES_FILENAME
+    String fileName = data?.fileName ?: DEFAULT_PROFILES_FILENAME
+    String gitHubUrl = defaultGitHubURL  // Use default URL
     logDebug "oneTimeUpdateFromGitHub: attempting to download ${fileName} and update product profiles from GitHub url ${gitHubUrl}..."
-    updateFromGitHub(gitHubUrl)
+    downloadFromGitHubAndSaveToHE(gitHubUrl)
 }
 
 
@@ -1842,7 +2008,9 @@ void oneTimeUpdateFromGitHub(Map data) {
 def readFile(fName) {
     long contentStartTime = now()
     //uri = "http://${location.hub.localIP}:8080/local/deviceProfilesV4_mmWave.json"
-    uri = "http://${location.hub.localIP}:8080/local/${fName}"
+    // URL-encode the filename to handle spaces and special characters
+    String encodedFileName = URLEncoder.encode(fName, "UTF-8")
+    uri = "http://${location.hub.localIP}:8080/local/${encodedFileName}"
 
     def params = [
         uri: uri,
@@ -2049,8 +2217,26 @@ private boolean ensureProfilesLoaded() {
                 startCooldownTimer()
             }
             g_profilesLoading = false
-            return result
+            
+            // State-based persistence: Check if we should auto-load custom profiles
+            String lastSource = state.profilesV4?.get('lastJSONSource')
+            String customFilename = state.profilesV4?.get('customFilename')
+            String dni = device?.deviceNetworkId
+            
+            if (result && lastSource == 'custom' && customFilename != null && dni) {
+                logDebug "ensureProfilesLoaded: lastJSONSource is 'custom', attempting to load ${customFilename} for device ${dni}"
+                boolean customResult = loadCustomProfilesForDevice(dni, customFilename)
+                if (!customResult) {
+                    logWarn "ensureProfilesLoaded: failed to auto-load custom profiles from '${customFilename}', device will use standard profiles"
+                    // Don't fail - standard profiles are still loaded and valid
+                }
+            } else if (result && lastSource == 'standard') {
+                logDebug "ensureProfilesLoaded: lastJSONSource is 'standard', using standard profiles"
+            }
+            
+            return result  // Return true if standard profiles loaded, even if custom failed
         }
+        
         return true
     } finally {
         state.profilesV4['loadProfilesExceptionsCtr'] = (state.profilesV4['loadProfilesExceptionsCtr'] ?: 0) + 1
@@ -2058,26 +2244,166 @@ private boolean ensureProfilesLoaded() {
     }
 }
 
-void updateFromGitHub() {
+/**
+ * Downloads and loads STANDARD device profiles from GitHub
+ * Saves to local storage and remembers this choice after reboot
+ */
+void loadStandardProfilesFromGitHub() {
+    logInfo "loadStandardProfilesFromGitHub: downloading and loading STANDARD profiles from GitHub"
+    
+    // Download from GitHub and save to local storage
     downloadFromGitHubAndSaveToHE(defaultGitHubURL)
+    
+    // Clear all cached profiles
     clearProfilesCache()
-    ensureProfilesLoaded()
-    ensureCurrentProfileLoaded()
-}
-
-void updateFromLocalStorage() {
-    logInfo "updateFromLocalStorage: reloading device profiles from Hubitat local storage (${DEFAULT_PROFILES_FILENAME})"
-    clearProfilesCache()
+    
+    // Load standard profiles
     boolean result = ensureProfilesLoaded()
+    
     if (result) {
+        // Remember this choice - user explicitly chose standard profiles
+        if (state.profilesV4 == null) { state.profilesV4 = [:] }
+        state.profilesV4['lastJSONSource'] = 'standard'
+        state.profilesV4.remove('customJSONFilename')  // Clear custom filename
+        
+        // Clear any custom profiles for this device
+        String dni = device?.deviceNetworkId
+        if (dni && g_customProfilesV4?.containsKey(dni)) {
+            g_customProfilesV4.remove(dni)
+            clearCustomJSONAttribute()
+        }
+        
         ensureCurrentProfileLoaded()
+        
+        // Update deviceProfileFile attribute to show currently loaded file
+        sendEvent(name: 'deviceProfileFile', value: DEFAULT_PROFILES_FILENAME, type: 'digital')
+        
         String version = state.profilesV4?.version ?: 'unknown'
         String timestamp = state.profilesV4?.timestamp ?: 'unknown'
-        sendInfoEvent "Successfully reloaded ${g_deviceProfilesV4?.size() ?: 0} device profiles from local storage (version: ${version}, timestamp: ${timestamp}). ⚠️ Refresh this page to see updated profiles in the dropdown!"
+        logInfo "✅ Successfully loaded STANDARD profiles from GitHub (version: ${version}, timestamp: ${timestamp})"
+        sendInfoEvent "Standard profiles loaded from GitHub. Press F5 to refresh the page."
     } else {
-        sendInfoEvent "❌ Failed to reload device profiles from local storage"
+        sendInfoEvent "❌ Failed to download standard profiles from GitHub"
     }
 }
+
+// Backward compatibility - redirect old command to new one
+void updateFromGitHub() {
+    logDebug "updateFromGitHub: redirecting to loadStandardProfilesFromGitHub()"
+    loadStandardProfilesFromGitHub()
+}
+
+/**
+ * Reloads STANDARD device profiles from Hubitat local storage
+ * Use after manual edits to the local standard JSON file
+ * Remembers this choice after reboot
+ */
+void loadStandardProfilesFromLocalStorage() {
+    logInfo "loadStandardProfilesFromLocalStorage: reloading STANDARD device profiles from Hubitat local storage (${DEFAULT_PROFILES_FILENAME})"
+    
+    // Clear all cached profiles
+    clearProfilesCache()
+    
+    // Load standard profiles from local storage
+    boolean result = ensureProfilesLoaded()
+    
+    if (result) {
+        // Remember this choice - user explicitly chose standard profiles
+        if (state.profilesV4 == null) { state.profilesV4 = [:] }
+        state.profilesV4['lastJSONSource'] = 'standard'
+        state.profilesV4.remove('customJSONFilename')  // Clear custom filename
+        
+        // Clear any custom profiles for this device
+        String dni = device?.deviceNetworkId
+        if (dni && g_customProfilesV4?.containsKey(dni)) {
+            g_customProfilesV4.remove(dni)
+            clearCustomJSONAttribute()
+        }
+        
+        ensureCurrentProfileLoaded()
+        
+        // Update deviceProfileFile attribute to show currently loaded file
+        sendEvent(name: 'deviceProfileFile', value: DEFAULT_PROFILES_FILENAME, type: 'digital')
+        
+        String version = state.profilesV4?.version ?: 'unknown'
+        String timestamp = state.profilesV4?.timestamp ?: 'unknown'
+        logInfo "✅ Successfully loaded STANDARD profiles (version: ${version}, timestamp: ${timestamp})"
+        sendInfoEvent "Standard profiles loaded from ${DEFAULT_PROFILES_FILENAME}. Press F5 to refresh the page."
+    } else {
+        sendInfoEvent "❌ Failed to reload standard device profiles from local storage"
+    }
+}
+
+// Backward compatibility - redirect old command to new one
+void updateFromLocalStorage() {
+    logDebug "updateFromLocalStorage: redirecting to loadStandardProfilesFromLocalStorage()"
+    loadStandardProfilesFromLocalStorage()
+}
+
+// Backward compatibility alias
+void loadStandardProfiles() {
+    logDebug "loadStandardProfiles: redirecting to loadStandardProfilesFromLocalStorage()"
+    loadStandardProfilesFromLocalStorage()
+}
+
+/**
+ * Loads CUSTOM device profiles from a specific JSON file on Hubitat local storage
+ * Remembers this choice after reboot via state persistence
+ * @param filename Custom JSON filename (e.g., "deviceProfilesV4_custom.json")
+ */
+void loadUserCustomProfilesFromLocalStorage(String filename) {
+    if (filename == null || filename.trim().isEmpty()) {
+        logWarn "loadUserCustomProfilesFromLocalStorage: filename parameter is required"
+        sendInfoEvent "❌ Custom JSON filename is required"
+        return
+    }
+    
+    String trimmedFilename = filename.trim()
+    logInfo "loadUserCustomProfilesFromLocalStorage: loading CUSTOM device profiles from ${trimmedFilename}"
+    
+    // Clear all cached profiles first
+    clearProfilesCache()
+    
+    // First ensure standard profiles are loaded (needed for fallback)
+    boolean standardResult = ensureProfilesLoaded()
+    
+    if (!standardResult) {
+        sendInfoEvent "❌ Failed to load standard profiles - cannot proceed with custom profiles"
+        return
+    }
+    
+    // Load custom profiles for this device
+    String dni = device?.deviceNetworkId
+    if (!dni) {
+        logWarn "loadCustomProfiles: device DNI is null"
+        sendInfoEvent "❌ Device DNI is null - cannot load custom profiles"
+        return
+    }
+    
+    boolean customResult = loadCustomProfilesForDevice(dni, trimmedFilename)
+    
+    if (customResult) {
+        // Remember this choice - user explicitly chose custom profiles
+        if (state.profilesV4 == null) { state.profilesV4 = [:] }
+        state.profilesV4['lastJSONSource'] = 'custom'
+        state.profilesV4['customJSONFilename'] = trimmedFilename
+        
+        // Reload current profile with custom data
+        ensureCurrentProfileLoaded()
+        
+        // Update deviceProfileFile attribute to show currently loaded custom file
+        sendEvent(name: 'deviceProfileFile', value: trimmedFilename, type: 'digital')
+        
+        String version = state.profilesV4?.customVersion ?: 'unknown'
+        String timestamp = state.profilesV4?.customTimestamp ?: 'unknown'
+        int count = state.profilesV4?.customProfileCount ?: 0
+        logInfo "✅ Successfully loaded CUSTOM profiles from ${trimmedFilename} (version: ${version}, timestamp: ${timestamp}, profiles: ${count})"
+        sendInfoEvent "Custom profiles loaded from ${trimmedFilename}. Press F5 to refresh the page."
+    } else {
+        sendInfoEvent "❌ Failed to load custom profiles from ${trimmedFilename}"
+    }
+}
+
 
 
 // updateFromGitHub command - download JSON profiles from GitHub and store to Hubitat local storage

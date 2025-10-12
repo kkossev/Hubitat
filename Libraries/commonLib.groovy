@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/commonLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-commonLib',
-    version: '4.0.0'
+    version: '4.0.1'
 )
 /*
   *  Common ZCL Library
@@ -24,6 +24,7 @@ library(
   * ..............................
   * ver. 3.5.2  2025-08-13 kkossev  - Status attribute renamed to _status_
   * ver. 4.0.0  2025-09-17 kkossev  - deviceProfileV4; HOBEIAN as Tuya device; customInitialize() hook;
+  * ver. 4.0.1  2025-10-12 kkossev  - deviceProfileV4; HOBEIAN as Tuya device; customInitialize() hook;
   *
   *                                   TODO: change the offline threshold to 2 
   *                                   TODO: 
@@ -41,8 +42,8 @@ library(
   *
 */
 
-String commonLibVersion() { '4.0.0' }
-String commonLibStamp() { '2025/09/17 10:42 PM' }
+String commonLibVersion() { '4.0.1' }
+String commonLibStamp() { '2025/10/12 7:10 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -77,7 +78,9 @@ metadata {
         attribute '_status_', 'string'
 
         // common commands for all device types
-        command 'configure', [[name:'normally it is not needed to configure anything', type: 'ENUM', constraints: ConfigureOpts.keySet() as List<String>]]
+        command 'configure', [[name:'⚙️ Advanced administrative and diagnostic commands • Use only when troubleshooting or reconfiguring the device', type: 'ENUM', constraints: ConfigureOpts.keySet() as List<String>]]
+        command 'ping', [[name:'📡 Test device connectivity and measure response time • Updates the RTT attribute with round-trip time in milliseconds']]
+        command 'refresh', [[name:"🔄 Query the device for current state and update the attributes. • ⚠️ Battery-powered 'sleepy' devices may not respond!"]]
 
         // trap for Hubitat F2 bug
         fingerprint profileId:'0104', endpointId:'F2', inClusters:'', outClusters:'', model:'unknown', manufacturer:'unknown', deviceJoinName: 'Zigbee device affected by Hubitat F2 bug'
