@@ -36,15 +36,15 @@
  * ver. 3.4.0  2024-10-05 kkossev  - driver renamed to Zigbee TRVs and Thermostats (Misc); code cleanup; added to HPM
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  * ver. 3.5.2  2025-05-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
- * ver. 3.5.3  2025-10-03 kkossev  - (dev. branch) adding IMOU TRV602WZ into new 'IMOU_IOT_TRV1_EU' profile
+ * ver. 3.5.3  2025-10-13 kkossev  - (dev. branch) adding IMOU TRV602WZ into new 'IMOU_IOT_TRV1_EU' profile
  *
  *                                   TODO:
  */
 
 static String version() { '3.5.3' }
-static String timeStamp() { '2025/10/04 1:11 PM' }
+static String timeStamp() { '2025/10/13 9:45 PM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
 
 import groovy.transform.Field
@@ -65,8 +65,8 @@ import java.math.RoundingMode
 deviceType = 'Thermostat'
 @Field static final String DEVICE_TYPE = 'Thermostat'
 
-@Field static final String SIMULATED_DEVICE_MODEL = 'TRV602WZ'            // comment out for production!
-@Field static final String SIMULATED_DEVICE_MANUFACTURER = 'IMOU'        // comment out for production!
+//@Field static final String SIMULATED_DEVICE_MODEL = 'TRV602WZ'            // comment out for production!
+//@Field static final String SIMULATED_DEVICE_MANUFACTURER = 'IMOU'        // comment out for production!
 
 metadata {
     definition(
@@ -277,16 +277,17 @@ metadata {
                         'getDeviceNameAndProfile':'getDeviceNameAndProfile'
         ],
         attributes    : [
-            [at:'0x0201:0x0000',  name:'temperature',              type:'decimal', dt: '0x21', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Temperature</b>',                   description:'Measured temperature'],
-            [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt: '0x21', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
-            [at:'0x0201:0x0015',  name:'minHeatingSetpoint',       type:'decimal', dt: '0x21', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:1, defVal: 5.0, unit:'°C', title: '<b>Min Heating Setpoint</b>',          description:'Minimum heating setpoint limit'],
-            [at:'0x0201:0x0016',  name:'maxHeatingSetpoint',       type:'decimal', dt: '0x21', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:1, defVal: 35.0, unit:'°C', title: '<b>Max Heating Setpoint</b>',          description:'Maximum heating setpoint limit'],
+            [at:'0x0201:0x0000',  name:'temperature',              type:'decimal', dt: '0x29', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Temperature</b>',                   description:'Measured temperature'],
+            [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt: '0x29', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
+            [at:'0x0201:0x0015',  name:'minHeatingSetpoint',       type:'decimal', dt: '0x29', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100, defVal: 5.0, unit:'°C', title: '<b>Min Heating Setpoint</b>',          description:'Minimum heating setpoint limit'],
+            [at:'0x0201:0x0016',  name:'maxHeatingSetpoint',       type:'decimal', dt: '0x29', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100, defVal: 35.0, unit:'°C', title: '<b>Max Heating Setpoint</b>',          description:'Maximum heating setpoint limit'],
             [at:'0x0201:0x001B',  name:'thermostatOperatingState', type:'enum',    dt: '0x30', rw: 'rw', min:0,    max:5,    step:1,  scale:1,    map:[0: 'cooling', 1: 'cooling', 2: 'heating', 3: 'heating', 4: 'idle', 5: 'idle'], unit:'', title: '<b>Thermostat Operating State</b>', description:'Operating state derived from control sequence'],
+            [at:'0x0006:0x0000',  name:'thermostatOperatingState', type:'enum',    dt: '0x10', rw: 'rw', min:0,    max:5,    step:1,  scale:1,    map:[0: 'cooling', 1: 'cooling', 2: 'heating', 3: 'heating', 4: 'idle', 5: 'idle'], unit:'', title: '<b>Thermostat Operating State</b>', description:'Operating state derived from control sequence'],
             [at:'0x0201:0x001C',  name:'thermostatMode',           type:'enum',    dt: '0x30', rw: 'rw', min:0,    max:4,    step:1,  scale:1,    map:[0: 'off', 3: 'auto', 4: 'heat'], unit:'',         title: '<b> Mode</b>',                   description:'System Mode'],
             [at:'0x0201:0x001E',  name:'thermostatRunMode',        type:'enum',    dt: '0x30', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatRunMode</b>',                   description:'thermostatRunMode'],
         ],
-        refresh: ['pollThermostatCluster'], // in thermostatLib
-        supportedThermostatModes : ['off', 'heat', 'auto'],
+        refresh: ['refreshAll'],
+        supportedThermostatModes : ['off', 'heat'],
         deviceJoinName: 'IMOU-IOT-TRV1-EU TRV',
         configuration : [:]
     ],
@@ -344,8 +345,8 @@ metadata {
     ]
 ]
 
-//void off() { setThermostatMode('off') }
-//void on()  { setThermostatMode('heat') }    // not used
+//void customOff() { setThermostatMode('off') }
+//void customOn()  { setThermostatMode('heat') }
 
 /*
  * -----------------------------------------------------------------------------
