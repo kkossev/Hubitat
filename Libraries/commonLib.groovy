@@ -24,10 +24,9 @@ library(
   * ..............................
   * ver. 3.5.2  2025-08-13 kkossev  - Status attribute renamed to _status_
   * ver. 4.0.0  2025-09-17 kkossev  - deviceProfileV4; HOBEIAN as Tuya device; customInitialize() hook;
-  * ver. 4.0.1  2025-10-12 kkossev  - deviceProfileV4; HOBEIAN as Tuya device; customInitialize() hook;
+  * ver. 4.0.1  2025-10-14 kkossev  - added clusters 0xFC80 and 0xFC81
   *
   *                                   TODO: change the offline threshold to 2 
-  *                                   TODO: 
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
   *                                   TODO: make the configure() without parameter smart - analyze the State variables and call delete states.... call ActiveAndpoints() or/amd initialize() or/and configure()
   *                                   TODO: check - offlineCtr is not increasing? (ZBMicro);
@@ -43,7 +42,7 @@ library(
 */
 
 String commonLibVersion() { '4.0.1' }
-String commonLibStamp() { '2025/10/12 7:10 PM' }
+String commonLibStamp() { '2025/10/14 11:24 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -211,7 +210,7 @@ public void parse(final String description) {
     0x000C: 'AnalogInput',       0x0012: 'MultistateInput',  0x0020: 'PollControl',      0x0102: 'WindowCovering',   0x0201: 'Thermostat',  0x0204: 'ThermostatConfig',/*0x0300: 'ColorControl',*/
     0x0400: 'Illuminance',       0x0402: 'Temperature',      0x0405: 'Humidity',         0x0406: 'Occupancy',        0x042A: 'Pm25',         0x0500: 'IAS',             0x0702: 'Metering',
     0x0B04: 'ElectricalMeasure', 0xE001: 'E0001',            0xE002: 'E002',             0xEC03: 'EC03',             0xEF00: 'Tuya',         0xFC03: 'FC03',            0xFC11: 'FC11',            0xFC7E: 'AirQualityIndex', // Sensirion VOC index
-    0xFCC0: 'XiaomiFCC0',
+    0xFC80: 'FC80',              0xFC81: 'FC81',             0xFCC0: 'XiaomiFCC0'
 ]
 
 // first try calling the custom parser, if not found, call the standard parser

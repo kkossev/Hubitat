@@ -36,13 +36,19 @@
  * ver. 3.4.0  2024-10-05 kkossev  - driver renamed to Zigbee TRVs and Thermostats (Misc); code cleanup; added to HPM
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  * ver. 3.5.2  2025-05-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
- * ver. 3.5.3  2025-10-13 kkossev  - (dev. branch) adding IMOU TRV602WZ into new 'IMOU_IOT_TRV1_EU' profile
+ * ver. 3.5.3  2025-10-14 kkossev  - (dev. branch) adding IMOU TRV602WZ into new 'IMOU_IOT_TRV1_EU' profile
  *
+ *                                   DONE: added IMOU unknown attributes
+ *                                   DONE: check refresh() for IMOU - only the major attributes are refreshed
+ *                                   DONE: check refreshAll() for IMOU - all attributes are refreshed, including model and manufacturer
+ *                                   TODO: thermostatOperatingState instead of on/off
+ *                                   DONE: fix zigbee configure reporting error: Unsupported Attribute
+ *                                   TODO:
  *                                   TODO:
  */
 
 static String version() { '3.5.3' }
-static String timeStamp() { '2025/10/13 9:45 PM' }
+static String timeStamp() { '2025/10/14 7:53 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
@@ -75,6 +81,7 @@ metadata {
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
         // capbilities are defined in the thermostatLib
+        attribute 'antiFreeze', 'enum', ['off', 'on']               // TUYA_SASWELL_TRV, AVATTO_TRV06_TRV16_ME167_ME168_TRV, 
         attribute 'occupancy', 'enum', ['away', 'heat']             // NAMRON
         attribute 'away', 'enum', ['off', 'on']                     // Tuya Saswell, AVATTO, NAMRON
         attribute 'awaySetPoint', 'number'                          // NAMRON
@@ -95,7 +102,6 @@ metadata {
         attribute 'lcdBrightnesss', 'enum', ['low Level', 'mid Level', 'high Level']  // NAMRON
         attribute 'keyVibration', 'enum', ['off', 'low level', 'high Level']  // NAMRON
         attribute 'displayAutoOffActivation', 'enum', ['deactivated', 'activated']  // NAMRON_RADIATOR
-
         attribute 'maxHeatingSetpoint', 'number'                    // BRT-100, Sonoff, AVATTO
         attribute 'minHeatingSetpoint', 'number'                    // BRT-100, Sonoff, AVATTO
         attribute 'modeAfterDry', 'enum', ['off', 'manual', 'auto', 'eco']      // NAMRON
@@ -107,11 +113,29 @@ metadata {
         attribute 'windowOpenCheckActivation', 'enum', ['enabled', 'disabled']  // NAMRON_RADIATOR
         attribute 'windowOpenState', 'enum', ['notOpened', 'opened']  // NAMRON_RADIATOR
         attribute 'overHeatMark', 'enum', ['no', 'temperature over 85ºC and lower than 90ºC', 'temperature over 90ºC']  // NAMRON_RADIATOR
+        attribute 'unknown_0201_8000', 'enum', ['unknown0', 'unknown1']  // IMOU
+        attribute 'unknown_0201_8002', 'enum', ['unknown0', 'unknown1']  // IMOU
+        attribute 'unknown_FC80_8001', 'enum', ['off', 'on']  // IMOU
+        attribute 'unknown_FC80_8002', 'number'  // IMOU
+        attribute 'unknown_FC80_8003', 'number'  // IMOU
+        attribute 'unknown_FC80_8004', 'number'  // IMOU
+        attribute 'unknown_FC81_8000', 'enum', ['off', 'on']  // IMOU
+        attribute 'unknown_FC81_8001', 'enum', ['off', 'on']  // IMOU
 
         command 'refreshAll', [[name: 'refreshAll', type: 'STRING', description: 'Refreshes all parameters', defaultValue : '']]
         command 'factoryResetThermostat', [[name: 'factoryResetThermostat', type: 'STRING', description: 'Factory reset the thermostat', defaultValue : '']]
         command 'setThermostatMode', [[name: 'thermostat mode (not all are available!)', type: 'ENUM', constraints: ['--- select ---'] + AllPossibleThermostatModesOpts.options.values() as List<String>]]
-        if (_DEBUG) { command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  }
+        if (_DEBUG) { 
+            command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  
+            command 'sendCommand', [
+                [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
+                [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
+            ]
+            command 'setPar', [
+                    [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
+                    [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
+            ]
+        }
 
         // itterate through all the figerprints and add them on the fly
         deviceProfilesV3.each { profileName, profileMap ->
@@ -264,13 +288,14 @@ metadata {
             configuration : [:]
     ],
 
-    'IMOU_IOT_TRV1_EU' : [
+    'IMOU_IOT_TRV1_EU' : [  // https://github.com/Koenkk/zigbee-herdsman-converters/issues/10212 
         description   : 'IMOU IOT-TRV1-EU TRV',
         device        : [type: 'TRV', powerSource: 'battery', isSleepy:false],
         capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
-        preferences   : ['minHeatingSetpoint':'0x0201:0x0015', 'maxHeatingSetpoint':'0x0201:0x0016'],
+        preferences   : ['minHeatingSetpoint':'0x0201:0x0015', 'maxHeatingSetpoint':'0x0201:0x0016', 'childLock':'0xFC80:0x8000', 'antiFreeze':'0x0201:0x8001', 'unknown_0201_8002':'0x0201:0x8002'],
         fingerprints  : [
-            [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0004,0005,0006,000A,000B,0201,0B05,FC80,FC81', outClusters:'0003,000A,0019', model:'TRV602WZ', manufacturer:'IMOU', deviceJoinName: 'IMOU IOT-TRV1-EU TRV'],
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0004,0005,0006,000A,000B,0201,0B05,FC80,FC81', outClusters:'0003,000A,0019', model:'TRV602WZ', manufacturer:'Topband', deviceJoinName: 'IMOU IOT-TRV1-EU TRV'],
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0004,0005,0006,000A,000B,0201,0B05,FC80,FC81', outClusters:'0003,000A,0019', model:'TRV602WZ', manufacturer:'', deviceJoinName: 'IMOU IOT-TRV1-EU TRV'],
             [profileId:'0104', endpointId:'02', inClusters:'0000', outClusters:'0019', model:'TRV602WZ', manufacturer:'IMOU', deviceJoinName: 'IMOU IOT-TRV1-EU TRV'],
         ],
         commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences',
@@ -281,10 +306,22 @@ metadata {
             [at:'0x0201:0x0012',  name:'heatingSetpoint',          type:'decimal', dt: '0x29', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
             [at:'0x0201:0x0015',  name:'minHeatingSetpoint',       type:'decimal', dt: '0x29', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100, defVal: 5.0, unit:'°C', title: '<b>Min Heating Setpoint</b>',          description:'Minimum heating setpoint limit'],
             [at:'0x0201:0x0016',  name:'maxHeatingSetpoint',       type:'decimal', dt: '0x29', rw: 'rw', min:5.0,  max:35.0, step:0.5, scale:100, defVal: 35.0, unit:'°C', title: '<b>Max Heating Setpoint</b>',          description:'Maximum heating setpoint limit'],
-            [at:'0x0201:0x001B',  name:'thermostatOperatingState', type:'enum',    dt: '0x30', rw: 'rw', min:0,    max:5,    step:1,  scale:1,    map:[0: 'cooling', 1: 'cooling', 2: 'heating', 3: 'heating', 4: 'idle', 5: 'idle'], unit:'', title: '<b>Thermostat Operating State</b>', description:'Operating state derived from control sequence'],
-            [at:'0x0006:0x0000',  name:'thermostatOperatingState', type:'enum',    dt: '0x10', rw: 'rw', min:0,    max:5,    step:1,  scale:1,    map:[0: 'cooling', 1: 'cooling', 2: 'heating', 3: 'heating', 4: 'idle', 5: 'idle'], unit:'', title: '<b>Thermostat Operating State</b>', description:'Operating state derived from control sequence'],
-            [at:'0x0201:0x001C',  name:'thermostatMode',           type:'enum',    dt: '0x30', rw: 'rw', min:0,    max:4,    step:1,  scale:1,    map:[0: 'off', 3: 'auto', 4: 'heat'], unit:'',         title: '<b> Mode</b>',                   description:'System Mode'],
-            [at:'0x0201:0x001E',  name:'thermostatRunMode',        type:'enum',    dt: '0x30', rw: 'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatRunMode</b>',                   description:'thermostatRunMode'],
+            [at:'0x0201:0x001B',  name:'thermostatOperatingState', type:'enum',    dt: '0x30', rw: 'rw', min:0,    max:5,    step:1,   scale:1,    map:[0: 'cooling', 1: 'cooling', 2: 'heating', 3: 'heating', 4: 'idle', 5: 'idle'], unit:'', title: '<b>Thermostat Operating State</b>', description:'Operating state derived from control sequence'],
+            [at:'0x0006:0x0000',  name:'thermostatOperatingState', type:'enum',    dt: '0x10', rw: 'rw', min:0,    max:5,    step:1,   scale:1,    map:[0: 'cooling', 1: 'cooling', 2: 'heating', 3: 'heating', 4: 'idle', 5: 'idle'], unit:'', title: '<b>Thermostat Operating State</b>', description:'Operating state derived from control sequence'],
+            [at:'0x0201:0x001C',  name:'thermostatMode',           type:'enum',    dt: '0x30', rw: 'rw', min:0,    max:4,    step:1,   scale:1,    map:[0: 'off', 3: 'auto', 4: 'heat'], unit:'',         title: '<b> Mode</b>',                   description:'System Mode'],
+            [at:'0x0201:0x001E',  name:'thermostatRunMode',        type:'enum',    dt: '0x30', rw: 'rw', min:0,    max:1,    step:1,   scale:1,    map:[0: 'off', 1: 'heat'], unit:'',         title: '<b>thermostatRunMode</b>',                   description:'thermostatRunMode'],
+            [at:'0x0201:0x8000',  name:'unknown_0201_8000',        type:'enum',    dt: '0x30', mfgCode: '0x1329', rw: 'rw', min:0,    max:5,    step:1,   scale:1,    map:[0: 'unknown0', 1: 'unknown1'], unit:'', title: '<b>unknown_0201_8000</b>', description:'unknown_0201_8000'],
+            [at:'0x0201:0x8001',  name:'antiFreeze',               type:'decimal', dt: '0x29', mfgCode: '0x1329', rw: 'rw', min:0.0,  max:35.0 ,step:1,   scale:100,  unit:'°C',  title: '<b>AntiFreeze</b>', description:'AntiFreeze temperature'],
+            [at:'0x0201:0x8002',  name:'unknown_0201_8002',        type:'enum',    dt: '0x30', mfgCode: '0x1329', rw: 'rw', min:0,    max:5,    step:1,   scale:1,    map:[0: 'unknown0', 1: 'unknown1'], unit:'', title: '<b>unknown_0201_8002</b>', description:'unknown_0201_8002'],
+            [at:'0xFC80:0x8000',  name:'childLock',                type:'enum',    dt: '0x10', mfgCode: '0x1329', rw: 'rw', min:0,    max:1,    step:1,   scale:1,    map:[0: 'off', 1: 'on'], unit:'',  title: '<b>childLock</b>', description:'childLock'],
+            [at:'0xFC80:0x8001',  name:'unknown_FC80_8001',        type:'enum',    dt: '0x10', mfgCode: '0x1329', rw: 'rw', min:0,    max:1,    step:1,   scale:1,    map:[0: 'off', 1: 'on'], unit:'',  title: '<b>unknown_FC80_8001</b>', description:'unknown_FC80_8001'],
+            [at:'0xFC80:0x8002',  name:'unknown_FC80_8002',        type:'number',  dt: '0x20', mfgCode: '0x1329', rw: 'rw', min:0,    max:9999, step:1,   scale:1,    unit:'',  title: '<b>unknown_FC80_8002</b>', description:'unknown_FC80_8002'],
+            [at:'0xFC80:0x8003',  name:'unknown_FC80_8003',        type:'number',  dt: '0x1B', mfgCode: '0x1329', rw: 'rw', min:0,    max:9999, step:1,   scale:1,    unit:'',  title: '<b>unknown_FC80_8003</b>', description:'unknown_FC80_8003'],
+            [at:'0xFC80:0x8004',  name:'unknown_FC80_8004',        type:'number',  dt: '0x1B', mfgCode: '0x1329', rw: 'rw', min:0,    max:9999, step:1,   scale:1,    unit:'',  title: '<b>unknown_FC80_8004</b>', description:'unknown_FC80_8004'],
+            [at:'0xFC81:0x8000',  name:'unknown_FC81_8000',        type:'enum',    dt: '0x10', mfgCode: '0x1329', rw: 'rw', min:0,    max:1,    step:1,   scale:1,    map:[0: 'off', 1: 'on'], unit:'',  title: '<b>unknown_FC81_8000</b>', description:'unknown_FC81_8000'],
+            [at:'0xFC81:0x8001',  name:'unknown_FC81_8001',        type:'enum',    dt: '0x10', mfgCode: '0x1329', rw: 'rw', min:0,    max:1,    step:1,   scale:1,    map:[0: 'off', 1: 'on'], unit:'',  title: '<b>unknown_FC81_8001</b>', description:'unknown_FC81_8001'],
+           
+
         ],
         refresh: ['refreshAll'],
         supportedThermostatModes : ['off', 'heat'],
@@ -376,6 +413,26 @@ void customParseThermostatConfigCluster(final Map descMap) {
 
 }
 
+void customParseFC80Cluster(final Map descMap) {
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    logTrace "customParseFC80Cluster: zigbee received FC80 cluster attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
+    boolean result = processClusterAttributeFromDeviceProfile(descMap)
+    if ( result == false ) {
+        logWarn "parseFC80Cluster: received unknown FC80 cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
+    }
+}
+
+void customParseFC81Cluster(final Map descMap) {
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    logTrace "customParseFC81Cluster: zigbee received FC81 cluster attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
+    boolean result = processClusterAttributeFromDeviceProfile(descMap)
+    if ( result == false ) {
+        logWarn "parseFC81Cluster: received unknown FC81 cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
+    }
+}
+
 //
 // called from updated() in the main code
 void customUpdated() {
@@ -415,7 +472,7 @@ void refreshAll() {
     List<String> cmds = []
     DEVICE.attributes.each { attr ->
         Map map = attr as Map
-        log.trace "refreshAll: ${map} "
+        //log.trace "refreshAll: ${map} "
         if (map != null && map.at != null) {
             Map mfgCode = map.mfgCode != null ? ['mfgCode':map.mfgCode] : [:]
             cmds += zigbee.readAttribute(hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[0]), hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[1]), mfgCode, delay = 100)
@@ -426,6 +483,7 @@ void refreshAll() {
     sendZigbeeCommands(cmds)
 }
 
+/*
 List<String> refreshNamron() {
     List<String> cmds = []
     logDebug 'refreshNamron() ...'
@@ -434,7 +492,9 @@ List<String> refreshNamron() {
     cmds += zigbee.readAttribute(0x0702, 0x0000, [:], delay = 255)    // CurrentSummationDelivered - energy consumption
     return cmds
 }
+*/
 
+/*
 List<String> configureNamron() {
     List<String> cmds = []
     logDebug 'configureNamron() ...'
@@ -448,27 +508,29 @@ List<String> configureNamron() {
     cmds += zigbee.configureReporting(0x0b04, 0x0508, DataType.UINT16, 0, 600, 50, [:], delay=200)      // Configure Amperage reporting
     cmds += zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, 0, 600, 1, [:], delay=200)       // Configure Energy reporting
     return cmds
-
 }
+*/
 
 List<String> customRefresh() {
     List<String> cmds = refreshFromDeviceProfileList()
-    cmds += refreshNamron()
+    //cmds += refreshNamron()
     logDebug "customRefresh: ${cmds} "
     return cmds
 }
 
+/*
 List<String> customConfigure() {
     List<String> cmds = []
-    cmds += configureNamron()
+    //cmds += configureNamron()
     logDebug "customConfigure() : ${cmds} "
     return cmds
 }
+*/
 
 // called from initializeDevice in the commonLib code
 List<String> customInitializeDevice() {
     List<String> cmds = []
-    cmds += configureNamron()
+    //cmds += configureNamron()
     logDebug "initializeThermostat() : ${cmds}"
     return cmds
 }
