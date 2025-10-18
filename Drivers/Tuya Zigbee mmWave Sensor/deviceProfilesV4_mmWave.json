@@ -150,7 +150,6 @@
         { "dp": 102, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 1, "max": 5, "defVal": 3, "scale": 1, "unit": "", "title": "<b>Radar sensitivity</b>", "description": "<i>Sensitivity of the radar</i>" },
         { "dp": 104, "name": "fadingTime", "type": "number", "rw": "rw", "min": 5, "max": 1500, "defVal": 60, "scale": 1, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Presence inactivity timer, seconds</i>" },
         { "dp": 103, "name": "detectionDelay", "type": "decimal", "rw": "rw", "min": 0.0, "max": 10.0, "defVal": 1.0, "scale": 10, "unit": "seconds", "title": "<b>Detection delay</b>", "description": "<i>Detection delay</i>" },
-        { "dp": 104, "name": "radar_scene", "type": "enum", "rw": "rw", "min": 0, "max": 4, "defVal": "0", "map": { "0": "default", "1": "bathroom", "2": "bedroom", "3": "sleeping" }, "description": "Presets for sensitivity for presence and movement" },
         { "dp": 105, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 10.0, "scale": 100, "unit": "meters", "description": "Distance" }
       ],
       "refresh": ["queryAllTuyaDP"],
