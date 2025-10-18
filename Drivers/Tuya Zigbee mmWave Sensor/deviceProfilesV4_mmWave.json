@@ -23,6 +23,7 @@
         { "model": "TS0601", "manufacturer": "_TZE200_xpq2rzhq" },
         { "model": "TS0601", "manufacturer": "_TZE204_xsm7l9xa" },
         { "model": "TS0601", "manufacturer": "_TZE204_qasjif9e" },
+        { "model": "TS0601", "manufacturer": "_TZE204_ztqnh5cg" },
         { "model": "TS0601", "manufacturer": "_TZE204_fwondbzy", "deviceJoinName": "Moes Smart Human Presence Detector" }
       ],
       "tuyaDPs": [
@@ -32,6 +33,7 @@
         { "dp": 4, "name": "maximumDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 10.0, "defVal": 6.0, "scale": 100, "unit": "meters", "title": "<b>Maximum detection distance</b>", "description": "<i>Maximum (far) detection distance</i>" },
         { "dp": 6, "name": "radarStatus", "type": "enum", "rw": "ro", "min": 0, "max": 5, "defVal": "1", "scale": 1, "map": { "0": "checking", "1": "check_success", "2": "check_failure", "3": "others", "4": "comm_fault", "5": "radar_fault" }, "unit": "TODO", "title": "<b>Radar self checking status</b>", "description": "<i>Radar self checking status</i>" },
         { "dp": 9, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 10.0, "defVal": 0.0, "scale": 100, "unit": "meters", "title": "<b>Distance</b>", "description": "<i>detected distance</i>" },
+        { "dp": 12, "name": "illuminance", "type": "number", "rw": "ro", "min": 0, "max": 2000, "defVal": 0, "scale": 1, "unit": "lx", "title": "<b>illuminance _TZE204_qasjif9e</b>", "description": "<i>illuminance _TZE204_qasjif9e</i>" },
         { "dp": 101, "name": "detectionDelay", "type": "decimal", "rw": "rw", "min": 0.0, "max": 10.0, "defVal": 0.2, "scale": 10, "unit": "seconds", "title": "<b>Detection delay</b>", "description": "<i>Presence detection delay timer</i>" },
         { "dp": 102, "name": "fadingTime", "type": "decimal", "rw": "rw", "min": 0.5, "max": 500.0, "defVal": 60.0, "scale": 10, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Presence inactivity delay timer</i>" },
         { "dp": 103, "name": "debugCLI", "type": "number", "rw": "ro", "min": 0, "max": 99999, "defVal": 0, "scale": 1, "unit": "?", "title": "<b>debugCLI</b>", "description": "<i>debug CLI</i>" },
@@ -57,8 +59,7 @@
       },
       "fingerprints": [
         { "model": "TS0601", "manufacturer": "_TZE284_iadro9bf" },
-        { "model": "TS0601", "manufacturer": "_TZE204_iadro9bf" },
-        { "model": "TS0601", "manufacturer": "_TZE204_ztqnh5cg" }
+        { "model": "TS0601", "manufacturer": "_TZE204_iadro9bf" }
       ],
       "tuyaDPs": [
         { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "scale": 1, "map": { "0": "active", "1": "inactive" }, "unit": "", "title": "<b>Presence state</b>", "description": "<i>Presence state</i>" },
@@ -837,10 +838,10 @@
     } 
   },
   "version": "4.0.8",
-  "timestamp": "2025-10-18 11:13 AM",
+  "timestamp": "2025-10-18 11:56 AM",
   "description": "Device profiles for Tuya Zigbee mmWave Sensor",
   "author": "kkossev",
   "comments": [
-    "v.4.0.8. - moved TS0601 _TZE204_qasjif9e back to TUYA_TS0601_RADAR profile"
+    "v.4.0.8. - moved TS0601 _TZE204_qasjif9e _TZE204_ztqnh5cg back to TS0601_TUYA_RADAR profile"
   ]
 }
