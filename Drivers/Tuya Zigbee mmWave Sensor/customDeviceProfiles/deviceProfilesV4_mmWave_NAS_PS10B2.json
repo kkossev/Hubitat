@@ -3,7 +3,7 @@
     "CUSTOM_NAS_PS10B2": {
       "description": "NEO NAS-PS10B2 Human presence sensor",
       "device": { "powerSource": "dc" },
-      "capabilities": { "MotionSensor": true },
+      "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement": true },
       "preferences": { "fadingTime": "12", "motionDetectionDistance": "13", "motionDetectionSensitivity": "15", "staticDetectionSensitivity": "16", "workMode": "101", "outputSwitch": "104", "outputTime": "103", "ledIndicator": "105" },
       "fingerprints": [
         { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_1youk3hj", "deviceJoinName": "NEO NAS-PS10B2 Human presence sensor" },
@@ -29,7 +29,8 @@
       "comments": [
         "NEO NAS-PS10B2 Human presence sensor",
         "https://www.zigbee2mqtt.io/devices/NAS-PS10B2.html",
-        "https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/neo.ts#L438"
+        "https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/neo.ts#L438",
+        "https://community.hubitat.com/t/beta-tuya-zigbee-mmwave-sensors/137410/401?u=kkossev"
       ] 
     }
   },
