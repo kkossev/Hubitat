@@ -7,8 +7,7 @@
       "preferences": { "radarSensitivity": "2", "detectionDelay": "101", "fadingTime": "102", "minimumDistance": "3", "maximumDistance": "4" },
       "commands": { "resetStats": "" },
       "defaultFingerprint": { 
-        "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", 
-        "model": "TS0601", "manufacturer": "_TZE200_ztc6ggyl", "deviceJoinName": "Tuya ZigBee Breath Presence Sensor ZY-M100"
+        "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_ztc6ggyl", "deviceJoinName": "Tuya ZigBee Breath Presence Sensor ZY-M100"
       },
       "fingerprints": [
         { "model": "TS0601", "manufacturer": "_TZE200_ztc6ggyl", "deviceJoinName": "Tuya ZigBee Breath Presence Sensor ZY-M100" },
@@ -23,6 +22,7 @@
         { "model": "TS0601", "manufacturer": "_TZE200_holel4dk" },
         { "model": "TS0601", "manufacturer": "_TZE200_xpq2rzhq" },
         { "model": "TS0601", "manufacturer": "_TZE204_xsm7l9xa" },
+        { "model": "TS0601", "manufacturer": "_TZE204_qasjif9e" },
         { "model": "TS0601", "manufacturer": "_TZE204_fwondbzy", "deviceJoinName": "Moes Smart Human Presence Detector" }
       ],
       "tuyaDPs": [
@@ -43,19 +43,21 @@
     },
     
     "TS0601_TUYA_RADAR_2": {
+      "comments": [
+        "motion state is inverted compared to TS0601_TUYA_RADAR",
+        "https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/tuya.ts#L10487"
+      ],
       "description": "Tuya Human Presence mmWave Radar ZY-M100-S_2",
       "device": { "powerSource": "dc", "ignoreIAS": true },
       "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement": true },
       "preferences": { "radarSensitivity": "2", "detectionDelay": "101", "fadingTime": "102", "minimumDistance": "3", "maximumDistance": "4" },
       "commands": { "resetStats": "" },
       "defaultFingerprint": { 
-        "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", 
-        "model": "TS0601", "manufacturer": "_TZE284_iadro9bf", "deviceJoinName": "Tuya ZigBee Breath Presence Sensor ZY-M100-S_2"
+        "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE284_iadro9bf", "deviceJoinName": "Tuya ZigBee Breath Presence Sensor ZY-M100-S_2"
       },
       "fingerprints": [
-        { "model": "TS0601", "manufacturer": "_TZE284_iadro9bf", "deviceJoinName": "Tuya ZigBee Breath Presence Sensor ZY-M100-S_2" },
-        { "model": "TS0601", "manufacturer": "_TZE204_iadro9bf", "deviceJoinName": "Tuya ZigBee Breath Presence Sensor ZY-M100-S_2" },
-        { "model": "TS0601", "manufacturer": "_TZE204_qasjif9e" },
+        { "model": "TS0601", "manufacturer": "_TZE284_iadro9bf" },
+        { "model": "TS0601", "manufacturer": "_TZE204_iadro9bf" },
         { "model": "TS0601", "manufacturer": "_TZE204_ztqnh5cg" }
       ],
       "tuyaDPs": [
@@ -72,10 +74,7 @@
       ],
       "refresh": ["queryAllTuyaDP"],
       "spammyDPsToIgnore": [9],
-      "spammyDPsToNotTrace": [2, 3, 4, 6, 9, 101, 102, 103, 104],
-      "comments": [
-        "motion state is inverted compared to TS0601_TUYA_RADAR"
-      ]
+      "spammyDPsToNotTrace": [2, 3, 4, 6, 9, 101, 102, 103, 104]
     },
     
     "TS0601_KAPVNNLK_RADAR": {
@@ -84,8 +83,7 @@
       "capabilities": { "MotionSensor": true, "DistanceMeasurement": true, "HumanMotionState": true },
       "preferences": { "radarSensitivity": "15", "maximumDistance": "13", "smallMotionDetectionSensitivity": "16", "fadingTime": "12" },
       "defaultFingerprint": { 
-        "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", 
-        "model": "TS0601", "manufacturer": "_TZE204_kapvnnlk", "deviceJoinName": "Tuya 24 GHz Human Presence Detector NEW"
+        "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_kapvnnlk", "deviceJoinName": "Tuya 24 GHz Human Presence Detector NEW"
       },
       "fingerprints": [
         { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_kapvnnlk", "deviceJoinName": "Tuya 24 GHz Human Presence Detector NEW" },
@@ -111,8 +109,7 @@
       "capabilities": { "MotionSensor": true },
       "preferences": { "radarSensitivity": "102", "fadingTime": "105" },
       "defaultFingerprint": { 
-        "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", 
-        "model": "TS0601", "manufacturer": "_TZE200_lu01t0zl", "deviceJoinName": "Tuya Human presence sensor with fall function"
+        "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_lu01t0zl", "deviceJoinName": "Tuya Human presence sensor with fall function"
       },
       "fingerprints": [
         { "model": "TS0601", "manufacturer": "_TZE200_lu01t0zl", "deviceJoinName": "Tuya Human presence sensor with fall function" },
@@ -138,8 +135,7 @@
       "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement": true },
       "preferences": { "radarSensitivity": "102", "fadingTime": "104" },
       "defaultFingerprint": { 
-        "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", 
-        "model": "TS0601", "manufacturer": "_TZE200_0u3bj3rc", "deviceJoinName": "24GHz Black Square Human Presence Radar w/ LED"
+        "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_0u3bj3rc", "deviceJoinName": "24GHz Black Square Human Presence Radar w/ LED"
       },
       "fingerprints": [
         { "model": "TS0601", "manufacturer": "_TZE200_0u3bj3rc", "deviceJoinName": "24GHz Black Square Human Presence Radar w/ LED" },
@@ -840,8 +836,11 @@
       "spammyDPsToNotTrace": [19]
     } 
   },
-  "version": "4.0.7",
-  "timestamp": "2025-10-03 3:43 PM",
+  "version": "4.0.8",
+  "timestamp": "2025-10-18 11:13 AM",
   "description": "Device profiles for Tuya Zigbee mmWave Sensor",
-  "author": "kkossev"
+  "author": "kkossev",
+  "comments": [
+    "v.4.0.8. - moved TS0601 _TZE204_qasjif9e back to TUYA_TS0601_RADAR profile"
+  ]
 }
