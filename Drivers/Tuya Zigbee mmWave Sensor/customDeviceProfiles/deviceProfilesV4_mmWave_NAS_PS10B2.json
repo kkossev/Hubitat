@@ -1,31 +1,32 @@
 {
   "deviceProfiles": {
     "CUSTOM_NAS_PS10B2": {
-      "description": "NEO NAS-PS10B2 Human presence sensor",
-      "device": { "powerSource": "dc" },
-      "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement": true },
-      "preferences": { "fadingTime": "12", "motionDetectionDistance": "13", "motionDetectionSensitivity": "15", "staticDetectionSensitivity": "16", "workMode": "101", "outputSwitch": "104", "outputTime": "103", "ledIndicator": "105" },
+      "description": "Human Presence Sensor Light Switch",
+      "device": { "powerSource": "dc", "tuyaDelay": "2000" },
+      "capabilities": { "MotionSensor": true, "HumanMotionState": true, "DistanceMeasurement": true, "IlluminanceMeasurement": true, "Switch": true },
+      "preferences": { "radarSensitivity": "15", "maximumDistance": "13", "staticDetectionSensitivity": "16", "fadingTime": "12", "ledIndicator": "105", "switch": "101", "switchOnTime": "103" },
+      "commands": { "resetStats": "" },
       "fingerprints": [
-        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_1youk3hj", "deviceJoinName": "NEO NAS-PS10B2 Human presence sensor" },
-        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE284_1youk3hj", "deviceJoinName": "NEO NAS-PS10B2 Human presence sensor" }
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_1youk3hj", "deviceJoinName": "Haozee Human Presence Sensor Light Switch" },
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE284_1youk3hj", "deviceJoinName": "NEO NAS-PS10B2 Human Presence Sensor" }
       ],
       "tuyaDPs": [
         { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "map": { "0": "inactive", "1": "active" }, "description": "Presence state" },
-        { "dp": 11, "name": "humanMotionState", "type": "enum", "rw": "ro", "map": { "0": "none", "1": "small", "2": "large" }, "defVal": "0", "description": "Human Motion State" },
-        { "dp": 19, "name": "distance", "type": "number", "rw": "ro", "min": 0, "max": 600, "scale": 1, "unit": "cm", "description": "Current distance of detected motion" },
-        { "dp": 12, "name": "fadingTime", "type": "number", "rw": "rw", "min": 3, "max": 600, "defVal": 60, "scale": 1, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Presence Time (motion keep time)</i>" },
-        { "dp": 13, "name": "motionDetectionDistance", "type": "decimal", "rw": "rw", "min": 1.5, "max": 6.0, "defVal": 3.0, "scale": 100, "unit": "meters", "title": "<b>Motion Detection Distance</b>", "description": "<i>Motion Range Detection (150-600 cm)</i>" },
-        { "dp": 15, "name": "motionDetectionSensitivity", "type": "number", "rw": "rw", "min": 0, "max": 7, "defVal": 3, "scale": 1, "unit": "x", "title": "<b>Motion Detection Sensitivity</b>", "description": "<i>Motion Detection Sensitivity</i>" },
+        { "dp": 11, "name": "humanMotionState", "type": "enum", "rw": "ro",  "min": 0, "max": 2, "defVal": "0", "map": { "0": "none", "1": "small", "2": "large" }, "description": "Human Motion State" },
+        { "dp": 12, "name": "fadingTime", "type": "number", "rw": "rw", "min": 3, "max": 600, "defVal": 60, "scale": 1, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Presence Timeout (motion keep time)</i>" },
+		{ "dp": 13, "name": "maximumDistance", "type": "decimal", "rw": "rw", "min": 1.5, "max": 6.0, "defVal": 6.0, "scale": 100, "unit": "meters", "title": "<b>Detection distance</b>", "description": "<i>Detection distance</i>" },
+		{ "dp": 15, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 0, "max": 7, "defVal": 5, "scale": 1, "unit": "", "title": "<b>Motion Detection Sensitivity</b>", "description": "<i>Motion Sensitivity</i>" },
         { "dp": 16, "name": "staticDetectionSensitivity", "type": "number", "rw": "rw", "min": 0, "max": 7, "defVal": 3, "scale": 1, "unit": "x", "title": "<b>Static Detection Sensitivity</b>", "description": "<i>Motionless Detection Sensitivity</i>" },
-        { "dp": 101, "name": "workMode", "type": "enum", "rw": "rw", "map": { "0": "manual", "1": "auto" }, "defVal": "1", "title": "<b>Work Mode</b>", "description": "<i>Work Mode (manual/auto)</i>" },
+        { "dp": 19, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 6.0, "defVal": 0.0, "scale": 100, "unit": "meters", "description": "Distance to target" },
+        { "dp": 101, "name": "switch", "type": "enum", "rw": "rw", "map": { "0": "manual", "1": "auto" }, "defVal": "1", "title": "<b>Switch Work Mode</b>", "description": "<i>Switch Work Mode</i>" },
         { "dp": 102, "name": "illuminance", "type": "enum", "rw": "ro", "map": { "0": "10", "1": "20", "2": "50", "3": "100" }, "title": "<b>Illuminance</b>", "description": "<i>Illuminance threshold for automation</i>" },
-        { "dp": 104, "name": "outputSwitch", "type": "enum", "rw": "rw", "map": { "0": "OFF", "1": "ON" }, "defVal": "1", "title": "<b>Output Switch</b>", "description": "<i>Output Switch (relay control)</i>" },
-        { "dp": 103, "name": "outputTime", "type": "number", "rw": "rw", "min": 10, "max": 1800, "defVal": 60, "scale": 1, "unit": "seconds", "title": "<b>Output Time</b>", "description": "<i>Output relay duration</i>" },
-        { "dp": 105, "name": "ledIndicator", "type": "enum", "rw": "rw", "map": { "0": "OFF", "1": "ON" }, "defVal": "1", "title": "<b>LED Indicator</b>", "description": "<i>LED indicator switch</i>" }
+		{ "dp": 103, "name": "switchOnTime", "type": "number", "rw": "rw", "min": 10, "max": 1800, "defVal": 30, "scale": 1, "unit": "seconds", "title": "<b>Switch ON time</b>", "description": "<i>Switch On timeout</i>" },
+		{ "dp": 104, "name": "switchState", "type": "enum", "rw": "ro",  "min": 0, "max": 1, "defVal": "0", "map": { "0": "OFF", "1": "ON" }, "title": "<b>Switch</b>", "description": "<i>Switch state</i>" },
+		{ "dp": 105, "name": "ledIndicator", "type": "enum", "rw": "rw", "map": { "0": "OFF", "1": "ON" }, "defVal": "1", "title": "<b>LED indicator</b>", "description": "<i>Power LED indicator</i>" }
       ],
       "refresh": ["queryAllTuyaDP"],
       "spammyDPsToIgnore": [19],
-      "configuration": {},
+      "spammyDPsToNotTrace": [19],
       "comments": [
         "NEO NAS-PS10B2 Human presence sensor",
         "https://www.zigbee2mqtt.io/devices/NAS-PS10B2.html",
@@ -34,8 +35,8 @@
       ] 
     }
   },
-  "version": "1.0.0",
-  "timestamp": "2025-10-18 12:41 PM",
+  "version": "1.0.2",
+  "timestamp": "2025-10-18 5:56 PM",
   "description": "CUSTOM Device profile for NEO NAS-PS10B2 Human presence sensor",
-  "author": "kkossev"
+  "author": "andrea.veroni & kkossev"
 }

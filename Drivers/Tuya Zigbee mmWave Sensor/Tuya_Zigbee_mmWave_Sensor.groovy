@@ -25,8 +25,10 @@
  * ver. 4.0.3  2025-09-19 kkossev  - (deviceProfileV4 dev. branch) cooldwown timer is started on JSON local storage read or parsing error; importUrl updated; added _TZE204_muvkrjr5 into TS0601_TUYA_RADAR_2 profile; 
  *                                   automatically load the standard JSON file from GitHub on driver installation if not present locally (one time action after installation or hub reboot)
  * ver. 4.1.0  2025-10-11 kkossev  - changed the default URLs to the development branch; added 'Update From Local Storage' command, show the JSON version and timestamp in the sendInfoEvent; 
- * ver. 4.2.0  2025-10-12 kkossev  - (development  branch) - added 'Load User Custom Profiles From Local Storage' command and functionality (per device); show the currently loaded profile filename in the deviceProfileFile attribute;
+ * ver. 4.2.0  2025-10-12 kkossev  - added 'Load User Custom Profiles From Local Storage' command and functionality (per device); show the currently loaded profile filename in the deviceProfileFile attribute;
+ * ver. 4.2.1  2025-10-19 kkossev  - (dev. branch) added attributes 'switch', 'switchOnTime' and 'switchState' for NEO NAS-PS10B2 device profile
  *                                   
+ *                                   TODO: new info page on WiKi
  *                                   TODO: Show both the profile key and the profile name in the Preferences page!
  *                                   TODO: handle the Unprocessed ZDO command: cluster=8032 after hub reboot
  *                                   TODO: go to the bottom of the reason for : loadProfilesFromJSON exception: error converting JSON: Unable to determine the current character, it is not a string, number, array, or object
@@ -34,8 +36,8 @@
  *                                   TODO: 
 */
 
-static String version() { "4.2.0" }
-static String timeStamp() {"2025/10/12 9:23 PM"}
+static String version() { "4.2.1" }
+static String timeStamp() {"2025/10/19 8:26 AM"}
 
 @Field static final Boolean _DEBUG = false           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -75,36 +77,38 @@ metadata {
         capability 'Refresh'
         capability 'Health Check'
         
-        attribute 'batteryVoltage', 'number'
-        attribute 'healthStatus', 'enum', ['offline', 'online']
-        attribute 'distance', 'number'                          // Tuya Radar
-        attribute 'unacknowledgedTime', 'number'                // AIR models
-        attribute 'occupiedTime', 'number'                      // BlackSquareRadar & LINPTECH // was existance_time
         attribute 'absenceTime', 'number'                       // BlackSquareRadar only
+        attribute 'batteryVoltage', 'number'
+        attribute 'detectionDelay', 'decimal'
+        attribute 'deviceProfileFile', 'string'                 // shows the currently loaded profile filename
+        attribute 'distance', 'number'                          // Tuya Radar
+        attribute 'fadingTime', 'decimal'
+        attribute 'healthStatus', 'enum', ['offline', 'online']
+        attribute 'humanMotionState', 'enum', ['none', 'moving', 'small', 'stationary', 'static', 'present', 'peaceful', 'large']
+        attribute 'humidity', 'number'                          // TS0601_HOBEIAN_RADAR
+        attribute 'illumState', 'enum', ['dark', 'light', 'unknown']
         attribute 'keepTime', 'enum', ['10 seconds', '30 seconds', '60 seconds', '120 seconds']
-        attribute 'motionDetectionSensitivity', 'number'
+        attribute 'ledIndicator', 'number'
+        attribute 'maximumDistance', 'decimal'
+        attribute 'minimumDistance', 'decimal'
         attribute 'motionDetectionDistance', 'decimal'          // changed 05/11/2024 - was 'number'
         attribute 'motionDetectionMode', 'enum', ['0 - onlyPIR', '1 - PIRandRadar', '2 - onlyRadar']    // added 07/24/2024
-
-        attribute 'radarSensitivity', 'number'
-        attribute 'staticDetectionSensitivity', 'number'        // added 10/29/2023
-        attribute 'staticDetectionDistance', 'decimal'          // added 05/1/2024
-        attribute 'smallMotionDetectionSensitivity', 'number'   // added 04/25/2024
-        attribute 'detectionDelay', 'decimal'
-        attribute 'fadingTime', 'decimal'
-        attribute 'minimumDistance', 'decimal'
-        attribute 'maximumDistance', 'decimal'
-        attribute 'radarStatus', 'enum', ['checking', 'check_success', 'check_failure', 'others', 'comm_fault', 'radar_fault']
-        attribute 'humanMotionState', 'enum', ['none', 'moving', 'small', 'stationary', 'static', 'present', 'peaceful', 'large']
+        attribute 'motionDetectionSensitivity', 'number'
+        attribute 'occupiedTime', 'number'                      // BlackSquareRadar & LINPTECH // was existance_time
         attribute 'radarAlarmMode', 'enum',   ['0 - arm', '1 - off', '2 - alarm', '3 - doorbell']
         attribute 'radarAlarmVolume', 'enum', ['0 - low', '1 - medium', '2 - high', '3 - mute']
-        attribute 'illumState', 'enum', ['dark', 'light', 'unknown']
-        attribute 'ledIndicator', 'number'
-        attribute 'WARNING', 'string'
+        attribute 'radarSensitivity', 'number'
+        attribute 'radarStatus', 'enum', ['checking', 'check_success', 'check_failure', 'others', 'comm_fault', 'radar_fault']
+        attribute 'smallMotionDetectionSensitivity', 'number'   // added 04/25/2024
+        attribute 'staticDetectionDistance', 'decimal'          // added 05/1/2024
+        attribute 'staticDetectionSensitivity', 'number'        // added 10/29/2023
+        attribute 'switch', 'enum', ['manual', 'auto']          // NEO NAS-PS10B2
+        attribute 'switchOnTime', 'number'                      // NEO NAS-PS10B2
+        attribute 'switchState', 'enum', ['OFF', 'ON']          // NEO NAS-PS10B2
         attribute 'tamper', 'enum', ['clear', 'detected']
         attribute 'temperature', 'number'                       // TS0601_HOBEIAN_RADAR
-        attribute 'humidity', 'number'                          // TS0601_HOBEIAN_RADAR
-        attribute 'deviceProfileFile', 'string'                 // shows the currently loaded profile filename
+        attribute 'unacknowledgedTime', 'number'                // AIR models
+        attribute 'WARNING', 'string'
 
         command 'sendCommand', [
             [name:'command', type: 'STRING', description: '⚡ Send a device-specific command with optional parameter value • Click the Run button to see the list of available commands', constraints: ['STRING']],

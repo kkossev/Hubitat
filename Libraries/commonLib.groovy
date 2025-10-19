@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/commonLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-commonLib',
-    version: '4.0.1'
+    version: '4.0.2'
 )
 /*
   *  Common ZCL Library
@@ -25,6 +25,7 @@ library(
   * ver. 3.5.2  2025-08-13 kkossev  - Status attribute renamed to _status_
   * ver. 4.0.0  2025-09-17 kkossev  - deviceProfileV4; HOBEIAN as Tuya device; customInitialize() hook;
   * ver. 4.0.1  2025-10-14 kkossev  - added clusters 0xFC80 and 0xFC81
+  * ver. 4.0.2  2025-10-18 kkossev  - added tuyaDelay in sendTuyaCommand()
   *
   *                                   TODO: change the offline threshold to 2 
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
@@ -41,8 +42,8 @@ library(
   *
 */
 
-String commonLibVersion() { '4.0.1' }
-String commonLibStamp() { '2025/10/14 11:24 PM' }
+String commonLibVersion() { '4.0.2' }
+String commonLibStamp() { '2025/10/18 5:48 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -857,13 +858,15 @@ public List<String> sendTuyaCommand(String dp, String dp_type, String fncmd, int
     if (ep == null || ep == 0) { ep = 1 }
     int tuyaCmd
     // added 07/01/2024 - deviceProfilesV3 device key tuyaCmd:04 : owerwrite all sendTuyaCommand calls for a specfic device profile, if specified!
-    if (this.respondsTo('getDEVICE') && DEVICE?.device?.tuyaCmd != null) {
-        tuyaCmd = DEVICE?.device?.tuyaCmd
+    if (this.respondsTo('getDEVICE') && getDEVICE()?.device?.tuyaCmd != null) {
+        tuyaCmd = getDEVICE().device.tuyaCmd
     }
     else {
         tuyaCmd = tuyaCmdDefault // 0x00 is the default command for most of the Tuya devices, except some ..
     }
-    cmds = zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], delay = 201, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd )
+    // Get delay from device profile or use default
+    int tuyaDelay = DEVICE?.device?.tuyaDelay as Integer ?: 201
+    cmds = zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], delay = tuyaDelay, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd )
     logDebug "${device.displayName} getTuyaCommand (dp=$dp fncmd=$fncmd dp_type=$dp_type) = ${cmds}"
     return cmds
 }

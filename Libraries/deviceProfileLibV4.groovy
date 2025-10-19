@@ -22,14 +22,14 @@ library(
  * ver. 4.0.0  2025-09-03 kkossev  - deviceProfileV4 BRANCH created; deviceProfilesV2 support is dropped; 
  * ver. 4.0.1  2025-09-15 kkossev  - added debug commands to sendCommand(); 
  * ver. 4.0.2  2025-09-18 kkossev  - (deviceProfileV4 branch) cooldown timer is started on JSON local storage read or parsing error;
- * ver. 4.1.0  2025-10-12 kkossev  - (development branch) WIP
+ * ver. 4.1.0  2025-10-12 kkossev  - (development branch) zclWriteAttribute delay default is 150ms if tuyaDelay not defined in the device profile;
  *
  *                                   TODO - updateStateUnknownDPs() from the earlier versions of 4 in 1 driver
  *
 */
 
 static String deviceProfileLibVersion()   { '4.1.0' }
-static String deviceProfileLibStamp() { '2025/10/12 9:23 PM' }
+static String deviceProfileLibStamp() { '2025/10/18 06:04 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -552,6 +552,7 @@ private List<String> zclWriteAttribute(Map attributesMap, int scaledValue) {
         map.dt = attributesMap.type in ['number', 'decimal'] ? DataType.INT16 : DataType.ENUM8
         logDebug "cluster:attribute ${attributesMap.at} is read-write, but no data type (dt) is defined! Assuming 0x${zigbee.convertToHexString(map.dt, 2)}"
     }
+    int tuyaDelay = DEVICE?.device?.tuyaDelay as Integer ?: 150    
     if ((map.mfgCode != null && map.mfgCode != '') || (map.ep != null && map.ep != '')) {
         Map mfgCode = map.mfgCode != null ? ['mfgCode':map.mfgCode] : [:]
         Map ep = map.ep != null ? ['destEndpoint':map.ep] : [:]
@@ -559,10 +560,11 @@ private List<String> zclWriteAttribute(Map attributesMap, int scaledValue) {
         if (mfgCode) mapOptions.putAll(mfgCode)
         if (ep) mapOptions.putAll(ep)
         //log.trace "$mapOptions"
-        cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, mapOptions, delay = 50)
+        // Get delay from device profile or use default
+        cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, mapOptions, delay = tuyaDelay)
     }
     else {
-        cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, [:], delay = 50)
+        cmds = zigbee.writeAttribute(map.cluster as int, map.attribute as int, map.dt as int, scaledValue, [:], delay = tuyaDelay)
     }
     return cmds
 }
@@ -2352,13 +2354,20 @@ void loadStandardProfiles() {
  * @param filename Custom JSON filename (e.g., "deviceProfilesV4_custom.json")
  */
 void loadUserCustomProfilesFromLocalStorage(String filename) {
-    if (filename == null || filename.trim().isEmpty()) {
-        logWarn "loadUserCustomProfilesFromLocalStorage: filename parameter is required"
-        sendInfoEvent "❌ Custom JSON filename is required"
-        return
-    }
+    String trimmedFilename = filename?.trim() ?: ""
     
-    String trimmedFilename = filename.trim()
+    // If filename is empty, check the deviceProfileFile attribute
+    if (trimmedFilename.isEmpty()) {
+        String attrValue = device.currentValue('deviceProfileFile')
+        if (attrValue != null && !attrValue.isEmpty() && attrValue != DEFAULT_PROFILES_FILENAME) {
+            logInfo "loadUserCustomProfilesFromLocalStorage: using deviceProfileFile attribute value: ${attrValue}"
+            trimmedFilename = attrValue
+        } else {
+            logWarn "loadUserCustomProfilesFromLocalStorage: filename parameter is required and deviceProfileFile attribute is empty or default"
+            sendInfoEvent "❌ Custom JSON filename is required"
+            return
+        }
+    }
     logInfo "loadUserCustomProfilesFromLocalStorage: loading CUSTOM device profiles from ${trimmedFilename}"
     
     // Clear all cached profiles first
