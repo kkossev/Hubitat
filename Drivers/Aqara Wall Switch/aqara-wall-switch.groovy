@@ -22,41 +22,31 @@
  *  09.03.2021 Extensive revision by @aonghus-mor, including own child DH.
  *  03.07.2021 Added support for unwired switches, WXKG06LM & WXKG06LM, and simple switch, Lumi WS-USC01
  *  20.11.2021 Now works in decoupled mode for newer switches QBKG21LM - QBKG26LM (Thanks to @mwtay84 for his help)
+ *
+ *  v. 2.0.0 10/19/2025 - kkossev & Claude Sonnet 4- ported to Hubitat Elevation
 */
  
 import groovy.json.JsonOutput
-import physicalgraph.zigbee.zcl.DataType
+import hubitat.zigbee.zcl.DataType
 
 metadata 
 {
-    definition (	name: "Aqara Wall Switch", namespace: "aonghus-mor", author: "aonghus-mor",
-    				//name: "testcode", namespace: "aonghus-mor", author: "aonghus-mor",
-                	mnmn: "SmartThingsCommunity", 
-                    vid: "0a242ce9-0299-3033-8860-aaab565eb04e",   // switch without neutral wire   
-                    ocfDeviceType: "oic.d.switch"
-                    //vid: "f7a15788-4d0f-323f-b061-010f145805a5", // switch with neutral wire
-                    //ocfDeviceType: "oic.d.switch"
-                    //vid: "52bbf611-e8b6-3530-89ac-9a4415b48045", // button (no battery)
-                    //ocfDeviceType: "x.com.st.d.remotecontroller"
-                    //vid: "1c4f60a8-b69f-37dd-9f1b-235e1d6f54bc",// button (with battery)
-                    //ocfDeviceType: "x.com.st.d.remotecontroller" 
-                    //vid: "2a0d4f73-869d-3e3e-93bf-8ef8e45de69d", // decoupled (no neutral)
-                    //ocfDeviceType: "x.com.st.d.remotecontroller"
-                    //vid: "5d9177d1-3af5-30b9-b32e-f2c109aa590b", // decoupled (with neutral)
-                    //ocfDeviceType: "x.com.st.d.remotecontroller"
+    definition (	name: "Aqara Wall Switch", namespace: "kkossev", author: "aonghus-mor & kkossev",
+                    importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20Wall%20Switch/aqara-wall-switch.groovy",
+                    singleThreaded: true
                 )
     {
         capability "Configuration"
         capability "Refresh"
         capability "Switch"
         capability "Momentary"
-        capability "Button"
-        capability "Temperature Measurement"
-        capability "Health Check"
-        capability "Power Meter"
-        capability "Energy Meter"
+        capability "PushableButton"
+        capability "TemperatureMeasurement"
+        capability "HealthCheck"
+        capability "PowerMeter"
+        capability "EnergyMeter"
         capability "Battery"
-        capability "Voltage Measurement"
+        capability "VoltageMeasurement"
         
         command "childOn"
         command "childOff"
@@ -113,12 +103,12 @@ metadata
 	
     preferences 
     {	
-        input name: "unwired", type: "bool", title: "Is this switch unwired?", required: true, displayDuringSetup: true
-        input name: "decoupled", type: "bool", title: "Decoupled Mode?", required: false, displayDuringSetup: false
+        input name: "unwired", type: "bool", title: "Is this switch unwired?", defaultValue: false, required: false
+        input name: "decoupled", type: "bool", title: "Decoupled Mode?", defaultValue: false, required: false
         input name: "tempOffset", type: "decimal", title:"Temperature Offset", 
-        							description:"Adjust temperature by this many degrees", range:"*..*", required: false, displayDuringSetup: false                         
-        input name: "infoLogging", type: "bool", title: "Display info log messages?", required: false, displayDuringSetup: false
-		input name: "debugLogging", type: "bool", title: "Display debug log messages?", required: false, displayDuringSetup: false
+        							description:"Adjust temperature by this many degrees", range:"-100..100", defaultValue: 0, required: false                         
+        input name: "infoLogging", type: "bool", title: "Display info log messages?", defaultValue: true, required: false
+		input name: "debugLogging", type: "bool", title: "Display debug log messages?", defaultValue: false, required: false
     }
 }
 
@@ -126,13 +116,13 @@ metadata
 // Parse incoming device messages to generate events
 def parse(String description)
 {
-   	displayDebugLog( "Parsing '${description}'" )
+   	logDebug( "Parsing '${description}'" )
     
     def dat = new Date()
     def newcheck = dat.time
     state.lastCheckTime = state.lastCheckTime == null ? 0 : state.lastCheckTime
     def diffcheck = newcheck - state.lastCheckTime
-    //displayDebugLog(newcheck + " " + state.lastCheckTime + " " + diffcheck)
+    //logDebug(newcheck + " " + state.lastCheckTime + " " + diffcheck)
     state.lastCheckTime = newcheck
   
    	def events = []
@@ -144,10 +134,10 @@ def parse(String description)
     else if (description?.startsWith('on/off: '))
         parseCustomMessage(description) 
     
-   	def now = ( location.timeZone != null ) ? dat.format("HH:mm:ss EEE dd MMM '('zzz')'", location.timeZone) : dat.format("HH:mm:ss EEE dd MMM '('zzz')'")
-    events << createEvent(name: "lastCheckin", value: now, descriptionText: "Check-In", displayed: debugLogging)
+   	def now = dat.format("HH:mm:ss EEE dd MMM '('zzz')'", location.timeZone ?: TimeZone.getDefault())
+    events << createEvent(name: "lastCheckin", value: now, descriptionText: "Check-In")
     
-    displayDebugLog( "Parse returned: $events" )
+    logDebug( "Parse returned: $events" )
     return events
 }
 
@@ -158,9 +148,9 @@ def updateTemp()
     def cmd = null
     if ( dat.time - state.lastTempTime > 1800000 ) 
     {
-    	log.debug "Requesting Temperature"
+    	logDebug "Requesting Temperature"
         state.lastTempTime = dat.time
-        cmd = [response(delayBetween(zigbee.readAttribute(0x0002,0),1000))]
+        cmd = delayBetween(zigbee.readAttribute(0x0002,0),1000)
     }
 	return cmd
 }
@@ -168,7 +158,7 @@ def updateTemp()
 private def parseCatchAllMessage(String description) 
 {
 	def cluster = zigbee.parse(description)
-	displayDebugLog( cluster )
+	logDebug( cluster )
     def events = []
     
     switch ( cluster.clusterId ) 
@@ -179,7 +169,7 @@ private def parseCatchAllMessage(String description)
             	if ( cluster.data[0] == 0x01 && cluster.data[1] == 0xff )
                 {
                     Map dtMap = dataMap(cluster.data)
-                    displayDebugLog( "Map: " + dtMap )
+                    logDebug( "Map: " + dtMap )
                     if ( ! state.numButtons )
                         getNumButtons()
                     events = events + setTemp( dtMap.get(3) ) +
@@ -187,24 +177,24 @@ private def parseCatchAllMessage(String description)
                                     ( dtMap.get(149) != null ? getkWh( dtMap.get(149) ) : [] ) +
                                     ( dtMap.get(100) != null ? [] : getBattery( dtMap.get(1) ) )
 
-                    displayDebugLog("Number of Switches: ${state.numSwitches}")
+                    logDebug("Number of Switches: ${state.numSwitches}")
                     if ( dtMap.get(100) != null )
                     {
                         def onoff = (dtMap.get(100) ? "on" : "off")
                         switch ( state.numSwitches )
                         {
                             case 1:
-                                displayInfoLog( "Hardware Switch is ${onoff}" )
-                                displayDebugLog( 'Software Switch is ' + device.currentValue('switch') )
+                                logInfo( "Hardware Switch is ${onoff}" )
+                                logDebug( 'Software Switch is ' + device.currentValue('switch') )
                                 break
                             case 2:
                                 def onoff2 = (dtMap.get(101) ? 'on' : 'off' )
                                 //def child = getChild(2)
                                 def child = getChildDevices()[0]
-                                displayDebugLog( "Unwired Switches: ${state.unwiredSwitches}" )
-                                displayDebugLog( "Decoupled Switches: ${state.decoupled}" )
-                                displayDebugLog( "Hardware Switches are (" + onoff + "," + onoff2 +")" )
-                                displayDebugLog( 'Software Switches are (' + device.currentValue('switch') + ',' + child.device.currentValue('switch') + ')' )
+                                logDebug( "Unwired Switches: ${state.unwiredSwitches}" )
+                                logDebug( "Decoupled Switches: ${state.decoupled}" )
+                                logDebug( "Hardware Switches are (" + onoff + "," + onoff2 +")" )
+                                logDebug( 'Software Switches are (' + device.currentValue('switch') + ',' + child.device.currentValue('switch') + ')' )
 
                                 break
                             case 3:
@@ -212,15 +202,15 @@ private def parseCatchAllMessage(String description)
                                 def child2 = getChild(0)
                                 def onoff3 = (dtMap.get(102) ? 'on' : 'off' )
                                 def child3 = getChild(1)
-                                displayDebugLog( "Unwired Switches: ${state.unwiredSwitches}" )
-                                displayDebugLog( "Decoupled Switches: ${state.decoupled}" )
-                                displayDebugLog( "Hardware Switches are (${onoff}, ${onoff2}, ${onoff3})" )
-                                displayDebugLog( 'Software Switches are (' + device.currentValue('switch') + ',' + child2.device.currentValue('switch') + ',' + child3.device.currentValue('switch')+ ')' )
+                                logDebug( "Unwired Switches: ${state.unwiredSwitches}" )
+                                logDebug( "Decoupled Switches: ${state.decoupled}" )
+                                logDebug( "Hardware Switches are (${onoff}, ${onoff2}, ${onoff3})" )
+                                logDebug( 'Software Switches are (' + device.currentValue('switch') + ',' + child2.device.currentValue('switch') + ',' + child3.device.currentValue('switch')+ ')' )
 
                                 break
 
                             default:
-                                displayDebugLog("Number of switches unrecognised: ${state.numSwitches}")
+                                logDebug("Number of switches unrecognised: ${state.numSwitches}")
                         }
                     }
                 }
@@ -228,14 +218,14 @@ private def parseCatchAllMessage(String description)
                 {
                 	state.holdDone = false
                     Map dtMap = dataMap(cluster.data)
-                    displayDebugLog( "Map: " + dtMap )
+                    logDebug( "Map: " + dtMap )
     				runIn( 1, doHoldButton )
                 }
                 else
             	{
                     //Map dtMap = dataMap(cluster.data)
-                    //displayDebugLog( "Map: " + dtMap )
-                    displayDebugLog('CatchAll ignored.')
+                    //logDebug( "Map: " + dtMap )
+                    logDebug('CatchAll ignored.')
             	}
             }
         	break
@@ -243,7 +233,7 @@ private def parseCatchAllMessage(String description)
 			//if ( state.oldOnOff )
             	//events = events + parseSwitchOnOff( [endpoint:cluster.sourceEndpoint.toString(), value: cluster.data[0].toString()] )
             //else
-            	displayDebugLog('CatchAll message ignored!')
+            	logDebug('CatchAll message ignored!')
             break
     }
     return events
@@ -256,14 +246,14 @@ private def setTemp(int temp)
     if ( state.tempNow != temp || state.tempOffset != tempOffset )
     {
       	state.tempNow = temp
-        state.tempOffset = tempOffset ? tempOffset : 0
-        if ( getTemperatureScale() != "C" ) 
+        state.tempOffset = tempOffset ?: 0
+        if ( location.temperatureScale != "C" ) 
             temp = celsiusToFahrenheit(temp)
         state.tempNow2 = temp + state.tempOffset     
-        event << createEvent(name: "temperature", value: state.tempNow2, unit: getTemperatureScale())
-        displayDebugLog("Temperature is now ${state.tempNow2}°")          	
+        event << createEvent(name: "temperature", value: state.tempNow2, unit: location.temperatureScale ?: "F")
+        logDebug("Temperature is now ${state.tempNow2}°")          	
 	}
-    displayDebugLog("setTemp: ${event}")
+    logDebug("setTemp: ${event}")
     return event
 }
 
@@ -277,7 +267,7 @@ private def getWatts(float pwr)
     	state.power = (float)pwr
     	event << createEvent(name: 'power', value: pwr, unit: 'W')
     }
-    displayDebugLog("Instantaneous Power: ${pwr} W")
+    logDebug("Instantaneous Power: ${pwr} W")
 	return event
 }
 
@@ -294,7 +284,7 @@ private def getkWh(float enrgy)
         else
         	event << createEvent(name: 'energy', value: enrgy, unit: 'kWh')
     }
-    displayDebugLog("Accumulated Energy: ${enrgy} kWh")
+    logDebug("Accumulated Energy: ${enrgy} kWh")
 	return event
 }
 
@@ -313,10 +303,10 @@ private def getBattery(rawValue)
         def pct = (rawVolts - minVolts) / (maxVolts - minVolts)
         def roundedPct = Math.min(100, Math.round(pct * 100))
         def descText = "Battery at ${roundedPct}% (${rawVolts} Volts)"
-        displayInfoLog(": $descText")
-        event << createEvent(name: 'battery', value: roundedPct, unit: '%', descriptionText: "${descText}", isStateChange:true, displayed:true)
-        event << createEvent(name: 'voltage', value: rawVolts, unit: "V (${roundedPct}%)", displayed: true, isStateChange: true)
-        displayDebugLog("Battery: ${event}")
+        logInfo(": $descText")
+        event << createEvent(name: 'battery', value: roundedPct, unit: '%', descriptionText: "${descText}", isStateChange:true)
+        event << createEvent(name: 'voltage', value: rawVolts, unit: "V (${roundedPct}%)", isStateChange: true)
+        logDebug("Battery: ${event}")
     }
     else
     	state.Nhours = state.Nhours + 1
@@ -339,7 +329,7 @@ private String decodeHexString(String hexString)
     }
     catch(Exception e)
     {
-    	displayDebugLog( "${e}")
+    	logDebug( "${e}")
     }
 
     return charString;
@@ -358,11 +348,11 @@ private def parseReportAttributeMessage(String description)
     switch (Integer.parseInt(descMap.cluster, 16)) 
     {
     	case 0x0000:
-        	displayDebugLog( "Basic Cluster: $descMap" )
+        	logDebug( "Basic Cluster: $descMap" )
             switch (Integer.parseInt(descMap.attrId, 16) )
             {
             	case 0x0005:
-                	displayDebugLog("Device Type: ${decodeHexString(descMap.value)}")
+                	logDebug("Device Type: ${decodeHexString(descMap.value)}")
                     break
                 case 0x0007:  
                 	if ( descMap.value != "03" )
@@ -372,14 +362,14 @@ private def parseReportAttributeMessage(String description)
                 	state.hasFF22 = true
                 case 0xFF23:
                 case 0xFF24:
-                	displayInfoLog("Decoupled Mode - attrId: ${descMap.attrId} -  ${descMap.value}")
+                	logInfo("Decoupled Mode - attrId: ${descMap.attrId} -  ${descMap.value}")
             }
             break
     	case 0x0001: //battery
         	if ( descMap.value == "0000" )
             	state.batteryPresent = false
         	else if (descMap.attrId == "0020")
-				events = events + getBatteryResult(convertHexToInt(descMap.value / 2))
+				events = events + getBattery(convertHexToInt(descMap.value) / 2)
             break
  		case 0x0002: // temperature
         	if ( descMap.attrId == '0000' ) 
@@ -407,14 +397,14 @@ private def parseReportAttributeMessage(String description)
         	switch ( Integer.parseInt(descMap.attrId, 16) )
             {
                 case 0x00EE:
-                	displayDebugLog("0x00EE meaning: ${Integer.parseInt(descMap.value, 16)}")
+                	logDebug("0x00EE meaning: ${Integer.parseInt(descMap.value, 16)}")
                     break
                 case 0x00F6:
-                	displayDebugLog("0x00F6 meaning: ${Integer.parseInt(descMap.value[2..3]+descMap.value[0..1], 16)}")
+                	logDebug("0x00F6 meaning: ${Integer.parseInt(descMap.value[2..3]+descMap.value[0..1], 16)}")
                     break
                 case 0x00F7:
             		Map myMap = parseFCC0F7(descMap.value)
-            		displayDebugLog("FCC07 Map: ${myMap}")
+            		logDebug("FCC07 Map: ${myMap}")
                 	events = events + setTemp(myMap.get(3))
             }
         	break
@@ -423,7 +413,7 @@ private def parseReportAttributeMessage(String description)
     	//		event = createEvent(name: "switch", value: "off")
         //    break
  		default:
-        	displayDebugLog( "unknown cluster in $descMap" )
+        	logDebug( "unknown cluster in $descMap" )
     }
 	return events
 }
@@ -445,7 +435,7 @@ private Map parseFCC0F7(String mystring)
     }
     catch(Exception e) 
     {
-		displayDebugLog( "${e}")
+		logDebug( "${e}")
     }
     return myMap
 }
@@ -474,14 +464,14 @@ def parseSwitchOnOff(Map descMap)
             	int idx = endpcode - ( endpcode < 3 ? 1 : ( endpcode < 6 ? 4 : 8 ) )
                 Map button = [name: 'button', value: action, data:[buttonNumber: 1], isStateChange: true]
             	getChild(idx).sendEvent( button)
-                displayDebugLog("Child ${idx+1}   ${button}")
+                logDebug("Child ${idx+1}   ${button}")
                 break
             case 6:
             	//events << createEvent(name: 'button', value: 'pushed', data:[buttonNumber: 2], isStateChange: true )
                 events << createEvent(name: 'button', value: action, data:[buttonNumber: 2], isStateChange: true )
                 break
             default:
-            	displayDebugLog("Invalid read attr code")
+            	logDebug("Invalid read attr code")
         }
      }
      else if ( !state.unwiredSwitches[endpcode] )
@@ -495,20 +485,20 @@ def parseSwitchOnOff(Map descMap)
             case 1..2:
             	Map sw = [name: 'switch', value: onoff, isStateChange: true]
             	getChild(endpcode-1).sendEvent( sw)
-                displayDebugLog("{Child ${endpcode}   ${sw}")
+                logDebug("{Child ${endpcode}   ${sw}")
                 break
             default:
-            	displayDebugLog("invalid rad attr code")
+            	logDebug("invalid rad attr code")
         }
     } 
     else
-    	displayDebugLog("read attr endpoint ${endp} ignored.")   	
+    	logDebug("read attr endpoint ${endp} ignored.")   	
 	return events
 }
 
 private def parseCustomMessage(String description) 
 {
-	displayDebugLog( "Parsing Custom Message: $description" )
+	logDebug( "Parsing Custom Message: $description" )
     if (description == 'on/off: 0')
     {
     	if ( state.oldOnOff )
@@ -530,7 +520,7 @@ private def parseCustomMessage(String description)
 
 def doHoldButton()
 {
-	displayDebugLog("doHoldButton   Hold Done: ${state.holdDone}   Last EndPcode: ${state.lastEndpcode}")
+	logDebug("doHoldButton   Hold Done: ${state.holdDone}   Last EndPcode: ${state.lastEndpcode}")
     if ( !state.holdDone )  // avoid this function being called twice.
    	{
         state.holdDone = true
@@ -543,16 +533,16 @@ def doHoldButton()
                 case 3:
                     //events << createEvent( button )
                     sendEvent(button)
-                    displayDebugLog(button)
+                    logDebug(button)
                 break
                 case 1..2:
                 case 4..5:
                 	int ch = state.lastEndpcode % 3 - 1
                     getChild(ch).sendEvent( button )
-                    displayDebugLog("Child ${state.lastEndpcode}  ${button}")
+                    logDebug("Child ${state.lastEndpcode}  ${button}")
                 break
                 default:
-                    displayDebugLog("Unexpected custom message")
+                    logDebug("Unexpected custom message")
             }
         }
         state.lastEndpcode = null
@@ -585,7 +575,7 @@ def childOn(String dni)
     int idx = state.childDevices.indexOf(dni) + 1
     int endp = state.endpoints[idx]
     def cmd = zigbee.command(0x0006, 0x01, "", [destEndpoint: endp] )
-    displayDebugLog("ChildOn ${dni}  ${idx}  ${cmd}" )
+    logDebug("ChildOn ${dni}  ${idx}  ${cmd}" )
     cmd 
 }
 
@@ -594,7 +584,7 @@ def childOff(String dni)
  	int idx = state.childDevices.indexOf(dni) + 1
     int endp = state.endpoints[idx]
     def cmd = zigbee.command(0x0006, 0x00, "", [destEndpoint: endp] )
-    displayDebugLog( "ChildOff ${dni}  ${idx}  ${cmd}")
+    logDebug( "ChildOff ${dni}  ${idx}  ${cmd}")
     cmd 
 }
 
@@ -603,7 +593,7 @@ def childToggle(String dni)
  	int idx = state.childDevices.indexOf(dni) + 1
     int endp = state.endpoints[idx]
     def cmd = zigbee.command(0x0006, 0x02, "", [destEndpoint: endp] )
-    displayDebugLog( "ChildToggle ${dni}  ${idx}  ${cmd}")
+    logDebug( "ChildToggle ${dni}  ${idx}  ${cmd}")
     cmd 
 }
 
@@ -648,7 +638,7 @@ def childRefresh(String dni, Map sets)
     {
 		log.debug "${device.displayName} ${e}"
     }
-    displayDebugLog("Child Refresh: ${idx} ${child.deviceNetworkId}   ${state.unwiredSwitches}   ${state.decoupled}")
+    logDebug("Child Refresh: ${idx} ${child.deviceNetworkId}   ${state.unwiredSwitches}   ${state.decoupled}")
 	def cmds = []
     if ( !state.refreshOn )
     	cmds += refresh()
@@ -657,51 +647,51 @@ def childRefresh(String dni, Map sets)
 
 def on() 
 {
-    displayDebugLog("Switch 1 pressed on")
+    logDebug("Switch 1 pressed on")
     if ( !state.decoupled[0] )
     {
     	Map button = [name: 'button', value: 'pushed', data:[buttonNumber: 1], isStateChange: true]
     	sendEvent(button)
-    	displayDebugLog(button)
+    	logDebug(button)
     }
     def cmd = []
     if ( ! state.unwiredSwitches[0] )
     	cmd = zigbee.command(0x0006, 0x01, "", [destEndpoint: state.endpoints[0]] )
-    displayDebugLog( cmd )
+    logDebug( cmd )
     return cmd 
 }
 
 def off() 
 {
-    displayDebugLog("Switch 1 pressed off")
+    logDebug("Switch 1 pressed off")
     if ( !state.decoupled[0] )
     {
     	Map button = [name: 'button', value: 'pushed', data:[buttonNumber: 1], isStateChange: true]
     	sendEvent( button )
-    	displayDebugLog(button)
+    	logDebug(button)
      }
     def cmd = []
     if ( !state.unwiredSwitches[0] )
     	cmd = zigbee.command(0x0006, 0x00, "", [destEndpoint: state.endpoints[0]] )
     
-    displayDebugLog(cmd)
+    logDebug(cmd)
     cmd
 }
 
 def push()
 {	
-	displayDebugLog("Momentary pressed")
+	logDebug("Momentary pressed")
 	Map button = [name: 'button', value: 'pushed', data:[buttonNumber: 1], isStateChange: true]
     sendEvent( button ) 
-    displayDebugLog(button)
+    logDebug(button)
     def cmd = state.decoupled[0] ? [] : zigbee.command(0x0006, 0x02, "", [destEndpoint: state.endpoints[0]] )
-    displayDebugLog( cmd )
+    logDebug( cmd )
     cmd
 }
 
 private def clearState()
 {
-	displayDebugLog(state)
+	logDebug(state)
     def unwiredSwitches = state.unwiredSwitches
     def decoupled = state.decoupled
     def tempNow = state.tempNow
@@ -711,18 +701,18 @@ private def clearState()
 	state.decoupled = decoupled
 	state.tempNow = tempNow
     state.tempNow2 = tempNow2
-    displayDebugLog(state)
+    logDebug(state)
 }
 
 def refresh() 
 {
 	//settings.infoLogging = true
     //settings.debugLogging = true
-    displayInfoLog( "refreshing" )
+    logInfo( "refreshing" )
     clearState()
     def dat = new Date()
     state.lastTempTime = dat.time
-   	displayDebugLog(settings)
+   	logDebug(settings)
     
     //state.unwired = parseUnwiredSwitch()
     state.tempNow = state.tempNow == null ? 0 : state.tempNow
@@ -736,35 +726,35 @@ def refresh()
     if ( settings.unwired == null )
     	settings.unwired = false
     state.unwiredSwitches[0] = settings.unwired
-    displayDebugLog("Unwired: ${state.unwiredSwitches}")
+    logDebug("Unwired: ${state.unwiredSwitches}")
     
     if ( state.decoupled == null )
     	state.decoupled = []
     if ( settings.decoupled == null )
     	settings.decoupled = false
     state.decoupled[0] = settings.decoupled
-    displayDebugLog("Decoupled: ${state.decoupled}")
+    logDebug("Decoupled: ${state.decoupled}")
     
     getNumButtons()
     if ( state.numSwitches > 1 )
     {
     	def childDevices = getChildDevices()
-		displayDebugLog("Children: ${childDevices}: ${childDevices.size()}")
+		logDebug("Children: ${childDevices}: ${childDevices.size()}")
         /*try 
         {
-        	displayDebugLog("Deleting Children")
+        	logDebug("Deleting Children")
             for ( child in childDevices )
             	deleteChildDevice("${child.deviceNetworkId}")
     	} 
         catch(Exception e) 
         { 
-        	displayDebugLog("${e}") 
+        	logDebug("${e}") 
         }
     	childDevices = getChildDevices()
         */
    		if (childDevices.size() == 0) 
     	{
-			displayInfoLog( "Creating Children" )
+			logInfo( "Creating Children" )
             //state.childDevices = [device.name]
 			try 
     		{
@@ -774,39 +764,37 @@ def refresh()
                 	for ( int i = 1; i < state.numSwitches; i++ )
                     {
                     	def networkId = "${device.deviceNetworkId}-${i}"
-    					addChildDevice( "Aqara Wall Switch Child", networkId , null,[label: "${device.displayName}-(${i})"])  
+    					addChildDevice( "kkossev", "Aqara Wall Switch Child", networkId , [name: "${device.displayName} Child ${i}", label: "${device.displayName}-(${i})", isComponent: false])  
                         state.childDevices[i-1] = networkId
                     }
                 }
 			} 
         	catch(Exception e) 
         	{
-				displayDebugLog( "${e}")
+				logDebug( "${e}")
         	}
-			displayInfoLog("Child created")
+			logInfo("Child created")
 		}    
         else
         	buildChildDevices()
-        displayDebugLog("Children(b): ${state.childDevices}")
+        logDebug("Children(b): ${state.childDevices}")
         
-        displayDebugLog("Unwired Switches: ${state.unwiredSwitches}")
+        logDebug("Unwired Switches: ${state.unwiredSwitches}")
         
         childDevices = getChildDevices()
         state.refreshOn = true
         for (child in childDevices)
         {	
-            child.sendEvent(name: 'checkInterval', value: 3000)
-            displayDebugLog("${child}  ${child.deviceNetworkId}")
+            logDebug("${child}  ${child.deviceNetworkId}")
             //child.refresh()
         }
         state.refreshOn = false
     }    
-    displayDebugLog("Devices: ${state.childDevices}")
-    displayDebugLog("Unwired Switches: ${state.unwiredSwitches}")
+    logDebug("Devices: ${state.childDevices}")
+    logDebug("Unwired Switches: ${state.unwiredSwitches}")
     
     sendEvent(name: 'supportedButtonValues', value: ['pushed', 'held', 'double'], isStateChange: true)
     //sendEvent(name: 'supportedButtonValues', value: ["down","down_hold","down_2x"].encodeAsJSON(), isStateChange: true)
-    sendEvent( name: 'checkInterval', value: 3000, data: [ protocol: 'zigbee', hubHardwareId: device.hub.hardwareID ] )
     
     //state.unwiredSwitches = [unwired]
     def cmds = []
@@ -822,8 +810,8 @@ def refresh()
             zigbee.readAttribute(0xFCC0, 0x00F7, [mfgCode: "0x115F"]) +
             zigbee.readAttribute(0x0000, 0xFF22, [mfgCode: "0x115F"])
      
-	displayDebugLog("State: ${state}")
-    displayDebugLog( cmds )
+	logDebug("State: ${state}")
+    logDebug( cmds )
      //updated()
      state.flag = null
      cmds
@@ -852,7 +840,7 @@ private def buildChildDevices()
 
 private def setDecoupled()
 {
-	displayDebugLog("Decoupled: ${state.decoupled}   ${decoupled}" )
+	logDebug("Decoupled: ${state.decoupled}   ${decoupled}" )
     def cmds = []
     if ( state.hasFCC0 ) //if ( false )
     {
@@ -893,7 +881,7 @@ private def showDecoupled()
 
 private def setOPPLE()
 {
-	displayDebugLog("Setting OPPLE Mode")
+	logDebug("Setting OPPLE Mode")
     def cmds = 	[]
     cmds += zigbee.readAttribute(0x0000, 0x0001) +
         		zigbee.readAttribute(0x0000, 0x0005) + 
@@ -904,39 +892,39 @@ private def setOPPLE()
 
 def installed()
 {
-	displayDebugLog('installed')
-    settings.infoLogging = true
-    response(refresh())
+	logDebug('installed')
+    device.updateSetting("infoLogging", [value: "true", type: "bool"])
+    refresh()
 }
 
 def configure()
 {
-	displayDebugLog('configure')
-    settings.infoLogging = true
-	response(refresh())
+	logDebug('configure')
+    device.updateSetting("infoLogging", [value: "true", type: "bool"])
+	refresh()
 }
 
 def updated()
 {
-    displayDebugLog('updated')
+    logDebug('updated')
     if ( getDataValue("onOff") != null )
     {
     	updateDataValue("onOff", "catchall")
-    	response(configure())
+    	configure()
     }
     else
-    	response(refresh())
+    	refresh()
 }
 
 def ping()
 {
-	displayDebugLog("Pinged")
+	logDebug("Pinged")
     return zigbee.readAttribute(0x0002, 0)
 }
 
 def poll()
 {
-	displayDebugLog("Polled")
+	logDebug("Polled")
     return zigbee.readAttribute(0x0002, 0)
 }
 
@@ -1031,14 +1019,14 @@ private getNumButtons()
             state.hasFCC0 = true
             break
         default:
-        	displayDebugLog("Unknown device model: " + model)
+        	logDebug("Unknown device model: " + model)
             state.numSwitches = 2
         	state.numButtons = 2
             state.endpoints = [null,null,null,0x01,0x02,null,null]  
     }
-    displayDebugLog("endpoints: ${state.endpoints}")
-    sendEvent(name: 'numberOfButtons', value: state.numButtons, displayed: false )
-    displayDebugLog( "Setting Number of Buttons to ${state.numButtons}" )
+    logDebug("endpoints: ${state.endpoints}")
+    sendEvent(name: 'numberOfButtons', value: state.numButtons )
+    logDebug( "Setting Number of Buttons to ${state.numButtons}" )
 }
 
 private Integer convertHexToInt(hex) 
@@ -1115,24 +1103,23 @@ private Map dataMap(data)
                     resultMap.put(lbl,y)
                     it = it + 6
                     break
-                default: displayDebugLog( "unrecognised type in dataMap: " + zigbee.convertToHexString(type) )
+                default: logDebug( "unrecognised type in dataMap: " + zigbee.convertToHexString(type) )
                     return resultMap
             }
         }
     else
-    	displayDebugLog("catchall data unrecognised.")
+    	logDebug("catchall data unrecognised.")
     return resultMap
 }
 
-private def displayDebugLog(message) 
+private def logDebug(message) 
 {
 	if (debugLogging)
 		log.debug "${device.displayName} ${message}"
 }
 
-private def displayInfoLog(message) 
+private def logInfo(message) 
 {
-	//if (infoLogging || state.prefsSetCount < 3)
     if (infoLogging)
 		log.info "${device.displayName} ${message}"
 }

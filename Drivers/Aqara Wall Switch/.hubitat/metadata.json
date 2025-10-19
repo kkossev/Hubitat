@@ -1,3 +1,16 @@
 {
-  "files": []
+  "files": [
+    {
+      "filepath": "/c:/Work/Hubitat/Drivers/Aqara Wall Switch/aqara-wall-switch.groovy",
+      "id": 4618,
+      "codeType": "driver",
+      "version": 2
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Drivers/Aqara Wall Switch/aqara-wall-switch-child.groovy",
+      "codeType": "driver",
+      "id": 4619,
+      "version": 1
+    }
+  ]
 }
