@@ -29,6 +29,7 @@
  * ver. 1.2.5  2024-08-20 kkossev  - pollContactStatus only when the current message is not IAS !
  * ver. 1.2.6  2024-10-02 kkossev  - added SNZB-04P; added capability 'TamperAlert'; pollContactStatus bug fix;
  * ver. 1.2.7  2025-02-03 kkossev  - Xfinity/Visonic MCT-350 Zigbee Contact Sensor fingerprint typo fix - tnx @thanhvle-94
+ * ver. 1.2.8  2025-10-20 kkossev  - (dev. branch) added IMOU Door and Window Sensor ZD1 ( MultIR ZD2-EN )
  *
  *                                   TODO: handle the case when 'lastBattery' is missing.
  *                                   TODO: filter duplicated open/close messages when 'Poll Contact Status' option is enabled
@@ -40,8 +41,8 @@
  *                                   TODO: refactor - use libraries !
  */
 
-static String version() { '1.2.7' }
-static String timeStamp() { '2025/02/03 3:58 PM' }
+static String version() { '1.2.8' }
+static String timeStamp() { '2025/10/20 9:25 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -109,6 +110,7 @@ metadata {
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,FF01,FF00,0001,0500', outClusters: '0019', model: '3RDS17BZ', manufacturer: 'Third Reality, Inc', deviceJoinName: 'Third Reality Contact Sensor' 
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0500,FFF1', outClusters:'0019', model:'3RDTS01056Z', manufacturer:'Third Reality, Inc', controllerType: 'ZGB', deviceJoinName: 'Third Reality Tilt Sensor'         
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0003,0020,0402,0500,0B05', outClusters: '0019', model: 'URC4460BC0-X-R', manufacturer: 'Universal Electronics Inc', deviceJoinName: 'Xfinity/Visonic MCT-350 Zigbee Contact Sensor'   
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0003", model:"ZD2-EN", manufacturer:"MultIR", controllerType: "ZGB", deviceJoinName: 'IMOU Door and Window Sensor ZD1'                   // +tamper
     }
     preferences {
         input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: 'Display measured values in HE log page. Recommended value is <b>true</b>', defaultValue: true)
@@ -256,6 +258,19 @@ metadata {
         batteries     : '2xAAA'
     ],
 
+    'IMOU_CONTACT_SENSOR_ZD1' : [
+        model         : 'ZD2-EN',
+        manufacturers : ['MultIR'],
+        deviceJoinName: 'IMOU Door and Window Sensor ZD1',
+        inClusters    : '0000,0001,0003,0500,0B05',
+        outClusters   : '0003',
+        capabilities  : ['contactSensor': true, 'battery': true, 'tamperAlert': true],
+        configuration : ['battery': true, 'minReportingTime': true],
+        attributes    : ['healthStatus'],
+        preferences   : ['minReportingTime': true],
+        batteries     : 'CR2032'
+    ],
+
     'UNKNOWN'             : [
         model         : '',
         manufacturers : [],
@@ -271,6 +286,7 @@ boolean isConfigurable(String model)   { return (deviceProfiles["$model"]?.prefe
 boolean isConfigurable()        { String model = getModelGroup(); return isConfigurable(model) }
 boolean isBatteryConfigurable() { deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true }
 boolean hasIlliminance()        { deviceProfiles[getModelGroup()]?.capabilities?.IlluminanceMeasurement?.value == true }
+boolean hasTamper()             { deviceProfiles[getModelGroup()]?.capabilities?.tamperAlert?.value == true }
 
 @Field static final Integer MaxRetries = 3
 @Field static final Integer ConfigTimer = 15
@@ -707,6 +723,9 @@ void parseIasMessage(String description) {
         } else {
             sendContactEvent(contactActive = false)
         }
+        if (hasTamper() == true) {
+            tamperEvent(zs.tamperSet == true ? 1 : 0)
+        }
     }
     catch (e) {
         log.error "${device.displayName} This driver requires HE version 2.2.7 (May 2021) or newer!"
@@ -857,6 +876,10 @@ void tamperEvent(value) {
     Map map = [:]
     map.name = 'tamper'
     map.value = value ? 'detected' : 'clear'
+    if ( map.value == device.currentValue('tamper')) {
+        logDebug "${device.displayName} tamper state unchanged (${map.value}), not sending event"
+        return
+    }
     map.descriptionText = "${device.displayName} tamper is ${map.value}"
     if (settings?.txtEnable) {
         log.info "${map.descriptionText}"
@@ -1143,7 +1166,7 @@ void initializeVars(boolean fullInit = true) {
         unschedule()
         resetStats()
         setDeviceName()
-        state.comment = 'works with Tuya TS0601, TS0203, BlitzWolf, Sonoff, ThirdReality'
+        state.comment = 'works with Tuya TS0601, TS0203, BlitzWolf, Sonoff, ThirdReality, Imou'
         log.info "${device.displayName} all states and scheduled jobs cleared!"
         state.driverVersion = driverVersionAndTimeStamp()
     }
