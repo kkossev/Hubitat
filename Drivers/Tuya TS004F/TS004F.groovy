@@ -77,7 +77,7 @@
 static String version() { '2.8.4' }
 static String timeStamp() { '2025/10/20 8:33 PM' }
 
-@Field static final Boolean DEBUG = true
+@Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
 
 import groovy.transform.Field
