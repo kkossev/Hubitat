@@ -57,6 +57,7 @@
  * ver. 2.8.1 2025-01-12 kkossev     - added SiHAS models SBM300Z2, SBM300Z3, SBM300Z4, SBM300Z5, SBM300Z6, ISM300Z3
  * ver. 2.8.2 2025-05-04 kkossev     - added TS0044 _TZ3000_5tqxpine 
  * ver. 2.8.3 2025-10-07 sbohrer     - added TS0041 _TZ3000_rsqqkdxv 
+ * ver. 2.8.4 2025-10-20 kkossev     - added IMOU MultIR ZE2-EN
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: batteryReporting is not initialized!
@@ -73,10 +74,10 @@
  *                                   - TODO: add 'auto revert to scene mode' option
  */
 
-static String version() { '2.8.3' }
-static String timeStamp() { '2025/10/07 8:07 AM' }
+static String version() { '2.8.4' }
+static String timeStamp() { '2025/10/20 8:33 PM' }
 
-@Field static final Boolean DEBUG = false
+@Field static final Boolean DEBUG = true
 @Field static final Integer healthStatusCountTreshold = 4
 
 import groovy.transform.Field
@@ -188,6 +189,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,0501', outClusters: '0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_ug1vtuzn', deviceJoinName: 'Tuya Security remote control' // - 1 button ???
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,0501', outClusters: '0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_0zrccfgx', deviceJoinName: 'Tuya Security remote control'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,0501', outClusters: '0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_p6ju8myv', deviceJoinName: 'Tuya Security remote control'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500,0B05', outClusters: '0003', model: 'ZE2-EN', manufacturer: 'MultIR', deviceJoinName: 'IMOU Emergency Alarm Button ZE1'
 
         // SOS 1 button - command_emergency
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,0501', outClusters: '0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_4fsgukof', deviceJoinName: 'Tuya SOS button'    // 1 button
@@ -375,6 +377,17 @@ void parse(String description) {
                     buttonState = 'unknown'
                     if (logEnable) { log.warn "${device.displayName} Unknown command 0006/${descMap.command}" }
                     break
+            }
+        }
+        else if (descMap.clusterInt == 0x0500) {
+            // IMOU SOS button
+            if (descMap.command == 'F1') {
+                buttonNumber = 1
+                buttonState = descMap.data[0] == '00' ? 'pushed' : descMap.data[0] == '01' ? 'doubleTapped' : descMap.data[0] == '80' ? 'held' : 'unknown'
+            }
+            else {
+                if (logEnable) { log.warn "${device.displayName } unkknown event from cluster=${descMap.clusterInt } command=${descMap.command} data=${descMap?.data}" }
+                return
             }
         }
         else if (descMap.clusterInt == 0x0501) {
