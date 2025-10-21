@@ -45,6 +45,7 @@
  *  ver. 1.6.0 2025-02-15 kkossev - added Switch capability
  *  ver. 1.6.1 2025-06-07 kkossev - added TS0601 _TZE284_fhvpaltk MUCIAKiE into TS0601_TZE284_VALVE group
  *  ver. 1.6.2 2025-07-05 kkossev - added TS0601 _TZE204_a7sghmms _TZE200_7ytb3h8u _TZE284_7ytb3h8u into TS0601_GIEX_VALVE group
+ *  ver. 1.6.3 2025-10-21 kkossev - (dev.branch) Sonoff SWV TRV specific configuration
  *
  *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes ''
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
@@ -55,8 +56,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-static String version() { '1.6.2' }
-static String timeStamp() { '2025/07/05 4:47 PM' }
+static String version() { '1.6.3' }
+static String timeStamp() { '2025/10/21 7:45 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true                // disable it for the production release !
@@ -1542,6 +1543,27 @@ void configure() {
         // TODO - configure battery reporting
         logDebug "settings.batteryReporting = ${settings?.batteryReporting}"
     }
+
+    // Sonoff SWV TRV specific configuration
+    if (isSonoff()) {
+        logInfo 'Configuring Sonoff SWV TRV...'
+        
+        // Bind clusters (equivalent to Zigbee2MQTT bindings)
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}" // genPowerCfg
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}" // genOnOff  
+        //cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0404 {${device.zigbeeId}} {}" // msFlowMeasurement
+        
+        // Configure OnOff reporting (min: 1s, max: 1800s, change: 0)
+        cmds += zigbee.configureReporting(0x0006, 0x0000, DataType.BOOLEAN, 1, 1800, 0)
+        
+        // Read custom Ewelink cluster attributes
+        cmds += zigbee.readAttribute(0xE001, 0x500C) // Valve Abnormal State
+        //cmds += zigbee.readAttribute(0xE001, 0x5011) // Valve Work State
+        
+        // Optional: Configure reporting for flow measurement if supported
+        cmds += zigbee.configureReporting(0x0404, 0x0000, DataType.UINT16, 30, 3600, 1) // Flow rate
+    }
+    
     //
     runIn(3, 'refresh')    // ver. 1.2.2
     //
