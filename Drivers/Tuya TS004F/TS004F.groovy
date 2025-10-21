@@ -57,10 +57,9 @@
  * ver. 2.8.1 2025-01-12 kkossev     - added SiHAS models SBM300Z2, SBM300Z3, SBM300Z4, SBM300Z5, SBM300Z6, ISM300Z3
  * ver. 2.8.2 2025-05-04 kkossev     - added TS0044 _TZ3000_5tqxpine 
  * ver. 2.8.3 2025-10-07 sbohrer     - added TS0041 _TZ3000_rsqqkdxv 
- * ver. 2.8.4 2025-10-20 kkossev     - added IMOU MultIR ZE2-EN
+ * ver. 2.8.4 2025-10-21 kkossev     - added IMOU MultIR ZE2-EN; testing TS0601 _TZE200_nojsjtj2 SOS button (not working for now)
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
- *                                   - TODO: batteryReporting is not initialized!
  *                                   - TODO: unschedule jobs from other drivers: https://community.hubitat.com/t/moes-4-button-zigbee-switch/78119/20?u=kkossev
  *                                   - TODO: configre (override) the numberOfButtons in the AdvancedOptions
  *                                   - TODO: Lightify initialization like in the stock HE driver'; add Aqara button;
@@ -75,7 +74,7 @@
  */
 
 static String version() { '2.8.4' }
-static String timeStamp() { '2025/10/20 8:33 PM' }
+static String timeStamp() { '2025/10/21 9:31 PM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -190,6 +189,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,0501', outClusters: '0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_0zrccfgx', deviceJoinName: 'Tuya Security remote control'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,0501', outClusters: '0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_p6ju8myv', deviceJoinName: 'Tuya Security remote control'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500,0B05', outClusters: '0003', model: 'ZE2-EN', manufacturer: 'MultIR', deviceJoinName: 'IMOU Emergency Alarm Button ZE1'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters: '0003', model: 'TS0601', manufacturer: '_TZE200_nojsjtj2', deviceJoinName: 'Tuya SOS Button'          // NOT WORKING! https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/290?u=kkossev
 
         // SOS 1 button - command_emergency
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,0501', outClusters: '0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_4fsgukof', deviceJoinName: 'Tuya SOS button'    // 1 button
@@ -249,7 +249,7 @@ boolean isIkea() { device.getDataValue('manufacturer') == 'IKEA of Sweden' }
 boolean isOsram() { device.getDataValue('manufacturer') == 'OSRAM' }
 boolean needsDebouncing() { (settings?.forcedDebounce == true) || (device.getDataValue('model') == 'TS004F' || (device.getDataValue('manufacturer') in ['_TZ3000_abci1hiu', '_TZ3000_vp6clf9d', '_TZ3000_ur5fpg7p', '_TZ3000_wkai4ga5']) || (device.getDataValue('model') == 'TS0043' && device.getDataValue('manufacturer') in ['TZ3000_gbm10jnj'])) }
 boolean needsMagic() { device.getDataValue('model') in ['TS004F', 'TS0044', 'TS0043', 'TS0042', 'TS0041', 'TS0046'] }
-boolean isSOSbutton() { device.getDataValue('manufacturer') in ['_TZ3000_4fsgukof', '_TZ3000_wr2ucaj9', '_TZ3000_zsh6uat3', '_TZ3000_tj4pwzzm', '_TZ3000_2izubafb', '_TZ3000_pkfazisv' ] }
+boolean isSOSbutton() { device.getDataValue('manufacturer') in ['_TZ3000_4fsgukof', '_TZ3000_wr2ucaj9', '_TZ3000_zsh6uat3', '_TZ3000_tj4pwzzm', '_TZ3000_2izubafb', '_TZ3000_pkfazisv', '_TZE200_nojsjtj2' ] }
 boolean isUSBpowered() { device.getDataValue('manufacturer') in ['_TZ3000_b3mgfu0d', '_TZ3000_czuyt8lz'] }
 boolean isSiHAS() { device.getDataValue('manufacturer') == 'ShinaSystem' }
 
@@ -647,12 +647,13 @@ void initializeVars(boolean fullInit = false) {
         state.stats = [:]
     }
     if (state.stats == null) { state.stats = [:] }
-    state.comment = 'Works with Tuya TS004F TS0041 TS0042 TS0043 TS0044 TS0046 TS0601, icasa, Konke, Sonoff'
+    state.comment = 'Works with Tuya TS004F TS0041 TS0042 TS0043 TS0044 TS0046 TS0601, icasa, Konke, Sonoff, Imou'
     if (fullInit == true || settings?.logEnable == null) { device.updateSetting('logEnable', DEFAULT_LOG_ENABLE) }
     if (fullInit == true || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
     if (fullInit == true || settings?.reverseButton == null) { device.updateSetting('reverseButton', true) }
     if (fullInit == true || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', false) }
     if (fullInit == true || settings?.forcedDebounce == null) { device.updateSetting('forcedDebounce', false) }
+    if (fullInit == true || settings?.batteryReporting == null) { device.updateSetting('batteryReporting', batteryReportingOptions.defaultValue) }
     if (fullInit == true || state.notPresentCounter == null) { state.notPresentCounter = 0 }
     if (fullInit == true || state.lastButtonNumber == null) { state.lastButtonNumber = 0 }
 
@@ -834,11 +835,7 @@ Double safeToDouble(val, Double defaultVal=0.0) {
 void tuyaMagic() {
     List<String> cmd = []
     cmd += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay = 200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, Unknown 0xfffe
-    /*
-    cmd +=  "raw 0x0000  {10 00 00 04 00 00 00 01 00 05 00 07 00 FE FF}"
-    cmd +=  "send 0x${device.deviceNetworkId} 1 255"
-    cmd += "delay 200"
-    */
+
     if (needsMagic()) {
         cmd += zigbee.readAttribute(0x0006, 0x8004, [:], delay = 50)                      // success / 0x00
         cmd += zigbee.readAttribute(0xE001, 0xD011, [:], delay = 50)                      // Unsupported attribute (0x86)
@@ -927,8 +924,4 @@ void logWarn(final String msg) {
 void test(String description) {
     log.warn "test: ${description}"
     parse(description)
-// TODO: add Centralite / Iris buttons : https://raw.githubusercontent.com/chalford-st/SmartThingsPublic/master/devicetypes/smartthings/zigbee-button.src/zigbee-button.groovy
-// TODO: Check Osrma mini driver: https://raw.githubusercontent.com/chalford-st/SmartThingsPublic/master/devicetypes/chalford/osram-lightify-switch-mini.src/osram-lightify-switch-mini.groovy
-// TODO: Check Aqara driver : https://raw.githubusercontent.com/jsconstantelos/SmartThings/master/devicetypes/jsconstantelos/my-aqara-double-rocker-switch-no-neutral.src/my-aqara-double-rocker-switch-no-neutral.groovy
-// TODO: Check Ikea quirk : https://github.com/TheJulianJES/zha-device-handlers/blob/05c59d01683e0e929f982bf90a338c7596b3e119/zhaquirks/ikea/fourbtnremote.py
 }
