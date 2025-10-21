@@ -57,7 +57,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 static String version() { '1.6.3' }
-static String timeStamp() { '2025/10/21 7:45 PM' }
+static String timeStamp() { '2025/10/21 7:54 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true                // disable it for the production release !
@@ -1615,6 +1615,8 @@ def setDeviceNameAndProfile(String model=null, String manufacturer=null) {
 // This method is called when the preferences of a device are updated.
 void updated() {
     checkDriverVersion()
+    String deviceModel = device.getDataValue('model') ?: 'unknown'
+    String deviceManufacturer = device.getDataValue('manufacturer') ?: 'unknown'
     logInfo "Updating ${(device.getLabel() ?: '[no lablel]')} (${device.getName()}) device model ${deviceModel} manufacturer ${deviceManufacturer} deviceProfile ${getModelGroup()} (driver version ${driverVersionAndTimeStamp()}) "
     logInfo "Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
     if (logEnable == true) {
