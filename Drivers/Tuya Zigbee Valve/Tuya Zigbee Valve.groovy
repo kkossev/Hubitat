@@ -45,7 +45,8 @@
  *  ver. 1.6.0 2025-02-15 kkossev - added Switch capability
  *  ver. 1.6.1 2025-06-07 kkossev - added TS0601 _TZE284_fhvpaltk MUCIAKiE into TS0601_TZE284_VALVE group
  *  ver. 1.6.2 2025-07-05 kkossev - added TS0601 _TZE204_a7sghmms _TZE200_7ytb3h8u _TZE284_7ytb3h8u into TS0601_GIEX_VALVE group
- *  ver. 1.6.3 2025-10-21 kkossev - (dev.branch) Sonoff SWV TRV specific configuration
+ *  ver. 1.6.3 2025-10-21 kkossev - Sonoff SWV valve specific configurations
+ *  ver. 1.6.4 2025-10-25 kkossev - added 'Update Zigbee Firmware' command for non-Tuya devices; added sonoffAutoShutOff attribute and preference (requires firmware 1.0.4); sonoff switch and valve states are updated (digitally) when irrigation starts/stops (workaround)
  *
  *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes ''
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
@@ -56,8 +57,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-static String version() { '1.6.3' }
-static String timeStamp() { '2025/10/21 7:54 PM' }
+static String version() { '1.6.4' }
+static String timeStamp() { '2025/10/25 7:29 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true                // disable it for the production release !
@@ -96,8 +97,8 @@ metadata {
         attribute 'valveOpenThreshold', 'number'        // FrankEver FK_V02 - the set threshold for valve open 
         attribute 'valveOpenPercentage', 'number'       // FrankEver FK_V02 - the current valve open percentage reported by the device
         attribute 'workState', 'enum', ['manual control', 'Cycle timing / quantity control', 'Schedule control']
-        //attribute 'workState', 'enum', SonoffWorkStateOptions.values() as List<String>
         attribute 'valve2', 'enum', ['open', 'closed']  // isTZE284()
+        attribute 'sonoffAutoShutOff', 'number'         // Sonoff SWV - auto shut off timeout in minutes (requires firmware 1.0.4 or later)
 
         command 'initialize', [[name: 'Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****']]
         command 'setIrrigationTimer', [[name:'auto-off timer (irrigationDuration ), in seconds or minutes (depending on the model)', type: 'NUMBER', description: 'Set the irrigation duration timer<br>, in seconds or minutes (depending on the model). Zero value disables the auto-off!', constraints: ['0..86400']]]
@@ -105,6 +106,7 @@ metadata {
         command 'setIrrigationMode', [[name:'select the mode (Saswell and GiEX)', type: 'ENUM', description: 'Set Irrigation Mode', constraints: ['duration', 'capacity']]]
         command 'setValveOpenThreshold', [[name:'Valve Open Threshold, % (FrankEver FK_V02)', type: 'NUMBER', description: 'Valve Open Threshold, % (FrankEver FK_V02)', constraints: ['0..100']]]
         command 'setValve2', [[name:'select state (TZE284)', type: 'ENUM', description: 'Set TZE284 second valve Mode', constraints: ['open', 'closed']]]
+        command 'updateZigbeeFirmware', [[name:'Update Zigbee Firmware', description: 'Request Zigbee OTA update for supported devices']]
 
         if (_DEBUG == true) {
             command 'testTuyaCmd', [
@@ -155,6 +157,9 @@ metadata {
                 input(name: 'forcedProfile', type: 'enum', title: '<b>Device Profile</b>', description: 'Forcely change the Device Profile, if the valve model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!',  options: getDeviceProfiles())
                 input(name: 'autoSendTimer', type: 'bool', title: '<b>Send the timeout timer automatically</b>', description: 'Send the configured timeout value on every open and close command <b>(GiEX)</b>', defaultValue: true)
                 input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: 'Experimental multi-state switch events', defaultValue: false
+                if (isSonoff()) {
+                    input(name: 'sonoffAutoShutOff', type: 'number', title: '<b>Sonoff Auto Shut Off</b>', description: 'Automatically shut down the water valve after the water shortage exceeds the specified time (minutes). Zero value disables the auto shut-off!<br>Requires firmware version 1.0.4 or later!', defaultValue: 30, required: false)
+                }
             }
         }
     }
@@ -608,12 +613,12 @@ void sendSwitchEvent(final String switchValue) {
     //boolean bWasChange = false
     boolean debounce   = state.states['debounce'] ?: false
     String lastSwitch = state.states['lastSwitch'] ?: 'unknown'
+    logDebug "sendSwitchEvent: value=${value}  lastSwitch=${state.states['lastSwitch']}"
     if (debounce == true && value == lastSwitch) {    // some devices send only catchall events, some only readattr reports, but some will fire both...
         if (logEnable) { log.debug "${device.displayName } Ignored duplicated switch event for model ${getModelGroup() }" }
         runInMillis(DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true])
         return
     }
-    logDebug "sendSwitchEvent: value=${value}  lastSwitch=${state.states['lastSwitch']}"
     boolean isDigital = state.states['isDigital'] ?: false  // bug fixed 2024-09-23
     map.type = isDigital == true ? 'digital' : 'physical'
     if (lastSwitch != value) {
@@ -1182,6 +1187,12 @@ void parseSonoffCluster(Map it, String description) {
             descText = "Irrigation Start Time is ${startDateString}" ; if (settings?.logEnable) { descText += " (raw: ${it.value})" }
             logInfo "${descText}"
             sendEvent(name: 'irrigationStartTime', value: startDateString, descriptionText:descText, type: 'physical')
+            // Set valve/switch to open/on if not already
+            if (device.currentValue('valve') != 'open' || device.currentValue('switch') != 'on') {
+                logInfo 'Irrigation started - setting valve to open and switch to on'
+                sendEvent(name: 'valve', value: 'open', descriptionText: 'Valve opened (irrigation started)', type: 'digital')
+                sendEvent(name: 'switch', value: 'on', descriptionText: 'Switch turned on (irrigation started)', type: 'digital')
+            }
             break
         case '500E' :   // Irrigation End Time //  uint32  // Local time (since 1970)
             Date endDate = new Date((intValue + 946684800L)  * 1000L)
@@ -1189,6 +1200,12 @@ void parseSonoffCluster(Map it, String description) {
             descText = "Irrigation End Time is ${endDateString}"  ; if (settings?.logEnable) { descText += " (raw: ${it.value})" }
             logInfo "${descText}"
             sendEvent(name: 'irrigationEndTime', value: endDateString, descriptionText:descText, type: 'physical')
+            // Set valve/switch to closed/off if not already
+            if (device.currentValue('valve') != 'closed' || device.currentValue('switch') != 'off') {
+                logInfo 'Irrigation ended - setting valve to closed and switch to off'
+                sendEvent(name: 'valve', value: 'closed', descriptionText: 'Valve closed (irrigation ended)', type: 'digital')
+                sendEvent(name: 'switch', value: 'off', descriptionText: 'Switch turned off (irrigation ended)', type: 'digital')
+            }
             break
         case '500F' :   // Daily Irrigation Volume (Irrigation water volume for the day)    // uint32 (Liter)
             logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Daily Irrigation Volume : value is ${intValue} (raw: ${it.value})"
@@ -1198,6 +1215,12 @@ void parseSonoffCluster(Map it, String description) {
             descText = "Valve Work State is ${workState}" ; if (settings?.logEnable) { descText += " (raw: ${it.value})" }
             logInfo "${descText}"
             sendEvent(name: 'workState', value: workState, descriptionText:descText, type: 'physical')
+            break
+        case '5011' :   // Lack Water Close Valve Timeout (Auto shut off timeout in minutes)  // uint16
+            descText = intValue == 0 ? 'Sonoff auto shut off is disabled' : "Sonoff auto shut off is set to ${intValue} minutes"
+            if (settings?.logEnable) { descText += " (raw: ${it.value})" }
+            logInfo "${descText}"
+            sendEvent(name: 'sonoffAutoShutOff', value: intValue, descriptionText: descText, type: 'physical')
             break
         default :
             logDebug "Sonoff cluster 0x${it.cluster} <b>unknown attribute ${it.attrId}</b> value is ${intValue} (raw: ${it.value})"
@@ -1557,12 +1580,38 @@ void configure() {
         cmds += zigbee.configureReporting(0x0006, 0x0000, DataType.BOOLEAN, 1, 1800, 0)
         
         // Read custom Ewelink cluster attributes
-        cmds += zigbee.readAttribute(0xE001, 0x500C) // Valve Abnormal State
-        //cmds += zigbee.readAttribute(0xE001, 0x5011) // Valve Work State
+        cmds += zigbee.readAttribute(0xE001, 0x500C) // Valve Abnormal State    normal state, water shortage or water leakage
         
-        // Optional: Configure reporting for flow measurement if supported
-        cmds += zigbee.configureReporting(0x0404, 0x0000, DataType.UINT16, 30, 3600, 1) // Flow rate
+        String sonoffMinVersion = '1.0.3'
+        if (device.getDataValue('softwareBuild') != null) {
+            logDebug "Sonoff firmware version: ${device.getDataValue('softwareBuild')}"
+            if (device.getDataValue('softwareBuild') >= sonoffMinVersion) {
+                // Configure auto shut off timeout (default 30 minutes)
+                if (settings?.sonoffAutoShutOff != null) {
+                    int shutOffValue = settings?.sonoffAutoShutOff as int
+                    if (shutOffValue == 0) {
+                    // Disable auto shut off
+                    cmds += zigbee.writeAttribute(0xE001, 0x5011, DataType.UINT16, 0, [:], delay = 300)
+                    logInfo "Disabling Sonoff auto shut off"
+                    sendEvent(name: 'sonoffAutoShutOff', value: 0, descriptionText: 'Sonoff auto shut off disabled', type: 'digital')
+                    } else {
+                    // Enable auto shut off with specified timeout in minutes
+                    cmds += zigbee.writeAttribute(0xE001, 0x5011, DataType.UINT16, shutOffValue, [:], delay = 300)
+                    logInfo "Setting Sonoff auto shut off to ${shutOffValue} minutes"
+                    sendEvent(name: 'sonoffAutoShutOff', value: shutOffValue, descriptionText: "Sonoff auto shut off set to ${shutOffValue} minutes", type: 'digital')
+                    }
+                }
+                cmds += zigbee.readAttribute(0xE001, 0x5011) // Valve Work State  lackWaterCloseValveTimeout: {ID: 0x5011, type: Zcl.DataType.UINT16},
+                // "Automatically shut down the water valve after the water shortage exceeds 30 minutes. Requires firmware version 1.0.4 or later!"
+                //                 valueOff: ["DISABLE", 0],     valueOn: ["ENABLE", 30],
+            }
+            else {
+                logWarn "Sonoff firmware version is below the minimum required version ${sonoffMinVersion} for auto shut off configuration"
+            }
+        }
     }
+    // Optional: Configure reporting for flow measurement if supported
+    cmds += zigbee.configureReporting(0x0404, 0x0000, DataType.UINT16, 30, 3600, 1) // Flow rate
     
     //
     runIn(3, 'refresh')    // ver. 1.2.2
@@ -2013,6 +2062,15 @@ void setValve2(String mode) {
     cmds = sendTuyaCommand('02', DP_TYPE_BOOL, dpValHex)
     logDebug "setValve2= ${mode} : ${cmds}"
     sendZigbeeCommands( cmds )
+}
+
+void updateZigbeeFirmware() {
+    if (isTuya()) {
+        logWarn 'Update Zigbee Firmware command is not supported for Tuya devices'
+        return
+    }
+    logInfo 'Requesting Zigbee OTA firmware update...'
+    sendZigbeeCommands(zigbee.updateFirmware())
 }
 
 void setValveOpenThreshold(Number percentage) {
