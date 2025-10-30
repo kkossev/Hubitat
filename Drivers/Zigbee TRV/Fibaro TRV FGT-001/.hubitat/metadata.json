@@ -1,0 +1,16 @@
+{
+  "files": [
+    {
+      "filepath": "/c:/Work/Hubitat/Drivers/Zigbee TRV/Fibaro TRV FGT-001/Fibaro TRV FGT-001 (4.7) (KK Mod).groovy",
+      "id": 2058,
+      "codeType": "driver",
+      "version": 27
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Drivers/Zigbee TRV/Fibaro TRV FGT-001/Libraries/drozovyk.sensor1.groovy",
+      "id": 25,
+      "codeType": "library",
+      "version": 2
+    }
+  ]
+}
