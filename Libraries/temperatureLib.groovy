@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Temperature Library', name: 'temperatureLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/temperatureLib.groovy', documentationLink: '',
-    version: '3.3.0'
+    version: '3.3.1'
 )
 /*
  *  Zigbee Temperature Library
@@ -15,14 +15,15 @@ library(
  * ver. 3.2.1  2024-06-07 kkossev  - excluded maxReportingTime for mmWaveSensor and Thermostat
  * ver. 3.2.2  2024-07-06 kkossev  - fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
  * ver. 3.2.3  2024-07-18 kkossev  - added 'ReportingConfiguration' capability check for minReportingTime and maxReportingTime
- * ver. 3.3.0  2025-09-15 kkossev  - (dev. branch) commonLib 4.0.0 allignment; added temperatureOffset
+ * ver. 3.3.0  2025-09-15 kkossev  - commonLib 4.0.0 allignment; added temperatureOffset
+ * ver. 3.3.1  2025-10-31 kkossev  - bugfix: isRefresh was not checked if temperature delta < 0.1
  *
  *                                   TODO: unschedule('sendDelayedTempEvent') only if needed (add boolean flag to sendDelayedTempEvent())
  *                                   TODO: check for negative temperature values in standardParseTemperatureCluster()
 */
 
-static String temperatureLibVersion()   { '3.3.0' }
-static String temperatureLibStamp() { '2025/09/15 7:54 PM' }
+static String temperatureLibVersion()   { '3.3.1' }
+static String temperatureLibStamp() { '2025/10/31 3:13 PM' }
 
 metadata {
     capability 'TemperatureMeasurement'
@@ -67,13 +68,16 @@ void handleTemperatureEvent(BigDecimal temperaturePar, boolean isDigital=false) 
     eventMap.value = tempCorrected.setScale(1, BigDecimal.ROUND_HALF_UP)
     BigDecimal lastTemp = device.currentValue('temperature') ?: 0
     logTrace "lastTemp=${lastTemp} tempCorrected=${tempCorrected} delta=${Math.abs(lastTemp - tempCorrected)}"
-    if (Math.abs(lastTemp - tempCorrected) < 0.1) {
+    
+    boolean isRefresh = state.states['isRefresh'] == true
+    
+    if (!isRefresh && Math.abs(lastTemp - tempCorrected) < 0.1) {
         logDebug "skipped temperature ${tempCorrected}, less than delta 0.1 (lastTemp=${lastTemp})"
         return
     }
     eventMap.type = isDigital == true ? 'digital' : 'physical'
     eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
-    if (state.states['isRefresh'] == true) {
+    if (isRefresh) {
         eventMap.descriptionText += ' [refresh]'
         eventMap.isStateChange = true
     }

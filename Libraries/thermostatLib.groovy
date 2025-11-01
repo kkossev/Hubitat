@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Thermostat Library', name: 'thermostatLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy', documentationLink: '',
-    version: '3.6.0')
+    version: '3.6.1')
 /*
  *  Zigbee Thermostat Library
  *
@@ -22,13 +22,14 @@ library(
  * ver. 3.5.0  2025-02-16 kkossev  - added setpointReceiveCheck() and modeReceiveCheck() retries
  * ver. 3.5.1  2025-03-04 kkossev  - == false bug fix; disabled switching to 'cool' mode.
  * ver. 3.6.0  2025-09-15 kkossev  - deviceProfileLibV4 alignment
+ * ver. 3.6.1  2025-10-31 kkossev  - added setRefreshRequest() in the autoPollThermostat() method, so that events are always sent with [refresh] tag 
  *
  *                                   TODO: add eco() method
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
-public static String thermostatLibVersion()   { '3.6.0' }
-public static String thermostatLibStamp() { '2025/09/15 8:10 PM' }
+public static String thermostatLibVersion()   { '3.6.1' }
+public static String thermostatLibStamp() { '2025/10/31 3:18 PM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib
@@ -412,6 +413,7 @@ public void autoPollThermostat() {
     checkDriverVersion(state)
     List<String> cmds = refreshFromDeviceProfileList()
     if (cmds != null && cmds != [] ) {
+        setRefreshRequest() // set the refresh flag and start a REFRESH_TIMER timer to clear it
         sendZigbeeCommands(cmds)
     }
 }
@@ -518,9 +520,10 @@ List<String> thermostatRefresh() {
     return []
 }
 
-// TODO - configure in the deviceProfile refresh: tag
+// Starting from library version 3.6.1  2025-10-31 the [Refresh] flag is set in the calling function 
+// before polling the thermostat in order to force sending events with [refresh] tag
 public List<String> pollThermostatCluster() {
-    return  zigbee.readAttribute(0x0201, [0x0000, 0x0001, /*0x0002,*/ 0x0012, 0x001B, 0x001C, 0x0029], [:], delay = 1500)      // 0x0000 = local temperature, 0x0001 = outdoor temperature, 0x0002 = occupancy, 0x0012 = heating setpoint, 0x001B = controlledSequenceOfOperation, 0x001C = system mode (enum8 )
+    return  zigbee.readAttribute(0x0201, [0x0000, /*0x0001, 0x0002,*/ 0x0012, 0x001B, 0x001C, 0x0029], [:], delay = 202)      // 0x0000 = local temperature, 0x0001 = outdoor temperature, 0x0002 = occupancy, 0x0012 = heating setpoint, 0x001B = controlledSequenceOfOperation, 0x001C = system mode (enum8 )
 }
 
 // TODO - configure in the deviceProfile refresh: tag

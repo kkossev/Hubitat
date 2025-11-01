@@ -581,7 +581,7 @@ private void standardParsePollControlCluster(final Map descMap) {
         case 0x0004: logDebug "PollControl cluster: CheckInIntervalMin = ${descMap?.value}" ; break
         case 0x0005: logDebug "PollControl cluster: LongPollIntervalMin = ${descMap?.value}" ; break
         case 0x0006: logDebug "PollControl cluster: FastPollTimeoutMax = ${descMap?.value}" ; break
-        default: logWarn "zigbee received unknown PollControl cluster attribute 0x${descMap.attrId} (value ${descMap.value})" ; break
+        default: logDebug "zigbee received unknown PollControl cluster attribute 0x${descMap.attrId} (value ${descMap.value})" ; break
     }
 }
 

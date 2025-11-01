@@ -16,15 +16,16 @@
  * ver. 3.3.0  2024-06-08 kkossev  - searate new driver for TRVZB thermostat
  * ver. 3.3.1  2024-07-18 kkossev  - TimeSync() magic;
  * ver. 3.4.0  2024-10-05 kkossev  - added to HPM
- * ver. 3.4.1  2025-03-06 kkossev  - (dev. branch) healthCheck by pinging the TRV
+ * ver. 3.4.1  2025-03-06 kkossev  - healthCheck by pinging the TRV
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  * ver. 3.5.2  2025-05-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
+ * ver. 3.6.0  2025-11-01 kkossev  - (dev. branch) autoPollThermostat() fixes; added reporting configuration; added refreshAll() command (inccluding valveOpeningDegree and valveClosingDegree)
  *
  *                                   TODO:
  */
 
-static String version() { '3.5.2' }
-static String timeStamp() { '2025/05/25 9:19 AM' }
+static String version() { '3.6.0' }
+static String timeStamp() { '2025/11/01 10:46 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -56,37 +57,29 @@ metadata {
         // TODO - add all other models attributes possible values
         attribute 'antiFreeze', 'enum', ['off', 'on']               // Tuya Saswell, AVATTO
         attribute 'batteryVoltage', 'number'
-        attribute 'boostTime', 'number'                             // BRT-100
         attribute 'calibrated', 'enum', ['false', 'true']           // Aqara E1
         attribute 'calibrationTemp', 'number'                       // BRT-100, Sonoff
         attribute 'childLock', 'enum', ['off', 'on']                // BRT-100, Aqara E1, Sonoff, AVATTO
-        attribute 'ecoMode', 'enum', ['off', 'on']                  // BRT-100
-        attribute 'ecoTemp', 'number'                               // BRT-100
-        attribute 'emergencyHeating', 'enum', ['off', 'on']         // BRT-100
-        attribute 'emergencyHeatingTime', 'number'                  // BRT-100
-        attribute 'floorTemperature', 'number'                      // AVATTO/MOES floor thermostats
         attribute 'frostProtectionTemperature', 'number'            // Sonoff
         attribute 'hysteresis', 'number'                            // AVATTO, Virtual thermostat
-        attribute 'level', 'number'                                 // BRT-100
         attribute 'maxHeatingSetpoint', 'number'                    // BRT-100, Sonoff, AVATTO
         attribute 'minHeatingSetpoint', 'number'                    // BRT-100, Sonoff, AVATTO
-        attribute 'sensor', 'enum', ['internal', 'external', 'both']         // Aqara E1, AVATTO
-        attribute 'systemMode', 'enum', ['off', 'on']               // Aqara E1, AVATTO
-        attribute 'valveAlarm', 'enum',  ['false', 'true']          // Aqara E1
-        attribute 'valveDetection', 'enum', ['off', 'on']           // Aqara E1
-        attribute 'weeklyProgram', 'number'                         // BRT-100
         attribute 'windowOpenDetection', 'enum', ['off', 'on']      // BRT-100, Aqara E1, Sonoff
-        attribute 'windowsState', 'enum', ['open', 'closed']        // BRT-100, Aqara E1
-        attribute 'batteryLowAlarm', 'enum', ['batteryOK', 'batteryLow']        // TUYA_SASWELL
-        //attribute 'workingState', "enum", ["open", "closed"]        // BRT-100
-
-        // Aqaura E1 attributes     TODO - consolidate a common set of attributes
-        attribute 'preset', 'enum', ['manual', 'auto', 'away']      // TODO - remove?
-        attribute 'awayPresetTemperature', 'number'
 
         command 'setThermostatMode', [[name: 'thermostat mode (not all are available!)', type: 'ENUM', constraints: ['--- select ---'] + AllPossibleThermostatModesOpts.options.values() as List<String>]]
         command 'setTemperature', ['NUMBER']                        // Virtual thermostat
-        if (_DEBUG) { command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  }
+        command 'refreshAll', [[name: 'Refresh All Attributes', description: 'Refresh all defined device attributes']]
+        if (_DEBUG) {
+            command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  
+            command 'sendCommand', [
+                [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
+                [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
+            ]
+            command 'setPar', [
+                    [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
+                    [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
+            ]
+        }
 
         // itterate through all the figerprints and add them on the fly
         deviceProfilesV3.each { profileName, profileMap ->
@@ -118,11 +111,11 @@ metadata {
             device        : [manufacturers: ['SONOFF'], type: 'TRV', powerSource: 'battery', isSleepy:false],
             capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true, 'BatteryVoltage':true],
 
-            preferences   : ['childLock':'0xFC11:0x0000', 'windowOpenDetection':'0xFC11:0x6000', 'frostProtectionTemperature':'0xFC11:0x6002', 'minHeatingSetpoint':'0x0201:0x0015', 'maxHeatingSetpoint':'0x0201:0x0016', 'calibrationTemp':'0x0201:0x0010' ],
+            preferences   : ['childLock':'0xFC11:0x0000', 'windowOpenDetection':'0xFC11:0x6000', 'frostProtectionTemperature':'0xFC11:0x6002', /*'valveOpeningDegree':'0xFC11:0x600B', 'valveClosingDegree':'0xFC11:0x600C',*/ 'minHeatingSetpoint':'0x0201:0x0015', 'maxHeatingSetpoint':'0x0201:0x0016', 'calibrationTemp':'0x0201:0x0010' ],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0006,0020,0201,FC57,FC11', outClusters:'000A,0019', model:'TRVZB', manufacturer:'SONOFF', deviceJoinName: 'Sonoff TRVZB']
             ],
-            commands      : [testT:'testT',initializeSonoff:'initializeSonoff', 'printFingerprints':'printFingerprints', 'autoPollThermostat':'autoPollThermostat', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            commands      : [testT:'testT',initializeSonoff:'initializeSonoff', 'printFingerprints':'printFingerprints', 'autoPollThermostat':'autoPollThermostat', 'resetStats':'resetStats', 'refresh':'refresh', 'refreshAll':'refreshAll', 'initialize':'initialize', 'configureTRV':'configureTRV', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             tuyaDPs       : [:],
             attributes    : [   // TODO - configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
                 [at:'0x0201:0x0000',  name:'temperature',           type:'decimal', dt:'0x29', rw:'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C',  description:'Local temperature'],
@@ -131,8 +124,9 @@ metadata {
                 [at:'0x0201:0x0004',  name:'absMaxHeatingSetpointLimit',  type:'decimal', dt:'0x29', rw:'ro', min:4.0,  max:35.0, step:0.5, scale:100,  unit:'°C',  description:'Abs Max Heat Setpoint Limit'],
                 [at:'0x0201:0x0010',  name:'calibrationTemp',  preProc:'signedInt',     type:'decimal', dt:'0x28', rw:'rw', min:-7.0,  max:7.0, defVal:0.0, step:0.2, scale:10,  unit:'°C', title: '<b>Local Temperature Calibration</b>', description:'Room temperature calibration'],
                 [at:'0x0201:0x0012',  name:'heatingSetpoint',       type:'decimal', dt:'0x29', rw:'rw', min:4.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Heating Setpoint</b>',      description:'Occupied heating setpoint'],
-                [at:'0x0201:0x0015',  name:'minHeatingSetpoint',    type:'decimal', dt:'0x29', rw:'rw', min:4.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Min Heating Setpoint</b>', description:'Min Heating Setpoint Limit'],
-                [at:'0x0201:0x0016',  name:'maxHeatingSetpoint',    type:'decimal', dt:'0x29', rw:'rw', min:4.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Max Heating Setpoint</b>', description:'Max Heating Setpoint Limit'],
+                // minHeatingSetpoint and maxHeatingSetpoint don't seem to have any effect on the device operation
+                [at:'0x0201:0x0015',  name:'minHeatingSetpoint',    type:'decimal', dt:'0x29', rw:'rw', min:4.0,  max:35.0, defVal:4.0, step:0.5, scale:100,  unit:'°C', title: '<b>Min Heating Setpoint</b>', description:'Min Heating Setpoint Limit'],
+                [at:'0x0201:0x0016',  name:'maxHeatingSetpoint',    type:'decimal', dt:'0x29', rw:'rw', min:4.0,  max:35.0, defVal:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Max Heating Setpoint</b>', description:'Max Heating Setpoint Limit'],
                 [at:'0x0201:0x001A',  name:'remoteSensing',         type:'enum',    dt:'0x18', rw:'ro', min:0,    max:1,    step:1,  scale:1,    map:[0: 'false', 1: 'true'], unit:'',  title: '<b>Remote Sensing<</b>', description:'Remote Sensing'],
                 [at:'0x0201:0x001B',  name:'termostatRunningState', type:'enum',    dt:'0x30', rw:'rw', min:0,    max:2,    step:1,  scale:1,    map:[0: 'off', 1: 'heat', 2: 'unknown'], unit:'',  description:'termostatRunningState (relay on/off status)'],      //  nothing happens when WRITING ????
                 [at:'0x0201:0x001C',  name:'thermostatMode',        type:'enum',    dt:'0x30', rw:'rw', min:0,    max:4,    step:1,  scale:1,    map:[0: 'off', 1: 'auto', 2: 'invalid', 3: 'invalid', 4: 'heat'], unit:'', title: '<b>System Mode</b>',  description:'Thermostat Mode'],
@@ -142,7 +136,7 @@ metadata {
                 [at:'0x0201:0x0022',  name:'numDailyTransitions',   type:'number',  dt:'0x20', rw:'ro', min:0,    max:255,  step:1,  scale:1,    unit:'',  description:'Number Of Daily Transitions'],
                 [at:'0x0201:0x0025',  name:'thermostatProgrammingOperationMode', type:'enum',  dt:'0x18', rw:'rw', min:0,    max:1,    step:1,  scale:1,    map:[0: 'mode1', 1: 'mode2'], unit:'',  title: '<b>Thermostat Programming Operation Mode/b>', description:'Thermostat programming operation mode'],  // nothing happens when WRITING ????
                 [at:'0x0201:0x0029',  name:'thermostatOperatingState', type:'enum', dt:'0x19', rw:'ro', min:0,    max:1,    step:1,  scale:1,    map:[0: 'idle', 1: 'heating'], unit:'',  description:'termostatRunningState (relay on/off status)'],   // read only!
-                // https://github.com/photomoose/zigbee-herdsman-converters/blob/227b28b23455f1a767c94889f57293c26e4a1e75/src/devices/sonoff.ts
+                // https://github.com/photomoose/zigbee-herdsman-converters/blob/master/src/devices/sonoff.ts#L1200
                 [at:'0x0006:0x0000',  name:'onOffReport',          type:'number',  dt: '0x10', rw: 'ro', min:0,    max:255,  step:1,  scale:1,   unit:'',  description:'TRV on/off report'],     // read only, 00 = off; 01 - thermostat is on
                 [at:'0xFC11:0x0000',  name:'childLock',             type:'enum',    dt: '0x10', rw: 'rw', min:0,    max:1,  defVal:'0', step:1,  scale:1,   map:[0: 'off', 1: 'on'], unit:'',   title: '<b>Child Lock</b>',   description:'Child lock<br>unlocked/locked'],
                 [at:'0xFC11:0x6000',  name:'windowOpenDetection',   type:'enum',    dt: '0x10', rw: 'rw', min:0,    max:1,  defVal:'0', step:1,  scale:1,   map:[0: 'off', 1: 'on'], unit:'',   title: '<b>Open Window Detection</b>',   description:'Automatically turns off the radiator when local temperature drops by more than 1.5°C in 4.5 minutes.'],
@@ -155,17 +149,13 @@ metadata {
                 [at:'0xFC11:0x6008',  name:'unknown1',              type:'number',  dt: '0x20', rw: 'rw', min:0,    max:255, step:1,  scale:1,   unit:'', description:'unknown1 (0xFC11:0x6008)/i>'],
                 [at:'0xFC11:0x6009',  name:'heatingSetpoint_FC11',  type:'decimal',  dt: '0x29', rw: 'rw', min:4.0,  max:35.0, step:1,  scale:100,   unit:'°C', title: '<b>Heating Setpoint</b>',      description:'Occupied heating setpoint'],
                 [at:'0xFC11:0x600A',  name:'unknown2',              type:'number',  dt: '0x29', rw: 'rw', min:0,    max:9999, step:1,  scale:1,   unit:'', description:'unknown2 (0xFC11:0x600A)/i>'],
-            // TODO :         configure: async (device, coordinatorEndpoint, logger) => {
-            // const endpoint = device.getEndpoint(1);
-            // await reporting.bind(endpoint, coordinatorEndpoint, ['hvacThermostat']);
-            // await reporting.thermostatTemperature(endpoint);
-            // await reporting.thermostatOccupiedHeatingSetpoint(endpoint);
-            // await reporting.thermostatSystemMode(endpoint);
-            // await endpoint.read('hvacThermostat', ['localTemperatureCalibration']);
-            // await endpoint.read(0xFC11, [0x0000, 0x6000, 0x6002]);
-            //                          ^^ TODO
+                // Additional Z2M-aligned attributes
+                [at:'0xFC11:0x600B',  name:'valveOpeningDegree',    type:'number',  dt: '0x20', rw: 'rw', min:0,    max:100,  step:1,  scale:1,   unit:'%',  title: '<b>Valve Opening Degree</b>', description:'Valve opening position (percentage) control. If set to 100%, valve is fully opened. If set to 0%, valve is fully closed. Default is 100%.'],
+                [at:'0xFC11:0x600C',  name:'valveClosingDegree',    type:'number',  dt: '0x20', rw: 'rw', min:0,    max:100,  step:1,  scale:1,   unit:'%',  title: '<b>Valve Closing Degree</b>', description:'Valve closed position (percentage) control. If set to 100%, valve is fully closed. If set to 0%, valve is fully opened. Default is 100%.'],
+                [at:'0xFC11:0x2000',  name:'tamper',                type:'enum',    dt: '0x20', rw: 'ro', min:0,    max:1,    step:1,  scale:1,   map:[0: 'clear', 1: 'tampered'], unit:'', description:'Tamper-proof status'],
+                [at:'0xFC11:0x2001',  name:'illumination',          type:'enum',    dt: '0x20', rw: 'ro', min:0,    max:1,    step:1,  scale:1,   map:[0: 'dim', 1: 'bright'], unit:'', description:'Illumination sensor status - only updated when occupancy is detected'],
             ],
-            refresh: ['pollBatteryPercentage', 'pollThermostatCluster'],
+            refresh: [/*'temperature', 'heatingSetpoint', 'thermostatMode', 'thermostatOperatingState'*/ 'refreshSonoff'],
             deviceJoinName: 'Sonoff TRVZB',
             configuration : [:]
     ],
@@ -177,7 +167,7 @@ metadata {
             capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
             preferences   : [:],
             fingerprints  : [],
-            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences',
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'refreshAll':'refreshAll', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences',
                             'getDeviceNameAndProfile':'getDeviceNameAndProfile'
             ],
             tuyaDPs       : [:],
@@ -270,11 +260,93 @@ List<String> customRefresh() {
     return cmds
 }
 
+List<String> refreshSonoff() {
+    List<String> cmds = []
+    cmds += pollThermostatCluster()
+
+    // Check if more than 12 hours have passed since last battery poll
+    Long currentTime = now()
+    Long lastBatteryTime = state.lastRx?.batteryTime ?: 0
+    Long twelveHoursInMs = 12 * 60 * 60 * 1000 // 12 hours in milliseconds
+
+    if ((currentTime - lastBatteryTime) > twelveHoursInMs) {
+        logDebug "refreshSonoff(): Battery not polled for >12h, reading battery percentage..."
+        cmds += pollBatteryPercentage() // defined in thermostatLib
+    } else {
+        logTrace "refreshSonoff(): Battery polled recently, skipping battery read"
+    }
+   
+    logDebug "refreshSonoff() : ${cmds}"
+    return cmds
+}
+
 List<String> customConfigure() {
     List<String> cmds = []
-    logDebug "customConfigure() : ${cmds} (not implemented!)"
-    //initializeSonoff()
+    logInfo 'customConfigure() : Configuring Sonoff TRVZB following Z2M pattern...'
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x00 0x0201 {${device.zigbeeId}} {}", 'delay 200']      // hvacThermostat
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0000 0x29 30 3600 {05 00}", 'delay 300']          // thermostatTemperature
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0012 0x29 0 3600 {0A 00}", 'delay 300']           // thermostatOccupiedHeatingSetpoint
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x001C 0x30 10 3600 {}", 'delay 300']               // thermostatSystemMode 
+    
+    cmds += zigbee.readAttribute(0x0201, 0x0010, [:], delay = 400)                          // localTemperatureCalibration  
+    cmds += zigbee.readAttribute(0xFC11, [0x0000, 0x6000, 0x6002, 0x6003, 0x6004, 0x6005, 0x6006, 0x6007], [:], delay = 500)
+    cmds += zigbee.readAttribute(0xFC11, [0x600B, 0x600C, 0x2000, 0x2001], [:], delay = 600)            // valve opening/closing degree, tamper, ?illumination?
+    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 200)  // Battery percentage remaining
+    
+    logDebug "customConfigure() : ${cmds}"
     return cmds
+}
+
+// Command to manually trigger Z2M-style configuration
+void configureTRV() {
+    logInfo 'configureTRV() : Manually triggering Z2M-style device configuration...'
+    List<String> cmds = customConfigure()
+    if (cmds != null && cmds != []) {
+        sendZigbeeCommands(cmds)
+    }
+    else {
+        logWarn 'configureTRV() : No configuration commands generated!'
+    }
+}
+
+// Command to refresh all defined attributes
+void refreshAll() {
+    logInfo 'refreshAll() : Refreshing all defined attributes...'
+    List<String> cmds = []
+    
+    if (DEVICE?.attributes != null) {
+        DEVICE.attributes.each { Map attributeMap ->
+            if (attributeMap.at != null && attributeMap.name != null) {
+                String[] clusterAndAttribute = attributeMap.at.split(':')
+                if (clusterAndAttribute.length == 2) {
+                    String clusterHex = clusterAndAttribute[0]
+                    String attributeHex = clusterAndAttribute[1]
+                    
+                    try {
+                        int cluster = hubitat.helper.HexUtils.hexStringToInt(clusterHex)
+                        int attribute = hubitat.helper.HexUtils.hexStringToInt(attributeHex)
+                        
+                        Map mfgCode = attributeMap.mfgCode != null ? ['mfgCode': attributeMap.mfgCode] : [:]
+                        cmds += zigbee.readAttribute(cluster, attribute, mfgCode, delay = 100)
+                        
+                        logTrace "refreshAll() : Added read for ${attributeMap.name} (${clusterHex}:${attributeHex})"
+                    } catch (Exception e) {
+                        logWarn "refreshAll() : Failed to parse cluster/attribute for ${attributeMap.name} (${attributeMap.at}): ${e.message}"
+                    }
+                }
+            }
+        }
+    }
+    cmds += pollBatteryPercentage() // defined in thermostatLib 
+    
+    if (cmds != null && cmds != []) {
+        logInfo "refreshAll() : Sending ${cmds.size()} read commands for all attributes"
+        setRefreshRequest() // Set refresh flag like autoPollThermostat does
+        sendZigbeeCommands(cmds)
+    }
+    else {
+        logWarn 'refreshAll() : No refresh commands generated!'
+    }
 }
 
 List<String> initializeSonoff()
@@ -282,60 +354,42 @@ List<String> initializeSonoff()
     logWarn 'initializeSonoff() ...'
     List<String> cmds = []
 
-//        cmds = ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
-   // cmds =   ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 86 12 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
-        cmds += zigbee.readAttribute(0x0000, 0x0001, [:], delay = 118)       // Seq: 18
-        //cmds += zigbee.readAttribute(0x0000, 0x0002, [:], delay = 119)       // Seq: 19  // response: unsupported attribute
-        //cmds += zigbee.readAttribute(0x0000, 0x0003, [:], delay = 120)       // Seq: 20  // response: unsupported attribute
+    //        cmds = ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
+    // cmds =   ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 86 12 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
+    cmds += zigbee.readAttribute(0x0000, 0x0001, [:], delay = 118)       // Seq: 18
 
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x00 0x0000 {${device.zigbeeId}} {}", 'delay 112' ]     // Basic cluster
-        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0000 0x0000 0x20 0 300 {00 00}", 'delay 122' ]           //
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x00 0x0000 {${device.zigbeeId}} {}", 'delay 112' ]     // Basic cluster
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0000 0x0000 0x20 0 300 {00 00}", 'delay 122' ]           //
 
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0020 {${device.zigbeeId}} {}", 'delay 112' ]     // Poll Control Cluster    Seq: 68
-        cmds += zigbee.readAttribute(0x0020, 0x0000, [:], delay = 121)       // Seq: 21 (Check-in interval)
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0020 {${device.zigbeeId}} {}", 'delay 112' ]     // Poll Control Cluster    Seq: 68
+    cmds += zigbee.readAttribute(0x0020, 0x0000, [:], delay = 121)       // Seq: 21 (Check-in interval)
 
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x00 0x0201 {${device.zigbeeId}} {}", 'delay 169' ]     // Thermostat Cluster  Seq: 69
-        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0000 0x29 0 3600 {0A 00}", 'delay 122' ]        // Seq: 22 configure reproting - local temperature  min 0 max 3600 delta 10
-        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0012 0x29 0 3600 {0A 00}", 'delay 123' ]        // Seq: 23 configure reproting - occupied heatingSetpoint  min 0 max 3600 delta 10
-        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x001c 0x30 10 3600 {00 00}", 'delay 124' ]            // Seq: 24 configure reproting - SystemMode  min 10 max 3600 delta 10
-        //sendZigbeeCommands(cmds)
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x00 0x0201 {${device.zigbeeId}} {}", 'delay 169' ]     // Thermostat Cluster  Seq: 69
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0000 0x29 0 3600 {05 00}", 'delay 122' ]          // Seq: 22 configure reproting - local temperature  min 0 max 3600 delta 5 (0.5°C)
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0012 0x29 0 3600 {0A 00}", 'delay 123' ]          // Seq: 23 configure reproting - occupied heatingSetpoint  min 0 max 3600 delta 10
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x001c 0x30 10 3600 {00 00}", 'delay 124' ]         // Seq: 24 configure reproting - SystemMode  min 10 max 3600 delta 10
+    cmds += zigbee.readAttribute(0x0201, 0x0010, [:], delay = 125)       // Seq: 25 (LocalTemperatureCalibration)
+    cmds += zigbee.readAttribute(0xFC11, [0x0000, 0x6000, 0x6002, 0x6003, 0x6004, 0x6005, 0x6006, 0x6007], [:], delay = 226)     // Seq: 26
+    cmds += zigbee.writeAttribute(0x0201, 0x001c, 0x30, 0x01, [:], delay = 140)                                    // Seq: 29 (System Mode)
 
-//        cmds = []
-        cmds += zigbee.readAttribute(0x0201, 0x0010, [:], delay = 125)       // Seq: 25 (LocalTemperatureCalibration)
-        cmds += zigbee.readAttribute(0xFC11, [0x0000, 0x6000, 0x6002, 0x6003, 0x6004, 0x6005, 0x6006, 0x6007], [:], delay = 226)     // Seq: 26
-        cmds += zigbee.writeAttribute(0x0201, 0x001c, 0x30, 0x01, [:], delay = 140)                                    // Seq: 29 (System Mode)
-        //sendZigbeeCommands(cmds)
-        cmds +=   ["he raw 0x${device.deviceNetworkId} 1 1 0x000a {40 01 01 00 00 00 e2 78 83 1f 2e 07 00 00 23 a8 ad 1f 2e}", "delay 141",]
+    cmds +=   ["he raw 0x${device.deviceNetworkId} 1 1 0x000a {40 01 01 00 00 00 e2 78 83 1f 2e 07 00 00 23 a8 ad 1f 2e}", "delay 141",]
 
-        //cmds = []
-        cmds += zigbee.writeAttribute(0x0201, 0x001c, 0x30, 0x04, [:], delay = 142)                                    // Seq: 30 (System Mode)
+    cmds += zigbee.writeAttribute(0x0201, 0x001c, 0x30, 0x04, [:], delay = 142)                                    // Seq: 30 (System Mode)
 
 /*
-        cmds += zigbee.readAttribute(0x0201, 0x0029, [:], delay = 131)                                                 // Seq: 31 (ThermostatRunningMode)
-        cmds += zigbee.readAttribute(0xFC11, 0x6002, [:], delay = 132)                                                 // Seq: 32 (Attribute: 0x6002)
+    cmds += zigbee.readAttribute(0x0201, 0x0029, [:], delay = 131)                                                 // Seq: 31 (ThermostatRunningMode)
+    cmds += zigbee.readAttribute(0xFC11, 0x6002, [:], delay = 132)                                                 // Seq: 32 (Attribute: 0x6002)
 
-        cmds += zigbee.readAttribute(0xFC11, 0x6005, [:], delay = 133)                                                 // Seq: 33 (Attribute: 0x6005)
-        cmds += zigbee.readAttribute(0xFC11, 0x6006, [:], delay = 134)                                                 // Seq: 34 (Attribute: 0x6006)
-        cmds += zigbee.readAttribute(0xFC11, 0x6007, [:], delay = 135)                                                 // Seq: 35 (Attribute: 0x6007) (first time)
-        cmds += zigbee.readAttribute(0xFC11, 0x6007, [:], delay = 136)                                                 // Seq: 36 (Attribute: 0x6007) (second time)
-        cmds += zigbee.readAttribute(0xFC11, 0x6007, [:], delay = 137)                                                 // Seq: 37 (Attribute: 0x6007) (third time)
-        cmds += zigbee.readAttribute(0xFC11, 0x6007, [:], delay = 1138)                                                // Seq: 38 (Attribute: 0x6007) (fourth time)
-        cmds += zigbee.readAttribute(0xFC11, 0x6002, [:], delay = 1139)                                                // Seq: 39 (Attribute: 0x6002)
+    cmds += zigbee.readAttribute(0xFC11, 0x6005, [:], delay = 133)                                                 // Seq: 33 (Attribute: 0x6005)
+    cmds += zigbee.readAttribute(0xFC11, 0x6006, [:], delay = 134)                                                 // Seq: 34 (Attribute: 0x6006)
+    cmds += zigbee.readAttribute(0xFC11, 0x6007, [:], delay = 135)                                                 // Seq: 35 (Attribute: 0x6007) (first time)
+    cmds += zigbee.readAttribute(0xFC11, 0x6007, [:], delay = 136)                                                 // Seq: 36 (Attribute: 0x6007) (second time)
+    cmds += zigbee.readAttribute(0xFC11, 0x6007, [:], delay = 137)                                                 // Seq: 37 (Attribute: 0x6007) (third time)
+    cmds += zigbee.readAttribute(0xFC11, 0x6007, [:], delay = 1138)                                                // Seq: 38 (Attribute: 0x6007) (fourth time)
+    cmds += zigbee.readAttribute(0xFC11, 0x6002, [:], delay = 1139)                                                // Seq: 39 (Attribute: 0x6002)
 */
-
-    /*
-        configure: async (device, coordinatorEndpoint, logger) => {
-                const endpoint = device.getEndpoint(1);
-                await reporting.bind(endpoint, coordinatorEndpoint, ['hvacThermostat']);    x 250
-                await reporting.thermostatTemperature(endpoint);                            x 251
-                await reporting.thermostatOccupiedHeatingSetpoint(endpoint);                x 252
-                await reporting.thermostatSystemMode(endpoint);                             x 253
-                await endpoint.read('hvacThermostat', ['localTemperatureCalibration']);     x 254
-                await endpoint.read(0xFC11, [0x0000, 0x6000, 0x6002]);
-            },
-    */
+    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 200)  // Battery percentage remaining
     return cmds
-    //sendZigbeeCommands(cmds)
 }
 
 // called from initializeDevice in the commonLib code
@@ -457,37 +511,13 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
 }
 
 void testT(String par) {
-    /*
-    log.trace "testT(${par}) : DEVICE.preferences = ${DEVICE.preferences}"
-    Map result
-    if (DEVICE != null && DEVICE.preferences != null && DEVICE.preferences != [:]) {
-        (DEVICE.preferences).each { key, value ->
-            log.trace "testT: ${key} = ${value}"
-            result = inputIt(key, debug = true)
-            logDebug "inputIt: ${result}"
-        }
-    }
-    */
     List<String> cmds = []
-    cmds =   ["he raw 0x${device.deviceNetworkId} 1 1 0x000a {40 01 01 00 00 00 e2 78 83 1f 2e 07 00 00 23 a8 ad 1f 2e}", "delay 200",]
-    /*
-ZigBee Cluster Library Frame, Command: Read Attributes Response, Seq: 9
-    Frame Control Field: Profile-wide (0x40)
-    Sequence Number: 9
-    Command: Read Attributes Response (0x01)
-    Status Record, UTC
-        Attribute: Time (0x0000)
-        Status: Success (0x00)
-        Data Type: UTC Time (0xe2)
-        UTC: Jul  9, 2024 08:13:28.000000000 FLE Daylight Time
-    Status Record, Uint32: 773828008
-        Attribute: Local Time (0x0007)
-        Status: Success (0x00)
-        Data Type: 32-Bit Unsigned Integer (0x23)
-        Uint32: 773828008 (0x2e1fada8)
+    //cmds =   ["he raw 0x${device.deviceNetworkId} 1 1 0x000a {40 01 01 00 00 00 e2 78 83 1f 2e 07 00 00 23 a8 ad 1f 2e}", "delay 200",]
 
-    */
-
+    // Read battery percentage from Power Configuration cluster
+    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 200)  // Battery percentage remaining
+    logInfo "testT: Reading battery percentage..."
+    
     sendZigbeeCommands(cmds)
 }
 
