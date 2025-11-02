@@ -48,14 +48,14 @@
  * ver. 1.7.4 2025-05-24 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
  * ver. 1.7.5 2025-09-15 bbholthome  - light sensor GZCGQ01LM maximum illuminance capped to 65500 lux
  * ver. 1.8.0 2025-09-28 kkossev  - added Aqara FP1 Spatial Learning Mode; added resetPresence() command for FP1/FP1E
- * ver. 1.9.0 2025-11-02 kkossev  - (dev. branch) adding Aqara FP300 Presence Sensor support (experimental, not tested);
+ * ver. 1.9.0 2025-11-02 kkossev  - (dev. branch) added Aqara FP300 Presence Sensor support (experimental, not tested); credits: Dan Gibson (@absent42 on GitHub)
  * 
  *                                 TODO: 
  *
  */
 
 static String version() { "1.9.0" }
-static String timeStamp() {"2025/11/02 7:45 PM"}
+static String timeStamp() {"2025/11/02 8:46 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -67,7 +67,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean deviceSimulation = false
 @Field static final Boolean _REGIONS = false
-@Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, FP1E, Aqara/Xiaomi/Mija other motion and illuminance sensors'
+@Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, FP1E, FP300, Aqara/Xiaomi/Mija other motion and illuminance sensors'
 
 // FP1E Spatial Learning (minimal constants)
 @Field static final int CLUSTER_AQARA_FCC0 = 0xFCC0
