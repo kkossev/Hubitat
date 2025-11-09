@@ -353,6 +353,19 @@
         "Zigbee"
        ]
     },
+	{
+      "id":"35869981-30c0-4c06-b77a-7cab33ba1b61",
+      "name":"Thermostats Sync",
+      "category":"Control",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Apps/Thermostats%20Sync/packageManifest.json",
+      "description":"Bidirectional synchronization of thermostat attributes between two devices. Supports 8 sync options including battery and healthStatus with advanced loop prevention.",
+      "tags":[
+        "Climate Control",
+        "Energy Monitoring",
+        "Monitoring",
+        "Temperature & Humidity"
+       ]
+	},
     {
       "id":"9df87cc8-f25f-4437-969c-e225c338dd30",
       "name":"ESPHome Apollo Automation Drivers",
@@ -367,20 +380,6 @@
         "Multi Sensors",
         "Temperature & Humidity"
        ]
-    },
-	{
-      "id":"35869981-30c0-4c06-b77a-7cab33ba1b61",
-      "name":"Thermostats Sync",
-      "category":"Control",
-      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Apps/Thermostats%20Sync/packageManifest.json",
-      "description":"Bidirectional synchronization of thermostat attributes between two devices. Supports 8 sync options including battery and healthStatus with advanced loop prevention.",
-      "tags":[
-        "Climate Control",
-        "Energy Monitoring",
-        "Monitoring",
-        "Temperature & Humidity"
-       ]
-    }	  
+    }
   ]
 }
-
