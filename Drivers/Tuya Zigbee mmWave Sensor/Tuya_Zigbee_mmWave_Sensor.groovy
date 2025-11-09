@@ -26,7 +26,7 @@
  *                                   automatically load the standard JSON file from GitHub on driver installation if not present locally (one time action after installation or hub reboot)
  * ver. 4.1.0  2025-10-11 kkossev  - changed the default URLs to the development branch; added 'Update From Local Storage' command, show the JSON version and timestamp in the sendInfoEvent; 
  * ver. 4.2.0  2025-10-12 kkossev  - added 'Load User Custom Profiles From Local Storage' command and functionality (per device); show the currently loaded profile filename in the deviceProfileFile attribute;
- * ver. 4.2.1  2025-10-19 kkossev  - (dev. branch) added attributes 'switch', 'switchOnTime' and 'switchState' for NEO NAS-PS10B2 device profile
+ * ver. 4.2.1  2025-10-19 kkossev  - (dev. branch) added attributes 'switch', 'switchOnTime', 'switchState' for NEO NAS-PS10B2; added 'blockTime', 'motionDetectionDelayTime', 'radarScene', 'sensorMode', 'distanceReportMode' for TS0225_LEAPMMW_RADAR Z2M compatibility
  *                                   
  *                                   TODO: new info page on WiKi
  *                                   TODO: Show both the profile key and the profile name in the Preferences page!
@@ -37,7 +37,7 @@
 */
 
 static String version() { "4.2.1" }
-static String timeStamp() {"2025/10/19 8:26 AM"}
+static String timeStamp() {"2025/10/19 8:31 PM"}
 
 @Field static final Boolean _DEBUG = false           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -82,6 +82,7 @@ metadata {
         attribute 'detectionDelay', 'decimal'
         attribute 'deviceProfileFile', 'string'                 // shows the currently loaded profile filename
         attribute 'distance', 'number'                          // Tuya Radar
+        attribute 'distanceReporting', 'enum', ['disabled', 'enabled']
         attribute 'fadingTime', 'decimal'
         attribute 'healthStatus', 'enum', ['offline', 'online']
         attribute 'humanMotionState', 'enum', ['none', 'moving', 'small', 'stationary', 'static', 'present', 'peaceful', 'large']
@@ -91,14 +92,18 @@ metadata {
         attribute 'ledIndicator', 'number'
         attribute 'maximumDistance', 'decimal'
         attribute 'minimumDistance', 'decimal'
-        attribute 'motionDetectionDistance', 'decimal'          // changed 05/11/2024 - was 'number'
+        attribute 'motionDetectionDistance', 'decimal'          // entry_distance //changed 05/11/2024 - was 'number'
         attribute 'motionDetectionMode', 'enum', ['0 - onlyPIR', '1 - PIRandRadar', '2 - onlyRadar']    // added 07/24/2024
-        attribute 'motionDetectionSensitivity', 'number'
+        attribute 'motionDetectionSensitivity', 'number'        // entry_sensitivity
+        attribute 'motionDetectionDelayTime', 'decimal'         // entry_filter_time
         attribute 'occupiedTime', 'number'                      // BlackSquareRadar & LINPTECH // was existance_time
         attribute 'radarAlarmMode', 'enum',   ['0 - arm', '1 - off', '2 - alarm', '3 - doorbell']
         attribute 'radarAlarmVolume', 'enum', ['0 - low', '1 - medium', '2 - high', '3 - mute']
+        attribute 'blockTime', 'decimal'
         attribute 'radarSensitivity', 'number'
+        attribute 'radarScene', 'enum', ['custom', 'toilet', 'kitchen', 'hallway', 'bedroom', 'livingroom', 'meetingroom', 'default']
         attribute 'radarStatus', 'enum', ['checking', 'check_success', 'check_failure', 'others', 'comm_fault', 'radar_fault']
+        attribute 'sensorMode', 'enum', ['normal', 'occupied', 'unoccupied']
         attribute 'smallMotionDetectionSensitivity', 'number'   // added 04/25/2024
         attribute 'staticDetectionDistance', 'decimal'          // added 05/1/2024
         attribute 'staticDetectionSensitivity', 'number'        // added 10/29/2023
@@ -106,6 +111,7 @@ metadata {
         attribute 'switchOnTime', 'number'                      // NEO NAS-PS10B2
         attribute 'switchState', 'enum', ['OFF', 'ON']          // NEO NAS-PS10B2
         attribute 'tamper', 'enum', ['clear', 'detected']
+        attribute 'distanceReportMode', 'enum', ['normal', 'occupancy detection']
         attribute 'temperature', 'number'                       // TS0601_HOBEIAN_RADAR
         attribute 'unacknowledgedTime', 'number'                // AIR models
         attribute 'WARNING', 'string'

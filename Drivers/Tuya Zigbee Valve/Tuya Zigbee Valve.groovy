@@ -47,6 +47,7 @@
  *  ver. 1.6.2 2025-07-05 kkossev - added TS0601 _TZE204_a7sghmms _TZE200_7ytb3h8u _TZE284_7ytb3h8u into TS0601_GIEX_VALVE group
  *  ver. 1.6.3 2025-10-21 kkossev - Sonoff SWV valve specific configurations
  *  ver. 1.6.4 2025-10-25 kkossev - added 'Update Zigbee Firmware' command for non-Tuya devices; added sonoffAutoShutOff attribute and preference (requires firmware 1.0.4); sonoff switch and valve states are updated (digitally) when irrigation starts/stops (workaround)
+ *  ver. 1.6.5 2025-11-02 kkossev - (dev.branch)
  *
  *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes ''
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
@@ -57,8 +58,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-static String version() { '1.6.4' }
-static String timeStamp() { '2025/10/25 7:29 PM' }
+static String version() { '1.6.5' }
+static String timeStamp() { '2025/11/02 5:349 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true                // disable it for the production release !

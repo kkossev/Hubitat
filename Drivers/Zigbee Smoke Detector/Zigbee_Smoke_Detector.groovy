@@ -13,8 +13,9 @@
  *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *     for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.3.0  2024-06-22 kkossev  - (dev. branch) new driver for Aqara Smoke Detector
- * ver. 3.3.1  2024-06-23 kkossev  - (dev. branch) xiaomi tags debug decoding; added alarmSelfTest command; smoke state is derived from 0xFCC0:0x013A,
+ * ver. 3.3.0  2024-06-22 kkossev  - new driver for Aqara Smoke Detector
+ * ver. 3.3.1  2024-06-23 kkossev  - Xiaomi tags debug decoding; added alarmSelfTest command; smoke state is derived from 0xFCC0:0x013A,
+ * ver. 3.4.0  2025-10-03 kkossev  - (dev. branch) 
  *
  *                                   TODO: refresh the smoke custom cluster state and publish the first alpha version!
  *                                   TODO: mute() command (mute the buzzer)
@@ -24,8 +25,8 @@
  *                                   TODO: handle the battery reporting (convert to percentage)
  */
 
-static String version() { '3.3.1' }
-static String timeStamp() { '2024/06/23 7:35 PM' }
+static String version() { '3.4.0' }
+static String timeStamp() { '2025/10/03 3:17 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true

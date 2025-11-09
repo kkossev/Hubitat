@@ -19,6 +19,7 @@
  *  ver. 2.0.0  2025/10/31 kkossev  - first version : added forceEvents option; added refresh() method; 
  *  ver. 2.1.0  2025/11/01 kkossev  - removed automatic logic (manageCycle); all setter methods now work directly
  *                                    added battery capability and setBattery method; added healthStatus capability and setHealthStatus method
+ *  ver. 2.1.1  2025/11/03 kkossev  - (dev.branch) isStateChange() now always returns true ?
  * 
  *              TODO: 
  */
@@ -26,8 +27,8 @@
 import groovy.transform.Field
 import groovy.json.JsonOutput
 
-static String version() { '2.1.0' }
-static String timeStamp() { '2025/11/01 11:55 PM' }
+static String version() { '2.1.1' }
+static String timeStamp() { '2025/11/03 10:00 AM' }
 
 @Field static final Boolean _DEBUG = true
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
@@ -308,7 +309,8 @@ private sendTemperatureEvent(name, val) {
 }
 
 private getIsStateChange() {
-	return settings?.forceEvents == true ? true : null
+	return true
+//	return settings?.forceEvents == true ? true : null
 }
 
 def parse(String description) {

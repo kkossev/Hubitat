@@ -179,7 +179,10 @@
       ],
       "refresh": ["queryAllTuyaDP"],
       "spammyDPsToIgnore": [109],
-      "spammyDPsToNotTrace": [109]
+      "spammyDPsToNotTrace": [109],
+      "comments": [
+        "https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/wenzhi_tuya_M100-230908.js"
+      ]
     },
     
     "TS0601_IJXVKHD0_RADAR": {
@@ -354,24 +357,88 @@
       "description": "Tuya TS0225 leapMMW radar",
       "device": { "powerSource": "dc", "ignoreIAS": false },
       "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "HumanMotionState": true },
-      "preferences": { "fadingTime": "103", "ledIndicator": "114", "minimumDistance": "116", "maximumDistance": "117" },
+      "preferences": { "fadingTime": "103", "ledIndicator": "114", "minimumDistance": "116", "maximumDistance": "117", "motionDetectionSensitivity": "101", "motionDetectionDistance": "102", "radarScene": "111", "sensorMode": "112" },
       "commands": { "resetSettings": "", "resetStats": "", "printFingerprints": "", "printPreferences": "" },
       "fingerprints": [
         { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,0500", "outClusters": "0019,000A", "model": "TS0225", "manufacturer": "_TZ321C_fkzihax8", "deviceJoinName": "WenzhiIoT Smart Motion Sensor" },
         { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,0500", "outClusters": "0019,000A", "model": "TS0225", "manufacturer": "_TZ321C_4slreunp", "deviceJoinName": "LeapMMW MTD095-ZB Human presence sensor" }
       ],
       "tuyaDPs": [
+        { "dp": 101, "name": "motionDetectionSensitivity", "type": "number", "rw": "rw", "min": 10, "max": 100, "scale": 1, "unit": "%", "title": "<b>Entry sensitivity</b>", "description": "<i>Initial detection sensitivity when target enters range</i>" },
+        { "dp": 102, "name": "motionDetectionDistance", "type": "decimal", "rw": "rw", "min": 1.0, "max": 10.0, "scale": 100, "unit": "meters", "title": "<b>Entry distance</b>", "description": "<i>Detection distance when unoccupied</i>" },
         { "dp": 103, "name": "fadingTime", "type": "decimal", "rw": "rw", "min": 5.0, "max": 7200.0, "defVal": 30.0, "scale": 1, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Presence inactivity delay timer</i>" },
+        { "dp": 104, "name": "motionDetectionDelayTime", "type": "decimal", "rw": "rw", "min": 0.0, "max": 0.5, "scale": 100, "unit": "seconds", "title": "<b>Entry filter time</b>", "description": "<i>Filter time for target entering range</i>" },
+        { "dp": 105, "name": "blockTime", "type": "decimal", "rw": "rw", "min": 0.5, "max": 10.0, "scale": 100, "unit": "seconds", "title": "<b>Block time</b>", "description": "<i>Time before target can be detected again after switching to unoccupied mode</i>" },
         { "dp": 107, "name": "illuminance", "type": "number", "rw": "ro", "scale": 10, "unit": "lx", "description": "Illuminance" },
+        { "dp": 109, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 10.0, "scale": 100, "unit": "meters", "description": "Real-time distance to target" },
+        { "dp": 110, "name": "occupiedTime", "type": "number", "rw": "ro", "min": 0, "max": 7200, "scale": 1, "unit": "seconds", "description": "Time before target disappears" },
+        { "dp": 111, "name": "radarScene", "type": "enum", "rw": "rw", "min": 0, "max": 7, "map": { "0": "custom", "1": "toilet", "2": "kitchen", "3": "hallway", "4": "bedroom", "5": "livingroom", "6": "meetingroom", "7": "default" }, "title": "<b>Radar scene</b>", "description": "<i>Preset scene configuration</i>" },
+        { "dp": 112, "name": "sensorMode", "type": "enum", "rw": "rw", "min": 0, "max": 2, "map": { "0": "normal", "1": "occupied", "2": "unoccupied" }, "title": "<b>Sensor mode</b>", "description": "<i>Sensor output: detection result, force occupied, force unoccupied</i>" },
         { "dp": 114, "name": "ledIndicator", "type": "enum", "rw": "rw", "min": 0, "max": 1, "defVal": "0", "map": { "0": "0 - OFF", "1": "1 - ON" }, "title": "<b>LED indicator</b>", "description": "<i>LED indicator mode</i>" },
         { "dp": 115, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 10, "max": 100, "defVal": 50, "scale": 1, "unit": "%", "title": "<b>Radar sensitivity</b>", "description": "<i>Radar sensitivity</i>" },
         { "dp": 116, "name": "minimumDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 8.0, "defVal": 0.5, "scale": 100, "unit": "meters", "title": "<b>Minimum distance</b>", "description": "Min detection distance" },
         { "dp": 117, "name": "maximumDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 8.0, "defVal": 6.0, "scale": 100, "unit": "meters", "title": "<b>Maximum distance</b>", "description": "<i>Max detection distance</i>" },
-        { "dp": 119, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 10.0, "scale": 100, "unit": "meters", "description": "Distance" }
+        { "dp": 118, "name": "radarStatus", "type": "number", "rw": "rw", "min": 0, "max": 1, "scale": 1, "unit": "", "title": "<b>Self test</b>", "description": "<i>Perform self test</i>" },
+        { "dp": 119, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 10.0, "scale": 100, "unit": "meters", "description": "Distance" },
+        { "dp": 120, "name": "distanceReportMode", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "normal", "1": "occupancy detection" }, "title": "<b>Distance report mode</b>", "description": "<i>Normal: continuous reporting, Occupancy detection: report only once when switching to occupied</i>" }
       ],
-      "spammyDPsToIgnore": [119],
-      "spammyDPsToNotTrace": [119],
-      "refresh": ["queryAllTuyaDP"]
+      "spammyDPsToIgnore": [109, 110, 119],
+      "spammyDPsToNotTrace": [109, 110, 119],
+      "refresh": ["queryAllTuyaDP"],
+      "comments": "https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/mtd085_convertor_240628.js"
+    },
+    
+    "WENZHI_MTD285_ZB": {
+      "description": "Wenzhi MTD285-ZB Human Presence Sensor",
+      "device": { "powerSource": "dc", "ignoreIAS": false },
+      "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement": true },
+      "preferences": { "fadingTime": "120", "blockTime": "121", "ledIndicator": "119", "minimumDistance": "3", "maximumDistance": "4", "radarScene": "128" },
+      "commands": { "resetSettings": "", "resetStats": "", "printFingerprints": "", "printPreferences": "" },
+      "fingerprints": [
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE284_aai5grix", "deviceJoinName": "Wenzhi MTD285-ZB Human Presence Sensor" }
+      ],
+      "tuyaDPs": [
+        { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 2, "map": { "0": "inactive", "1": "active", "2": "active" }, "description": "Presence state" },
+        { "dp": 3, "name": "minimumDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 8.4, "scale": 10, "unit": "meters", "title": "<b>Near detection distance</b>", "description": "<i>Near detection distance</i>" },
+        { "dp": 4, "name": "maximumDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 8.4, "scale": 10, "unit": "meters", "title": "<b>Far detection distance</b>", "description": "<i>Far detection distance</i>" },
+        { "dp": 9, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 9.9, "scale": 10, "unit": "meters", "description": "Closest target distance" },
+        { "dp": 101, "name": "gateEnable01", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "disable", "1": "enable" }, "description": "Distance gate 1 enable" },
+        { "dp": 102, "name": "gateEnable02", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "disable", "1": "enable" }, "description": "Distance gate 2 enable" },
+        { "dp": 103, "name": "gateEnable03", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "disable", "1": "enable" }, "description": "Distance gate 3 enable" },
+        { "dp": 104, "name": "gateEnable04", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "disable", "1": "enable" }, "description": "Distance gate 4 enable" },
+        { "dp": 105, "name": "gateEnable05", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "disable", "1": "enable" }, "description": "Distance gate 5 enable" },
+        { "dp": 106, "name": "gateEnable06", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "disable", "1": "enable" }, "description": "Distance gate 6 enable" },
+        { "dp": 107, "name": "gateEnable07", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "disable", "1": "enable" }, "description": "Distance gate 7 enable" },
+        { "dp": 108, "name": "gateEnable08", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "disable", "1": "enable" }, "description": "Distance gate 8 enable" },
+        { "dp": 109, "name": "gateEnable09", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "disable", "1": "enable" }, "description": "Distance gate 9 enable" },
+        { "dp": 110, "name": "gateEnable10", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "disable", "1": "enable" }, "description": "Distance gate 10 enable" },
+        { "dp": 111, "name": "gateEnable11", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "disable", "1": "enable" }, "description": "Distance gate 11 enable" },
+        { "dp": 112, "name": "thrCfgRangeGate", "type": "number", "rw": "rw", "min": 1, "max": 11, "scale": 1, "unit": "", "description": "Threshold configuration gate" },
+        { "dp": 113, "name": "motionDetectionSensitivity", "type": "number", "rw": "rw", "min": 0, "max": 99, "scale": 1, "unit": "", "title": "<b>Motion detection threshold</b>", "description": "<i>Motion detection threshold</i>" },
+        { "dp": 114, "name": "staticDetectionSensitivity", "type": "number", "rw": "rw", "min": 0, "max": 99, "scale": 1, "unit": "", "title": "<b>Presence detection threshold</b>", "description": "<i>Presence detection threshold</i>" },
+        { "dp": 115, "name": "nearestTargetGate", "type": "number", "rw": "ro", "min": 0, "max": 11, "scale": 1, "unit": "", "description": "Nearest active gate" },
+        { "dp": 116, "name": "occupiedTime", "type": "number", "rw": "ro", "min": 0, "max": 3600, "scale": 1, "unit": "seconds", "description": "Target timeout countdown" },
+        { "dp": 117, "name": "targetVelocity", "type": "decimal", "rw": "ro", "min": -9.99, "max": 9.99, "scale": 100, "unit": "m/s", "description": "Target velocity with direction" },
+        { "dp": 118, "name": "debugSwitch", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "debug_off", "1": "debug_on" }, "description": "Debug mode toggle" },
+        { "dp": 119, "name": "ledIndicator", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "0 - OFF", "1": "1 - ON" }, "title": "<b>LED mode</b>", "description": "<i>LED indicator mode</i>" },
+        { "dp": 120, "name": "fadingTime", "type": "number", "rw": "rw", "min": 5, "max": 3600, "scale": 1, "unit": "seconds", "title": "<b>Departure delay time</b>", "description": "<i>Departure delay time</i>" },
+        { "dp": 121, "name": "blockTime", "type": "decimal", "rw": "rw", "min": 0.0, "max": 10.0, "scale": 10, "unit": "seconds", "title": "<b>Block time</b>", "description": "<i>Block time after unoccupancy</i>" },
+        { "dp": 122, "name": "judgeAlgorithm", "type": "enum", "rw": "rw", "min": 0, "max": 2, "map": { "0": "large_move", "1": "small_move", "2": "custom_move" }, "description": "Presence detection algorithm" },
+        { "dp": 123, "name": "envNoiseCollect", "type": "enum", "rw": "rw", "min": 0, "max": 2, "map": { "0": "start", "1": "ongoing", "2": "complete" }, "description": "Environmental noise collection status" },
+        { "dp": 124, "name": "deviceControl", "type": "enum", "rw": "rw", "min": 0, "max": 2, "map": { "0": "no_action", "1": "restart", "2": "reset_param" }, "description": "Device control commands" },
+        { "dp": 125, "name": "illuminance", "type": "number", "rw": "ro", "scale": 1, "unit": "lx", "description": "Illuminance" },
+        { "dp": 126, "name": "presenceSensitivity", "type": "enum", "rw": "rw", "min": 0, "max": 3, "map": { "0": "high", "1": "midst", "2": "low", "3": "custom" }, "description": "Presence sensitivity" },
+        { "dp": 127, "name": "motionSensitivity", "type": "enum", "rw": "rw", "min": 0, "max": 3, "map": { "0": "high", "1": "midst", "2": "low", "3": "custom" }, "description": "Motion sensitivity" },
+        { "dp": 128, "name": "radarScene", "type": "enum", "rw": "rw", "min": 0, "max": 6, "map": { "0": "default", "1": "toilet", "2": "kitchen", "3": "hallway", "4": "bedroom", "5": "livingroom", "6": "meetingroom" }, "title": "<b>Scene mode</b>", "description": "<i>Scene mode preset</i>" },
+        { "dp": 129, "name": "illuminanceReportSwitch", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "off", "1": "on" }, "description": "Illuminance reporting toggle" },
+        { "dp": 130, "name": "motionDetectionSwitch", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "off", "1": "on" }, "description": "Motion detection toggle" },
+        { "dp": 131, "name": "distanceReporting", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "disabled", "1": "enabled" }, "description": "Distance reporting toggle" },
+        { "dp": 132, "name": "speedReportSwitch", "type": "enum", "rw": "rw", "min": 0, "max": 1, "map": { "0": "off", "1": "on" }, "description": "Speed reporting toggle" }
+      ],
+      "spammyDPsToIgnore": [9, 116],
+      "spammyDPsToNotTrace": [9, 116],
+      "refresh": ["queryAllTuyaDP"],
+      "comments": "https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/mtd285_250207.js"
     },
     
     "TS0601_24GHZ_PIR_RADAR": {
@@ -519,7 +586,10 @@
       ],
       "refresh": ["queryAllTuyaDP"],
       "spammyDPsToIgnore": [9],
-      "spammyDPsToNotTrace": [9]
+      "spammyDPsToNotTrace": [9],
+      "comments": [
+        "https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/M100_24g.js" 
+      ]
     },
 
     "TS0601_YA4FT0W4_RADAR": {
@@ -529,7 +599,8 @@
       "preferences": { "radarSensitivity": "2", "staticDetectionSensitivity": "102", "fadingTime": "105", "minimumDistance": "3", "maximumDistance": "4", "distanceReporting": "101" },
       "commands": { "resetStats": "" },
       "fingerprints": [
-        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_ya4ft0w4", "deviceJoinName": "Tuya Human Presence Detector YA4FT0W4 ZY-M100-24GV372" }
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_ya4ft0w4", "deviceJoinName": "Tuya Human Presence Detector YA4FT0W4 ZY-M100-24GV372" },
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_gkfbdvyx", "deviceJoinName": "Tuya Human Presence Detector ZY-M100-24GV3.1" }
       ],
       "tuyaDPs": [
         { "dp": 1, "name": "humanMotionState", "type": "enum", "rw": "ro", "map": { "0": "none", "1": "present", "2": "moving", "3": "none" }, "description": "Presence state" },
@@ -545,7 +616,12 @@
       ],
       "refresh": ["queryAllTuyaDP"],
       "spammyDPsToIgnore": [9],
-      "spammyDPsToNotTrace": [9]
+      "spammyDPsToNotTrace": [9],
+      "comments": [
+        "https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/M100-ya4ft0-V3-20240907.js",
+        "https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/ms.zy24g3.js",
+        "distanceReporting DP101 to disable spammy distance reports"
+      ]
     },
 
     "TS0601_LAOKFQWU_RADAR": {
@@ -570,7 +646,10 @@
       ],
       "refresh": ["queryAllTuyaDP"],
       "spammyDPsToIgnore": [9],
-      "spammyDPsToNotTrace": [9]
+      "spammyDPsToNotTrace": [9],
+      "comments": [
+        "https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/wenzhi_tuya_M100_240704.js"
+      ]
     },
 
     "TS0225_LINPTECH_RADAR": {
@@ -836,11 +915,12 @@
       "spammyDPsToNotTrace": [19]
     } 
   },
-  "version": "4.0.8",
-  "timestamp": "2025-10-18 11:56 AM",
+  "version": "4.0.9",
+  "timestamp": "2025-10-19 8:00 PM",
   "description": "Device profiles for Tuya Zigbee mmWave Sensor",
   "author": "kkossev",
   "comments": [
-    "v.4.0.8. - moved TS0601 _TZE204_qasjif9e _TZE204_ztqnh5cg back to TS0601_TUYA_RADAR profile"
+    "v.4.0.8. - moved TS0601 _TZE204_qasjif9e _TZE204_ztqnh5cg back to TS0601_TUYA_RADAR profile",
+    "v.4.0.9. - added _TZE204_gkfbdvyx, LeapMMW all DPs,  "
   ]
 }

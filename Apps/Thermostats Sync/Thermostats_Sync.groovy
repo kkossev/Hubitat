@@ -25,7 +25,7 @@
 
 import groovy.transform.Field
 @Field static final String VERSION = "1.0.2"
-@Field static final String COMPILE_TIME = '2025/11/09 8:35 AM'
+@Field static final String COMPILE_TIME = '2025/11/09 1:23 PM'
 
 definition(
     name: "Thermostats Sync",
@@ -53,8 +53,8 @@ preferences {
             input "syncHeatingSetpoint", "bool", title: "Synchronize Heating Setpoint", defaultValue: true, submitOnChange: true
             input "syncCoolingSetpoint", "bool", title: "Synchronize Cooling Setpoint", defaultValue: true, submitOnChange: true
             input "syncFanMode", "bool", title: "Synchronize Fan Mode", defaultValue: true, submitOnChange: true
-            input "syncTemperature", "bool", title: "Synchronize Temperature (using setTemperature command)", defaultValue: false, submitOnChange: true
-            input "syncOperatingState", "bool", title: "Synchronize Operating State (using setThermostatOperatingState command)", defaultValue: false, submitOnChange: true
+            input "syncTemperature", "bool", title: "Synchronize Temperature (using setTemperature command)", defaultValue: true, submitOnChange: true
+            input "syncOperatingState", "bool", title: "Synchronize Operating State (using setThermostatOperatingState command)", defaultValue: true, submitOnChange: true
             input "syncBattery", "bool", title: "Synchronize Battery Level (using setBattery command)", defaultValue: false, submitOnChange: true
             input "syncHealthStatus", "bool", title: "Synchronize Health Status (using setHealthStatus command)", defaultValue: false, submitOnChange: true
         }
