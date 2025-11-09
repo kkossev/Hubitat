@@ -1,0 +1,20 @@
+{
+ "packageName":"Thermostats Sync",
+ "author":"Krassimir Kossev",
+ "version":"1.0.2",
+ "minimumHEVersion":"2.3.8.100",
+ "dateReleased":"2025-11-09",
+ "releaseNotes":"1.0.2 - first version published to HPM",
+ "communityLink":"https://community.hubitat.com/t/beta-thermostats-sync-bi-directional/156225",
+ "apps": [
+  {
+     "id":"10d5c9bb-fc70-42c9-9da6-781d189035d9",
+     "name":"Thermostats Sync",
+     "namespace":"kkossev",
+     "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Apps/Thermostats%20Sync/Thermostats_Sync.groovy",
+     "required":true,
+     "oauth":false,
+     "primary":true
+  }
+  ]
+}
