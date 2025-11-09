@@ -46,13 +46,16 @@
  * ver. 1.7.2 2024-11-28 kkossev  - HE platfrom 2.4.0.x compatibility fixes;
  * ver. 1.7.3 2025-01-16 kkossev  - first ping() throwing exception bug fix tnx@user2428 
  * ver. 1.7.4 2025-05-24 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
+ * ver. 1.7.5 2025-09-15 bbholthome  - light sensor GZCGQ01LM maximum illuminance capped to 65500 lux
+ * ver. 1.8.0 2025-09-28 kkossev  - added Aqara FP1 Spatial Learning Mode; added resetPresence() command for FP1/FP1E
+ * ver. 1.9.0 2025-11-02 kkossev  - (dev. branch) added Aqara FP300 Presence Sensor support (experimental, not tested); credits: Dan Gibson (@absent42 on GitHub)
  * 
  *                                 TODO: 
  *
  */
 
-static String version() { "1.7.4" }
-static String timeStamp() {"2025/05/24 5:49 PM"}
+static String version() { "1.9.0" }
+static String timeStamp() {"2025/11/02 8:46 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -64,7 +67,12 @@ import java.util.concurrent.ConcurrentHashMap
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean deviceSimulation = false
 @Field static final Boolean _REGIONS = false
-@Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, FP1E, Aqara/Xiaomi/Mija other motion and illuminance sensors'
+@Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, FP1E, FP300, Aqara/Xiaomi/Mija other motion and illuminance sensors'
+
+// FP1E Spatial Learning (minimal constants)
+@Field static final int CLUSTER_AQARA_FCC0 = 0xFCC0
+@Field static final int MFG_AQARA_FP1E = 0x115F
+@Field static final int ATTR_SPATIAL_LEARNING = 0x0157   // FP1E: trigger AI Spatial Learning
 
 @Field static final Map<Integer, Map> DynamicSettingsMap = new ConcurrentHashMap<>().withDefault {
     new ConcurrentHashMap<String, String>()
@@ -80,6 +88,7 @@ metadata {
         capability "PowerSource"
         capability "Health Check"
         capability "Refresh"
+        capability "RelativeHumidityMeasurement"  // FP300
         //capability "SignalStrength"    //lqi - NUMBER; rssi - NUMBER (not supported yet)
         
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
@@ -106,7 +115,16 @@ metadata {
         attribute "targetDistance", "number"    // FP1E
         attribute "detectionRange", "decimal"   // FP1E
         attribute "motionSensitivity", "enum", ["low", "medium", "high"]   // FP1E
-       
+        attribute "spatialLearning", "enum", ["idle","started"]
+        
+        // FP300-specific attributes
+        attribute "presenceDetectionMode", "enum", ["both", "mmwave", "pir"]
+        attribute "pirDetection", "enum", ["detected", "not_detected"] 
+        attribute "absenceDelayTimer", "number"    // 10-300 seconds
+        attribute "pirDetectionInterval", "number" // 2-300 seconds
+        attribute "aiInterferenceIdentification", "enum", ["on", "off"]
+        attribute "aiSensitivityAdaptive", "enum", ["on", "off"]
+        
         if (_REGIONS) {
             attribute "region_last_enter", "number"
             attribute "region_last_leave", "number"
@@ -117,6 +135,8 @@ metadata {
         command "configure", [[name: "Initialize the device after switching drivers. Will load device default values!" ]]
         command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["active", "inactive"], description: "Use for tests"]]
         command "ping",      [[name: "Check device online status and measure the Round-Trip Time (ms)"]]
+    command "resetPresence", [[name: "Reset Presence (FP1/FP1E/FP300)" ]]
+    command "startSpatialLearning", [[name: "Start FP1E Spatial Learning (experimental)" ]]
 
         if (_DEBUG) {
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "FCC0"]]
@@ -136,6 +156,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer: "XIAOMI", deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.agl01", manufacturer:"LUMI",   deviceJoinName:  aqaraModels['GZCGQ11LM'].deviceJoinName                       // tests only : "Aqara T1 light intensity sensor GZCGQ11LM"    
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0", outClusters:"0003,0019", model:"lumi.sensor_occupy.agl1", manufacturer:"aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP1E Human Presence Detector RTCZCGQ13LM"        // RTCZCGQ13LM ( FP1E )
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0", outClusters:"0003,0019", model:"lumi.sensor_occupy.agl8", manufacturer:"aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D"                     // PS-S04D ( FP300 )
     }
 
     preferences {
@@ -162,6 +183,13 @@ metadata {
             if (isFP1E()) {
                 input (name: "filterSpam", type: "bool", title: "<b>Filter FP1E Distance Reports</b>", description: "<i>Filter the FP1E distance reports, if not really used in automations. Recommended value is <b>true</b></i>", defaultValue: true)
                 input (name: 'detectionRange', type: 'decimal', title: '<b>Detection Range</b>', description: '<i>Maximum detection distance, range (0.10..6.00)</i>', range: '0..6', defaultValue: 6.00)
+            }
+            if (isFP300()) {
+                input (name: "presenceDetectionMode", type: "enum", title: "<b>Presence Detection Mode</b>", description: "<i>Detection sensor type</i>", defaultValue: "both", options: ["both":"Both mmWave+PIR", "mmwave":"mmWave only", "pir":"PIR only"])
+                input (name: "absenceDelayTimer", type: "number", title: "<b>Absence Delay Timer</b>", description: "<i>Delay before reporting absence (10-300 seconds)</i>", range: "10..300", defaultValue: 30)
+                input (name: "pirDetectionInterval", type: "number", title: "<b>PIR Detection Interval</b>", description: "<i>PIR detection frequency (2-300 seconds)</i>", range: "2..300", defaultValue: 30)
+                input (name: "aiInterferenceIdentification", type: "bool", title: "<b>AI Interference Identification</b>", description: "<i>Enable AI to identify interference sources</i>", defaultValue: false)
+                input (name: "aiSensitivityAdaptive", type: "bool", title: "<b>AI Adaptive Sensitivity</b>", description: "<i>Enable AI adaptive sensitivity</i>", defaultValue: false)
             }
             if (isLightSensor()) {
                 input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "<i>illuminance minimum reporting interval, seconds (4..300)</i>", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
@@ -206,6 +234,19 @@ metadata {
         ],
         motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],    // TODO - check!
     ],    
+    'PS-S04D': [    // FP300 https://github.com/absent42/fp300/blob/main/fp300.mjs
+        model: "lumi.sensor_occupy.agl8", manufacturer: "aqara", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D",
+        capabilities: ["motionSensor":true, "temperatureMeasurement":true, "illuminanceMeasurement":true, "relativeHumidityMeasurement":true, "battery":true, "powerSource":true],
+        attributes: ["roomState", "roomActivity", "targetDistance", "detectionRange", "presenceDetectionMode", "pirDetection", "absenceDelayTimer", "pirDetectionInterval", "aiInterferenceIdentification", "aiSensitivityAdaptive"],
+        preferences: [
+            "motionSensitivity": [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ],
+            "presenceDetectionMode": true,
+            "absenceDelayTimer": true,
+            "pirDetectionInterval": true,
+            "aiInterferenceIdentification": true,
+            "aiSensitivityAdaptive": true
+        ]
+    ],    
     'RTCGQ14LM': [
         model: "lumi.motion.ac02", manufacturer: "LUMI", deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM",
         motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],
@@ -242,6 +283,7 @@ def isRTCGQ13LM() { if (deviceSimulation) return false else return (device.getDa
 def isP1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac02'] ) }     // Aqara P1 motion sensor (LED control)
 def isFP1()       { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac01'] ) }     // Aqara FP1 Presence sensor (microwave radar)
 def isFP1E()      { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.sensor_occupy.agl1'] ) }     // Aqara FP1E Presence sensor
+def isFP300()     { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.sensor_occupy.agl8'] ) }     // Aqara FP300 Presence sensor
 def isT1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl02'] ) }    // Aqara T1 motion sensor
 def isLightSensorXiaomi() { return (device.getDataValue('model') in ['lumi.sen_ill.mgl01'] ) } // Mi Light Detection Sensor;
 def isLightSensorAqara()  { return (device.getDataValue('model') in ['lumi.sen_ill.agl01'] ) } // T1 light intensity sensor
@@ -376,7 +418,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             logWarn "<b>received unknown report: ${P1_LED_MODE_NAME(value)}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0065" :
-            if (isFP1() || isFP1E()) { // FP1    'unoccupied':'occupied'
+            if (isFP1() || isFP1E() || isFP300()) { // FP1    'unoccupied':'occupied'
                 logDebug "(attr 0x065) roomState (presence) is  ${fp1RoomStateEventOptions[value.toString()]} (${value})"
                 roomStateEvent( fp1RoomStateEventOptions[value.toString()] )
             }
@@ -396,7 +438,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
                 logDebug "<b>received motion retrigger interval report: ${value} s</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             }
-            else if (isFP1() || isFP1E()) { // FP1
+            else if (isFP1() || isFP1E() || isFP300()) { // FP1
                 logDebug "(0x69) <b>received approach_distance report: ${value} s</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
                 device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
             }
@@ -434,6 +476,20 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             break
         case "0143" : // (323) FP1 RTCZCGQ11LM presence_event {0: 'enter', 1: 'leave', 2: 'left_enter', 3: 'right_leave', 4: 'right_enter', 5: 'left_leave', 6: 'approach', 7: 'away'}[value];  // FP1E: 0143_SensorPresenseEvent (115F): [UNSIGNED_8_BIT_INTEGER]
             presenceTypeEvent( fp1RoomActivityEventTypeOptions[value.toString()] )
+            break
+        case "014D" : // FP300 PIR detection state
+            if (isFP300()) {
+                sendEvent(name: "pirDetection", value: value ? "detected" : "not_detected", type: "physical")
+                logDebug "PIR detection: ${value ? 'detected' : 'not detected'}"
+            }
+            break
+        case "014F" : // FP300 PIR detection interval
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                sendEvent(name: "pirDetectionInterval", value: value, unit: "sec", type: "physical")
+                device.updateSetting("pirDetectionInterval", [value: value.toString(), type: "number"])
+                logDebug "PIR detection interval: ${value} seconds"
+            }
             break
         case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
             device.updateSetting( "monitoringMode",  [value:value.toString(), type:"enum"] )    // monitoring_mode = {0: 'undirected', 1: 'left_right'}[value]
@@ -476,6 +532,20 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             logDebug "(0x015B) received detection range report: ${value} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             detectionRangeEvent( value )
             break
+        case "015D" : // FP300 AI adaptive sensitivity
+            if (isFP300()) {
+                sendEvent(name: "aiSensitivityAdaptive", value: value ? "on" : "off", type: "physical")
+                device.updateSetting("aiSensitivityAdaptive", [value: value ? true : false, type: "bool"])
+                logDebug "AI adaptive sensitivity: ${value ? 'on' : 'off'}"
+            }
+            break
+        case "015E" : // FP300 AI interference identification 
+            if (isFP300()) {
+                sendEvent(name: "aiInterferenceIdentification", value: value ? "on" : "off", type: "physical")
+                device.updateSetting("aiInterferenceIdentification", [value: value ? true : false, type: "bool"])
+                logDebug "AI interference identification: ${value ? 'on' : 'off'}"
+            }
+            break
         case "015F" :   // 015F_Custom: 15 [UNSIGNED_32_BIT_INTEGER] FP1E 'target_distance'
             value = Integer.parseInt(it.value, 16)
             logDebug "(0x015F) received FP1E target_distance report: ${value} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
@@ -484,6 +554,22 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case '0160' :   // FP1E frequently sent report ?? presence_event [ "0":"0 - unknown", "1":"1 - unknown" , "2":"idle" , "3":"large movement" , "4":"small movement" , "5":"5 - unknown" ]
             logDebug "(0x0160) received report: ${fp1ERoomActivityEventTypeOptions[value.toString()]} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             presenceTypeEvent( fp1ERoomActivityEventTypeOptions[value.toString()] )
+            break
+        case "0197" : // FP300 Absence delay timer
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                sendEvent(name: "absenceDelayTimer", value: value, unit: "sec", type: "physical")
+                device.updateSetting("absenceDelayTimer", [value: value.toString(), type: "number"])
+                logDebug "Absence delay timer: ${value} seconds"
+            }
+            break
+        case "0199" : // FP300 Presence detection options
+            if (isFP300()) {
+                def modes = ["both", "mmwave", "pir"]
+                sendEvent(name: "presenceDetectionMode", value: modes[value] ?: "both", type: "physical")
+                device.updateSetting("presenceDetectionMode", [value: modes[value] ?: "both", type: "enum"])
+                logDebug "Presence detection mode: ${modes[value] ?: 'both'}"
+            }
             break
 
         case '0006' :   // 0006_Unknown (115F): ByteArray [value=D3 45 B9 CD AC 60 DB 02 FB C5 C0 E9 41 14 B0 CC] [OCTET_STRING]
@@ -929,7 +1015,7 @@ void illuminanceEventLux( Integer lux ) {
         logWarn "ignored lux reading ${lux}"
         return
     }
-    if ( lux > 0xFFDC ) lux = 0    // maximum value is 0xFFDC !
+    if ( lux > 0xFFDC ) lux = 0xFFDC    // maximum value is 0xFFDC !
     handleIlluminanceEvent(lux)
 }
 
@@ -1038,6 +1124,13 @@ def detectionRangeEvent( Integer range ) {
         rangeConverted = rangeConverted.setScale(2, RoundingMode.HALF_UP)
         sendEvent("name": "detectionRange", "value": rangeConverted, "type": "physical")
         if (settings?.txtEnable) log.info "${device.displayName} detection range is ${rangeConverted} m"
+    }
+}
+
+def humidityEvent( Integer humidity ) {
+    if (humidity != null && (isFP300())) {
+        sendEvent(name: "humidity", value: humidity, unit: "%", type: "physical")
+        if (settings?.txtEnable) log.info "${device.displayName} humidity is ${humidity}%"
     }
 }
 
@@ -1169,7 +1262,7 @@ private void scheduleDeviceHealthCheck(int intervalMins) {
 }
 
 void deviceCommandTimeout() {
-    if (isFP1() || isFP1E()) {
+    if (isFP1() || isFP1E() || isFP300()) {
         logWarn 'no response received (device offline?)'
         sendHealthStatusEvent("offline")
         //resetState()
@@ -1193,6 +1286,10 @@ void sendHealthStatusEvent(String value) {
 }
 
 void resetPresence() {
+    if (!(isFP1() || isFP1E() || isFP300())) {
+        logWarn 'resetPresence() is supported only for FP1/FP1E/FP300 devices.'
+        return
+    }
     logInfo 'reset presence'
     //resetRegions()
     sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x0157, DataType.UINT8, 0x01, [mfgCode: 0x115F], 0))
@@ -1211,9 +1308,39 @@ void refresh() {
     if (isFP1E()) {
         sendZigbeeCommands(zigbee.readAttribute(0xFCC0, 0x015B, [mfgCode: 0x115F], 0))  // detection range
     }
+    else if (isFP300()) {
+        sendZigbeeCommands(zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x014D, 0x014F, 0x0197, 0x0199, 0x015D, 0x015E], [mfgCode: 0x115F], 0))  // FP300 attributes
+    }
     else {
         logDebug 'no refresh required'
     }
+}
+
+// Start Spatial Learning - FP1E only. Sends a single write to ATTR_SPATIAL_LEARNING with value 0x01.
+void startSpatialLearning() {
+    if (!(isFP1E() || isFP300())) {
+        logWarn 'startSpatialLearning() is supported only for FP1E/FP300 devices.'
+        return
+    }
+    logInfo 'Starting FP1E/FP300 Spatial Learning...'
+    List<String> cmds = []
+    cmds += zigbee.writeAttribute(
+        CLUSTER_AQARA_FCC0,
+        ATTR_SPATIAL_LEARNING,
+        hubitat.zigbee.zcl.DataType.UINT8,
+        0x01,
+        [mfgCode: MFG_AQARA_FP1E],
+       100
+    )
+    sendZigbeeCommands(cmds)
+    // transient indicator
+    sendEvent(name: 'spatialLearning', value: 'started', type: 'digital', descriptionText: 'Spatial Learning started')
+    runIn(35, 'spatialLearningReset', [overwrite: true])
+}
+
+private void spatialLearningReset() {
+    sendEvent(name: 'spatialLearning', value: 'idle', type: 'digital', descriptionText: 'Spatial Learning idle')
+    logInfo 'Spatial Learning state reset to idle'
 }
 
 
@@ -1285,7 +1412,7 @@ void updated() {
             cmds += zigbee.writeAttribute(0xFCC0, 0x0152, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
     }
-    if (isRTCGQ13LM() || isP1() || isFP1() || isFP1E()) {
+    if (isRTCGQ13LM() || isP1() || isFP1() || isFP1E() || isFP300()) {
         if (settings?.motionSensitivity != null && settings?.motionSensitivity != 0) {
             value = safeToInt( motionSensitivity )
             if (settings?.logEnable) log.debug "${device.displayName} setting motionSensitivity to ${sensitivityOptions[value.toString()]} (${value})"
@@ -1322,6 +1449,31 @@ void updated() {
             cmds += zigbee.writeAttribute(0xFCC0, 0x0144, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
         device.deleteCurrentState("battery")
+    }
+    //
+    if (isFP300()) {
+        if (settings?.presenceDetectionMode != null) {
+            def modeValue = ["both": 0, "mmwave": 1, "pir": 2][settings.presenceDetectionMode] ?: 0
+            if (settings?.logEnable) log.debug "${device.displayName} setting presenceDetectionMode to ${settings.presenceDetectionMode} (${modeValue})"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0199, 0x20, modeValue, [mfgCode: 0x115F], delay=200)
+        }
+        if (settings?.absenceDelayTimer != null) {
+            if (settings?.logEnable) log.debug "${device.displayName} setting absenceDelayTimer to ${settings.absenceDelayTimer} seconds"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0197, 0x23, settings.absenceDelayTimer as Integer, [mfgCode: 0x115F], delay=200)
+        }
+        if (settings?.pirDetectionInterval != null) {
+            if (settings?.logEnable) log.debug "${device.displayName} setting pirDetectionInterval to ${settings.pirDetectionInterval} seconds"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x014F, 0x21, settings.pirDetectionInterval as Integer, [mfgCode: 0x115F], delay=200)
+        }
+        if (settings?.aiInterferenceIdentification != null) {
+            if (settings?.logEnable) log.debug "${device.displayName} setting aiInterferenceIdentification to ${settings.aiInterferenceIdentification}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x015E, 0x20, settings.aiInterferenceIdentification ? 1 : 0, [mfgCode: 0x115F], delay=200)
+        }
+        if (settings?.aiSensitivityAdaptive != null) {
+            if (settings?.logEnable) log.debug "${device.displayName} setting aiSensitivityAdaptive to ${settings.aiSensitivityAdaptive}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x015D, 0x20, settings.aiSensitivityAdaptive ? 1 : 0, [mfgCode: 0x115F], delay=200)
+        }
+        // FP300 is battery powered - do not delete battery state
     }
     //
     if (isLightSensor()) {
@@ -1401,6 +1553,14 @@ void initializeVars(boolean fullInit = false) {
         if (fullInit == true || settings?.filterSpam == null) { device.updateSetting("filterSpam", true) }
         if (fullInit == true || settings?.detectionRange == null) { device.updateSetting('detectionRange', [value:6.00, type:'decimal']) }
     }
+    if (isFP300()) {
+        device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP300
+        if (fullInit == true || settings?.presenceDetectionMode == null) { device.updateSetting("presenceDetectionMode", "both") }
+        if (fullInit == true || settings?.absenceDelayTimer == null) { device.updateSetting("absenceDelayTimer", [value: 30 , type:"number"]) }
+        if (fullInit == true || settings?.pirDetectionInterval == null) { device.updateSetting("pirDetectionInterval", [value: 10 , type:"number"]) }
+        if (fullInit == true || settings?.aiInterferenceIdentification == null) { device.updateSetting("aiInterferenceIdentification", false) }
+        if (fullInit == true || settings?.aiSensitivityAdaptive == null) { device.updateSetting("aiSensitivityAdaptive", false) }
+    }
     if (fullInit == true || settings.tempOffset == null) { device.updateSetting("tempOffset", 0) }
     if (fullInit == true ) { powerSourceEvent() }
     if (fullInit == true ) { sendEvent(name: "parentNWK", value: "unknown", descriptionText: "parentNWK is unknown", type: "digital") }
@@ -1447,14 +1607,14 @@ void setMotion(final String mode) {
     switch (mode) {
         case "active" : 
             handleMotion(true, isDigital=true)
-            if (isFP1() || isFP1E()) {
+            if (isFP1() || isFP1E() || isFP300()) {
                 roomStateEvent("occupied", isDigital=true)
                 presenceTypeEvent("enter", isDigital=true)
             }
             break
         case "inactive" :
             handleMotion(false, isDigital=true)
-            if (isFP1() || isFP1E()) {
+            if (isFP1() || isFP1E() || isFP300()) {
                 roomStateEvent("unoccupied", isDigital=true)
                 presenceTypeEvent("leave", isDigital=true)
                 resetPresence()
@@ -1495,6 +1655,10 @@ void aqaraReadAttributes() {
     }
     else if (isFP1() || isFP1E()) {  // Aqara presence detector FP1 
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x0144, 0x0146], [mfgCode: 0x115F], delay=200)
+    }
+    else if (isFP300()) {  // Aqara FP300 presence detector 
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // battery voltage
+        cmds += zigbee.readAttribute(0xFCC0, [0x014D, 0x014F, 0x015D, 0x015E, 0x0197, 0x0199], [mfgCode: 0x115F], delay=200)
     }
     else if (isLightSensorAqara()) {
         cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x115F], delay=200)

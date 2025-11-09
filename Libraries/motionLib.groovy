@@ -9,18 +9,19 @@ library(
  *  Licensed Virtual the Apache License, Version 2.0
  *
  * ver. 3.2.0  2024-07-06 kkossev  - added motionLib.groovy; added [digital] [physical] to the descriptionText
- * ver. 3.2.1  2025-03-24 kkossev  - (dev.branch) documentation
+ * ver. 3.2.1  2025-03-24 kkossev  - documentation
+ * ver. 3.2.2  2025-10-12 kkossev  - (dev.branch) setMotion help text improved
  *
  *                                   TODO:
 */
 
-static String motionLibVersion()   { '3.2.1' }
-static String motionLibStamp() { '2025/03/06 12:52 PM' }
+static String motionLibVersion()   { '3.2.2' }
+static String motionLibStamp() { '2025/10/12 7:25 PM' }
 
 metadata {
     capability 'MotionSensor'
     // no custom attributes
-    command 'setMotion', [[name: 'setMotion', type: 'ENUM', constraints: ['No selection', 'active', 'inactive'], description: 'Force motion active/inactive (for tests)']]
+    command 'setMotion', [[name: 'setMotion', type: 'ENUM', constraints: ['No selection', 'active', 'inactive'], description: '🧪 Force motion state to active or inactive for testing purposes']]
     preferences {
         if (device) {
             if (('motionReset' in DEVICE?.preferences) && (DEVICE?.preferences.motionReset == true)) {

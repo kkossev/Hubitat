@@ -30,12 +30,17 @@
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  * ver. 3.5.1  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
  * ver. 3.5.2  2025-07-14 kkossev  - bug fix: 'sendDelayedBatteryEvent' exception
- *                                   
+ * ver. 3.5.3  2025-09-15 kkossev  - alligned with commonLib 4.0.0
+ * ver. 3.5.4  2025-10-03 kkossev  - added model:'ZG-204ZL' (note the 'ZL' sufix!), manufacturer:'HOBEIAN' 2-in-1 sensor into TS0601_2IN1' device profile group
+ * ver. 3.5.5  2025-10-20 kkossev  - added IMOU Motion Sensor ZP1 model:'ZP2-EN', manufacturer:'MultIR'
+ *
+ *                                   TODO: show Temperature Offset and Humidity Offset only when the device profile supports TemperatureMeasurement and RelativeHumidityMeasurement capabilities
+ *                                   TODO: check why no preferences : updateAllPreferences: no preferences defined for device profile SIHAS_USM-300Z_4_IN_1
  *                                   TODO: update documentation : https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1 
  */
 
-static String version() { "3.5.2" }
-static String timeStamp() {"2025/07/14 7:56 AM"}
+static String version() { "3.5.5" }
+static String timeStamp() {"2025/10/20 10:45 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -220,7 +225,9 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_3towulqd', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // https://www.aliexpress.com/item/1005004095233195.html
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0500,0001,0400', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_3towulqd', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],     // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/934?u=kkossev
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bh3n6gk8', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // https://community.hubitat.com/t/tze200-bh3n6gk8-motion-sensor-not-working/123213?u=kkossev
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_1ibpyhdc', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL']          //
+                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_1ibpyhdc', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          //
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,EF00,0001,0400', outClusters:'', model:'ZG-204ZL', manufacturer:'HOBEIAN', deviceJoinName: 'HOBEIAN ZG-204ZL 2 in 1 PIR Motion Detector and Lux sensor'],                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1153?u=kkossev 
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0400', outClusters:'', model:'ZG-204ZL', manufacturer:'HOBEIAN', deviceJoinName: 'HOBEIAN ZG-204ZL 2 in 1 PIR Motion Detector and Lux sensor']                       // https://github.com/JohanBendz/com.tuya.zigbee/issues/1267
             ],
             tuyaDPs:        [
                 [dp:1,   name:'motion', /*preProc:'invert',*/ type:'enum',   rw: 'ro', min:0, max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'Motion'],
@@ -480,6 +487,25 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             ],
             refresh       : ['motion', 'temperatureRefresh'],
             configuration : ['custom':'configureEspressif'],
+    ],
+
+    'IMOU_MOTION_ZP1'   : [
+            description   : 'IMOU Motion Sensor ZP1',
+            models        : ['ZP2-EN', 'ZP1-EN'],
+            device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],
+            capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': false, 'RelativeHumidityMeasurement': false, 'IlluminanceMeasurement': false, 'Battery': true],
+            preferences   : ['motionReset':true, /*'keepTime':'0x0500:0xF001', 'sensitivity':'0x0500:0x0013'*/],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500,0B05', outClusters:'0003', model:'ZP2-EN', manufacturer:'MultIR', deviceJoinName: 'IMOU Motion Sensor ZP1'],
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500,0B05', outClusters:'0003', model:'ZP1-EN', manufacturer:'MultIR', deviceJoinName: 'IMOU Motion Sensor ZP1']
+            ],
+            attributes:       [/*
+                [at:'0x0500:0x0013', name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
+                [at:'0x0500:0xF001', name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:2,    defVal:'0',  unit:'seconds',    map:[0:'30 seconds', 1:'60 seconds', 2:'120 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)'],
+                */
+            ],
+            configuration : ['battery': false]
+            // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/imou.ts 
     ],
 
     'NONTUYA_MOTION_IAS'   : [

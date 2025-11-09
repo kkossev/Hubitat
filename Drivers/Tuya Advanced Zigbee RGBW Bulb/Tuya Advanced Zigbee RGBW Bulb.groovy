@@ -1429,11 +1429,11 @@ private void sendColorTempEvent(final String rawValue) {
     if (state.ct.low && value < state.ct.low) {
         return
     }
-    final String descriptionText = "color temperature was set to ${value}°K"
+    final String descriptionText = "color temperature was set to ${value}Â°K"
     if (device.currentValue('colorTemperature') as Integer != value && settings.txtEnable) {
         log.info descriptionText
     }
-    sendEvent(name: 'colorTemperature', value: value, descriptionText: descriptionText, unit: '°K')
+    sendEvent(name: 'colorTemperature', value: value, descriptionText: descriptionText, unit: 'Â°K')
 }
 
 /**

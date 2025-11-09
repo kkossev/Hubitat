@@ -1,0 +1,40 @@
+{
+  "files": [
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
+      "id": 144,
+      "codeType": "library",
+      "version": 618
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/reportingLib.groovy",
+      "id": 177,
+      "codeType": "library",
+      "version": 15
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/motionLib.groovy",
+      "id": 180,
+      "codeType": "library",
+      "version": 8
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLib.groovy",
+      "id": 142,
+      "codeType": "library",
+      "version": 603
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Drivers/Tuya Zigbee mmWave Sensor/Tuya_Zigbee_mmWave_Sensor.groovy",
+      "id": 2862,
+      "codeType": "driver",
+      "version": 342
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Drivers/Tuya Multi Sensor 4 In 1/Tuya Multi Sensor 4 in 1 (V3).groovy",
+      "id": 3015,
+      "codeType": "driver",
+      "version": 221
+    }
+  ]
+}

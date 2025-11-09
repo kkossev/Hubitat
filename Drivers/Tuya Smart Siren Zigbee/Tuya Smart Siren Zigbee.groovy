@@ -27,6 +27,7 @@
  * ver. 1.3.3 2024-11-20 kkossev  - added TS0601 _TZE204_hcxvyxa5 and _TZE204_q76rtoa9 in Tuya group;
  * ver. 1.3.4 2025-02-22 kkossev  - added TS0601 _TZE284_nlrfgpny in TuyaSolarAlarm group;
  *
+ *                                  TODO: add TS0224 _TZ3000_c2yscrj8 https://community.hubitat.com/t/tuya-zigbee-smart-siren-f048b/156934/3?u=kkossev ( https://gist.github.com/Koenkk/04b9a1ff8c0ca2c046e3e00cfe469f10)
  *                                  TODO: add ping() and healthStatus
  *                                  TODO: add TS0216  _TYZB01_0wcfvptl https://github.com/zigpy/zha-device-handlers/issues/1824#issuecomment-1302637169 (https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/74?u=kkossev)
  *                                  TODO: _TZE204_t1blo2bj control @abraham : https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/67?u=kkossev
@@ -104,6 +105,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE284_nlrfgpny", deviceJoinName: "Tuya Solar Alarm"         // https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/116?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE204_hcxvyxa5", deviceJoinName: "Tuya Smart Siren"              // https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/148?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE204_q76rtoa9", deviceJoinName: "Tuya Smart Siren"              // https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/148?u=kkossev
+        // 
+        
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)

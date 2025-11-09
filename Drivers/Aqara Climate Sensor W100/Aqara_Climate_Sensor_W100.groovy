@@ -14,20 +14,22 @@
  *     for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2025-07-23 kkossev  - Initial version
- * ver. 1.1.0  2025-07-26 kkossev  - added external temperature and humidity sensor support
- * ver. 1.2.0  2025-08-12 kkossev  - HVAC Thermostat support - work-in-progress
- * ver. 1.2.1  2025-08-14 kkossev  - (dev. branch) Celsius/Fahrenheit HVAC Thermostat support - work-in-progress; 
+ * ver. 1.2.0  2025-08-12 kkossev  - HVAC Thermostat support
+ * ver. 1.2.1  2025-08-14 kkossev  - Celsius/Fahrenheit HVAC Thermostat support
  *                                   checked: Auto Cool Heat Off EmergencyHeat setThermostatMode commands; command FanAuto FanCirculate FanOn setThermostatFanMode; 
  *                                   checked: setHeatingSetpoint setCoolingSetpoint; woarkaround for Fahrenheit rounding problem
+ * ver. 1.2.2  2025-09-15 kkossev  - (dev. branch)commonLib ver 4.0.0 allignment
  *
+ *                        TODO: on LoadAAllDefaults - deviceProfile is UNKNOWN !  ; check if state.deviceMAC is really needed ; remove the log.trace lines; check the exception when updatind aqara version
  *                        TODO: simulate thermostatOperatingState changes
  *                        TODO: enableHVAC disableHVAC command
  *                        TODO: 
  *                        TODO: 0x0168 and 0x016F attributes (alarms) ; initializeHVACDefaults() should be called just once;
  */
 
-static String version() { '1.2.1' }
-static String timeStamp() { '2025/08/14 11:17 PM' }
+static String version() { '1.2.2' }
+static String timeStamp() { '2025/09/15 1:02 PM' }
+>>>>>>> development
 
 @Field static final Boolean _DEBUG = false
 

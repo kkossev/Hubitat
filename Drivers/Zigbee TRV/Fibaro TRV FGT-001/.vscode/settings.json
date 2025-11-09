@@ -1,0 +1,4 @@
+{
+    "hubitat.hub.hostname": "192.168.0.183",
+    "hubitat.hub.networkTimeout": 60000
+}

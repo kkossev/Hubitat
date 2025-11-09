@@ -25,12 +25,13 @@
  * ver. 3.5.0  2025-02-16 kkossev  - restored sendCommand and setPar; added brightness attribute; added checkIfIsDuplicated; added Resend failed commands : setThermostatMode and heatingSetpoint retries; added forceManual prefrence
  * ver. 3.5.1  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  * ver. 3.5.2  2025-05-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
+ * ver. 3.5.3  2025-10-03 kkossev  - (dev. branch) added TS0601 _TZE204_lpedvtvr into new 'MOES_RING_THERMOSTAT' profile
  *
- *                                   TODO:
+ *                                   TODO: 
  */
 
-static String version() { '3.5.2' }
-static String timeStamp() { '2025/05/25 8:54 AM' }
+static String version() { '3.5.3' }
+static String timeStamp() { '2025/10/03 9:03 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -678,6 +679,42 @@ metadata {
             deviceJoinName: 'Avatto ZWT198/ZWT100-BH Thermostat',
             configuration : [:]
     ],
+
+    'MOES_RING_THERMOSTAT'   : [       // https://github.com/Koenkk/zigbee-herdsman-converters/blob/0f787aecb1fc85230d9c1d70d90aa8c04d4490f2/src/devices/moes.ts#L1401-L1501
+            description   : 'Moes Ring Thermostat',
+            device        : [models: ['TS0601'], type: 'Thermostat', powerSource: 'ac', isSleepy:false],
+            capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
+            preferences   : ['childLock':'39', 'minHeatingSetpoint':'18', 'maxHeatingSetpoint':'34', 'sensor':'32', 'hysteresis':'110', 'ecoTemp':'113', 'temperatureCalibration':'101', 'brightness':'48', 'screenTime':'114', 'highProtectTemperature':'111', 'lowProtectTemperature':'112'],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_lpedvtvr", deviceJoinName: 'Moes Ring Thermostat']
+            ],
+            commands      : ['sendSupportedThermostatModes':'sendSupportedThermostatModes', 'setHeatingSetpoint':'setHeatingSetpoint', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            tuyaDPs       : [
+                [dp:1,   name:'systemMode',         type:'enum',            rw: 'rw', defVal:'1', map:[0: 'off', 1: 'heat'],  title:'<b>Thermostat Switch</b>',  description:'Thermostat switch (system mode)'],
+                [dp:2,   name:'preset',             type:'enum',            rw: 'rw', defVal:'0', map:[0:'manual', 1:'temporary manual', 2:'program', 3:'eco'], description:'Preset mode'],
+                [dp:16,  name:'temperature',        type:'decimal',         rw: 'ro', min:-20.0, max:60.0, defVal:20.0, step:0.1, scale:10, unit:'°C',  description:'Measured temperature'],
+                [dp:18,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:1.0,   max:15.0, defVal:5.0, step:0.5, scale:10, unit:'°C',  title:'<b>Minimum Heating Setpoint</b>', description:'Minimum comfort temperature limit'],
+                [dp:32,  name:'sensor',             type:'enum',            rw: 'rw', defVal:'0', map:[0:'internal', 1:'dual', 2:'external'], title:'<b>Sensor Selection</b>', description:'Temperature sensor mode'],
+                [dp:34,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:35.0,  max:45.0, defVal:45.0, step:0.5, scale:10, unit:'°C',  title:'<b>Maximum Heating Setpoint</b>', description:'Maximum comfort temperature limit'],
+                [dp:39,  name:'childLock',          type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Child Lock</b>',  description:'Child lock'],
+                [dp:47,  name:'thermostatOperatingState', type:'enum',     rw: 'rw', defVal:'0', map:[0:'heating', 1:'idle'], description:'Thermostat operating state'],
+                [dp:48,  name:'brightness',         type:'number',          rw: 'rw', min:0,     max:100, defVal:100, step:1,   unit:'%', title:'<b>Backlight Brightness</b>', description:'Display backlight brightness'],
+                [dp:50,  name:'heatingSetpoint',    type:'decimal',         rw: 'rw', min:5.0,   max:45.0, defVal:20.0, step:0.5, scale:10, unit:'°C',  title:'<b>Current Heating Setpoint</b>', description:'Target heating setpoint'],
+                [dp:101, name:'temperatureCalibration', type:'decimal',    rw: 'rw', min:-10.0, max:10.0, defVal:0.0, step:1.0, scale:1,  unit:'°C',  title:'<b>Temperature Calibration</b>', description:'Temperature calibration offset'],
+                [dp:109, name:'floorTemperature',   type:'decimal',         rw: 'ro', min:0.0,   max:70.0, defVal:20.0, step:0.5, scale:10, unit:'°C', description:'Floor temperature'],
+                [dp:110, name:'hysteresis',         type:'decimal',         rw: 'rw', min:0.5,   max:5.0,  defVal:1.0, step:0.5, scale:10, title:'<b>Temperature Deadzone</b>', description:'Temperature delta before heating engages'],
+                [dp:111, name:'highProtectTemperature', type:'decimal',    rw: 'rw', min:10.0,  max:70.0, defVal:50.0, step:1.0, scale:1,  unit:'°C',  title:'<b>High Protect Temperature</b>', description:'High temperature protection threshold'],
+                [dp:112, name:'lowProtectTemperature',  type:'decimal',    rw: 'rw', min:0.0,   max:10.0, defVal:5.0,  step:0.5, scale:10, unit:'°C',  title:'<b>Low Protect Temperature</b>', description:'Low temperature protection threshold'],
+                [dp:113, name:'ecoTemp',           type:'decimal',         rw: 'rw', min:10.0,  max:30.0, defVal:18.0, step:0.5, scale:10, unit:'°C',  title:'<b>Eco Temperature</b>', description:'Temperature used in Eco preset'],
+                [dp:114, name:'screenTime',        type:'enum',            rw: 'rw', defVal:'2', map:[0:'10 seconds', 1:'20 seconds', 2:'30 seconds', 3:'40 seconds', 4:'50 seconds', 5:'60 seconds'], title:'<b>Screen Timeout</b>', description:'Screen backlight timeout'],
+                [dp:115, name:'rgbLight',          type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>RGB Accent Light</b>', description:'Enable the RGB accent light'],
+            ],
+            supportedThermostatModes: ['off', 'heat'],
+            refresh: ['pollTuya'],
+            deviceJoinName: 'Moes Ring Thermostat',
+            configuration : [:]
+    ],
+    
 ]
 
 /*

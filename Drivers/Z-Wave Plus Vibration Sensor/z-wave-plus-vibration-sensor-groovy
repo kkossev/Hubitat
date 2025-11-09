@@ -1,0 +1,410 @@
+/**
+ *  Z-Wave Plus Vibration Sensor  -  Device Driver for Hubitat Elevation hub
+ *
+ *  https://community.hubitat.com/t/tuya-vibration-sensor/75269
+ *  
+ *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ *  in compliance with the License. You may obtain a copy of the License at:
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+ *  for the specific language governing permissions and limitations under the License.
+ * 
+ * ver 1.0.0 2025-03-01 kkossev - inital version
+ * 
+ *                                TODO:
+ */
+
+
+String version() { '1.0.0' }
+String timeStamp() { '2025/03/01 9:13 PM '}
+
+import groovy.transform.Field
+import hubitat.helper.HexUtils
+import hubitat.device.HubAction
+
+metadata {
+    definition (name: "Z-Wave Plus Vibration Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/drivers/development/z-wave-plus-vibration-sensor.groovy", singleThreaded: true ) {
+        capability "Sensor"
+        capability "AccelerationSensor"
+        capability "ShockSensor"                    // shock - ENUM ["clear", "detected"] attribute
+		capability "Battery"
+		capability "Configuration"
+        capability "Refresh"
+        capability "HealthCheck"
+        
+        attribute 'rtt', 'number'
+        attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
+        attribute 'batteryStatus', 'enum', ["normal", "replace"]
+        attribute 'sensitivity', 'number'
+        //attribute 'lastBattery', 'date'         // last battery event time
+
+        command "initialize"
+        command 'setActive',   [[name: 'Set the accelaration to active state']]
+        command 'setInactive', [[name: 'Reset the accelaration to inactive state']]
+		
+        //fingerprint mfr:"0148", prod:"0003", deviceId:"0001", inClusters:"0x5E,0x55,0x98,0x9F"
+        //fingerprint mfr:"0148", prod:"0003", deviceId:"0001", inClusters:"0x5E,0x85,0x59,0x86,0x72,0x5A,0x75,0x31,0x26,0x40,0x43,0x80,0x70,0x71,0x73,0x98,0x9F,0x55,0x6C,0x7A"
+        fingerprint mfr:"045A", prod:"0004", deviceId:"0362", inClusters:"0x5E,0x9F,0x55,0x85,0x59,0x8E,0x80,0x70,0x5A,0x7A,0x87,0x72,0x71,0x73,0x6C,0x86,0x84,0x22", controllerType: "ZWV"		// ZW866
+    }
+    
+    def batteriestatus =  [:]
+        batteriestatus << [0 : "Event-driven"]
+        batteriestatus << [1 : "Once per day"]
+
+
+    preferences {
+        input (name: "txtEnable", type: "bool",   title: "<b>Description text logging</b>", description: "Display sensor states on HE log page. The recommended value is <b>true</b>", defaultValue: true)
+        input (name: "logEnable", type: "bool",   title: "<b>Debug logging</b>", description: "Debug information, useful for troubleshooting. The recommended value is <b>false</b>", defaultValue: true)
+        input (name: "shockSensor", type: "bool",   title: "<b>Shock Sensor</b>", description: "Simulate a Shock Sensor", defaultValue: true)
+        //input name:"englishLang",        type:"bool",    title: "<b>English Language</b>",                  description: "Default: Yes",                              defaultValue:true
+
+        //input name: "parameter1",    type:"bool",    title: "<b>Invert LCD</b>",                        description: "Default: No",                               defaultValue:false
+        //input name: "parameter2",    type:"number",  title: "<b>LCD Timeout (in secs)</b>",             description: "Default: 0-Always on, range 0..30",         defaultValue:0,      range: "0..30"
+        //input name: "parameter4",    type:"enum",    title: "<b>Battery reporting</b>",                 description: "Default: once a day",                       defaultValue:1,      options: batteriestatus
+    }
+}
+
+@Field static Map commandClassVersions = [
+     0x22:1,    // Command Class Application Status (0x22/34)
+     0x55:2,    // Transport Service V2
+     0x59:3,    // Command Class Association Group Information (0x59/89)
+     0x5A:1,    // Command Class DeviceResetLocally (0x5A/90)
+     0x5E:2,    // Command Class Z-Wave Plus Info (0x5E/94)
+     0x6C:1,	// Command Class Supervision (0x6C/108)
+     0x70:4,    // Command Class Configuration (0x70/112)
+     0x71:8,    // Command Class Alarm (0x71/113) Notification report 7:vibration
+     0x72:2,    // Command Class ManufacturerSpecific (0x72/114)
+     0x73:1,    // Command Class PowerLevel (0x73/115)
+     0x7A:5,    // Command Class Firmware Update (0x7A/122)
+     0x80:1,    // Command Class Battery (0x80/128)
+     0x84:2,	// Command Class Wakeup (0x84/132)
+     0x85:2,    // Command Class Association (0x85/133)
+     0x86:3,    // Command Class Version (0x86/134)
+     0x87:3,    // Command Class Indicator (0x87/135)
+     0x8e:3,    // Command Class MultiChannelAssociation (0x8E/142)
+     0x9F:1		// Command Class SecurityS2 (0x9F/159)
+] 
+
+@Field static final Integer pollTimer = 3    // seconds
+@Field static final Integer presenceCountTreshold = 4
+
+// Z-Wave command:NotificationReport(v1AlarmType: 0, v1AlarmLevel: 0, notificationStatus: 0, notificationType: 7, event: 10, sequence: false, eventParametersLength: 0, eventParameter: [], sequenceNumber: 0)
+def parse(String description) {
+    checkDriverVersion()
+    setPresent()
+    def cmd = zwave.parse(description, commandClassVersions)
+    if (cmd) {
+        logDebug "parse event: description = ${description} <br> cmd = ${cmd}"
+        return zwaveEvent(cmd)
+    } else {
+        logWarn "Non-parsed event: ${description}"
+    }
+}
+
+// 0x84:2,	// // COMMAND_CLASS_WAKE_UP_V2
+void zwaveEvent(hubitat.zwave.commands.wakeupv2.WakeUpNotification cmd) {
+    logDebug "received NotificationReport: ${cmd}"
+    def event = [:]
+    event.name = "notify"
+    event.value = 'Wake Up'
+    event.displayed = true
+    logInfo "Notification : ${event.value}"
+    if (/*forceStateChange==*/true) {event.isStateChange = true}
+    sendEvent(event)
+}
+
+// 0x71:8,    // Notification report 7:vibration
+void zwaveEvent (hubitat.zwave.commands.notificationv8.NotificationReport cmd) {
+    logDebug "received NotificationReport: ${cmd}"
+    def event = [:]
+    event.name = "notify"
+    event.displayed = true
+    switch (cmd.notificationType) {
+        case 0x07: //vibration
+        	//event.value = 'vibration detected'
+            sendAccelarationEvent("active")
+            return
+        	//break
+        case 0x08:
+            if (cmd.event == 0x0A) {
+                event.value = "Less than 25% battery remaining"
+            } else if (cmd.event == 0x0B) {
+                event.value = "Less than 15% battery remaining"
+            } else {
+                event.value = "battery was changed"
+            }
+            break
+        default : 
+        	event.value = "unknown type %{cmd.notificationType}"
+        	break
+    }
+    logInfo "Notification : ${event.value}"
+    if (/*forceStateChange==*/true) {event.isStateChange = true}
+    sendEvent(event)
+}
+
+void zwaveEvent (hubitat.zwave.commands.batteryv1.BatteryReport cmd) {
+    logInfo "Battery report ${cmd.batteryLevel} %"
+    sendEvent(name:"battery", value: cmd.batteryLevel, unit: "%", isStateChange: true)
+}
+
+void zwaveEvent(hubitat.zwave.commands.deviceresetlocallyv1.DeviceResetLocallyNotification cmd) {
+    logWarn "Device Reset Locally"
+    sendEvent(name:"deviceResetLocally", value: 'true', isStateChange: true)
+    sendEvent(name:"notify", value: "Deleted")
+}
+
+void zwaveEvent (hubitat.zwave.commands.switchmultilevelv1.SwitchMultilevelReport cmd) {
+    logDebug "received SwitchMultilevelReport: ${cmd}"
+    thermostatLevelAndOperatingStateEvents(cmd.value)
+}
+
+void zwaveEvent(hubitat.zwave.Command cmd) {
+    logDebug "received Unhandled event ${cmd}"
+    log.debug englishLang==true ? "${device.displayName}: Unhandled: $cmd" : "${device.displayName}: Unhandled: $cmd"
+}
+
+void zwaveEvent (hubitat.zwave.commands.configurationv1.ConfigurationReport cmd) {
+    logDebug "received ConfigurationReport: ${cmd}"
+    def cmds = []
+    switch (cmd.parameterNumber) {
+        case 1:
+            if ((parameter1 ? 0x01 : 0x00) != cmd.scaledConfigurationValue) {
+                logInfo englishLang ?"Parameter number ${cmd.parameterNumber} was not set, trying again" : "Parameter nummer ${cmd.parameterNumber} hat den Wert nich übernommen, erneter Versuch"
+                cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber:1,    size:1,    scaledConfigurationValue: parameter1 ? 0x01 : 0x00)
+            } else {
+                logInfo englishLang ?"Parameter number  ${cmd.parameterNumber} was successfuly set" : "Parameter nummer  ${cmd.parameterNumber} hat den Wert erfolgreich übernommen"
+            }
+            break;
+        case 2:
+            if (Math.round(parameter2).toInteger() != cmd.scaledConfigurationValue) {
+                logInfo englishLang ? "Parameter number ${cmd.parameterNumber} was not set, trying again" : "Parameter nummer ${cmd.parameterNumber} hat den Wert nich übernommen, erneter Versuch"
+                cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber:2,    size:1,    scaledConfigurationValue: Math.round(parameter2).toInteger())
+            } else {
+                logInfo englishLang ? "Parameter number  ${cmd.parameterNumber} was successfuly set" : "Parameter nummer  ${cmd.parameterNumber} hat den Wert erfolgreich übernommen"
+                state.parameter2 = parameter2
+            }
+            break;
+        case 4:
+            if (parameter4.toInteger() != cmd.scaledConfigurationValue) {
+                logInfo englishLang ? "Parameter number ${cmd.parameterNumber} was not set, trying again" : "Parameter nummer ${cmd.parameterNumber} hat den Wert nich übernommen, erneter Versuch"
+                cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber:4,    size:1,    scaledConfigurationValue: parameter4.toInteger())
+            } else {
+                logInfo englishLang ? "Parameter number  ${cmd.parameterNumber} was successfuly set" : "Parameter nummer  ${cmd.parameterNumber} hat den Wert erfolgreich übernommen"
+                state.parameter4 = parameter4                
+            }
+            break;
+        default : 
+            break
+    }
+    if (cmds != []) {
+        cmds << new hubitat.zwave.commands.configurationv1.ConfigurationGet(parameterNumber:cmd.parameterNumber)
+        sendToDevice(cmds)
+    }
+}
+
+
+void sendConfigurationCommand (List<Integer> zuErneuerndeParametern) {
+    logDebug "sendConfigurationCommand: ${zuErneuerndeParametern}"
+    def cmds = []
+    if (zuErneuerndeParametern) {
+    zuErneuerndeParametern.each { k ->
+        switch (k) {
+            case 1:
+                cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber:k,    size:1,    scaledConfigurationValue: parameter1 ? 0x01 : 0x00)
+                logDebug "Parameter 1 hat den Wert ${parameter1 ? 0x01 : 0x00} übermittelt bekommen"
+                break
+            case 3:
+                cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber:k,    size:1,    scaledConfigurationValue: parameter3 ? 0x01 : 0x00)
+                logDebug "Parameter 3 hat den Wert ${parameter3 ? 0x01 : 0x00} übermittelt bekommen"
+                break
+            case 4:
+                cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber:k,    size:1,    scaledConfigurationValue: parameter4.toInteger())
+                logDebug "Parameter 4 hat den Wert ${parameter4.toInteger()} übermittelt bekommen"
+                break
+            default:
+                logWarn "Falsche Parameternummer für Configuration gesandt"
+        }
+        cmds << new hubitat.zwave.commands.configurationv1.ConfigurationGet(parameterNumber:k)
+    }
+    sendToDevice(cmds)
+    }
+}
+
+void setActive() {
+    sendAccelarationEvent("active")    
+}
+
+void setInactive() {
+    sendAccelarationEvent("inactive")
+}
+
+void sendAccelarationEvent(String value, boolean forceStateChange = false) {
+    Map event = [:]
+    event.name = "acceleration"
+    event.value = value
+    logInfo "Acceleration : ${event.value}"
+    event.isStateChange = forceStateChange
+    sendEvent(event)
+    if (settings?.shockSensor) {
+        sendShockEvent(value, forceStateChange)
+    }
+}
+
+void sendShockEvent(String value, boolean forceStateChange = false) {
+    Map event = [:]
+    event.name = "shock"
+    event.value = value == "active" ? "detected" : "clear"
+    // logInfo "Shock : ${event.value}" // no need to log this event
+    event.isStateChange = forceStateChange
+    sendEvent(event)
+}
+
+void updated() {
+    log.info "Device ${device.label?device.label:device.name} is updated"
+    scheduleDeviceHealthCheck()
+    if (logEnable==true) {
+        runIn(86400, logsOff, [overwrite: true])    // turn off debug logging after 24 hours
+        logInfo "Debug logging will be turned off after 24 hours"
+    }
+    else {
+        unschedule(logsOff)
+    }    
+    def cmds = []
+    cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber:1,    size:1,    scaledConfigurationValue: parameter1 ? 0x01 : 0x00)
+    logInfo "Parameter 1 will be set to ${parameter1 ? 0x01 : 0x00}"
+    cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber:3,    size:1,    scaledConfigurationValue: parameter3 ? 0x01 : 0x00)
+    logInfo "Parameter 3 will be set to ${parameter3 ? 0x01 : 0x00}"
+    cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber:4,    size:1,    scaledConfigurationValue: parameter4.toInteger())
+    logInfo "Parameter 4 will be set to ${parameter4.toInteger()}"
+    cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber:5,    size:1,    scaledConfigurationValue: Math.round(parameter5.toFloat() * 10).toInteger())
+    for (int i=1 ; i<=8 ; i++) {
+        cmds << new hubitat.zwave.commands.configurationv1.ConfigurationGet(parameterNumber: i)
+    }
+    sendToDevice(cmds)
+}
+
+void installed() {
+    log.info "Device ${device.label ? device.label : device.name} is installed"
+    sendEvent(name:"notify", value:"Installed", displayed: true)
+    sendEvent(name:"deviceResetLocally", value:false, displayed: true)
+    def cmds = []
+    cmds << new hubitat.zwave.commands.protectionv1.ProtectionGet()
+    //cmds << new hubitat.zwave.commands.thermostatsetpointv3.ThermostatSetpointGet(setpointType:0x01)
+    //cmds << new hubitat.zwave.commands.thermostatsetpointv3.ThermostatSetpointGet(setpointType:0x0B)
+    cmds << new hubitat.zwave.commands.batteryv1.BatteryGet()
+    //cmds << new hubitat.zwave.commands.thermostatmodev3.ThermostatModeGet()
+    cmds << new hubitat.zwave.commands.sensormultilevelv5.SensorMultilevelGet(sensorType:1)
+    for (int i=1 ; i<=8 ; i++) {
+        cmds << new hubitat.zwave.commands.configurationv1.ConfigurationSet(parameterNumber: i, defaultValue: true)
+        logInfo "Parameter number ${i} is reset"
+    }
+    sendToDevice(cmds)
+}
+
+def logsOff(){
+    if (settings?.logEnable) log.info "${device.displayName} debug logging disabled..."
+    device.updateSetting("logEnable",[value:"false",type:"bool"])
+}
+
+def initialize() {
+    log.info "initialize..."
+    state.retries = 0
+    setDeviceLimits()
+    installed()
+}
+
+void sendToDevice(List<hubitat.zwave.Command> cmds, Long delay=1000) {
+    logDebug "sendToDevice: $cmds"
+    sendHubCommand(new hubitat.device.HubMultiAction(commands(cmds, delay), hubitat.device.Protocol.ZWAVE))
+}
+
+void sendToDevice(hubitat.zwave.Command cmd, Long delay=1000) {
+    logDebug "sendToDevice: $cmd"
+    sendHubCommand(new hubitat.device.HubAction(zwaveSecureEncap(cmd.format()), hubitat.device.Protocol.ZWAVE))
+}
+
+List<String> commands(List<hubitat.zwave.Command> cmds, Long delay=1000) {
+    logDebug "sendToDevice: $cmds"
+    return delayBetween(cmds.collect{ zwaveSecureEncap(it.format()) }, delay)
+}
+
+void refresh() {
+    def cmds = []
+    cmds << new hubitat.zwave.commands.batteryv2.BatteryGet()
+    //cmds << new hubitat.zwave.commands.switchmultilevelv3.SwitchMultilevelGet()                // valve + simulated OperatingState calculation depending on valve % open
+    //cmds << new hubitat.zwave.commands.sensormultilevelv5.SensorMultilevelGet(sensorType:1)    // temperature
+    //cmds << new hubitat.zwave.commands.thermostatsetpointv3.ThermostatSetpointGet(setpointType:0x01)    // heatingSetpoint 
+    sendToDevice(cmds)
+    logInfo "Refreshing..."    
+}
+
+String driverVersionAndTimeStamp() {version()+' '+timeStamp()}
+
+void checkDriverVersion() {
+    if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
+        logInfo "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+        scheduleDeviceHealthCheck()
+        state.driverVersion = driverVersionAndTimeStamp()
+    }
+}
+
+void scheduleDeviceHealthCheck() {
+    Random rnd = new Random()
+    //schedule("1 * * * * ? *", 'deviceHealthCheck') // for quick test
+    schedule("${rnd.nextInt(59)} ${rnd.nextInt(59)} 1/3 * * ? *", 'deviceHealthCheck')
+}
+
+// called when any event was received from the Zigbee device in parse() method..
+void setPresent() {
+    if ((device.currentValue("healthStatus") ?: "unknown") != "online") {
+        sendHealthStatusEvent("online")
+        logInfo "is present"
+    }    
+    state.notPresentCounter = 0    
+}
+
+void deviceHealthCheck() {
+    state.notPresentCounter = (state.notPresentCounter ?: 0) + 1
+    if (state.notPresentCounter > presenceCountTreshold) {
+        if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline" ) {
+            sendHealthStatusEvent("offline")
+            if (settings?.txtEnable) { log.warn "${device.displayName} is not present!" }
+            // TODO - send alarm ?
+        }
+    }
+    else {
+        logDebug "deviceHealthCheck - online (notPresentCounter=${state.notPresentCounter})"
+    }
+    
+}
+
+void sendHealthStatusEvent(String value) {
+    sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
+}
+
+void ping() {
+    logDebug 'Ping() is not implemented (yet)!'
+}
+
+void logDebug(msg) {
+    if (settings?.logEnable) {
+        log.debug "${device.displayName} " + msg
+    }
+}
+
+void logInfo(msg) {
+    if (settings?.txtEnable) {
+        log.info "${device.displayName} " + msg
+    }
+}
+
+void logWarn(msg) {
+    if (settings?.txtEnable) {
+        log.warn "${device.displayName} " + msg
+    }
+}
+

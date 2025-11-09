@@ -18,13 +18,14 @@
  * ver. 2.0.0  2023-05-08 kkossev  - Initial test version (VINDSTYRKA driver)
  * ver. 2.1.5  2023-09-02 kkossev  - VINDSTYRKA: removed airQualityLevel, added thresholds; airQualityIndex replaced by sensirionVOCindex
  * ver. 3.0.5  2024-04-05 kkossev  - commonLib 3.0.5 check; Groovy lint;
- * ver. 3.1.0  2024-04-24 kkossev  - (dev. branch) commonLib 3.1.0 speed optimization
+ * ver. 3.1.0  2024-04-24 kkossev  - commonLib 3.1.0 speed optimization
+ * ver. 3.2.0  2025-09-28 kkossev  - commonLib 4.0.0 allignment; added temperatureOffset and humidityOffset;
  *
  *                                   TODO: 
  */
 
-static String version() { "3.1.0" }
-static String timeStamp() {"2024/04/25 11:53 PM"}
+static String version() { "3.2.0" }
+static String timeStamp() {"2025/09/28 7:58 PM"}
 
 @Field static final boolean _DEBUG = false
 
@@ -85,7 +86,7 @@ metadata {
         else  if (isAqaraTVOC()) {
             input name: 'airQualityIndexThreshold', type: 'number', title: '<b>Air Quality Index Reporting Threshold</b>', description: '<i>Air quality index reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>', range: '1..255', defaultValue: DEFAULT_AIR_QUALITY_INDEX_THRESHOLD
             input name: 'temperatureScale', type: 'enum', title: '<b>Temperaure Scale on the Screen</b>', options: TemperatureScaleOpts.options, defaultValue: TemperatureScaleOpts.defaultValue, required: true, description: '<i>Changes the temperature scale (Celsius, Fahrenheit) on the screen.</i>'
-            input name: 'tVocUnut', type: 'enum', title: '<b>tVOC unit on the Screen</b>', options: TvocUnitOpts.options, defaultValue: TvocUnitOpts.defaultValue, required: true, description: '<i>Changes the tVOC unit (mg/m³, ppb) on the screen.</i>'
+            input name: 'tVocUnut', type: 'enum', title: '<b>tVOC unit on the Screen</b>', options: TvocUnitOpts.options, defaultValue: TvocUnitOpts.defaultValue, required: true, description: '<i>Changes the tVOC unit (mg/mÂ³, ppb) on the screen.</i>'
         }
     }
 }
@@ -106,7 +107,7 @@ boolean isAqaraTVOC()  { return (device?.getDataValue('model') ?: 'n/a') in ['lu
 ]
 @Field static final Map TvocUnitOpts = [                    // bit 0
     defaultValue: 1,
-    options     : [0: 'mg/m³', 1: 'ppb']
+    options     : [0: 'mg/mÂ³', 1: 'ppb']
 ]
 
 // TODO - use for all events sent by this driver !!

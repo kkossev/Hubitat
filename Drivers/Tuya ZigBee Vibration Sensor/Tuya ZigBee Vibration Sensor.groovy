@@ -29,8 +29,9 @@
  * ver 1.3.0 2025-01-28 kkossev - added Tuya Cluster parser; added TS0601 _TZE200_kzm5w4iz (contact&vibration); added TS0601 _TZE200_iba1ckek (Tilt Xyz Axis Sensor) (ZG-103Z); added queryAllTuyaDP(); missing [overwrite: true] bug fix;
  * ver 1.3.1 2025-02-19 kkossev - added TS0210 _TZ3000_lqpt3mvr _TZ3000_lzdjjfss _TYZB01_geigpsy4
  * ver 1.4.0 2025-03-01 kkossev - added ShockSensor capability; added shockSensor option (default:enabled)
- * ver 1.4.1 2025-08-30 kkossev - (dev. branch) adding TS0210 _TZ3210100000_5oy7cysk for tests @masachapa34
+ * ver 1.4.1 2025-08-30 kkossev - added TS0210 _TZ3210100000_5oy7cysk for tests @masachapa34
  * 
+ *                                TODO: save the configuration commands in a state and send them on device wakes up
  *                                TODO: this driver does not process ZCL battery percentage reports, only voltage reports!
  *                                TODO: bugFix: healthCheck is not started on installed()
  *                                TODO: add powerSource attribute
@@ -80,7 +81,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TZ3000_bmfw9ykl"         // Moes https://community.hubitat.com/t/vibration-sensor/85203/14?u=kkossev       
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TZ3000_lzdjjfss"         // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TYZB01_j9xxahcl"         // not tested
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TZ3000_fkxmyics"         // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TZ3000_fkxmyics"         // https://community.hubitat.com/t/vibration-sensor-sensitivity-adjustment/93930/26?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,FFF1",           outClusters:"0019", model:"3RVS01031Z", manufacturer:"Third Reality, Inc"        // Third Reality vibration sensor   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0500,0B05,FC02", outClusters:"0003,0019", model:"multi", manufacturer:"Samjin"          // Samsung Multisensor
 		fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_kzm5w4iz"         // https://github.com/flatsiedatsie/zigbee-herdsman-converters/blob/ef4d559ccba0a39cd6957d2270352e29fb1d0296/converters/fromZigbee.js#L7449-L7467

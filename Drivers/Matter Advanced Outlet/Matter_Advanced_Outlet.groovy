@@ -973,7 +973,7 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
 @Field static final Map<Integer, String> MatterClusters = [
     0x001D  : 'Descriptor',                 // The Descriptor cluster is meant to replace the support from the Zigbee Device Object (ZDO) for describing a node, its endpoints and clusters
     0x001E  : 'Binding',                    // Meant to replace the support from the Zigbee Device Object (ZDO) for supportiprefriginatng the binding table.
-    0x001F  : 'AccessControl',              // Exposes a data model view of a Node’s Access Control List (ACL), which codifies the rules used to manage and enforce Access Control for the Node’s endpoints and their associated cluster instances.
+    0x001F  : 'AccessControl',              // Exposes a data model view of a Nodeâ€™s Access Control List (ACL), which codifies the rules used to manage and enforce Access Control for the Nodeâ€™s endpoints and their associated cluster instances.
     0x0025  : 'Actions',                    // Provides a standardized way for a Node (typically a Bridge, but could be any Node) to expose information, commands, events ...
     0x0028  : 'BasicInformation',           // Provides attributes and events for determining basic information about Nodes, which supports both Commissioning and operational determination of Node characteristics, such as Vendor ID, Product ID and serial number, which apply to the whole Node.
     0x0029  : 'OTASoftwareUpdateProvider',
@@ -981,17 +981,17 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x002B  : 'LocalizationConfiguration',  // Provides attributes for determining and configuring localization information
     0x002C  : 'TimeFormatLocalization',     // Provides attributes for determining and configuring time and date formatting information
     0x002D  : 'UnitLocalization',           // Provides attributes for determining and configuring the units
-    0x002E  : 'PowerSourceConfiguration',   // Used to describe the configuration and capabilities of a Device’s power system
+    0x002E  : 'PowerSourceConfiguration',   // Used to describe the configuration and capabilities of a Deviceâ€™s power system
     0x002F  : 'PowerSource',                // Used to describe the configuration and capabilities of a physical power source that provides power to the Node
     0x0030  : 'GeneralCommissioning',       // Used to manage basic commissioning lifecycle
-    0x0031  : 'NetworkCommissioning',       // Associates a Node with or manage a Node’s one or more network interfaces
+    0x0031  : 'NetworkCommissioning',       // Associates a Node with or manage a Nodeâ€™s one or more network interfaces
     0x0032  : 'DiagnosticLogs',             // Provides commands for retrieving unstructured diagnostic logs from a Node that may be used to aid in diagnostics.
     0x0033  : 'GeneralDiagnostics',         // Provides a means to acquire standardized diagnostics metrics
     0x0034  : 'SoftwareDiagnostics',        // Provides a means to acquire standardized diagnostics metrics that MAY be used by a Node to assist a user or Administrator in diagnosing potential problems
     0x0035  : 'ThreadNetworkDiagnostics',   // Provides a means to acquire standardized diagnostics metrics that MAY be used by a Node to assist a user or Administrator in diagnosing potential problems
     0x0036  : 'WiFiNetworkDiagnostics',     // Provides a means to acquire standardized diagnostics metrics that MAY be used by a Node to assist a user or Administrator in diagnosing potential
     0x0037  : 'EthernetNetworkDiagnostics', // Provides a means to acquire standardized diagnostics metrics that MAY be used by a Node to assist a user or Administrator in diagnosing potential
-    0x0038  : 'TimeSync',                   // Provides Attributes for reading a Node’s current time
+    0x0038  : 'TimeSync',                   // Provides Attributes for reading a Nodeâ€™s current time
     0x0039  : 'BridgedDeviceBasicInformation',  // Serves two purposes towards a Node communicating with a Bridge
     0x003C  : 'AdministratorCommissioning', // Used to trigger a Node to allow a new Administrator to commission it. It defines Attributes, Commands and Responses needed for this purpose.
     0x003E  : 'OperationalCredentials',     // Used to add or remove Node Operational credentials on a Commissionee or Node, as well as manage the associated Fabrics.

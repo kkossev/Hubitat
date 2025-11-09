@@ -30,7 +30,7 @@ https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Tem
 
 |  Device |  Links |
 |--------|------|
-| SONOFF SNZB-02 – Zigbee Temperature and Humidity Sensorr<br> ![image](https://user-images.githubusercontent.com/6189950/224310636-62ddf198-6f6b-4175-8523-282fc1f91604.png) | Features: Fully configurable temperature and humidity reporting periods, can report as quickly as 10 seconds and 0.1 deg. change.<br><br><b>RECOMMENDED!</b><br><br> itead .cc [(link)](https://itead.cc/product/sonoff-snzb-02-zigbee-temperature-and-humidity-sensor/ref/221/) |
+| SONOFF SNZB-02 â€“ Zigbee Temperature and Humidity Sensorr<br> ![image](https://user-images.githubusercontent.com/6189950/224310636-62ddf198-6f6b-4175-8523-282fc1f91604.png) | Features: Fully configurable temperature and humidity reporting periods, can report as quickly as 10 seconds and 0.1 deg. change.<br><br><b>RECOMMENDED!</b><br><br> itead .cc [(link)](https://itead.cc/product/sonoff-snzb-02-zigbee-temperature-and-humidity-sensor/ref/221/) |
 | SONOFF SNZB-02D Zigbee LCD Smart Temperature Humidity Sensor <br> ![image](https://user-images.githubusercontent.com/6189950/224309433-aa845332-065b-48db-b107-0c7a2f4c5902.png) | <b>WARNING</b>: may be difficult to pair to C-7 and older hubs.<br><br>Features: C/F switch; <br>Review: Youtube [link](https://www.youtube.com/watch?v=u0nB1olg72w)<br><br> itead .cc [(link)](https://itead.cc/product/sonoff-snzb-02d-zigbee-lcd-smart-temperature-humidity-sensor/ref/221/) |
 
 

@@ -11,11 +11,11 @@ Drivers/Drivers.iml
 Drivers/SmartThings/SmartThings.iml
 .idea/libraries/groovy_2_4_21.xml
 .idea/encodings.xml
-.hubitat/metadata.json
+Drivers/Tuya Zigbee Metering Plug/new 55.txt
 Drivers/Tuya Multi Sensor 4 In 1/.vscode/extensions.json
-Drivers/Tuya Multi Sensor 4 In 1/.hubitat/metadata.json
+Drivers/Zigbee TRV/logback.log
 Drivers/Misc/Third Reality Matter Multi-Function Night Light.groovy
-Drivers/Matter Advanced Outlet/logback.log
+Drivers/Misc/Matter Test.groovy
 Drivers/Tuya Zigbee Metering Plug/logback.log
 Drivers/Tuya Multi Sensor 4 In 1/logback.log
 Drivers/Matter Advanced Bridge/ScratchPad.txt
@@ -23,34 +23,31 @@ Drivers/Tuya Zigbee mmWave Sensor/ScratchPad.txt
 Drivers/Tuya Zigbee Valve/ScratchPad.txt
 Drivers/Tuya ZigBee Vibration Sensor/scratchPad.txt
 Libraries/scratchPad.txt
-Drivers/ZigUSB/scratchPad.txt
 Drivers/Aqara Cube T1 Pro/scratchPad.txt
 Drivers/Aqara LED Strip T1/scratchPad.txt
 Drivers/Tuya Contact Sensor/scratchPad.txt
-Drivers/Tuya Zigbee Switch/scratchPad.txt
+Drivers/ZigUSB/scratchPad.txt
 Drivers/Tuya Multi Sensor 4 In 1/scratchPad.txt
+Drivers/Tuya Zigbee Switch/scratchPad.txt
 Drivers/Zigbee TRV/scratchPad.txt
-Drivers/Tuya Zigbee Metering Plug/.hubitat/metadata.json
 *.log
 Drivers/Zigbee Smoke Detector/scratchPad.txt
 Drivers/ZigBee Window Shade/scratchPad.txt
 Drivers/Tuya Temperature Humidity Illuminance LCD Display with a Clock/scratchPad.txt
 Drivers/Tuya NEO Coolcam Zigbee Water Leak Sensor/scratchPad.txt
 Drivers/Tuya Zigbee Tank Level Monitor/scratchPad.txt
-Drivers/Tuya Zigbee Chlorine Meter/scratchPad.txt
+.idea/.name
 Drivers/Tuya Zigbee Tank Level Monitor/Tuya Zigbee Tank Level Monitor.code-workspace
 Drivers/Tuya Multi Sensor 4 In 1/Tuya Multi Sensor 4 In 1.code-workspace
-Drivers/Aqara TVOC Air Quality Monitor/.hubitat/metadata.json
-Drivers/Aqara LED Strip T1/Aqara LED Strip T1.code-workspace
-Drivers/Aqara LED Strip T1/.hubitat/metadata.json
-Drivers/AWTRIX 3 MQTT/.hubitat/metadata.json
+Drivers/Tuya Zigbee Chlorine Meter/scratchPad.txt
 Drivers/Tuya Zigbee Metering Plug/scratchpad.txt
+Drivers/Zigbee TRV/TODO.txt
 Drivers/Aqara Climate Sensor W100/scratchPad.txt
-Drivers/Tuya Zigbee mmWave Sensor/docs/cntop_zigbee_sensor.js
-Drivers/Aqara TVOC Air Quality Monitor/scratchPad.txt
-.github/copilot-instructions.md
 Drivers/Tuya Zigbee mmWave Sensor/V4_Implementation_Summary.md
+.github/copilot-instructions.md
 Drivers/Tuya Zigbee mmWave Sensor/tools/validate-defaultFingerprint.ps1
 Drivers/Tuya Zigbee mmWave Sensor/tools/validate-integrity.ps1
-Drivers/Tuya TS004F/scratchPad.txt
 Drivers/Tuya Zigbee mmWave Sensor/CUSTOM_JSON_IMPLEMENTATION.md
+Drivers/Tuya TS004F/scratchPad.txt
+Drivers/Tuya Zigbee mmWave Sensor/docs/cntop_zigbee_sensor.js
+Drivers/Aqara TVOC Air Quality Monitor/scratchPad.txt

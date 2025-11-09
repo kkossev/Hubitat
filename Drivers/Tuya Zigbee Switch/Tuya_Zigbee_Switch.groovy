@@ -31,14 +31,15 @@
  * ver. 3.3.1  2025-03-13 kkossev  - added activeEndpoints() command in test mode; sending ZCL Default Response in ZBMINIR2 Detach Relay Mode; added PushableButton capability for ZBMINIR2;
  * ver. 3.3.2  2025-03-29 kkossev  - fixed ZCL Default Response in ZBMINIR2 Detach Relay Mode; added updateFirmware() command; added toggle() command; added delayedPowerOnState and delayedPowerOnTime preferences
  * ver. 3.4.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException in HE platform update 2.4.1.155
+ * ver. 3.5.0  2025-09-15 kkossev  - (dev. branch) commonLib 4.0.0 allignment;
  *
  *                                   TODO: initialize 'switch' to unknown
  *                                   TODO: add 'allStatus' attribute
  *                                   TODO: add Info dummy preference w/ link to Hubitat forum page
  */
 
-static String version() { '3.4.0' }
-static String timeStamp() { '2025/04/08 8:52 PM' }
+static String version() { '3.5.0' }
+static String timeStamp() { '2025/09/15 8:05 PM' }
 
 @Field static final Boolean _DEBUG = false
 
