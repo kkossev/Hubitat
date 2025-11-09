@@ -373,7 +373,7 @@
       "name":"Thermostats Sync",
       "category":"Control",
       "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Apps/Thermostats%20Sync/packageManifest.json",
-      "description":"Bidirectional synchronization of thermostat attributes between two devices. Supports 8 sync options including mode, setpoints, fan, temperature, operating state, battery, and health status with advanced loop prevention.",
+      "description":"Bidirectional synchronization of thermostat attributes between two devices. Supports 8 sync options including battery and healthStatus with advanced loop prevention.",
       "tags":[
         "Climate Control",
         "Energy Monitoring",
