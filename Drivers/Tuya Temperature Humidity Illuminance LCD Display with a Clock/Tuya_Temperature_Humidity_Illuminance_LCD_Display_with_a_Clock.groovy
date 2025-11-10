@@ -67,13 +67,14 @@
  *                                  added TS0601 _TZE284_33bwcga2 to TS0601_Soil_II group; added missing model map _TZE200_bjawzodf.
  *                                  added missing model map _TZE200_bjawzodf; added Nous devices _TZE200_qrztc3ev, _TZE200_snloy4rw, _TZE200_eanjj2pa, _TZE200_ydrdfkim
  * ver. 1.9.1  2025-09-02 kkossev - added TS0601 _TZE284_oitavov2 and _TZE200_2se8efxh to 'TS0601_Soil' group; added TS0601 _TZE284_ap9owrsa to 'TS0601_Soil_2' group
- * ver. 1.9.2  2025-09-27 kkossev - (dev. branch) temperature and humidity offset bug fix; invalid humidity values are corrected to 0% or 100% instead of ignored
+ * ver. 1.9.2  2025-09-27 kkossev - temperature and humidity offset bug fix; invalid humidity values are corrected to 0% or 100% instead of ignored
+ * ver. 1.9.3  2025-11-10 kkossev - (dev. branch) added humidity processing for DS18B20 group devices (0x67 DP)
  *
  *                                  TODO: update GitHub documentation
 */
 
-@Field static final String VERSION = '1.9.2'
-@Field static final String TIME_STAMP = '2025/09/27 11:37 AM'
+@Field static final String VERSION = '1.9.3'
+@Field static final String TIME_STAMP = '2025/11/10 8:23 AM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -977,6 +978,14 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                     fncmd = fncmd - 65536
                 }
                 temperatureEvent( fncmd / 10.0 )
+            }
+            else {
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            break
+        case 0x67 : // (103)
+            if (getModelGroup() in ['DS18B20']) {
+                humidityEvent( fncmd )
             }
             else {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
