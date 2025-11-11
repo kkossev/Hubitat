@@ -69,12 +69,13 @@
  * ver. 1.9.1  2025-09-02 kkossev - added TS0601 _TZE284_oitavov2 and _TZE200_2se8efxh to 'TS0601_Soil' group; added TS0601 _TZE284_ap9owrsa to 'TS0601_Soil_2' group
  * ver. 1.9.2  2025-09-27 kkossev - temperature and humidity offset bug fix; invalid humidity values are corrected to 0% or 100% instead of ignored
  * ver. 1.9.3  2025-11-10 kkossev - (dev. branch) added humidity processing for DS18B20 group devices (0x67 DP)
+ * ver. 2.0.0  2025-11-11 kkossev - (dev. branch) added child switch device support for DS18B20 group devices (relay control via DP 1)
  *
  *                                  TODO: update GitHub documentation
 */
 
-@Field static final String VERSION = '1.9.3'
-@Field static final String TIME_STAMP = '2025/11/10 8:23 AM'
+@Field static final String VERSION = '2.0.0'
+@Field static final String TIME_STAMP = '2025/11/11 8:00 AM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -767,7 +768,17 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 if (settings?.txtEnable) { log.info "${device.displayName} Contact is ${value}" }
             }
             else if (getModelGroup() == 'DS18B20') {
-                logInfo "DS18B20 Switch is ${fncmd}"
+                def switchState = fncmd == 1 ? 'on' : 'off'
+                logInfo "DS18B20 Switch is ${switchState}"
+                
+                // Update child device state
+                def childDevice = getChildDevice("${device.deviceNetworkId}-switch")
+                if (childDevice) {
+                    childDevice.sendEvent(name: "switch", value: switchState)
+                    logDebug "Updated child switch to ${switchState}"
+                } else {
+                    logWarn "DS18B20 child switch device not found"
+                }
             }
             else if (getModelGroup() != 'TS0601_AUBESS') { // temperature in C, including 'TS0601_Tuya_2', 'TS0601_AVATTO_Ink' - all Tuya EF00 models !
                 if (fncmd > 32767) {
@@ -1031,6 +1042,54 @@ def getModelGroup() {
     return modelGroup
 }
 
+private void manageChildDevices() {
+    def modelGroup = getModelGroup()
+    
+    // Define which model groups support child devices and what type
+    switch (modelGroup) {
+        case 'DS18B20':
+            manageChildDevice('switch', 'Generic Component Switch', 'Switch')
+            break
+        default:
+            // Remove any existing child devices for unsupported model groups
+            removeAllChildDevices()
+            break
+    }
+}
+
+private void manageChildDevice(String deviceSuffix, String hubDriverType, String deviceLabel) {
+    def childId = "${device.deviceNetworkId}-${deviceSuffix}"
+    def childDevice = getChildDevice(childId)
+    def modelGroup = getModelGroup()
+    
+    // Create child device if it doesn't exist
+    if (!childDevice) {
+        logInfo "Creating ${deviceLabel} child device for ${modelGroup}"
+        try {
+            addChildDevice("hubitat", hubDriverType, childId, 
+                [name: "${device.displayName} ${deviceLabel}", 
+                 label: "${device.displayName} ${deviceLabel}",
+                 isComponent: true])
+            logInfo "Successfully created ${deviceLabel} child device"
+        } catch (Exception e) {
+            logWarn "Failed to create ${deviceLabel} child device: ${e.message}"
+        }
+    }
+}
+
+private void removeAllChildDevices() {
+    def childDevices = getChildDevices()
+    childDevices.each { childDevice ->
+        logInfo "Removing child device: ${childDevice.displayName}"
+        try {
+            deleteChildDevice(childDevice.deviceNetworkId)
+            logInfo "Successfully removed child device: ${childDevice.displayName}"
+        } catch (Exception e) {
+            logWarn "Failed to remove child device ${childDevice.displayName}: ${e.message}"
+        }
+    }
+}
+
 def temperatureEvent( temperaturePar, isDigital=false ) {
     def temperature = temperaturePar
     def map = [:]
@@ -1151,6 +1210,7 @@ def installed() {
     if (settings?.txtEnable) { log.info "${device.displayName} installed()..." }
     unschedule()
     initializeVars(fullInit = true )
+    manageChildDevices()
 }
 
 //
@@ -1160,6 +1220,7 @@ def updated() {
     Map lastTxMap = stringToJsonMap(state.lastTx)
 
     state.modelGroup = getModelGroup()
+    manageChildDevices()
 
     logInfo "Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> modelGroupPreference = <b>${modelGroupPreference}</b> (${getModelGroup()})"
     logInfo "Debug logging is ${logEnable}; Description text logging is ${txtEnable}"
@@ -1295,6 +1356,19 @@ def updated() {
     }
     state.lastTx = mapToJsonString(lastTxMap)
     sendZigbeeCommands( cmds )
+}
+
+def uninstalled() {
+    logInfo "Uninstalling ${device.displayName}"
+    def childDevice = getChildDevice("${device.deviceNetworkId}-switch")
+    if (childDevice) {
+        try {
+            deleteChildDevice("${device.deviceNetworkId}-switch")
+            logInfo "Successfully removed DS18B20 switch child device"
+        } catch (Exception e) {
+            logWarn "Failed to remove child switch device: ${e.message}"
+        }
+    }
 }
 
 def isPendingConfig() {
@@ -1439,6 +1513,34 @@ private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
 void deviceCommandTimeout() {
     logWarn 'no response received (sleepy device or offline?)'
     sendEvent(name: 'rtt', value: 'timeout', descriptionText: 'no response received', unit: '', isDigital: true)
+}
+
+// Child device component commands for DS18B20 switch
+void componentOn(cd) {
+    if (getModelGroup() == 'DS18B20') {
+        logInfo "Turning DS18B20 switch ON via child device"
+        sendZigbeeCommands(sendTuyaCommand('01', DP_TYPE_BOOL, '01'))
+    } else {
+        logWarn "componentOn() called but device is not DS18B20 model (${getModelGroup()})"
+    }
+}
+
+void componentOff(cd) {
+    if (getModelGroup() == 'DS18B20') {
+        logInfo "Turning DS18B20 switch OFF via child device"
+        sendZigbeeCommands(sendTuyaCommand('01', DP_TYPE_BOOL, '00'))
+    } else {
+        logWarn "componentOff() called but device is not DS18B20 model (${getModelGroup()})"
+    }
+}
+
+void componentRefresh(cd) {
+    if (getModelGroup() == 'DS18B20') {
+        logInfo "Refreshing DS18B20 switch state via child device"
+        refresh()
+    } else {
+        logWarn "componentRefresh() called but device is not DS18B20 model (${getModelGroup()})"
+    }
 }
 
 def driverVersionAndTimeStamp() { VERSION + ' ' + TIME_STAMP }
