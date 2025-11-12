@@ -48,14 +48,16 @@
  * ver. 1.7.4 2025-05-24 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
  * ver. 1.7.5 2025-09-15 bbholthome  - light sensor GZCGQ01LM maximum illuminance capped to 65500 lux
  * ver. 1.8.0 2025-09-28 kkossev  - added Aqara FP1 Spatial Learning Mode; added resetPresence() command for FP1/FP1E
- * ver. 1.9.0 2025-11-02 kkossev  - (dev. branch) added Aqara FP300 Presence Sensor support (experimental, not tested); credits: Dan Gibson (@absent42 on GitHub)
+ * ver. 1.9.0 2025-11-02 kkossev  - added Aqara FP300 Presence Sensor support (experimental, not tested); credits: Dan Gibson (@absent42 on GitHub)
+ * ver. 1.9.1 2025-11-12 kkossev  - (dev. branch) Bug fix: decoding Aqara RTCGQ11LM (lumi.sensor_motion.aq2) battery voltage 
+ 
  * 
  *                                 TODO: 
  *
  */
 
-static String version() { "1.9.0" }
-static String timeStamp() {"2025/11/02 8:46 PM"}
+static String version() { "1.9.1" }
+static String timeStamp() {"2025/11/12 7:45 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -307,12 +309,17 @@ void parse(String description) {
 
     def descMap = [:]
     
-    if (description.contains("cluster: 0000") && description.contains("attrId: FF02")) {
-        //log.trace "parsing Xiaomi cluster 0xFF02"
-        parseAqaraAttributeFF02( description )
-        return 
+    if (description.contains("cluster: 0000")) {
+        if (description.contains("attrId: FF01")) {
+            parseAqaraAttributeFF01(description)
+            return
+        }
+        else if (description.contains("attrId: FF02")) {
+            parseAqaraAttributeFF02(description)
+            return
+        }
     }
-    
+
     try {
         descMap = zigbee.parseDescriptionAsMap(description)
     }
@@ -398,11 +405,13 @@ boolean isSpammyReport(Map descMap) {
 }
 
 void parseAqaraAttributeFF01(String description) {
+    logDebug "(parseAqaraAttributeFF01) description: ${description}"
     def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
     parseBatteryFF01( valueHex )    
 }
 
 void parseAqaraAttributeFF02(String description) {
+    logDebug "(parseAqaraAttributeFF02) description: ${description}"
     def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
     parseBatteryFF02( valueHex )    
 }
@@ -809,37 +818,74 @@ def decodeAqaraStruct( description )
 	} // for all tags in valueHex 
 }
 
-private parseBatteryFF02( valueHex ) {
-	def MsgLength = valueHex.size()
-   	for (int i = 0; i < (MsgLength-3); i+=2) {
-		if (valueHex[i..(i+1)] == "21") { // Search for byte preceeding battery voltage bytes
-			rawValue = Integer.parseInt((valueHex[(i+4)..(i+5)] + valueHex[(i+2)..(i+3)] ),16)
-			break
-		}
-	}
-    if (rawValue == 0) {
-        return
+// TEMP FIX: decode battery from FF02 TLV (key 0x01, type 0x21)
+// accepts either a hex string or Hubitat's octet-string bytes
+private parseBatteryFF02(String valueHex) {
+    if (!valueHex) return
+
+    // If not hex, convert Hubitat octet-string to hex
+    if (!(valueHex ==~ /(?i)^[0-9a-f]+$/)) {
+        StringBuilder sb = new StringBuilder(valueHex.length() * 2)
+        for (char ch : valueHex.toCharArray()) {
+            sb.append(String.format("%02X", ((int) ch) & 0xFF))
+        }
+        valueHex = sb.toString()
     }
-	def rawVolts = rawValue / 1000
-    
-    voltageAndBatteryEvents(rawVolts)
+
+    Integer rawmV = null
+    int L = valueHex.length()
+    // TLV scan: [key][type][value...]; battery = key 0x01, type 0x21 (uint16 LE)
+    for (int i = 0; i <= L - 8; i += 2) {
+        String key  = valueHex.substring(i,   i+2)
+        String type = valueHex.substring(i+2, i+4)
+        if (key.equalsIgnoreCase("01") && type.equalsIgnoreCase("21")) {
+            String lo = valueHex.substring(i+4, i+6)
+            String hi = valueHex.substring(i+6, i+8)
+            rawmV = Integer.parseInt(hi + lo, 16)  // LE -> BE
+            break
+        }
+    }
+
+    if (rawmV == null || rawmV <= 0) return
+
+    BigDecimal volts = rawmV / 1000.0G  // mV -> V
+    voltageAndBatteryEvents(volts)
 }
 
+
 // called by parseAqaraAttributeFF01 (cluster "0000")
-private parseBatteryFF01( valueHex ) {
-	def MsgLength = valueHex.size()
-   	for (int i = 0; i < (MsgLength-3); i+=2) {
-		if (valueHex[i..(i+1)] == "21") { // Search for byte preceeding battery voltage bytes
-			rawValue = Integer.parseInt((valueHex[(i+2)..(i+3)] + valueHex[(i+4)..(i+5)]),16)
-			break
-		}
-	}
-    if (rawValue == 0) {
-        return
+// TEMP FIX: robustly decode battery from FF01 TLV (key 0x01, type 0x21)
+// - accepts either a hex string OR Hubitat's raw octet-string bytes
+private parseBatteryFF01(String valueHex) {
+    if (!valueHex) return
+
+    // If not hex, convert the octet-string bytes to hex (Hubitat encoding: 0x42)
+    if (!(valueHex ==~ /(?i)^[0-9a-f]+$/)) {
+        StringBuilder sb = new StringBuilder(valueHex.length() * 2)
+        for (char ch : valueHex.toCharArray()) {
+            sb.append(String.format("%02X", ((int) ch) & 0xFF))
+        }
+        valueHex = sb.toString()
     }
-	def rawVolts = rawValue / 100
-    
-    voltageAndBatteryEvents(rawVolts)
+
+    Integer rawmV = null
+    int L = valueHex.length()
+    // Scan TLV: [key][type][value...]; battery is key=0x01, type=0x21 (uint16 LE)
+    for (int i = 0; i <= L - 8; i += 2) {
+        String key  = valueHex.substring(i,   i+2)
+        String type = valueHex.substring(i+2, i+4)
+        if (key.equalsIgnoreCase("01") && type.equalsIgnoreCase("21")) {
+            String lo = valueHex.substring(i+4, i+6)
+            String hi = valueHex.substring(i+6, i+8)
+            rawmV = Integer.parseInt(hi + lo, 16) // LE -> BE
+            break
+        }
+    }
+
+    if (rawmV == null || rawmV <= 0) return
+
+    BigDecimal volts = rawmV / 1000.0G   // mV -> V
+    voltageAndBatteryEvents(volts)
 }
 
 def voltageAndBatteryEvents( rawVolts, isDigital=false  )
