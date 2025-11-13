@@ -49,15 +49,15 @@
  * ver. 1.7.5 2025-09-15 bbholthome  - light sensor GZCGQ01LM maximum illuminance capped to 65500 lux
  * ver. 1.8.0 2025-09-28 kkossev  - added Aqara FP1 Spatial Learning Mode; added resetPresence() command for FP1/FP1E
  * ver. 1.9.0 2025-11-02 kkossev  - added Aqara FP300 Presence Sensor support (experimental, not tested); credits: Dan Gibson (@absent42 on GitHub)
- * ver. 1.9.1 2025-11-12 kkossev  - (dev. branch) Bug fix: decoding Aqara RTCGQ11LM (lumi.sensor_motion.aq2) battery voltage 
- 
+ * ver. 1.9.1 2025-11-12 kkossev  - Bug fix: decoding Aqara RTCGQ11LM (lumi.sensor_motion.aq2) battery voltage 
+ * ver. 1.9.2 2025-11-13 kkossev  - (dev. branch) FP300 temperature and humidity parsing; decoding most of the FP300 reports; added restartDevice() command for FP1E/FP300
  * 
  *                                 TODO: 
  *
  */
 
-static String version() { "1.9.1" }
-static String timeStamp() {"2025/11/12 7:45 AM"}
+static String version() { "1.9.2" }
+static String timeStamp() {"2025/11/13 11:53 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -69,7 +69,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean deviceSimulation = false
 @Field static final Boolean _REGIONS = false
-@Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, FP1E, FP300, Aqara/Xiaomi/Mija other motion and illuminance sensors'
+@Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, FP1E, FP300, Aqara/Xiaomi/Mija motion and illuminance sensors'
 
 // FP1E Spatial Learning (minimal constants)
 @Field static final int CLUSTER_AQARA_FCC0 = 0xFCC0
@@ -138,6 +138,7 @@ metadata {
         command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["active", "inactive"], description: "Use for tests"]]
         command "ping",      [[name: "Check device online status and measure the Round-Trip Time (ms)"]]
     command "resetPresence", [[name: "Reset Presence (FP1/FP1E/FP300)" ]]
+    command "restartDevice", [[name: "Restart Device (FP1E/FP300)" ]]
     command "startSpatialLearning", [[name: "Start FP1E Spatial Learning (experimental)" ]]
 
         if (_DEBUG) {
@@ -347,7 +348,21 @@ void parse(String description) {
                 else {
                     illuminanceEventLux( rawLux )
                 }
-		    }                 
+		    }
+            else if (it.cluster == "0402" && it.attrId == "0000") {    // Temperature Measurement cluster
+                if (isFP300()) {
+                    def rawTemp = Integer.parseInt(it.value,16)
+                    // Temperature is reported in centidegrees Celsius (1/100th of a degree)
+                    temperatureEvent(rawTemp / 100.0)
+                }
+            }
+            else if (it.cluster == "0405" && it.attrId == "0000") {    // Relative Humidity Measurement cluster
+                if (isFP300()) {
+                    def rawHumidity = Integer.parseInt(it.value,16)
+                    // Humidity is reported in percentage * 100
+                    humidityEvent(rawHumidity / 100)
+                }
+            }
             else if (it.cluster == "0406" && it.attrId == "0000") {    // lumi.sensor_motion.aq2
                 map = handleMotion( Integer.parseInt(it.value,16) as Boolean )
             }
@@ -459,7 +474,8 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             decodeAqaraStruct(description)
             break
         case "00FC" :   // Aqara FP1E : 00FC_Unknown (115F): false [BOOLEAN]
-            logWarn "received unknown 00FC report:  (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            log.warn "received LUMI LEAVE report:  (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            logDebug 'experiment with calling lumiPreventLeave() method here!'
             break
         case "0102" : // Retrigger interval (duration)
             value = Integer.parseInt(it.value, 16)
@@ -564,20 +580,157 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             logDebug "(0x0160) received report: ${fp1ERoomActivityEventTypeOptions[value.toString()]} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             presenceTypeEvent( fp1ERoomActivityEventTypeOptions[value.toString()] )
             break
-        case "0197" : // FP300 Absence delay timer
+        case "0017" : // (23) FP300 Battery voltage in mV
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def voltage = value / 1000.0
+                voltageAndBatteryEvents(voltage)
+                logDebug "FP300 battery voltage: ${voltage}V (${value} mV)"
+            }
+            break
+        case "0018" : // (24) FP300 Battery percentage (direct from device, if reported)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                sendBatteryEvent(value)
+                logDebug "FP300 battery percentage: ${value}%"
+            }
+            break
+        case "0162" : // (354) FP300 Temperature & Humidity sampling period (milliseconds)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                logDebug "FP300 temp/humidity sampling period: ${value / 1000.0} seconds"
+            }
+            break
+        case "0163" : // (355) FP300 Temperature reporting interval (milliseconds)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                logDebug "FP300 temperature reporting interval: ${value / 1000.0} seconds"
+            }
+            break
+        case "0164" : // (356) FP300 Temperature reporting threshold (centidegrees)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                logDebug "FP300 temperature reporting threshold: ${value / 100.0}°C"
+            }
+            break
+        case "0165" : // (357) FP300 Temperature reporting mode
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def modes = ["unknown", "threshold", "reporting interval", "threshold and interval"]
+                logDebug "FP300 temperature reporting mode: ${modes[value] ?: 'unknown'} (${value})"
+            }
+            break
+        case "016A" : // (362) FP300 Humidity reporting interval (milliseconds)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                logDebug "FP300 humidity reporting interval: ${value / 1000.0} seconds"
+            }
+            break
+        case "016B" : // (363) FP300 Humidity reporting threshold (percentage * 100)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                logDebug "FP300 humidity reporting threshold: ${value / 100.0}%"
+            }
+            break
+        case "016C" : // (364) FP300 Humidity reporting mode
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def modes = ["unknown", "threshold", "reporting interval", "threshold and interval"]
+                logDebug "FP300 humidity reporting mode: ${modes[value] ?: 'unknown'} (${value})"
+            }
+            break
+        case "0170" : // (368) FP300 Temperature & Humidity sampling frequency
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def frequencies = ["off", "low", "medium", "high", "custom"]
+                logDebug "FP300 temp/humidity sampling frequency: ${frequencies[value] ?: 'unknown'} (${value})"
+            }
+            break
+        case "0192" : // (402) FP300 Light sampling frequency
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def frequencies = ["off", "low", "medium", "high", "custom"]
+                logDebug "FP300 light sampling frequency: ${frequencies[value] ?: 'unknown'} (${value})"
+            }
+            break
+        case "0193" : // (403) FP300 Light sampling period (milliseconds)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                logDebug "FP300 light sampling period: ${value / 1000.0} seconds"
+            }
+            break
+        case "0194" : // (404) FP300 Light reporting interval (milliseconds)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                logDebug "FP300 light reporting interval: ${value / 1000.0} seconds"
+            }
+            break
+        case "0195" : // (405) FP300 Light reporting threshold (percentage * 100)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                logDebug "FP300 light reporting threshold: ${value / 100.0}%"
+            }
+            break
+        case "0196" : // (406) FP300 Light reporting mode
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def modes = ["unknown", "threshold", "reporting interval", "threshold and interval"]
+                logDebug "FP300 light reporting mode: ${modes[value] ?: 'unknown'} (${value})"
+            }
+            break
+        case "0197" : // (407) FP300 Absence delay timer
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 sendEvent(name: "absenceDelayTimer", value: value, unit: "sec", type: "physical")
                 device.updateSetting("absenceDelayTimer", [value: value.toString(), type: "number"])
-                logDebug "Absence delay timer: ${value} seconds"
+                logDebug "FP300 absence delay timer: ${value} seconds"
             }
             break
-        case "0199" : // FP300 Presence detection options
+        case "0198" : // (408) FP300 Track target distance (command trigger)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                logDebug "FP300 track target distance triggered: ${value}"
+            }
+            break
+        case "0199" : // (409) FP300 Presence detection options
             if (isFP300()) {
                 def modes = ["both", "mmwave", "pir"]
                 sendEvent(name: "presenceDetectionMode", value: modes[value] ?: "both", type: "physical")
                 device.updateSetting("presenceDetectionMode", [value: modes[value] ?: "both", type: "enum"])
-                logDebug "Presence detection mode: ${modes[value] ?: 'both'}"
+                logDebug "FP300 presence detection mode: ${modes[value] ?: 'both'}"
+            }
+            break
+        case "019A" : // (410) FP300 Detection range (24-bit bitmap for 0.25m zones)
+            if (isFP300()) {
+                // Parse as octet string (buffer/array)
+                def detectionRangeHex = it.value
+                logDebug "FP300 detection range raw data: ${detectionRangeHex}"
+                // First 2 bytes are prefix (typically 0x0300), next 3 bytes are the 24-bit zone bitmap
+                if (detectionRangeHex && detectionRangeHex.length() >= 10) {
+                    def prefix = detectionRangeHex[0..3]
+                    def rangeValue = Integer.parseInt(detectionRangeHex[4..9], 16)
+                    def zones = []
+                    for (int i = 0; i < 24; i++) {
+                        if ((rangeValue & (1 << i)) != 0) {
+                            def startM = i * 0.25
+                            def endM = (i + 1) * 0.25
+                            zones.add("${startM}m-${endM}m")
+                        }
+                    }
+                    logDebug "FP300 detection range zones enabled: ${zones.join(', ')}"
+                }
+            }
+            break
+        case "023E" : // (574) FP300 LED schedule (start/end time)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def startHour = value & 0xFF
+                def startMin = (value >>> 8) & 0xFF
+                def endHour = (value >>> 16) & 0xFF
+                def endMin = (value >>> 24) & 0xFF
+                def startTime = String.format("%02d:%02d", startHour, startMin)
+                def endTime = String.format("%02d:%02d", endHour, endMin)
+                logDebug "FP300 LED disable schedule: ${startTime} - ${endTime}"
             }
             break
 
@@ -890,12 +1043,14 @@ private parseBatteryFF01(String valueHex) {
 
 def voltageAndBatteryEvents( rawVolts, isDigital=false  )
 {
-	def minVolts = 2.5
+    // FP300 uses CR2450 lithium coin cell batteries (2.85V-3.0V per Z2M reference)
+    // Other devices use standard range (2.5V-3.0V)
+	def minVolts = isFP300() ? 2.85 : 2.5
 	def maxVolts = 3.0
 	def pct = (rawVolts - minVolts) / (maxVolts - minVolts)
-	def roundedPct = Math.min(100, Math.round(pct * 100))
-	def descText  = "Battery level is ${roundedPct} %"
-	def descText2 = "Battery voltage is ${rawVolts} V"
+	def roundedPct = Math.min(100, Math.max(0, Math.round(pct * 100)))
+	def descText  = "Battery level is ${roundedPct}%"
+	def descText2 = "Battery voltage is ${rawVolts}V"
     if (txtEnable) log.info "${device.displayName} ${descText}"
     sendEvent(name: 'batteryVoltage', value: rawVolts, unit: "V", type: "physical", descriptionText: descText2, isStateChange: true )
     sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", descriptionText: descText, isStateChange: true )    
@@ -1109,18 +1264,24 @@ private void sendDelayedIllumEvent(Map eventMap) {
 
 
 def temperatureEvent( temperature ) {
-    if (settings?.internalTemperature == false) {
+    // FP300 has a dedicated external temperature sensor, not internal
+    if (!isFP300() && settings?.internalTemperature == false) {
         return
     }
     def map = [:] 
     map.name = "temperature"
     map.unit = "\u00B0"+"C"
+    def tempOffset = settings?.tempOffset ?: 0
+    
     if ( location.temperatureScale == "F") {
         temperature = (temperature * 1.8) + 32
         map.unit = "\u00B0"+"F"
     }
-    Integer tempConverted = temperature + ((settings?.tempOffset?:0) as int) 
-    map.value = tempConverted
+    
+    def tempConverted = temperature + tempOffset
+    map.value = Math.round(tempConverted * 10) / 10.0  // Round to 1 decimal place
+    map.type = "physical"
+    
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
     sendEvent(map)
 }
@@ -1173,10 +1334,15 @@ def detectionRangeEvent( Integer range ) {
     }
 }
 
-def humidityEvent( Integer humidity ) {
+def humidityEvent( humidity ) {
     if (humidity != null && (isFP300())) {
-        sendEvent(name: "humidity", value: humidity, unit: "%", type: "physical")
-        if (settings?.txtEnable) log.info "${device.displayName} humidity is ${humidity}%"
+        // Ensure humidity is within valid range (0-100%)
+        def humidityValue = Math.round(humidity as Double)
+        if (humidityValue < 0) humidityValue = 0
+        if (humidityValue > 100) humidityValue = 100
+        
+        sendEvent(name: "humidity", value: humidityValue, unit: "%", type: "physical")
+        if (settings?.txtEnable) log.info "${device.displayName} humidity is ${humidityValue}%"
     }
 }
 
@@ -1341,6 +1507,21 @@ void resetPresence() {
     sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x0157, DataType.UINT8, 0x01, [mfgCode: 0x115F], 0))
 }
 
+void restartDevice() {
+    if (!(isFP1E() || isFP300())) {
+        logWarn 'restartDevice() is supported only for FP1E/FP300 devices.'
+        return
+    }
+    logInfo 'restarting device...'
+    // Write 0x00 (boolean false) to attribute 0x00E8 (232) to trigger device restart
+    sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x00E8, DataType.BOOLEAN, 0x00, [mfgCode: 0x115F], 0))
+}
+
+void lumiPreventLeave() {
+    logDebug 'lumiPreventLeave(): writing attribute 0x00FC = true'
+    sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x00FC, DataType.BOOLEAN, 0x01, [mfgCode: 0x115F], 0))
+}
+
 void setWatchdogTimer() {
     boolean watchdogEnabled = (settings.stateResetInterval as Integer) > 0
     if (watchdogEnabled) {
@@ -1351,14 +1532,21 @@ void setWatchdogTimer() {
 
 void refresh() {
     logInfo 'refresh...'
+    List<String> cmds = []
     if (isFP1E()) {
-        sendZigbeeCommands(zigbee.readAttribute(0xFCC0, 0x015B, [mfgCode: 0x115F], 0))  // detection range
+        cmds += zigbee.readAttribute(0xFCC0, 0x015B, [mfgCode: 0x115F], delay=200)  // detection range
     }
     else if (isFP300()) {
-        sendZigbeeCommands(zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x014D, 0x014F, 0x0197, 0x0199, 0x015D, 0x015E], [mfgCode: 0x115F], 0))  // FP300 attributes
+        cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x014D, 0x014F, 0x0197, 0x0199, 0x015D, 0x015E], [mfgCode: 0x115F], delay=200)  // FP300 attributes
+        cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)  // Temperature
+        cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)  // Humidity
+        cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=200)  // Illuminance
     }
     else {
         logDebug 'no refresh required'
+    }
+    if (cmds != []) {
+        sendZigbeeCommands(cmds)
     }
 }
 
@@ -1703,8 +1891,8 @@ void aqaraReadAttributes() {
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x0144, 0x0146], [mfgCode: 0x115F], delay=200)
     }
     else if (isFP300()) {  // Aqara FP300 presence detector 
-        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // battery voltage
-        cmds += zigbee.readAttribute(0xFCC0, [0x014D, 0x014F, 0x015D, 0x015E, 0x0197, 0x0199], [mfgCode: 0x115F], delay=200)
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // Standard battery voltage
+        cmds += zigbee.readAttribute(0xFCC0, [0x0017, 0x0018, 0x014D, 0x014F, 0x015D, 0x015E, 0x0197, 0x0199], [mfgCode: 0x115F], delay=200)
     }
     else if (isLightSensorAqara()) {
         cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x115F], delay=200)
@@ -1751,7 +1939,30 @@ void aqaraBlackMagic() {
         cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 f2 ff 41 aa 74 02 44 00 9c 03 20}  {0x0104}", "delay 50",]                                 // FP1 (seq:9) write attr 0xfff2 8 bytes
         cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 f2 ff 41 aa 74 02 44 01 9b 01 20}  {0x0104}", "delay 50",]                                 // FP1 (seq:10) write attr 0xfff2 8 bytes
         //cmds += activeEndpoints()         
-        logDebug "aqaraBlackMagic() for FP1"
+        logDebug "aqaraBlackMagic() for FP1E"
+    }
+    else if (isFP300()) {
+        // Bind battery cluster
+        cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 50",]
+        cmds += zigbee.configureReporting(0x0001, 0x0020, 0x20, 3600, 7200, null, [:], delay=100)
+        
+        // Bind and configure temperature cluster (0x0402)
+        cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}", "delay 50",]
+        cmds += zigbee.configureReporting(0x0402, 0x0000, 0x29, 30, 600, 10, [:], delay=100)  // min 30s, max 600s, delta 0.1°C
+        
+        // Bind and configure humidity cluster (0x0405)
+        cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0405 {${device.zigbeeId}} {}", "delay 50",]
+        cmds += zigbee.configureReporting(0x0405, 0x0000, 0x21, 30, 600, 100, [:], delay=100)  // min 30s, max 600s, delta 1%
+        
+        // Bind and configure illuminance cluster (0x0400)
+        cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}", "delay 50",]
+        cmds += zigbee.configureReporting(0x0400, 0x0000, 0x21, 30, 600, 50, [:], delay=100)  // min 30s, max 600s, delta 50 lux
+        
+        // Bind manufacturer cluster and read initial values
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
+        
+        logDebug "aqaraBlackMagic() for FP300"
     }
     else if (isLightSensorXiaomi() || isLightSensorAqara()) {
         cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 50",]

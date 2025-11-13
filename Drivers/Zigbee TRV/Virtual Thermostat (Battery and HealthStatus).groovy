@@ -19,7 +19,7 @@
  *  ver. 2.0.0  2025/10/31 kkossev  - first version : added forceEvents option; added refresh() method; 
  *  ver. 2.1.0  2025/11/01 kkossev  - removed automatic logic (manageCycle); all setter methods now work directly
  *                                    added battery capability and setBattery method; added healthStatus capability and setHealthStatus method
- *  ver. 2.1.1  2025/11/03 kkossev  - (dev.branch) isStateChange() now always returns true ?
+ *  ver. 2.1.1  2025/11/12 kkossev  - forceEvents preference hidden and isStateChange() forcibly set to true (all events should be sent!)
  * 
  *              TODO: 
  */
@@ -28,7 +28,7 @@ import groovy.transform.Field
 import groovy.json.JsonOutput
 
 static String version() { '2.1.1' }
-static String timeStamp() { '2025/11/03 10:00 AM' }
+static String timeStamp() { '2025/11/12 8:56 PM' }
 
 @Field static final Boolean _DEBUG = true
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
@@ -63,7 +63,7 @@ metadata {
 
 	preferences {
 		input( name: "hysteresis",type:"enum",title: "Thermostat hysteresis degrees", options:["0.1","0.25","0.5","1","2"], description:"", defaultValue: 0.5)
-		input( name: "forceEvents", type:"bool", title: "Force events even when values don't change", description: "Send events even when attribute values haven't changed", defaultValue: true)
+		//input( name: "forceEvents", type:"bool", title: "Force events even when values don't change", description: "Send events even when attribute values haven't changed", defaultValue: true)
 		input( name: "logEnable", type:"bool", title: "Enable debug logging",defaultValue: false)
 		input( name: "txtEnable", type:"bool", title: "Enable descriptionText logging", defaultValue: true)
 	}
