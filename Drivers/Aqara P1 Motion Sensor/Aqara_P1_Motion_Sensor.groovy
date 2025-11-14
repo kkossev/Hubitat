@@ -50,14 +50,25 @@
  * ver. 1.8.0 2025-09-28 kkossev  - added Aqara FP1 Spatial Learning Mode; added resetPresence() command for FP1/FP1E
  * ver. 1.9.0 2025-11-02 kkossev  - added Aqara FP300 Presence Sensor support (experimental, not tested); credits: Dan Gibson (@absent42 on GitHub)
  * ver. 1.9.1 2025-11-12 kkossev  - Bug fix: decoding Aqara RTCGQ11LM (lumi.sensor_motion.aq2) battery voltage 
- * ver. 1.9.2 2025-11-13 kkossev  - (dev. branch) FP300 temperature and humidity parsing; decoding most of the FP300 reports; added restartDevice() command for FP1E/FP300
+ * ver. 1.9.2 2025-11-13 kkossev  - FP300 temperature and humidity parsing; decoding most of the FP300 reports; added restartDevice() command for FP1E/FP300
+ * ver. 1.9.3 2025-11-14 kkossev  - (dev. branch) fix FP300 illuminance handling and the calculation formula; enabled motionSensitivity for FP300; FP300 fingerprint update; bugfix : no response on ping() command was switching FP300 healthStatus to offline 
+ *                                  added battery voltage and percentage events for FP300; enabled advanced options for FP300 illuminance sensor
  * 
- *                                 TODO: 
+ *                                 TODO:
+ *                                 TODO:
+ *                                 TODO:
+ *                                 TODO: add advancedOptions toggle
+ *                                 TODO: add deviceTemperature attribute and use it instead of the standard temperature attribute for internal temperature sensors  
+ *                                 TODO: add FP300 Detection range (24-bit bitmap for 0.25m zones)
+ *                                 TODO: add FP300 Track target distance (command trigger)
+ *                                 TODO: add FP300 LED disable schedule
+ *                                 TODO: update the true aqaraVersion from Xiaomi struct tag:0x0D 
+ *                                 TODO: create child device(s) for FP300 temperature and humidity 
  *
  */
 
-static String version() { "1.9.2" }
-static String timeStamp() {"2025/11/13 11:53 PM"}
+static String version() { "1.9.3" }
+static String timeStamp() {"2025/11/14 8:30 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -120,12 +131,12 @@ metadata {
         attribute "spatialLearning", "enum", ["idle","started"]
         
         // FP300-specific attributes
-        attribute "presenceDetectionMode", "enum", ["both", "mmwave", "pir"]
-        attribute "pirDetection", "enum", ["detected", "not_detected"] 
-        attribute "absenceDelayTimer", "number"    // 10-300 seconds
-        attribute "pirDetectionInterval", "number" // 2-300 seconds
-        attribute "aiInterferenceIdentification", "enum", ["on", "off"]
-        attribute "aiSensitivityAdaptive", "enum", ["on", "off"]
+        attribute "presenceDetectionMode", "enum", ["both", "mmwave", "pir"] // FP300
+        attribute "pirDetection", "enum", ["detected", "not_detected"]       // FP300
+        attribute "absenceDelayTimer", "number"                              // 10-300 seconds FP300
+        attribute "pirDetectionInterval", "number"                           // 2-300 seconds FP300
+        attribute "aiInterferenceIdentification", "enum", ["on", "off"]      // FP300
+        attribute "aiSensitivityAdaptive", "enum", ["on", "off"]             // FP300
         
         if (_REGIONS) {
             attribute "region_last_enter", "number"
@@ -136,10 +147,10 @@ metadata {
         
         command "configure", [[name: "Initialize the device after switching drivers. Will load device default values!" ]]
         command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["active", "inactive"], description: "Use for tests"]]
-        command "ping",      [[name: "Check device online status and measure the Round-Trip Time (ms)"]]
-    command "resetPresence", [[name: "Reset Presence (FP1/FP1E/FP300)" ]]
-    command "restartDevice", [[name: "Restart Device (FP1E/FP300)" ]]
-    command "startSpatialLearning", [[name: "Start FP1E Spatial Learning (experimental)" ]]
+        command "ping",      [[name: "Check device online status and measure the Round-Trip Time (ms). May not work for battery-powered devices."]]
+        command "resetPresence", [[name: "Reset Presence (FP1/FP1E/FP300)" ]]
+        command "restartDevice", [[name: "Restart Device (FP1E/FP300)" ]]
+        command "startSpatialLearning", [[name: "Start FP1E Spatial Learning (experimental)" ]]
 
         if (_DEBUG) {
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "FCC0"]]
@@ -159,46 +170,46 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer: "XIAOMI", deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.agl01", manufacturer:"LUMI",   deviceJoinName:  aqaraModels['GZCGQ11LM'].deviceJoinName                       // tests only : "Aqara T1 light intensity sensor GZCGQ11LM"    
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0", outClusters:"0003,0019", model:"lumi.sensor_occupy.agl1", manufacturer:"aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP1E Human Presence Detector RTCZCGQ13LM"        // RTCZCGQ13LM ( FP1E )
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0", outClusters:"0003,0019", model:"lumi.sensor_occupy.agl8", manufacturer:"aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D"                     // PS-S04D ( FP300 )
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0012,0400,0405,0402,0001,0003,0000,FCC0", outClusters:"000A,0019", model:"lumi.sensor_occupy.agl8", manufacturer:"Aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D"  // PS-S04D ( FP300 ) Hubitat fingerprint
     }
 
     preferences {
-        input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Show motion activity in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
+        input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "Show motion activity in HE log page. Recommended value is <b>enabled</b>", defaultValue: true)
+        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "Debug information, useful for troubleshooting. Recommended value is <b>disabled</b>", defaultValue: true)
         input (name: 'helpInfo',  type: 'hidden', title: "Information on Pairing and Configuration", description: "Pair the P1 and FP1/FP1E devices two times (without deleting), very close to the HE hub. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences")
         if (device) {
-            if (!(isFP1() || isFP1E()) && !isLightSensor()) {
-                input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "<i>After motion is detected, wait ${motionResetTimer} second(s) until resetting to inactive state. Default = 30 seconds</i>", range: "0..7200", defaultValue: 30)
+            if (!(isFP1() || isFP1E() || isFP300()) && !isLightSensor()) {
+                input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ${motionResetTimer} second(s) until resetting to inactive state. Default = 30 seconds", range: "0..7200", defaultValue: 30)
             }    
             if (isRTCGQ13LM() || isP1() || isT1()) {
-                input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "<i>Motion Retrigger Interval, seconds (2..200)</i>", range: "2..202", defaultValue: 30)
+                input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (2..200)", range: "2..202", defaultValue: 30)
             }
-            if (isRTCGQ13LM() || isP1() || isFP1() || isFP1E()) {
-                input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "<i>Sensor motion sensitivity</i>", defaultValue: 0, options: getSensitivityOptions())
+            if (isRTCGQ13LM() || isP1() || isFP1() || isFP1E() || isFP300()) {
+                input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: getSensitivityOptions())
             }
             if (isP1()) {
-                input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "<i>Enable/disable LED blinking on motion detection</i>", defaultValue: -1, options: ["0":"Disabled", "1":"Enabled" ])
+                input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: ["0":"Disabled", "1":"Enabled" ])
             }
             if (isFP1()) {
-                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "<i>Approach distance</i>", defaultValue: "1", options: approachDistanceOptions)
-                input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "<i>monitoring mode</i>", defaultValue: 0, options: monitoringModeOptions)
+                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "Approach distance", defaultValue: "1", options: approachDistanceOptions)
+                input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "monitoring mode", defaultValue: 0, options: monitoringModeOptions)
             }
             if (isFP1E()) {
-                input (name: "filterSpam", type: "bool", title: "<b>Filter FP1E Distance Reports</b>", description: "<i>Filter the FP1E distance reports, if not really used in automations. Recommended value is <b>true</b></i>", defaultValue: true)
-                input (name: 'detectionRange', type: 'decimal', title: '<b>Detection Range</b>', description: '<i>Maximum detection distance, range (0.10..6.00)</i>', range: '0..6', defaultValue: 6.00)
+                input (name: "filterSpam", type: "bool", title: "<b>Filter FP1E Distance Reports</b>", description: "Filter the FP1E distance reports, if not really used in automations. Recommended value is <b>true</b>", defaultValue: true)
+                input (name: 'detectionRange', type: 'decimal', title: '<b>Detection Range</b>', description: 'Maximum detection distance, range (0.10..6.00)', range: '0..6', defaultValue: 6.00)
             }
             if (isFP300()) {
-                input (name: "presenceDetectionMode", type: "enum", title: "<b>Presence Detection Mode</b>", description: "<i>Detection sensor type</i>", defaultValue: "both", options: ["both":"Both mmWave+PIR", "mmwave":"mmWave only", "pir":"PIR only"])
-                input (name: "absenceDelayTimer", type: "number", title: "<b>Absence Delay Timer</b>", description: "<i>Delay before reporting absence (10-300 seconds)</i>", range: "10..300", defaultValue: 30)
-                input (name: "pirDetectionInterval", type: "number", title: "<b>PIR Detection Interval</b>", description: "<i>PIR detection frequency (2-300 seconds)</i>", range: "2..300", defaultValue: 30)
-                input (name: "aiInterferenceIdentification", type: "bool", title: "<b>AI Interference Identification</b>", description: "<i>Enable AI to identify interference sources</i>", defaultValue: false)
-                input (name: "aiSensitivityAdaptive", type: "bool", title: "<b>AI Adaptive Sensitivity</b>", description: "<i>Enable AI adaptive sensitivity</i>", defaultValue: false)
+                input (name: "presenceDetectionMode", type: "enum", title: "<b>Presence Detection Mode</b>", description: "Detection sensor type", defaultValue: "both", options: ["both":"Both mmWave+PIR", "mmwave":"mmWave only", "pir":"PIR only"])
+                input (name: "absenceDelayTimer", type: "number", title: "<b>Absence Delay Timer</b>", description: "Delay before reporting absence (10-300 seconds)", range: "10..300", defaultValue: 30)
+                input (name: "pirDetectionInterval", type: "number", title: "<b>PIR Detection Interval</b>", description: "PIR detection frequency (2-300 seconds)", range: "2..300", defaultValue: 30)
+                input (name: "aiInterferenceIdentification", type: "bool", title: "<b>AI Interference Identification</b>", description: "Enable AI to identify interference sources", defaultValue: false)
+                input (name: "aiSensitivityAdaptive", type: "bool", title: "<b>AI Adaptive Sensitivity</b>", description: "Enable AI adaptive sensitivity", defaultValue: false)
             }
             if (isLightSensor()) {
-                input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "<i>illuminance minimum reporting interval, seconds (4..300)</i>", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
-                input (name: "illuminanceMaxReportingTime", type: "number", title: "<b>Maximum time between Illuminance Reports</b>", description: "<i>illuminance maximum reporting interval, seconds (120..10000)</i>", range: "120..10000", defaultValue: DEFAULT_ILLUMINANCE_MAX_TIME)
-                input (name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "<i>illuminance reporting threshold, value (1..255)<br>Bigger values will result in less frequent reporting</i>", range: "1..255", defaultValue: 1)
-                input (name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: '<i>Illuminance correction coefficient, range (0.1..10.0)</i>', range: '0..10', defaultValue: 1.00)
+                input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "illuminance minimum reporting interval, seconds (4..300)", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
+                input (name: "illuminanceMaxReportingTime", type: "number", title: "<b>Maximum time between Illuminance Reports</b>", description: "illuminance maximum reporting interval, seconds (120..10000)", range: "120..10000", defaultValue: DEFAULT_ILLUMINANCE_MAX_TIME)
+                input (name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "illuminance reporting threshold, value (1..255)<br>Bigger values will result in less frequent reporting", range: "1..255", defaultValue: 1)
+                input (name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: 'Illuminance correction coefficient, range (0.1..10.0)', range: '0..10', defaultValue: 1.00)
             }
             input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "<i>The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b></i>", defaultValue: false)
             if (internalTemperature == true) {
@@ -238,6 +249,8 @@ metadata {
         motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],    // TODO - check!
     ],    
     'PS-S04D': [    // FP300 https://github.com/absent42/fp300/blob/main/fp300.mjs
+        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/lumi.ts#L5020
+        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/lumi.ts
         model: "lumi.sensor_occupy.agl8", manufacturer: "aqara", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D",
         capabilities: ["motionSensor":true, "temperatureMeasurement":true, "illuminanceMeasurement":true, "relativeHumidityMeasurement":true, "battery":true, "powerSource":true],
         attributes: ["roomState", "roomActivity", "targetDistance", "detectionRange", "presenceDetectionMode", "pirDetection", "absenceDelayTimer", "pirDetectionInterval", "aiInterferenceIdentification", "aiSensitivityAdaptive"],
@@ -290,11 +303,11 @@ def isFP300()     { if (deviceSimulation) return false else return (device.getDa
 def isT1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl02'] ) }    // Aqara T1 motion sensor
 def isLightSensorXiaomi() { return (device.getDataValue('model') in ['lumi.sen_ill.mgl01'] ) } // Mi Light Detection Sensor;
 def isLightSensorAqara()  { return (device.getDataValue('model') in ['lumi.sen_ill.agl01'] ) } // T1 light intensity sensor
-def isLightSensor() { return (isLightSensorXiaomi() || isLightSensorAqara()) }
+def isLightSensor() { return (isLightSensorXiaomi() || isLightSensorAqara() || isFP300()) }
 
 private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1 : null }
 private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
-@Field static final Map sensitivityOptions =          [ "1":"low", "2":"medium", "3":"high" ]
+@Field static final Map sensitivityOptions =          [ "0":"-- do not change --", "1":"low", "2":"medium", "3":"high" ]
 @Field static final Map fp1RoomStateEventOptions =        [ "0":"unoccupied", "1":"occupied" ]
 @Field static final Map fp1RoomActivityEventTypeOptions = [ "0":"enter", "1":"leave" , "2":"enter (right)" , "3":"leave (left)" , "4":"enter (left)" , "5":"leave (right)" , "6":"towards", "7":"away" ]
 @Field static final Map fp1ERoomActivityEventTypeOptions = [ "0":"0 - unknown", "1":"1 - unknown" , "2":"idle" , "3":"large movement" , "4":"small movement" , "5":"5 - unknown" ]
@@ -342,7 +355,7 @@ void parse(String description) {
             }
 		    else if (it.cluster == "0400" && it.attrId == "0000") {    // lumi.sensor_motion.aq2
                 def rawLux = Integer.parseInt(it.value,16)
-                if (isLightSensorAqara() || isLightSensorXiaomi()) {
+                if (isLightSensorAqara() || isLightSensorXiaomi() || isFP300()) {
                     illuminanceEvent( rawLux )
                 }
                 else {
@@ -352,8 +365,12 @@ void parse(String description) {
             else if (it.cluster == "0402" && it.attrId == "0000") {    // Temperature Measurement cluster
                 if (isFP300()) {
                     def rawTemp = Integer.parseInt(it.value,16)
+                    logDebug "FP300 raw temperature value: ${rawTemp}"
                     // Temperature is reported in centidegrees Celsius (1/100th of a degree)
                     temperatureEvent(rawTemp / 100.0)
+                }
+                else {
+                    logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
                 }
             }
             else if (it.cluster == "0405" && it.attrId == "0000") {    // Relative Humidity Measurement cluster
@@ -361,6 +378,9 @@ void parse(String description) {
                     def rawHumidity = Integer.parseInt(it.value,16)
                     // Humidity is reported in percentage * 100
                     humidityEvent(rawHumidity / 100)
+                }
+                else {
+                    logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
                 }
             }
             else if (it.cluster == "0406" && it.attrId == "0000") {    // lumi.sensor_motion.aq2
@@ -462,7 +482,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
                 logDebug "<b>received motion retrigger interval report: ${value} s</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             }
-            else if (isFP1() || isFP1E() || isFP300()) { // FP1
+            else if (isFP1() || isFP1E()) { // FP1
                 logDebug "(0x69) <b>received approach_distance report: ${value} s</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
                 device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
             }
@@ -483,19 +503,24 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             logDebug "<b>received motion retrigger interval report: ${value} s</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0106" : // PIR sensitivity RTCGQ13LM RTCGQ14LM RTCZCGQ11LM
-        case "010C" : // (268) PIR sensitivity RTCGQ13LM RTCGQ14LM (P1) RTCZCGQ11LM; TODO: check if applicable for FP1 ? // FP1E 010C_SensorSensitivity (115F): 3 [UNSIGNED_8_BIT_INTEGER]
+        case "010C" : // (268) PIR sensitivity RTCGQ13LM RTCGQ14LM (P1) RTCZCGQ11LM & FP300; TODO: check if applicable for FP1 ? // FP1E 010C_SensorSensitivity (115F): 3 [UNSIGNED_8_BIT_INTEGER]
             device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
             sendEvent(name: "motionSensitivity", value: sensitivityOptions[value.toString()], type: "physical")
-            logDebug "(0x010C) <b>received motion sensitivity report: ${sensitivityOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            logDebug "(0x010C) >received motion sensitivity report: ${sensitivityOptions[value.toString()]} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0112" : // Aqara P1 PIR motion Illuminance
             if (!isRTCGQ13LM()) { // filter for High Preceision sensor - no illuminance sensor!
                 def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(0)..(1)]),16)
+                logDebug "(0x0112) <b>received illuminance report: ${rawValue} lx</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
                 illuminanceEventLux( rawValue )
-                handleMotion( true )    // TODO !!
+                logDebug 'handleMotion(true) called for Aqara motion illuminance report ?! '
+                handleMotion(true)    // TODO !!
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
-        case "0142" : // (322) FP1 RTCZCGQ11LM presence (roomState) // FP1E: 0142_SensorPresense (115F): 1 [UNSIGNED_8_BIT_INTEGER]
+        case "0142" : // (322) FP1 RTCZCGQ11LM FP300 presence (roomState) // FP1E: 0142_SensorPresense (115F): 1 [UNSIGNED_8_BIT_INTEGER]
             logDebug "(attr. 0x0142) roomState (presence) is  ${fp1RoomStateEventOptions[value.toString()]} (${value})"
             roomStateEvent( fp1RoomStateEventOptions[value.toString()] )
             break
@@ -507,6 +532,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 sendEvent(name: "pirDetection", value: value ? "detected" : "not_detected", type: "physical")
                 logDebug "PIR detection: ${value ? 'detected' : 'not detected'}"
             }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
             break
         case "014F" : // FP300 PIR detection interval
             if (isFP300()) {
@@ -514,6 +542,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 sendEvent(name: "pirDetectionInterval", value: value, unit: "sec", type: "physical")
                 device.updateSetting("pirDetectionInterval", [value: value.toString(), type: "number"])
                 logDebug "PIR detection interval: ${value} seconds"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
         case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
@@ -563,12 +594,18 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 device.updateSetting("aiSensitivityAdaptive", [value: value ? true : false, type: "bool"])
                 logDebug "AI adaptive sensitivity: ${value ? 'on' : 'off'}"
             }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
             break
         case "015E" : // FP300 AI interference identification 
             if (isFP300()) {
                 sendEvent(name: "aiInterferenceIdentification", value: value ? "on" : "off", type: "physical")
                 device.updateSetting("aiInterferenceIdentification", [value: value ? true : false, type: "bool"])
                 logDebug "AI interference identification: ${value ? 'on' : 'off'}"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
         case "015F" :   // 015F_Custom: 15 [UNSIGNED_32_BIT_INTEGER] FP1E 'target_distance'
@@ -584,8 +621,11 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 def voltage = value / 1000.0
-                voltageAndBatteryEvents(voltage)
+                sendVoltageEvent(voltage)
                 logDebug "FP300 battery voltage: ${voltage}V (${value} mV)"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
         case "0018" : // (24) FP300 Battery percentage (direct from device, if reported)
@@ -594,11 +634,17 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 sendBatteryEvent(value)
                 logDebug "FP300 battery percentage: ${value}%"
             }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
             break
         case "0162" : // (354) FP300 Temperature & Humidity sampling period (milliseconds)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 logDebug "FP300 temp/humidity sampling period: ${value / 1000.0} seconds"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
         case "0163" : // (355) FP300 Temperature reporting interval (milliseconds)
@@ -606,11 +652,17 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 value = Integer.parseInt(it.value, 16)
                 logDebug "FP300 temperature reporting interval: ${value / 1000.0} seconds"
             }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
             break
         case "0164" : // (356) FP300 Temperature reporting threshold (centidegrees)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 logDebug "FP300 temperature reporting threshold: ${value / 100.0}°C"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
         case "0165" : // (357) FP300 Temperature reporting mode
@@ -619,17 +671,26 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 def modes = ["unknown", "threshold", "reporting interval", "threshold and interval"]
                 logDebug "FP300 temperature reporting mode: ${modes[value] ?: 'unknown'} (${value})"
             }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
             break
         case "016A" : // (362) FP300 Humidity reporting interval (milliseconds)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 logDebug "FP300 humidity reporting interval: ${value / 1000.0} seconds"
             }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
             break
         case "016B" : // (363) FP300 Humidity reporting threshold (percentage * 100)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 logDebug "FP300 humidity reporting threshold: ${value / 100.0}%"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
         case "016C" : // (364) FP300 Humidity reporting mode
@@ -638,12 +699,18 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 def modes = ["unknown", "threshold", "reporting interval", "threshold and interval"]
                 logDebug "FP300 humidity reporting mode: ${modes[value] ?: 'unknown'} (${value})"
             }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
             break
         case "0170" : // (368) FP300 Temperature & Humidity sampling frequency
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 def frequencies = ["off", "low", "medium", "high", "custom"]
                 logDebug "FP300 temp/humidity sampling frequency: ${frequencies[value] ?: 'unknown'} (${value})"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
         case "0192" : // (402) FP300 Light sampling frequency
@@ -652,11 +719,17 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 def frequencies = ["off", "low", "medium", "high", "custom"]
                 logDebug "FP300 light sampling frequency: ${frequencies[value] ?: 'unknown'} (${value})"
             }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
             break
         case "0193" : // (403) FP300 Light sampling period (milliseconds)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 logDebug "FP300 light sampling period: ${value / 1000.0} seconds"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
         case "0194" : // (404) FP300 Light reporting interval (milliseconds)
@@ -664,11 +737,17 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 value = Integer.parseInt(it.value, 16)
                 logDebug "FP300 light reporting interval: ${value / 1000.0} seconds"
             }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
             break
         case "0195" : // (405) FP300 Light reporting threshold (percentage * 100)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 logDebug "FP300 light reporting threshold: ${value / 100.0}%"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
         case "0196" : // (406) FP300 Light reporting mode
@@ -676,6 +755,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 value = Integer.parseInt(it.value, 16)
                 def modes = ["unknown", "threshold", "reporting interval", "threshold and interval"]
                 logDebug "FP300 light reporting mode: ${modes[value] ?: 'unknown'} (${value})"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
         case "0197" : // (407) FP300 Absence delay timer
@@ -685,11 +767,17 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 device.updateSetting("absenceDelayTimer", [value: value.toString(), type: "number"])
                 logDebug "FP300 absence delay timer: ${value} seconds"
             }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
             break
         case "0198" : // (408) FP300 Track target distance (command trigger)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 logDebug "FP300 track target distance triggered: ${value}"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
         case "0199" : // (409) FP300 Presence detection options
@@ -698,6 +786,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 sendEvent(name: "presenceDetectionMode", value: modes[value] ?: "both", type: "physical")
                 device.updateSetting("presenceDetectionMode", [value: modes[value] ?: "both", type: "enum"])
                 logDebug "FP300 presence detection mode: ${modes[value] ?: 'both'}"
+            }   
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
         case "019A" : // (410) FP300 Detection range (24-bit bitmap for 0.25m zones)
@@ -720,6 +811,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                     logDebug "FP300 detection range zones enabled: ${zones.join(', ')}"
                 }
             }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
             break
         case "023E" : // (574) FP300 LED schedule (start/end time)
             if (isFP300()) {
@@ -731,6 +825,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 def startTime = String.format("%02d:%02d", startHour, startMin)
                 def endTime = String.format("%02d:%02d", endHour, endMin)
                 logDebug "FP300 LED disable schedule: ${startTime} - ${endTime}"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
 
@@ -781,12 +878,13 @@ def sendRegionEvent( regionId, value) {
 
 }
 
+// "00F7" Xiaomi/Aqara TLV structure 
 def decodeAqaraStruct( description )
 {
     def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
 	def MsgLength = valueHex.size()
     
-    if (logEnable) log.debug "decodeAqaraStruct len = ${MsgLength} valueHex = ${valueHex}"
+    if (logEnable) log.debug "decodeAqaraStruct 00F7 : len = ${MsgLength} valueHex = ${valueHex}"
    	for (int i = 2; i < (MsgLength-3); ) {
         def dataType = Integer.parseInt(valueHex[(i+2)..(i+3)], 16)
         def tag = Integer.parseInt(valueHex[(i+0)..(i+1)], 16)
@@ -802,27 +900,39 @@ def decodeAqaraStruct( description )
                 rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
                 switch (tag) {
                     case 0x03 :    // device temperature
+                    logDebug "tag 0x03: device temperature is ${rawValue} °C"
                         temperatureEvent( rawValue )
                         break
+                    case 0x18 :   // FP300 battery percentage
+                        if (isFP300()) {
+                            sendBatteryEvent( rawValue  )
+                            logDebug "tag 0x18: FP300 battery percentage is ${rawValue} %"
+                        }
+                        else {
+                            logDebug "tag 0x18: unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        }
+                        break
                     case 0x64 :    // on/off
-                        logDebug "on/off is ${rawValue}"
+                        if (isFP300()) {
+                            logDebug "tag 0x64: FP300 presence  is ${rawValue}"     // TODO: check why is forced to 1 in Z2M ?
+                        }
+                        else {
+                            logDebug "tag 0x64: on/off is ${rawValue}"
+                        }
                         break
                     case 0x9b :    // consumer connected
-                        logDebug "consumer connected is ${rawValue}"
-                        break
-                    case 0x64 :    // curtain lift or smoke/gas density; also battery percentage for Aqara curtain motor 
-                        logDebug "lift % or gas density is ${rawValue}"
+                        logDebug "tag 0x9b: consumer connected is ${rawValue}"
                         break
                     case 0x65 :    // (101) FP1 roomState (presence)
                         if (isFP1()) { // FP1 'unoccupied':'occupied'
-                            logDebug "(0x65) roomState (presence) is  ${fp1RoomStateEventOptions[rawValue.toString()]} (${rawValue})"
+                            logDebug "tag 0x65: roomState (presence) is  ${fp1RoomStateEventOptions[rawValue.toString()]} (${rawValue})"
                             roomStateEvent( fp1RoomStateEventOptions[rawValue.toString()] )  
                         }
-                        else if (isFP1E()) {
-                            logDebug "FP1E tag #65 is ${rawValue}"
+                        else if (isFP1E() || isFP300()) { 
+                            logDebug "FP1E/FP300 tag #65 (roomState>) is ${rawValue}"
                         }
                         else {
-                            logDebug "on/off EP 2 or battery percentage is ${rawValue}"
+                            logDebug "tag 0x65: on/off EP 2 or battery percentage is ${rawValue}"
                         }
                         break
                     case 0x66 :    // (102)    FP1 
@@ -833,14 +943,20 @@ def decodeAqaraStruct( description )
                             }
                             else {
                                 device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
-                                logDebug "(tag 0x66) sensitivity is <b>${sensitivityOptions[rawValue.toString()]}</b> (${rawValue})"
+                                logDebug "tag 0x66: sensitivity is <b>${sensitivityOptions[rawValue.toString()]}</b> (${rawValue})"
                             }
+                        }
+                        else {
+                            logDebug "tag 0x66: unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         }
                         break
                     case 0x67 : // (103) FP1 monitoring_mode
                         if (isFP1() || isFP1E()) {
-                            logDebug "monitoring_mode is <b> ${monitoringModeOptions[rawValue.toString()]}</b> (${rawValue})"
+                            logDebug "tag 0x67: monitoring_mode is <b> ${monitoringModeOptions[rawValue.toString()]}</b> (${rawValue})"
                             device.updateSetting( "monitoringMode",  [value:rawValue.toString(), type:"enum"] )
+                        }
+                        else if (isFP300()) {
+                            logDebug "tag 0x67: FP300 pir_direction, value: ${rawValue}"        // TODO:  check why is forced to 1 in Z2M ?
                         }
                         else {
                             logDebug "tag 0x67 value is ${rawValue}"    // sent by T1 sensor
@@ -849,41 +965,41 @@ def decodeAqaraStruct( description )
                     case 0x69 : // (105) 
                         if (isFP1() || isFP1E()) { // FP1
                             device.updateSetting( "approachDistance",  [value:rawValue.toString(), type:"enum"] )    // {0: 'far', 1: 'medium', 2: 'near'}
-                            logDebug "approach_distance is <b>${approachDistanceOptions[rawValue.toString()]}</b> (${rawValue})"
+                            logDebug "tag 0x69: approach_distance is <b>${approachDistanceOptions[rawValue.toString()]}</b> (${rawValue})"
                         }
                         else if (isRTCGQ13LM()) {
                             // payload.motion_sensitivity = {1: 'low', 2: 'medium', 3: 'high'}[value];
                             device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
-                            logDebug "(tag 0x69) sensitivity is <b>${sensitivityOptions[rawValue.toString()]}</b> (${rawValue})"
+                            logDebug "tag 0x69: sensitivity is <b>${sensitivityOptions[rawValue.toString()]}</b> (${rawValue})"
                         }
                         else if (isP1()) {
                             device.updateSetting( "motionRetriggerInterval",  [value:rawValue.toString(), type:"number"] )
-                            logDebug "motion retrigger interval is ${rawValue} s."
+                            logDebug "tag 0x69: motion retrigger interval is ${rawValue} s."
                         }
                         else {
-                            logWarn "unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                            logWarn "tag 0x69: unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         }
                         break
                     case 0x6A :    // sensitivity
                         if (isFP1() || isFP1E()) {
-                            logDebug "(0x6A) FP1 unknown parameter, value: ${rawValue}"
+                            logDebug "tag 0x6A: FP1 unknown parameter, value: ${rawValue}"
                         }
                         else {
                             device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
-                            logDebug "(tag 0x6A) sensitivity is <b>${sensitivityOptions[rawValue.toString()]}</b> (${rawValue})"
+                            logDebug "tag 0x6A: sensitivity is <b>${sensitivityOptions[rawValue.toString()]}</b> (${rawValue})"
                         }
                         break
                     case 0x6B :    // LED
                         if (isFP1() || isFP1E()) {
-                            logDebug "(0x06B) FP1 unknown parameter, value: ${rawValue}"
+                            logDebug "tag 0x6B: FP1 unknown parameter, value: ${rawValue}"
                         }
                         else {
                             device.updateSetting( "motionLED",  [value:rawValue.toString(), type:"enum"] )
-                            if (txtEnable) log.info "${device.displayName} LED is ${P1_LED_MODE_NAME(rawValue)} (${rawValue})"
+                            logInfo "${device.displayName} LED is ${P1_LED_MODE_NAME(rawValue)} (${rawValue})"
                         }
                         break
                     default :
-                        logDebug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        logDebug "unknown tag=0x${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
                 i = i + (1 + 1 + 1) * 2
@@ -892,17 +1008,17 @@ def decodeAqaraStruct( description )
                 rawValue = Integer.parseInt((valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]),16)
                 switch (tag) {
                     case 0x01 : // battery level
+                        logDebug "tag 0x01: battery level is ${rawValue}"
                         voltageAndBatteryEvents( rawValue/1000 )
                         break
                     case 0x05 : // RSSI
-                        if (logEnable) log.debug "RSSI is ${rawValue} ? db"
+                        logDebug "tag 0x05: RSSI is ${rawValue} ? db"
                         break
                     case 0x0A : // Parent NWK
-                        if (logEnable) log.debug "Parent NWK is ${valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]}"
+                        logDebug "tag 0x0A: Parent NWK is ${valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]}"
                         String nwk = intToHexStr(rawValue as Integer, 2)
                         if (state.health == null) { state.health = [:] }
                         String oldNWK = state.health['parentNWK'] ?: 'n/a'
-                        logDebug "<b>Parent NWK is ${nwk}</b>"
                         if (oldNWK != nwk || device.currentState('parentNWK')?.value != nwk) {
                             String descriptionText = "parentNWK changed from ${oldNWK} to ${nwk}"
                             state.health['parentNWK']  = nwk
@@ -912,15 +1028,29 @@ def decodeAqaraStruct( description )
                         }
                         break
                     case 0x0B : // lightlevel 
-                        if (logEnable) log.debug "lightlevel is ${rawValue}"
+                        logDebug "tag 0x0B: lightlevel is ${rawValue}"
+                        break
+                    case 0x17 : // FP300 battery voltage in mV
+                        if (isFP300()) {
+                            def voltage = rawValue / 1000.0
+                            sendVoltageEvent(voltage)
+                            logDebug "tag 0x17: FP300 battery voltage is ${voltage}V (${rawValue} mV)"
+                        }
+                        else {
+                            logDebug "tag 0x17: unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        }
                         break
                     case 0x65 : // illuminance or humidity
+                        logDebug "tag 0x65: illuminance or humidity is ${rawValue}"
                         if (!isRTCGQ13LM()) {    // filter for high precision sensor - no illuminance!
                             illuminanceEventLux( rawValue )
                         }
+                        else {
+                            logDebug "tag 0x65: unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        }
                         break
                     default :
-                        logDebug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        logDebug "unknown tag=0x${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
                 i = i + (1 + 1 + 2) * 2
@@ -930,13 +1060,33 @@ def decodeAqaraStruct( description )
             case 0x23 : // Unsigned 32-bit integer
             case 0x2B : // Signed 32-bit integer
                 // TODO: Zcl32BitUint tag == 0x0d  -> firmware version ?
-                logDebug "unknown 32 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                switch (tag) {
+                    case 0x0D :    // firmware version ?
+                        rawValue = Integer.parseInt((valueHex[(i+10)..(i+11)] + valueHex[(i+8)..(i+9)] + valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]),16)
+                        def major = (rawValue >> 24) & 0xFF
+                        def minor = (rawValue >> 16) & 0xFF
+                        def patch = rawValue & 0xFFFF
+                        String firmwareVersion = "${major}.${minor}.${patch}"
+                        logDebug "tag 0x0D: firmware version is ${firmwareVersion} (raw=${rawValue})"
+                        /*
+                        if (device.getDataValue("firmwareVersion") != firmwareVersion) {
+                            device.updateDataValue("firmwareVersion", firmwareVersion)
+                            logInfo "firmwareVersion updated to ${firmwareVersion}"
+                        }
+                        */
+                        break
+                    default :
+                        rawValue = Integer.parseInt((valueHex[(i+10)..(i+11)] + valueHex[(i+8)..(i+9)] + valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]),16)
+                        logDebug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        break
+                }
+                //logDebug "unknown 32 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                 i = i + (1 + 1 + 4) * 2    // TODO: check!
                 break
             case 0x24 : // 5 bytes 40 bits Zcl40BitUint tag == 0x06 -> LQI (?)
                 switch (tag) {
                     case 0x06 :    // LQI ?
-                        if (logEnable) log.debug "device LQI is ${valueHex[(i+4)..(i+14)]}"
+                        logDebug "tag 0x06: device LQI is ${valueHex[(i+4)..(i+14)]}"
                         break
                     default :
                         logDebug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} TODO rawValue"
@@ -1056,9 +1206,16 @@ def voltageAndBatteryEvents( rawVolts, isDigital=false  )
     sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", descriptionText: descText, isStateChange: true )    
 }
 
+def sendVoltageEvent( rawVolts ) {
+    def descText = "Battery voltage is ${rawVolts}V"
+    if (txtEnable) log.info "${device.displayName} ${descText}"
+    sendEvent(name: 'batteryVoltage', value: rawVolts, unit: "V", type: "physical", descriptionText: descText, isStateChange: true )
+}
+
 def sendBatteryEvent( roundedPct, isDigital=false ) {
-    def descText = "Battery level "
+    def descText = "Battery level is ${roundedPct}%"
     descText += isDigital ? safeToInt(roundedPct)==0 ?"forced to ${roundedPct}%" : "restored to ${roundedPct}%" : " "     // TODO !!!
+    if (txtEnable) log.info "${device.displayName} ${descText}"
     sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", descriptionText: descText, isStateChange: true )    
 }
 
@@ -1207,7 +1364,7 @@ void illuminanceEvent( rawLux ) {
         logWarn "ignored rawLux reading ${rawLux}"
         return
     }
-	def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
+	def lux = rawLux > 0 ? Math.round(Math.pow(10,((rawLux-1)/10000))) : 0
     illuminanceEventLux( lux as Integer )
 }
 
@@ -1290,7 +1447,7 @@ def roomStateEvent( String status, isDigital=false ) {
     if (status != null) {
         def type = isDigital == true ? "digital" : "physical"
         sendEvent("name": "roomState", "value": status, "type": type)                    // isStateChange" true removed ver 1.2.0
-        if (settings?.txtEnable) log.info "${device.displayName} roomState (presence) is <b>${status}</b>"
+        if (settings?.txtEnable) log.info "${device.displayName} roomState (presence) is ${status}"
         if (status == "occupied") {
             handleMotion(true, isDigital=true)
         }
@@ -1303,7 +1460,7 @@ def roomStateEvent( String status, isDigital=false ) {
 def presenceTypeEvent( String presenceTypeEvent, isDigital=false ) {
     if (presenceTypeEvent != null) {
         def type = isDigital == true ? "digital" : "physical"
-        sendEvent("name": "roomActivity", "value": presenceTypeEvent, "type": type)                // isStateChange" true removed ver 1.2.0
+        sendEvent("name": "roomActivity", "value": presenceTypeEvent, "type": type)       // isStateChange" true removed ver 1.2.0
         if (settings?.txtEnable) log.info "${device.displayName} presence type is <b>${presenceTypeEvent}</b>"
         if (presenceTypeEvent in ["enter", "left_enter", "right_enter"] ) {
             handleMotion(true, isDigital=true)
@@ -1474,13 +1631,12 @@ private void scheduleDeviceHealthCheck(int intervalMins) {
 }
 
 void deviceCommandTimeout() {
-    if (isFP1() || isFP1E() || isFP300()) {
+    if (isFP1() || isFP1E()) {
         logWarn 'no response received (device offline?)'
         sendHealthStatusEvent("offline")
-        //resetState()
     }
     else {
-        logDebug 'no response received (sleepy device)'
+        logInfo 'no ping response received (sleepy device)'
     }
 }
 
@@ -1891,8 +2047,8 @@ void aqaraReadAttributes() {
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x0144, 0x0146], [mfgCode: 0x115F], delay=200)
     }
     else if (isFP300()) {  // Aqara FP300 presence detector 
-        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // Standard battery voltage
-        cmds += zigbee.readAttribute(0xFCC0, [0x0017, 0x0018, 0x014D, 0x014F, 0x015D, 0x015E, 0x0197, 0x0199], [mfgCode: 0x115F], delay=200)
+        //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // Standard battery voltage
+        cmds += zigbee.readAttribute(0xFCC0, [0x0018, 0x014D, 0x014F, 0x015D, 0x015E, 0x0197, 0x0199], [mfgCode: 0x115F], delay=200)
     }
     else if (isLightSensorAqara()) {
         cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x115F], delay=200)
@@ -1943,8 +2099,8 @@ void aqaraBlackMagic() {
     }
     else if (isFP300()) {
         // Bind battery cluster
-        cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 50",]
-        cmds += zigbee.configureReporting(0x0001, 0x0020, 0x20, 3600, 7200, null, [:], delay=100)
+        //cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 50",]
+        //cmds += zigbee.configureReporting(0x0001, 0x0020, 0x20, 3600, 7200, null, [:], delay=100)
         
         // Bind and configure temperature cluster (0x0402)
         cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}", "delay 50",]
@@ -1960,7 +2116,7 @@ void aqaraBlackMagic() {
         
         // Bind manufacturer cluster and read initial values
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
+        //cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
         
         logDebug "aqaraBlackMagic() for FP300"
     }
