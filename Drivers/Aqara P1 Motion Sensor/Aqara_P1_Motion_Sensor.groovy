@@ -48,27 +48,27 @@
  * ver. 1.7.4 2025-05-24 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
  * ver. 1.7.5 2025-09-15 bbholthome  - light sensor GZCGQ01LM maximum illuminance capped to 65500 lux
  * ver. 1.8.0 2025-09-28 kkossev  - added Aqara FP1 Spatial Learning Mode; added resetPresence() command for FP1/FP1E
- * ver. 1.9.0 2025-11-02 kkossev  - added Aqara FP300 Presence Sensor support (experimental, not tested); credits: Dan Gibson (@absent42 on GitHub)
+ * ver. 1.9.0 2025-11-02 kkossev  - added Aqara FP300 Presence Sensor support (experimental, not tested); credits: Dan Gibson (@absent42) and Kamil Pustelnik (@kpustelnik)
  * ver. 1.9.1 2025-11-12 kkossev  - Bug fix: decoding Aqara RTCGQ11LM (lumi.sensor_motion.aq2) battery voltage 
  * ver. 1.9.2 2025-11-13 kkossev  - FP300 temperature and humidity parsing; decoding most of the FP300 reports; added restartDevice() command for FP1E/FP300
- * ver. 1.9.3 2025-11-14 kkossev  - (dev. branch) fix FP300 illuminance handling and the calculation formula; enabled motionSensitivity for FP300; FP300 fingerprint update; bugfix : no response on ping() command was switching FP300 healthStatus to offline 
+ * ver. 1.9.3 2025-11-14 kkossev  - fix FP300 illuminance handling and the calculation formula; enabled motionSensitivity for FP300; FP300 fingerprint update; bugfix : no response on ping() command was switching FP300 healthStatus to offline 
  *                                  added battery voltage and percentage events for FP300; enabled advanced options for FP300 illuminance sensor
+ * ver. 2.0.0 2025-11-15 kkossev  - (dev. branch) Added child device support for FP300 temperature & humidity; removed TemperatureMeasurement and RelativeHumidityMeasurement capabilities from parent driver;
+ *                                  FP300 T/H readings now appear in a separate child device using Generic Component Temperature Humidity Sensor; added deviceTemperature attribute for non-FP300 devices internal temperature;
+ *                                  added advancedOptions preference toggle; renamed tempOffset to internalTempOffset for non-FP300 devices; added separate tempOffset and humidityOffset for FP300; added experimental trackTargetDistance() command for FP300
+ *                                  
  * 
  *                                 TODO:
- *                                 TODO:
- *                                 TODO:
- *                                 TODO: add advancedOptions toggle
- *                                 TODO: add deviceTemperature attribute and use it instead of the standard temperature attribute for internal temperature sensors  
  *                                 TODO: add FP300 Detection range (24-bit bitmap for 0.25m zones)
- *                                 TODO: add FP300 Track target distance (command trigger)
  *                                 TODO: add FP300 LED disable schedule
+ *                                 TODO: check whether the motionSensitivity for FP300 low/medum/high are not inverted? Could the Z2M implementation be wrong? Put a Zigbee sniffing session to verify.
+ *                                 TODO: trackTargetDistance() - use a he raw command w/o defaultResponse flag
  *                                 TODO: update the true aqaraVersion from Xiaomi struct tag:0x0D 
- *                                 TODO: create child device(s) for FP300 temperature and humidity 
  *
  */
 
-static String version() { "1.9.3" }
-static String timeStamp() {"2025/11/14 8:30 PM"}
+static String version() { "2.0.0" }
+static String timeStamp() {"2025/11/15 10:56 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -76,6 +76,8 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import hubitat.helper.HexUtils
 import java.util.concurrent.ConcurrentHashMap
+import java.math.RoundingMode
+import com.hubitat.app.DeviceWrapper
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean deviceSimulation = false
@@ -96,12 +98,11 @@ metadata {
         capability "Sensor"
 		capability "Motion Sensor"
 		capability "Illuminance Measurement"
-		capability "TemperatureMeasurement"        
 		capability "Battery"
         capability "PowerSource"
         capability "Health Check"
         capability "Refresh"
-        capability "RelativeHumidityMeasurement"  // FP300
+        // Note: TemperatureMeasurement and RelativeHumidityMeasurement removed from parent - FP300 uses child device
         //capability "SignalStrength"    //lqi - NUMBER; rssi - NUMBER (not supported yet)
         
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
@@ -129,6 +130,7 @@ metadata {
         attribute "detectionRange", "decimal"   // FP1E
         attribute "motionSensitivity", "enum", ["low", "medium", "high"]   // FP1E
         attribute "spatialLearning", "enum", ["idle","started"]
+        attribute "deviceTemperature", "number"  // Internal temperature for non-FP300 devices
         
         // FP300-specific attributes
         attribute "presenceDetectionMode", "enum", ["both", "mmwave", "pir"] // FP300
@@ -146,11 +148,12 @@ metadata {
         }
         
         command "configure", [[name: "Initialize the device after switching drivers. Will load device default values!" ]]
-        command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["active", "inactive"], description: "Use for tests"]]
+        command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["active", "inactive"], description: "Use for tests", defaultValue: "inactive"]]
         command "ping",      [[name: "Check device online status and measure the Round-Trip Time (ms). May not work for battery-powered devices."]]
         command "resetPresence", [[name: "Reset Presence (FP1/FP1E/FP300)" ]]
         command "restartDevice", [[name: "Restart Device (FP1E/FP300)" ]]
-        command "startSpatialLearning", [[name: "Start FP1E Spatial Learning (experimental)" ]]
+        command "startSpatialLearning", [[name: "Start Spatial Learning (FP1E/FP300)" ]]
+        command "trackTargetDistance", [[name: "enable", type: "ENUM", constraints: ["enable", "disable"], description: "Enable or disable target distance tracking (FP300)", defaultValue: "disable"]]
 
         if (_DEBUG) {
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "FCC0"]]
@@ -205,15 +208,23 @@ metadata {
                 input (name: "aiInterferenceIdentification", type: "bool", title: "<b>AI Interference Identification</b>", description: "Enable AI to identify interference sources", defaultValue: false)
                 input (name: "aiSensitivityAdaptive", type: "bool", title: "<b>AI Adaptive Sensitivity</b>", description: "Enable AI adaptive sensitivity", defaultValue: false)
             }
-            if (isLightSensor()) {
-                input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "illuminance minimum reporting interval, seconds (4..300)", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
-                input (name: "illuminanceMaxReportingTime", type: "number", title: "<b>Maximum time between Illuminance Reports</b>", description: "illuminance maximum reporting interval, seconds (120..10000)", range: "120..10000", defaultValue: DEFAULT_ILLUMINANCE_MAX_TIME)
-                input (name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "illuminance reporting threshold, value (1..255)<br>Bigger values will result in less frequent reporting", range: "1..255", defaultValue: 1)
-                input (name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: 'Illuminance correction coefficient, range (0.1..10.0)', range: '0..10', defaultValue: 1.00)
-            }
-            input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "<i>The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b></i>", defaultValue: false)
-            if (internalTemperature == true) {
-                input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "<i>Select how many degrees to adjust the temperature.</i>", range: "-100..100", defaultValue: 0)
+            // Advanced options
+            input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "Show advanced configuration options", defaultValue: false)
+            if (advancedOptions == true) {
+                input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "<i>The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b></i>", defaultValue: false)
+                if (internalTemperature == true) {
+                    input (name: "internalTempOffset", type: "decimal", title: "<b>Internal Temperature Offset</b>", description: "<i>Select how many degrees to adjust the internal temperature.</i>", range: "-100..100", defaultValue: 0)
+                }
+                if (isFP300()) {
+                    input (name: "tempOffset", type: "decimal", title: "<b>Temperature Offset</b>", description: "<i>Adjust the FP300 temperature reading.</i>", range: "-100..100", defaultValue: 0)
+                    input (name: "humidityOffset", type: "decimal", title: "<b>Humidity Offset</b>", description: "<i>Adjust the FP300 humidity reading.</i>", range: "-100..100", defaultValue: 0)
+                }
+                if (isLightSensor()) {
+                    input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "illuminance minimum reporting interval, seconds (4..300)", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
+                    input (name: "illuminanceMaxReportingTime", type: "number", title: "<b>Maximum time between Illuminance Reports</b>", description: "illuminance maximum reporting interval, seconds (120..10000)", range: "120..10000", defaultValue: DEFAULT_ILLUMINANCE_MAX_TIME)
+                    input (name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "illuminance reporting threshold, value (1..255)<br>Bigger values will result in less frequent reporting", range: "1..255", defaultValue: 1)
+                    input (name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: 'Illuminance correction coefficient, range (0.1..10.0)', range: '0..10', defaultValue: 1.00)
+                }
             }            
         }
     }
@@ -304,6 +315,74 @@ def isT1()        { if (deviceSimulation) return false else return (device.getDa
 def isLightSensorXiaomi() { return (device.getDataValue('model') in ['lumi.sen_ill.mgl01'] ) } // Mi Light Detection Sensor;
 def isLightSensorAqara()  { return (device.getDataValue('model') in ['lumi.sen_ill.agl01'] ) } // T1 light intensity sensor
 def isLightSensor() { return (isLightSensorXiaomi() || isLightSensorAqara() || isFP300()) }
+
+// ~~~~~ Child Device Management for FP300 Temperature & Humidity ~~~~~
+
+def createChildDevices() {
+    if (!isFP300()) {
+        logDebug "createChildDevices: Not FP300, skipping child device creation"
+        return
+    }
+    
+    String childDni = "${device.id}-TempHumidity"
+    def childDevice = getChildDevice(childDni)
+    
+    if (!childDevice) {
+        logInfo "Creating child device for Temperature & Humidity"
+        try {
+            childDevice = addChildDevice(
+                "hubitat",
+                "Generic Component Temperature Humidity Sensor",
+                childDni,
+                [
+                    name: "FP300 Temperature & Humidity",
+                    label: "${device.label ?: device.name} - Temperature & Humidity",
+                    isComponent: true
+                ]
+            )
+            logInfo "Child device created: ${childDevice.displayName}"
+        } catch (Exception e) {
+            logWarn "Failed to create child device: ${e.message}"
+        }
+    } else {
+        logDebug "Child device already exists: ${childDevice.displayName}"
+    }
+}
+
+def deleteChildDevices() {
+    def children = getChildDevices()
+    children.each { child ->
+        try {
+            logInfo "Deleting child device: ${child.displayName}"
+            deleteChildDevice(child.deviceNetworkId)
+        } catch (Exception e) {
+            logWarn "Failed to delete child device: ${e.message}"
+        }
+    }
+}
+
+def getChildTempHumidityDevice() {
+    if (!isFP300()) return null
+    String childDni = "${device.id}-TempHumidity"
+    return getChildDevice(childDni)
+}
+
+// Component methods - required for child device interaction
+void componentRefresh(DeviceWrapper childDevice) {
+    logDebug "componentRefresh: ${childDevice.displayName}"
+    // Trigger a refresh of the parent device which will update child
+    refresh()
+}
+
+void componentOn(DeviceWrapper childDevice) {
+    logDebug "componentOn called from ${childDevice.displayName} - not implemented"
+}
+
+void componentOff(DeviceWrapper childDevice) {
+    logDebug "componentOff called from ${childDevice.displayName} - not implemented"
+}
+
+// ~~~~~ End Child Device Management ~~~~~
 
 private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1 : null }
 private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
@@ -463,7 +542,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             break
         case "0065" :
             if (isFP1() || isFP1E() || isFP300()) { // FP1    'unoccupied':'occupied'
-                logDebug "(attr 0x065) roomState (presence) is  ${fp1RoomStateEventOptions[value.toString()]} (${value})"
+                logDebug "(attr 0x065) roomState (mmWave 'presence') is  ${fp1RoomStateEventOptions[value.toString()]} (${value})"
                 roomStateEvent( fp1RoomStateEventOptions[value.toString()] )
             }
             else {     // illuminance only? for RTCGQ12LM RTCGQ14LM
@@ -521,7 +600,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             }
             break
         case "0142" : // (322) FP1 RTCZCGQ11LM FP300 presence (roomState) // FP1E: 0142_SensorPresense (115F): 1 [UNSIGNED_8_BIT_INTEGER]
-            logDebug "(attr. 0x0142) roomState (presence) is  ${fp1RoomStateEventOptions[value.toString()]} (${value})"
+            logDebug "(attr. 0x0142) roomState (mmWave 'presence') is  ${fp1RoomStateEventOptions[value.toString()]} (${value})"
             roomStateEvent( fp1RoomStateEventOptions[value.toString()] )
             break
         case "0143" : // (323) FP1 RTCZCGQ11LM presence_event {0: 'enter', 1: 'leave', 2: 'left_enter', 3: 'right_leave', 4: 'right_enter', 5: 'left_leave', 6: 'approach', 7: 'away'}[value];  // FP1E: 0143_SensorPresenseEvent (115F): [UNSIGNED_8_BIT_INTEGER]
@@ -608,14 +687,23 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
-        case "015F" :   // 015F_Custom: 15 [UNSIGNED_32_BIT_INTEGER] FP1E 'target_distance'
+        case "015F" :   // 015F_Custom: 15 [UNSIGNED_32_BIT_INTEGER] FP1E/FP300 'target_distance' - distance to detected target in cm
             value = Integer.parseInt(it.value, 16)
-            logDebug "(0x015F) received FP1E target_distance report: ${value} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            logDebug "(0x015F) received FP1E/FP300 target_distance report: ${value} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             targetDistanceEvent( value )
             break
         case '0160' :   // FP1E frequently sent report ?? presence_event [ "0":"0 - unknown", "1":"1 - unknown" , "2":"idle" , "3":"large movement" , "4":"small movement" , "5":"5 - unknown" ]
             logDebug "(0x0160) received report: ${fp1ERoomActivityEventTypeOptions[value.toString()]} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             presenceTypeEvent( fp1ERoomActivityEventTypeOptions[value.toString()] )
+            break
+        case "0198" :   // 0198_Custom: FP300 track_target_distance enable/disable status (0=disabled, 1=enabled)
+            value = Integer.parseInt(it.value, 16)
+            def status = (value == 1) ? "enabled" : "disabled"
+            logDebug "(0x0198) received FP300 track_target_distance status: ${status} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            if (value == 0 && device.currentValue('targetDistance') != null) {
+                device.deleteCurrentState('targetDistance')
+                logInfo "target distance tracking disabled - attribute removed"
+            }
             break
         case "0017" : // (23) FP300 Battery voltage in mV
             if (isFP300()) {
@@ -925,7 +1013,7 @@ def decodeAqaraStruct( description )
                         break
                     case 0x65 :    // (101) FP1 roomState (presence)
                         if (isFP1()) { // FP1 'unoccupied':'occupied'
-                            logDebug "tag 0x65: roomState (presence) is  ${fp1RoomStateEventOptions[rawValue.toString()]} (${rawValue})"
+                            logDebug "tag 0x65: roomState (mmWave 'presence') is  ${fp1RoomStateEventOptions[rawValue.toString()]} (${rawValue})"
                             roomStateEvent( fp1RoomStateEventOptions[rawValue.toString()] )  
                         }
                         else if (isFP1E() || isFP300()) { 
@@ -1421,14 +1509,41 @@ private void sendDelayedIllumEvent(Map eventMap) {
 
 
 def temperatureEvent( temperature ) {
-    // FP300 has a dedicated external temperature sensor, not internal
-    if (!isFP300() && settings?.internalTemperature == false) {
+    // FP300 has a dedicated external temperature sensor - route to child device
+    if (isFP300()) {
+        def child = getChildTempHumidityDevice()
+        if (child) {
+            def map = [:] 
+            map.name = "temperature"
+            map.unit = "\u00B0"+"C"
+            def tempOffset = settings?.tempOffset ?: 0
+            
+            if ( location.temperatureScale == "F") {
+                temperature = (temperature * 1.8) + 32
+                map.unit = "\u00B0"+"F"
+            }
+            
+            def tempConverted = temperature + tempOffset
+            map.value = Math.round(tempConverted * 10) / 10.0  // Round to 1 decimal place
+            map.type = "physical"
+            map.isStateChange = true
+            
+            if (settings?.txtEnable) {log.info "${device.displayName} temperature is ${map.value} ${map.unit} (via child device)"}
+            child.parse([[name: map.name, value: map.value, unit: map.unit, type: map.type, descriptionText: "${child.displayName} temperature is ${map.value} ${map.unit}"]])
+        } else {
+            log.warn "${device.displayName} FP300 child device not found for temperature event"
+        }
+        return
+    }
+    
+    // Other devices: internal temperature sensor - use deviceTemperature attribute
+    if (settings?.internalTemperature == false) {
         return
     }
     def map = [:] 
-    map.name = "temperature"
+    map.name = "deviceTemperature"
     map.unit = "\u00B0"+"C"
-    def tempOffset = settings?.tempOffset ?: 0
+    def tempOffset = settings?.internalTempOffset ?: 0
     
     if ( location.temperatureScale == "F") {
         temperature = (temperature * 1.8) + 32
@@ -1447,7 +1562,7 @@ def roomStateEvent( String status, isDigital=false ) {
     if (status != null) {
         def type = isDigital == true ? "digital" : "physical"
         sendEvent("name": "roomState", "value": status, "type": type)                    // isStateChange" true removed ver 1.2.0
-        if (settings?.txtEnable) log.info "${device.displayName} roomState (presence) is ${status}"
+        if (settings?.txtEnable) log.info "${device.displayName} roomState (mmWave 'presence') is ${status}"
         if (status == "occupied") {
             handleMotion(true, isDigital=true)
         }
@@ -1471,7 +1586,6 @@ def presenceTypeEvent( String presenceTypeEvent, isDigital=false ) {
     }
 }
 
-import java.math.RoundingMode
 
 def targetDistanceEvent( Integer distance ) {
     if (distance != null) {
@@ -1493,13 +1607,22 @@ def detectionRangeEvent( Integer range ) {
 
 def humidityEvent( humidity ) {
     if (humidity != null && (isFP300())) {
-        // Ensure humidity is within valid range (0-100%)
-        def humidityValue = Math.round(humidity as Double)
-        if (humidityValue < 0) humidityValue = 0
-        if (humidityValue > 100) humidityValue = 100
-        
-        sendEvent(name: "humidity", value: humidityValue, unit: "%", type: "physical")
-        if (settings?.txtEnable) log.info "${device.displayName} humidity is ${humidityValue}%"
+        def child = getChildTempHumidityDevice()
+        if (child) {
+            // Apply humidity offset
+            def humidityOffset = settings?.humidityOffset ?: 0
+            def humidityAdjusted = humidity + humidityOffset
+            
+            // Ensure humidity is within valid range (0-100%)
+            def humidityValue = Math.round(humidityAdjusted as Double)
+            if (humidityValue < 0) humidityValue = 0
+            if (humidityValue > 100) humidityValue = 100
+            def isStateChange = true
+            if (settings?.txtEnable) log.info "${device.displayName} humidity is ${humidityValue}% (via child device)"
+            child.parse([[name: "humidity", value: humidityValue, unit: "%", type: "physical", descriptionText: "${child.displayName} humidity is ${humidityValue}%", isStateChange: isStateChange]])
+        } else {
+            log.warn "${device.displayName} FP300 child device not found for humidity event"
+        }
     }
 }
 
@@ -1673,6 +1796,18 @@ void restartDevice() {
     sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x00E8, DataType.BOOLEAN, 0x00, [mfgCode: 0x115F], 0))
 }
 
+void trackTargetDistance(String enable = "enable") {
+    if (!isFP300()) {
+        logWarn 'trackTargetDistance() is supported only for FP300 devices.'
+        return
+    }
+    def value = (enable == "enable" || enable == "1") ? 0x01 : 0x00
+    def action = (value == 0x01) ? "enabled" : "disabled"
+    logInfo "target distance tracking ${action}"
+    // Write 0x01 to enable or 0x00 to disable attribute 0x0198 (408) for distance tracking
+    sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x0198, DataType.UINT8, value, [mfgCode: 0x115F], 0))
+}
+
 void lumiPreventLeave() {
     logDebug 'lumiPreventLeave(): writing attribute 0x00FC = true'
     sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x00FC, DataType.BOOLEAN, 0x01, [mfgCode: 0x115F], 0))
@@ -1782,6 +1917,18 @@ void updated() {
 
     // restart the healthCheck timer
     runIn( DEFAULT_POLLING_INTERVAL, "deviceHealthCheck", [overwrite: true, misfire: "ignore"])
+    
+    // Child device management for FP300
+    if (!isFP300()) {
+        def children = getChildDevices()
+        if (children.size() > 0) {
+            logWarn "Device is not FP300 but has child devices - cleaning up"
+            deleteChildDevices()
+        }
+    } else {
+        // Ensure child exists for FP300
+        createChildDevices()
+    }
 
     /*
     log.warn "updated(): before: DynamicSettingsMap dynamicCommands = ${DynamicSettingsMap.get(device.id).get('dynamicCommands')}"
@@ -1951,7 +2098,11 @@ void initializeVars(boolean fullInit = false) {
         if (fullInit == true || settings?.aiInterferenceIdentification == null) { device.updateSetting("aiInterferenceIdentification", false) }
         if (fullInit == true || settings?.aiSensitivityAdaptive == null) { device.updateSetting("aiSensitivityAdaptive", false) }
     }
-    if (fullInit == true || settings.tempOffset == null) { device.updateSetting("tempOffset", 0) }
+    if (fullInit == true || settings.internalTempOffset == null) { device.updateSetting("internalTempOffset", 0) }
+    if (isFP300()) {
+        if (fullInit == true || settings.tempOffset == null) { device.updateSetting("tempOffset", 0) }
+        if (fullInit == true || settings.humidityOffset == null) { device.updateSetting("humidityOffset", 0) }
+    }
     if (fullInit == true ) { powerSourceEvent() }
     if (fullInit == true ) { sendEvent(name: "parentNWK", value: "unknown", descriptionText: "parentNWK is unknown", type: "digital") }
     
@@ -1962,6 +2113,11 @@ void installed() {
     log.info "${device.displayName} installed() model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
     sendHealthStatusEvent("unknown")
     aqaraBlackMagic()
+    
+    // Create child devices for FP300 (delayed to ensure parent is fully initialized)
+    if (isFP300()) {
+        runIn(2, 'createChildDevices')
+    }
 }
 
 void configure(boolean fullInit = false) {
@@ -1971,6 +2127,11 @@ void configure(boolean fullInit = false) {
     runIn( DEFAULT_POLLING_INTERVAL, "deviceHealthCheck", [overwrite: true, misfire: "ignore"])
     logWarn "<b>if no more logs, please pair the device again to HE!</b>"
     runIn( 30, "aqaraReadAttributes", [overwrite: true])
+    
+    // Ensure child device exists for FP300
+    if (isFP300()) {
+        runIn(3, 'createChildDevices')
+    }
 }
 
 def initialize() {
