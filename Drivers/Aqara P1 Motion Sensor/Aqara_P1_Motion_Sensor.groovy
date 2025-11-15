@@ -56,11 +56,12 @@
  * ver. 2.0.0 2025-11-15 kkossev  - (dev. branch) Added child device support for FP300 temperature & humidity; removed TemperatureMeasurement and RelativeHumidityMeasurement capabilities from parent driver;
  *                                  FP300 T/H readings now appear in a separate child device using Generic Component Temperature Humidity Sensor; added deviceTemperature attribute for non-FP300 devices internal temperature;
  *                                  added advancedOptions preference toggle; renamed tempOffset to internalTempOffset for non-FP300 devices; added separate tempOffset and humidityOffset for FP300; added experimental trackTargetDistance() command for FP300
+ *                                  INTELLIGENT PARAMETER CHANGE DETECTION - Implemented for FP300 and illuminance reporting - Stores parameters in state.params [n:name, t:type, v:value, l:local] and only sends changed values to prevent device instability
  *                                  
  * 
- *                                 TODO:
  *                                 TODO: add FP300 Detection range (24-bit bitmap for 0.25m zones)
  *                                 TODO: add FP300 LED disable schedule
+ *                                 TODO: add remaining ~10 FP300 advanced calibration parameters
  *                                 TODO: check whether the motionSensitivity for FP300 low/medum/high are not inverted? Could the Z2M implementation be wrong? Put a Zigbee sniffing session to verify.
  *                                 TODO: trackTargetDistance() - use a he raw command w/o defaultResponse flag
  *                                 TODO: update the true aqaraVersion from Xiaomi struct tag:0x0D 
@@ -68,7 +69,7 @@
  */
 
 static String version() { "2.0.0" }
-static String timeStamp() {"2025/11/15 10:56 PM"}
+static String timeStamp() {"2025/11/15 11:58 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -209,7 +210,7 @@ metadata {
                 input (name: "aiSensitivityAdaptive", type: "bool", title: "<b>AI Adaptive Sensitivity</b>", description: "Enable AI adaptive sensitivity", defaultValue: false)
             }
             // Advanced options
-            input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "Show advanced configuration options", defaultValue: false)
+            input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "Show advanced configuration options", defaultValue: false, submitOnChange: true)
             if (advancedOptions == true) {
                 input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "<i>The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b></i>", defaultValue: false)
                 if (internalTemperature == true) {
@@ -585,6 +586,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "010C" : // (268) PIR sensitivity RTCGQ13LM RTCGQ14LM (P1) RTCZCGQ11LM & FP300; TODO: check if applicable for FP1 ? // FP1E 010C_SensorSensitivity (115F): 3 [UNSIGNED_8_BIT_INTEGER]
             device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
             sendEvent(name: "motionSensitivity", value: sensitivityOptions[value.toString()], type: "physical")
+            storeParamValue('motionSensitivity', value.toString(), 'enum', false)  // Store confirmed value (shared by multiple devices)
             logDebug "(0x010C) >received motion sensitivity report: ${sensitivityOptions[value.toString()]} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0112" : // Aqara P1 PIR motion Illuminance
@@ -620,6 +622,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 value = Integer.parseInt(it.value, 16)
                 sendEvent(name: "pirDetectionInterval", value: value, unit: "sec", type: "physical")
                 device.updateSetting("pirDetectionInterval", [value: value.toString(), type: "number"])
+                storeParamValue('pirDetectionInterval', value, 'number', false)  // Store confirmed value
                 logDebug "PIR detection interval: ${value} seconds"
             }
             else {
@@ -671,6 +674,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 sendEvent(name: "aiSensitivityAdaptive", value: value ? "on" : "off", type: "physical")
                 device.updateSetting("aiSensitivityAdaptive", [value: value ? true : false, type: "bool"])
+                storeParamValue('aiSensitivityAdaptive', value ? true : false, 'bool', false)  // Store confirmed value
                 logDebug "AI adaptive sensitivity: ${value ? 'on' : 'off'}"
             }
             else {
@@ -681,6 +685,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 sendEvent(name: "aiInterferenceIdentification", value: value ? "on" : "off", type: "physical")
                 device.updateSetting("aiInterferenceIdentification", [value: value ? true : false, type: "bool"])
+                storeParamValue('aiInterferenceIdentification', value ? true : false, 'bool', false)  // Store confirmed value
                 logDebug "AI interference identification: ${value ? 'on' : 'off'}"
             }
             else {
@@ -853,6 +858,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 value = Integer.parseInt(it.value, 16)
                 sendEvent(name: "absenceDelayTimer", value: value, unit: "sec", type: "physical")
                 device.updateSetting("absenceDelayTimer", [value: value.toString(), type: "number"])
+                storeParamValue('absenceDelayTimer', value, 'number', false)  // Store confirmed value
                 logDebug "FP300 absence delay timer: ${value} seconds"
             }
             else {
@@ -873,6 +879,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 def modes = ["both", "mmwave", "pir"]
                 sendEvent(name: "presenceDetectionMode", value: modes[value] ?: "both", type: "physical")
                 device.updateSetting("presenceDetectionMode", [value: modes[value] ?: "both", type: "enum"])
+                storeParamValue('presenceDetectionMode', modes[value] ?: "both", 'enum', false)  // Store confirmed value
                 logDebug "FP300 presence detection mode: ${modes[value] ?: 'both'}"
             }   
             else {
@@ -1950,11 +1957,12 @@ void updated() {
         }
     }
     if (isRTCGQ13LM() || isP1() || isFP1() || isFP1E() || isFP300()) {
-        if (settings?.motionSensitivity != null && settings?.motionSensitivity != 0) {
+        if (hasParamChanged('motionSensitivity', settings?.motionSensitivity) && settings?.motionSensitivity != 0) {
             value = safeToInt( motionSensitivity )
             if (settings?.logEnable) log.debug "${device.displayName} setting motionSensitivity to ${sensitivityOptions[value.toString()]} (${value})"
             cmds += zigbee.writeAttribute(0xFCC0, 0x010C, 0x20, value, [mfgCode: 0x115F], delay=200)
             cmds += zigbee.readAttribute(0xFCC0, 0x010C, [mfgCode: 0x115F], delay=200)    // read it back
+            // Will be stored after parse() confirmation
             if (isFP1E()) {
                 log.trace "detectionRange = ${settings?.detectionRange}"
                 value = (settings?.detectionRange * 100 as Integer) ?: 600
@@ -1989,32 +1997,62 @@ void updated() {
     }
     //
     if (isFP300()) {
-        if (settings?.presenceDetectionMode != null) {
+        // Physical parameters - only send if changed
+        if (hasParamChanged('presenceDetectionMode', settings?.presenceDetectionMode)) {
             def modeValue = ["both": 0, "mmwave": 1, "pir": 2][settings.presenceDetectionMode] ?: 0
             if (settings?.logEnable) log.debug "${device.displayName} setting presenceDetectionMode to ${settings.presenceDetectionMode} (${modeValue})"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0199, 0x20, modeValue, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
         }
-        if (settings?.absenceDelayTimer != null) {
+        if (hasParamChanged('absenceDelayTimer', settings?.absenceDelayTimer)) {
             if (settings?.logEnable) log.debug "${device.displayName} setting absenceDelayTimer to ${settings.absenceDelayTimer} seconds"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0197, 0x23, settings.absenceDelayTimer as Integer, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
         }
-        if (settings?.pirDetectionInterval != null) {
+        if (hasParamChanged('pirDetectionInterval', settings?.pirDetectionInterval)) {
             if (settings?.logEnable) log.debug "${device.displayName} setting pirDetectionInterval to ${settings.pirDetectionInterval} seconds"
             cmds += zigbee.writeAttribute(0xFCC0, 0x014F, 0x21, settings.pirDetectionInterval as Integer, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
         }
-        if (settings?.aiInterferenceIdentification != null) {
+        if (hasParamChanged('aiInterferenceIdentification', settings?.aiInterferenceIdentification)) {
             if (settings?.logEnable) log.debug "${device.displayName} setting aiInterferenceIdentification to ${settings.aiInterferenceIdentification}"
             cmds += zigbee.writeAttribute(0xFCC0, 0x015E, 0x20, settings.aiInterferenceIdentification ? 1 : 0, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
         }
-        if (settings?.aiSensitivityAdaptive != null) {
+        if (hasParamChanged('aiSensitivityAdaptive', settings?.aiSensitivityAdaptive)) {
             if (settings?.logEnable) log.debug "${device.displayName} setting aiSensitivityAdaptive to ${settings.aiSensitivityAdaptive}"
             cmds += zigbee.writeAttribute(0xFCC0, 0x015D, 0x20, settings.aiSensitivityAdaptive ? 1 : 0, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
         }
+        
+        // Virtual parameters - store immediately (local only, not sent to device)
+        if (hasParamChanged('tempOffset', settings?.tempOffset)) {
+            storeParamValue('tempOffset', settings.tempOffset, 'decimal', true)
+            if (settings?.logEnable) log.debug "${device.displayName} updated virtual parameter tempOffset to ${settings.tempOffset}"
+        }
+        if (hasParamChanged('humidityOffset', settings?.humidityOffset)) {
+            storeParamValue('humidityOffset', settings.humidityOffset, 'decimal', true)
+            if (settings?.logEnable) log.debug "${device.displayName} updated virtual parameter humidityOffset to ${settings.humidityOffset}"
+        }
+        
         // FP300 is battery powered - do not delete battery state
     }
     //
+    // Illuminance reporting configuration - only send if any parameter changed
     if (isLightSensor()) {
-        cmds += configureIlluminance()
+        boolean illumConfigChanged = false
+        illumConfigChanged |= hasParamChanged('illuminanceMinReportingTime', settings?.illuminanceMinReportingTime)
+        illumConfigChanged |= hasParamChanged('illuminanceMaxReportingTime', settings?.illuminanceMaxReportingTime)
+        illumConfigChanged |= hasParamChanged('illuminanceThreshold', settings?.illuminanceThreshold)
+        
+        if (illumConfigChanged) {
+            if (settings?.logEnable) log.debug "${device.displayName} illuminance reporting configuration changed - reconfiguring"
+            cmds += configureIlluminance()
+            // Store immediately (no device confirmation for bind/configure commands)
+            storeParamValue('illuminanceMinReportingTime', settings.illuminanceMinReportingTime, 'number', false)
+            storeParamValue('illuminanceMaxReportingTime', settings.illuminanceMaxReportingTime, 'number', false)
+            storeParamValue('illuminanceThreshold', settings.illuminanceThreshold, 'number', false)
+        }
     }
     if (cmds != null && cmds != []) {
         sendZigbeeCommands( cmds )     
@@ -2065,6 +2103,10 @@ void initializeVars(boolean fullInit = false) {
         setDeviceName()
         state.driverVersion = driverVersionAndTimeStamp()
     }
+    
+    // Initialize parameter storage system
+    initializeParamStorage()
+    
     if (fullInit == true || state.health == null) { state.health = [:] }
     if (fullInit == true || state.rxCounter == null) { state.rxCounter = 0 }
     if (fullInit == true || state.txCounter == null) { state.txCounter = 0 }
@@ -2153,6 +2195,154 @@ void sendZigbeeCommands(List<String> cmds) {
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
 }
 
+// ============================================================================================================
+// PARAMETER STORAGE AND CHANGE DETECTION FUNCTIONS
+// ============================================================================================================
+
+/**
+ * List of virtual (local-only) parameters that are not sent to the device
+ * These are applied during parse() to modify raw values
+ */
+@Field static final List<String> VIRTUAL_PARAMS = [
+    'tempOffset', 
+    'humidityOffset', 
+    'internalTempOffset', 
+    'illuminanceOffset'
+]
+
+/**
+ * Check if a parameter is virtual (local-only, not sent to device)
+ * @param paramName The parameter name to check
+ * @return true if parameter is virtual/local-only
+ */
+Boolean isVirtualParam(String paramName) {
+    return paramName in VIRTUAL_PARAMS
+}
+
+/**
+ * Store a parameter value in state for change detection
+ * @param paramName The parameter name (matches settings.xxx)
+ * @param value The current value to store
+ * @param type The data type ('number', 'decimal', 'enum', 'bool')
+ * @param isLocal True if this is a local-only parameter
+ */
+void storeParamValue(String paramName, Object value, String type, Boolean isLocal = false) {
+    if (state.params == null) {
+        state.params = []
+    }
+    
+    def existing = state.params.find { it.n == paramName }
+    
+    // Check if value actually changed before storing/logging (debounce duplicate device responses)
+    if (existing?.v == value && existing?.t == type && existing?.l == isLocal) {
+        // Value unchanged - skip storage and logging to avoid duplicate responses
+        return
+    }
+    
+    // Remove existing entry if present
+    state.params.removeAll { it.n == paramName }
+    
+    // Add new entry
+    state.params << [n: paramName, t: type, v: value, l: isLocal]
+    
+    if (logEnable) {
+        log.debug "${device.displayName} stored parameter: ${paramName} = ${value} (${type})${isLocal ? ' [local]' : ''}"
+    }
+}
+
+/**
+ * Get stored parameter value for comparison
+ * @param paramName The parameter name to retrieve
+ * @return The stored value, or null if not found
+ */
+Object getStoredParamValue(String paramName) {
+    if (state.params == null) {
+        return null
+    }
+    def param = state.params.find { it.n == paramName }
+    return param?.v
+}
+
+/**
+ * Check if a parameter value has changed from stored value
+ * Handles type conversions and null checks
+ * @param paramName The parameter name to check
+ * @param newValue The new value from settings
+ * @return true if value has changed or is not yet stored
+ */
+Boolean hasParamChanged(String paramName, Object newValue) {
+    def storedValue = getStoredParamValue(paramName)
+    
+    // If not stored yet, consider it changed (first time setup)
+    if (storedValue == null) {
+        return newValue != null
+    }
+    
+    // If new value is null and stored exists, no change
+    if (newValue == null) {
+        return false
+    }
+    
+    // Normalize values for comparison
+    def normalizedNew = normalizeParamValue(newValue)
+    def normalizedStored = normalizeParamValue(storedValue)
+    
+    return normalizedNew != normalizedStored
+}
+
+/**
+ * Normalize parameter values for comparison
+ * Handles type conversions (e.g., "1" vs 1, "true" vs true)
+ * @param value The value to normalize
+ * @return Normalized value for comparison
+ */
+private Object normalizeParamValue(Object value) {
+    if (value == null) return null
+    
+    // Convert string numbers to actual numbers
+    if (value instanceof String) {
+        if (value.isInteger()) {
+            return value.toInteger()
+        }
+        if (value.isDouble()) {
+            return value.toDouble()
+        }
+        if (value.toLowerCase() in ['true', 'false']) {
+            return value.toLowerCase() == 'true'
+        }
+    }
+    
+    return value
+}
+
+/**
+ * Initialize or migrate parameter storage
+ * Called during configure() or driver upgrade
+ */
+void initializeParamStorage() {
+    if (state.params == null) {
+        state.params = []
+        logDebug "Initialized parameter storage"
+    }
+    
+    // Check if driver version changed - may need migration
+    if (state.driverVersion != version()) {
+        logInfo "Driver version changed from ${state.driverVersion} to ${version()}"
+        state.driverVersion = version()
+        // Migration logic can be added here if needed
+    }
+}
+
+/**
+ * Clear all stored parameters (for testing/reset)
+ */
+void clearParamStorage() {
+    state.params = []
+    logInfo "Cleared all stored parameters"
+}
+
+// ============================================================================================================
+
 // device Web UI command
 void setMotion(final String mode) {
     switch (mode) {
@@ -2209,7 +2399,7 @@ void aqaraReadAttributes() {
     }
     else if (isFP300()) {  // Aqara FP300 presence detector 
         //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // Standard battery voltage
-        cmds += zigbee.readAttribute(0xFCC0, [0x0018, 0x014D, 0x014F, 0x015D, 0x015E, 0x0197, 0x0199], [mfgCode: 0x115F], delay=200)
+        cmds += zigbee.readAttribute(0xFCC0, [0x014D, 0x014F, 0x015D, 0x015E, 0x0197, 0x0199], [mfgCode: 0x115F], delay=200)  // Removed 0x0018 (unsupported)
     }
     else if (isLightSensorAqara()) {
         cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x115F], delay=200)
