@@ -33,9 +33,9 @@ definition(
     author: "Krassimir Kossev",
     description: "Synchronizes the main attributes of two thermostats bidirectionally",
     category: "Climate Control",
-    iconUrl: "",
-    iconX2Url: "",
-    iconX3Url: "",
+    //iconUrl: "",
+    //iconX2Url: "",
+    //iconX3Url: "",
     importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Apps/Thermostats%20Sync/Thermostats_Sync.groovy",
     singleInstance: false,
     singleThreaded: true
