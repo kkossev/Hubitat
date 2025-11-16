@@ -37,8 +37,8 @@ definition(
     //iconX2Url: "",
     //iconX3Url: "",
     importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Apps/Thermostats%20Sync/Thermostats_Sync.groovy",
-    singleInstance: false,
-    singleThreaded: true
+    singleInstance: false//,
+    //singleThreaded: true
 )
 
 preferences {
