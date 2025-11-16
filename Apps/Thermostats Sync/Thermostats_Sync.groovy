@@ -1,4 +1,4 @@
-﻿/**
+/**
  *  Thermostats Sync
  *
  *  Description: Synchronizes the main attributes of two thermostats. When an attribute 
@@ -16,16 +16,17 @@
  *
  *  ver. 1.0.0  2025-08-19 kkossev  - Initial version
  *  ver. 1.0.1  2025-10-20 kkossev  - added support for temperature and operating state sync; added importUrl; 
- *  ver. 1.0.2  2025-11-09 kkossev  - (dev. branch) app is singleThreaded; Implemented 2-second global sync flag clearing across all sync methods and fixed sync counter accumulation by clearing both flags AND counters together to prevent "Maximum sync attempts reached" errors with rapid TRVZB device events.
+ *  ver. 1.0.2  2025-11-09 kkossev  - app is singleThreaded; Implemented 2-second global sync flag clearing across all sync methods and fixed sync counter accumulation by clearing both flags AND counters together to prevent "Maximum sync attempts reached" errors with rapid TRVZB device events.
  *                                    added Battery and Health Status sync support;
+ *  ver. 1.0.3  2025-11-09 kkossev  - fixed an accidental UTF-8 with BOM encoding that caused issues with HPM
  * 
  *              TODO:
  *
  */
 
 import groovy.transform.Field
-@Field static final String VERSION = "1.0.2"
-@Field static final String COMPILE_TIME = '2025/11/09 1:23 PM'
+@Field static final String VERSION = "1.0.3"
+@Field static final String COMPILE_TIME = '2025/11/16 9:07 PM'
 
 definition(
     name: "Thermostats Sync",

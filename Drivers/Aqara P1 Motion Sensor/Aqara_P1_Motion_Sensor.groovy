@@ -56,9 +56,11 @@
  * ver. 2.0.0 2025-11-15 kkossev  - (dev. branch) Added child device support for FP300 temperature & humidity; removed TemperatureMeasurement and RelativeHumidityMeasurement capabilities from parent driver;
  *                                  FP300 T/H readings now appear in a separate child device using Generic Component Temperature Humidity Sensor; added deviceTemperature attribute for non-FP300 devices internal temperature;
  *                                  added advancedOptions preference toggle; renamed tempOffset to internalTempOffset for non-FP300 devices; added separate tempOffset and humidityOffset for FP300; added experimental trackTargetDistance() command for FP300
- *                                  INTELLIGENT PARAMETER CHANGE DETECTION - Implemented for FP300 and illuminance reporting - Stores parameters in state.params [n:name, t:type, v:value, l:local] and only sends changed values to prevent device instability
+ *                                  MAJOR CHANGE: INTELLIGENT PARAMETER CHANGE DETECTION - Implemented for FP300 and illuminance reporting - Stores parameters in state.params [n:name, t:type, v:value, l:local] and only sends changed values to prevent device instability
+ * ver. 2.0.1 2025-11-15 kkossev  - (dev. branch) forced sending temperature updates to the child device;
  *                                  
  * 
+ *                                 TODO: add sendInfoMessage 
  *                                 TODO: add FP300 Detection range (24-bit bitmap for 0.25m zones)
  *                                 TODO: add FP300 LED disable schedule
  *                                 TODO: add remaining ~10 FP300 advanced calibration parameters
@@ -68,8 +70,8 @@
  *
  */
 
-static String version() { "2.0.0" }
-static String timeStamp() {"2025/11/15 11:58 PM"}
+static String version() { "2.0.1" }
+static String timeStamp() {"2025/11/16 12:00 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -84,6 +86,8 @@ import com.hubitat.app.DeviceWrapper
 @Field static final Boolean deviceSimulation = false
 @Field static final Boolean _REGIONS = false
 @Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, FP1E, FP300, Aqara/Xiaomi/Mija motion and illuminance sensors'
+@Field static final Integer INFO_AUTO_CLEAR_PERIOD = 60      // automatically clear the Info attribute after 60 seconds
+
 
 // FP1E Spatial Learning (minimal constants)
 @Field static final int CLUSTER_AQARA_FCC0 = 0xFCC0
@@ -106,6 +110,7 @@ metadata {
         // Note: TemperatureMeasurement and RelativeHumidityMeasurement removed from parent - FP300 uses child device
         //capability "SignalStrength"    //lqi - NUMBER; rssi - NUMBER (not supported yet)
         
+        attribute '_status_', 'string'
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute "batteryVoltage", "string"
         attribute "rtt", "number" 
@@ -1536,7 +1541,7 @@ def temperatureEvent( temperature ) {
             map.isStateChange = true
             
             if (settings?.txtEnable) {log.info "${device.displayName} temperature is ${map.value} ${map.unit} (via child device)"}
-            child.parse([[name: map.name, value: map.value, unit: map.unit, type: map.type, descriptionText: "${child.displayName} temperature is ${map.value} ${map.unit}"]])
+            child.parse([[name: map.name, value: map.value, unit: map.unit, type: map.type, descriptionText: "${child.displayName} temperature is ${map.value} ${map.unit}", isStateChange: map.isStateChange]])
         } else {
             log.warn "${device.displayName} FP300 child device not found for temperature event"
         }
@@ -1750,6 +1755,21 @@ void sendRttEvent() {
     logInfo "Round Trip Time is ${timeRunning} (ms)"    
     sendEvent(name: "rtt", value: timeRunning, unit: "ms", type: "digital", descriptionText: "Round Trip Time is ${timeRunning} ms")    
 }
+
+public void clearInfoEvent()      { sendInfoEvent('clear') }
+
+public void sendInfoEvent(String info=null) {
+    if (info == null || info == 'clear') {
+        logDebug 'clearing the Status event'
+        sendEvent(name: '_status_', value: 'clear', type: 'digital')
+    }
+    else {
+        logInfo "${info}"
+        sendEvent(name: '_status_', value: info, type: 'digital')
+        runIn(INFO_AUTO_CLEAR_PERIOD, 'clearInfoEvent')            // automatically clear the Info attribute after 1 minute
+    }
+}
+
 
 private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
     runIn(delay, 'deviceCommandTimeout')
