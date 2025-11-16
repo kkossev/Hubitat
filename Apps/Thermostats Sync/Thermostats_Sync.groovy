@@ -32,7 +32,7 @@ definition(
     namespace: "kkossev",
     author: "Krassimir Kossev",
     description: "Synchronizes the main attributes of two thermostats bidirectionally",
-    category: "Climate Control",
+    category: "Utility",
     //iconUrl: "",
     //iconX2Url: "",
     //iconX3Url: "",
