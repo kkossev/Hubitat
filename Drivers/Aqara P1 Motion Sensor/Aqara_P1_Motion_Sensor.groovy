@@ -53,25 +53,28 @@
  * ver. 1.9.2 2025-11-13 kkossev  - FP300 temperature and humidity parsing; decoding most of the FP300 reports; added restartDevice() command for FP1E/FP300
  * ver. 1.9.3 2025-11-14 kkossev  - fix FP300 illuminance handling and the calculation formula; enabled motionSensitivity for FP300; FP300 fingerprint update; bugfix : no response on ping() command was switching FP300 healthStatus to offline 
  *                                  added battery voltage and percentage events for FP300; enabled advanced options for FP300 illuminance sensor
- * ver. 2.0.0 2025-11-15 kkossev  - (dev. branch) Added child device support for FP300 temperature & humidity; removed TemperatureMeasurement and RelativeHumidityMeasurement capabilities from parent driver;
+ * ver. 2.0.0 2025-11-15 kkossev  - Added child device support for FP300 temperature & humidity; removed TemperatureMeasurement and RelativeHumidityMeasurement capabilities from parent driver;
  *                                  FP300 T/H readings now appear in a separate child device using Generic Component Temperature Humidity Sensor; added deviceTemperature attribute for non-FP300 devices internal temperature;
  *                                  added advancedOptions preference toggle; renamed tempOffset to internalTempOffset for non-FP300 devices; added separate tempOffset and humidityOffset for FP300; added experimental trackTargetDistance() command for FP300
  *                                  MAJOR CHANGE: INTELLIGENT PARAMETER CHANGE DETECTION - Implemented for FP300 and illuminance reporting - Stores parameters in state.params [n:name, t:type, v:value, l:local] and only sends changed values to prevent device instability
- * ver. 2.0.1 2025-11-15 kkossev  - (dev. branch) forced sending temperature updates to the child device;
- *                                  
+ * ver. 2.0.1 2025-11-20 kkossev  - forced sending temperature updates to the child device; improved trackTargetDistance() and startSpatialLearning() commands description; added _info_ messages for better user experience; pirDetection changed to active/inactive
+ *                                  roomActivity attribute filtered for FP1/FP1E only; updates battery attribute for the FP300 child device
  * 
- *                                 TODO: add sendInfoMessage 
+ *                                 TODO: 
+ *                                 TODO: 
+ *                                 TODO: 
+ *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event
+ *                                 TODO: resetPresence() : _info_messages and timeout check 
+ *                                 TODO: scheduleCommandTimeoutCheck() - implementation for FP300 commands
  *                                 TODO: add FP300 Detection range (24-bit bitmap for 0.25m zones)
  *                                 TODO: add FP300 LED disable schedule
  *                                 TODO: add remaining ~10 FP300 advanced calibration parameters
- *                                 TODO: check whether the motionSensitivity for FP300 low/medum/high are not inverted? Could the Z2M implementation be wrong? Put a Zigbee sniffing session to verify.
- *                                 TODO: trackTargetDistance() - use a he raw command w/o defaultResponse flag
  *                                 TODO: update the true aqaraVersion from Xiaomi struct tag:0x0D 
  *
  */
 
 static String version() { "2.0.1" }
-static String timeStamp() {"2025/11/16 12:00 PM"}
+static String timeStamp() {"2025/11/20 7:15 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -140,7 +143,7 @@ metadata {
         
         // FP300-specific attributes
         attribute "presenceDetectionMode", "enum", ["both", "mmwave", "pir"] // FP300
-        attribute "pirDetection", "enum", ["detected", "not_detected"]       // FP300
+        attribute "pirDetection", "enum", ["active", "inactive"]             // FP300 (probably pirDetected is a better name?)
         attribute "absenceDelayTimer", "number"                              // 10-300 seconds FP300
         attribute "pirDetectionInterval", "number"                           // 2-300 seconds FP300
         attribute "aiInterferenceIdentification", "enum", ["on", "off"]      // FP300
@@ -158,8 +161,8 @@ metadata {
         command "ping",      [[name: "Check device online status and measure the Round-Trip Time (ms). May not work for battery-powered devices."]]
         command "resetPresence", [[name: "Reset Presence (FP1/FP1E/FP300)" ]]
         command "restartDevice", [[name: "Restart Device (FP1E/FP300)" ]]
-        command "startSpatialLearning", [[name: "Start Spatial Learning (FP1E/FP300)" ]]
-        command "trackTargetDistance", [[name: "enable", type: "ENUM", constraints: ["enable", "disable"], description: "Enable or disable target distance tracking (FP300)", defaultValue: "disable"]]
+        command "startSpatialLearning", [[name: "Wake the device with one button press.<br> Ensure the room is empty, then click Run to start a 30-second calibration (FP1E/FP300)." ]]
+        command "trackTargetDistance", [[name: "Press the FP300 pairing button once to wake the device, then click Run. <br> The sensor will report the distance to the detected target for about 3 minutes (FP300)."]]
 
         if (_DEBUG) {
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "FCC0"]]
@@ -318,7 +321,7 @@ def isFP1()       { if (deviceSimulation) return false else return (device.getDa
 def isFP1E()      { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.sensor_occupy.agl1'] ) }     // Aqara FP1E Presence sensor
 def isFP300()     { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.sensor_occupy.agl8'] ) }     // Aqara FP300 Presence sensor
 def isT1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl02'] ) }    // Aqara T1 motion sensor
-def isLightSensorXiaomi() { return (device.getDataValue('model') in ['lumi.sen_ill.mgl01'] ) } // Mi Light Detection Sensor;
+def isLightSensorXiaomi() { return (device.getDataValue('model') in ['lumi.sen_ill.mgl01'] ) } // Mi Light Detection Sensor
 def isLightSensorAqara()  { return (device.getDataValue('model') in ['lumi.sen_ill.agl01'] ) } // T1 light intensity sensor
 def isLightSensor() { return (isLightSensorXiaomi() || isLightSensorAqara() || isFP300()) }
 
@@ -378,6 +381,15 @@ void componentRefresh(DeviceWrapper childDevice) {
     logDebug "componentRefresh: ${childDevice.displayName}"
     // Trigger a refresh of the parent device which will update child
     refresh()
+    
+    // Also update child device with current battery level
+    if (isFP300()) {
+        def currentBattery = device.currentValue('battery')
+        if (currentBattery != null) {
+            childDevice.sendEvent(name: "battery", value: currentBattery, unit: "%", type: "digital", descriptionText: "${childDevice.displayName} battery is ${currentBattery}%", isStateChange: false)
+            logDebug "componentRefresh: updated child battery to ${currentBattery}%"
+        }
+    }
 }
 
 void componentOn(DeviceWrapper childDevice) {
@@ -483,7 +495,8 @@ void parse(String description) {
                 if (txtEnable) log.info "${device.displayName} (parse) device model is ${it.value}"
             }
             else if (it.cluster == "0000" && it.attrId == "0005") {    // lumi.sensor_motion.aq2 button is pressed
-                if (txtEnable) log.info "${device.displayName} (parse attr 5) device ${it.value} button was pressed "
+                logDebug "${device.displayName} (parse attr 5) device ${it.value} button was pressed "
+                sendInfoEvent( "Button was pressed. The device will stay awake for 15 minutes" )
             }
             else if (it.cluster == "0001" && it.attrId == "0020") {    // contact sensor
                 if (it.value != "00") {
@@ -575,6 +588,12 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 logWarn "Received unknown device report: cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value} status=${it.status} data=${descMap.data}"
             }
             break
+        case "00E6" : // FP300 unknown report
+            logDebug "<b>Received FP300 unknown report</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "00E8" : // FP300 restart response
+            logWarn "<b>Received FP300 restart response</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
         case "00F7" :   // Aqara FP1E : 00F7_States (115F): {16=1, 18=0, 3=19, 5=1, 101=0, 8=278, 10=56426, 12=20} [STRUCT2]
             decodeAqaraStruct(description)
             break
@@ -615,8 +634,8 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             break
         case "014D" : // FP300 PIR detection state
             if (isFP300()) {
-                sendEvent(name: "pirDetection", value: value ? "detected" : "not_detected", type: "physical")
-                logDebug "PIR detection: ${value ? 'detected' : 'not detected'}"
+                sendEvent(name: "pirDetection", value: value ? "active" : "inactive", type: "physical")
+                logDebug "PIR detection: ${value ? 'active' : 'inactive'}"
             }
             else {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
@@ -710,6 +729,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             value = Integer.parseInt(it.value, 16)
             def status = (value == 1) ? "enabled" : "disabled"
             logDebug "(0x0198) received FP300 track_target_distance status: ${status} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            if (value == 1) {
+                sendInfoEvent("target distance tracking enabled for 5 minutes")
+            }
             if (value == 0 && device.currentValue('targetDistance') != null) {
                 device.deleteCurrentState('targetDistance')
                 logInfo "target distance tracking disabled - attribute removed"
@@ -1316,7 +1338,16 @@ def sendBatteryEvent( roundedPct, isDigital=false ) {
     def descText = "Battery level is ${roundedPct}%"
     descText += isDigital ? safeToInt(roundedPct)==0 ?"forced to ${roundedPct}%" : "restored to ${roundedPct}%" : " "     // TODO !!!
     if (txtEnable) log.info "${device.displayName} ${descText}"
-    sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", descriptionText: descText, isStateChange: true )    
+    sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", descriptionText: descText, isStateChange: true )
+    
+    // Update FP300 child device battery as well (same physical battery)
+    if (isFP300()) {
+        def child = getChildTempHumidityDevice()
+        if (child) {
+            child.parse([[name: "battery", value: roundedPct, unit: "%", type: isDigital == true ? "digital" : "physical", descriptionText: "${child.displayName} battery is ${roundedPct}%", isStateChange: true]])
+            if (logEnable) log.debug "${device.displayName} updated child device battery to ${roundedPct}%"
+        }
+    }
 }
 
 def parseZDOcommand( Map descMap ) {
@@ -1585,6 +1616,10 @@ def roomStateEvent( String status, isDigital=false ) {
 }
                                               
 def presenceTypeEvent( String presenceTypeEvent, isDigital=false ) {
+    if (!(isFP1() || isFP1E())) {
+        logWarn "presenceTypeEvent received for unsupported device ${device.getDataValue('model')}"
+        return
+    }
     if (presenceTypeEvent != null) {
         def type = isDigital == true ? "digital" : "physical"
         sendEvent("name": "roomActivity", "value": presenceTypeEvent, "type": type)       // isStateChange" true removed ver 1.2.0
@@ -1823,16 +1858,24 @@ void restartDevice() {
     sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x00E8, DataType.BOOLEAN, 0x00, [mfgCode: 0x115F], 0))
 }
 
-void trackTargetDistance(String enable = "enable") {
+void trackTargetDistance() {
+    def enable = "enable"
     if (!isFP300()) {
         logWarn 'trackTargetDistance() is supported only for FP300 devices.'
         return
     }
     def value = (enable == "enable" || enable == "1") ? 0x01 : 0x00
     def action = (value == 0x01) ? "enabled" : "disabled"
-    logInfo "target distance tracking ${action}"
+    sendInfoEvent("Requesting target distance tracking")
     // Write 0x01 to enable or 0x00 to disable attribute 0x0198 (408) for distance tracking
     sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x0198, DataType.UINT8, value, [mfgCode: 0x115F], 0))
+}
+
+void deleteTargetDistanceAttribute() {
+    if (device.currentValue('targetDistance') != null) {
+        device.deleteCurrentState('targetDistance')
+        logInfo 'targetDistance attribute deleted after 5 minutes'
+    }
 }
 
 void lumiPreventLeave() {
