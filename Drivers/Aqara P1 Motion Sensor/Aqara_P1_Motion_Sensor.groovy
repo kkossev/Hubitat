@@ -59,8 +59,10 @@
  *                                  MAJOR CHANGE: INTELLIGENT PARAMETER CHANGE DETECTION - Implemented for FP300 and illuminance reporting - Stores parameters in state.params [n:name, t:type, v:value, l:local] and only sends changed values to prevent device instability
  * ver. 2.0.1 2025-11-20 kkossev  - forced sending temperature updates to the child device; improved trackTargetDistance() and startSpatialLearning() commands description; added _info_ messages for better user experience; pirDetection changed to active/inactive
  *                                  roomActivity attribute filtered for FP1/FP1E only; updates battery attribute for the FP300 child device
- * ver. 2.0.2 2025-11-23 kkossev  - (dev.branch) added FP300 advanced sampling configuration parameters (temp/humidity and light sampling frequency/period) with intelligent change detection; added sampling parameters to refresh() command
+ * ver. 2.0.2 2025-11-23 kkossev  - (dev.branch) added FP300 advanced sampling configuration parameters (temp/humidity and light sampling frequency/period) with intelligent change detection; added sampling parameters to refresh() command;
+ *                                  added FP300 detection range zones configuration (0.25m resolution bitmap, attribute 0x019A) with validation and attribute event.
  * 
+ *
  *                                 TODO: 
  *                                 TODO: 
  *                                 TODO: 
@@ -75,7 +77,7 @@
  */
 
 static String version() { "2.0.2" }
-static String timeStamp() {"2025/11/23 7:15 AM"}
+static String timeStamp() {"2025/11/23 11:44 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -149,6 +151,7 @@ metadata {
         attribute "pirDetectionInterval", "number"                           // 2-300 seconds FP300
         attribute "aiInterferenceIdentification", "enum", ["on", "off"]      // FP300
         attribute "aiSensitivityAdaptive", "enum", ["on", "off"]             // FP300
+        attribute "detectionRangeZones", "string"                             // FP300 enabled detection zones
         
         if (_REGIONS) {
             attribute "region_last_enter", "number"
@@ -232,6 +235,9 @@ metadata {
                     input (name: "humidityOffset", type: "decimal", title: "<b>Humidity Offset</b>", description: "<i>Adjust the FP300 humidity reading.</i>", range: "-100..100", defaultValue: 0)
                     input (name: "lightSamplingFrequency", type: "enum", title: "<b>Light Sampling Frequency</b>", description: "<i>Sampling frequency preset (use 'Custom' to enable period setting)</i>", options: ["0":"Off", "1":"Low", "2":"Medium", "3":"High", "4":"Custom"])
                     input (name: "lightSamplingPeriod", type: "number", title: "<b>Light Sampling Period</b>", description: "<i>How often to sample light (1-3600 seconds). Use with 'Custom' frequency.</i>", range: "1..3600")
+                    input (name: "detectionRangeZones", type: "string", title: "<b>Detection Range Zones</b>", description: "<i>Enable detection in specific distance ranges (0.25m resolution).<br>" +
+                           "Format: '0.5-2.0' or '0.25-1.5,3.0-5.0' (comma-separated ranges).<br>" +
+                           "Min: 0.25m, Max: 6.0m. Leave empty to enable all zones (0-6m).</i>")
                 }
                 if (isLightSensor()) {
                     input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "illuminance minimum reporting interval, seconds (4..300)", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
@@ -926,22 +932,70 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             break
         case "019A" : // (410) FP300 Detection range (24-bit bitmap for 0.25m zones)
             if (isFP300()) {
-                // Parse as octet string (buffer/array)
                 def detectionRangeHex = it.value
-                logDebug "FP300 detection range raw data: ${detectionRangeHex}"
-                // First 2 bytes are prefix (typically 0x0300), next 3 bytes are the 24-bit zone bitmap
-                if (detectionRangeHex && detectionRangeHex.length() >= 10) {
-                    def prefix = detectionRangeHex[0..3]
-                    def rangeValue = Integer.parseInt(detectionRangeHex[4..9], 16)
+                
+                if (!detectionRangeHex || detectionRangeHex.isEmpty() || detectionRangeHex == "00") {
+                    logDebug "FP300 detection range: not configured (empty octet string)"
+                    sendEvent(name: "detectionRangeZones", value: "not configured", type: "physical")
+                }
+                else if (detectionRangeHex.length() >= 4) {
+                    logDebug "FP300 detection range raw data: ${detectionRangeHex} (length: ${detectionRangeHex.length()})"
+                    // Parse bitmap in little-endian format
+                    // Raw packet: "0300F10F" means prefix "03 00" + bitmap bytes "F1 0F"
+                    // Hubitat value: "00F10F" (includes last byte of prefix + bitmap bytes)
+                    // We need to extract just the bitmap bytes and parse as little-endian
+                    
+                    def rangeValue = 0
+                    def bitmapHex = detectionRangeHex
+                    
+                    // Check if it starts with "0300" prefix pattern
+                    if (detectionRangeHex.startsWith("0300")) {
+                        // Full format with prefix, skip it
+                        bitmapHex = detectionRangeHex.substring(4)
+                    } else if (detectionRangeHex.startsWith("00")) {
+                        // Partial prefix (last byte), skip first 2 chars
+                        bitmapHex = detectionRangeHex.substring(2)
+                    }
+                    
+                    // Now parse bitmap as little-endian bytes
+                    // "F10F" or "F10F00" -> bytes [0xF1, 0x0F, 0x00] -> 0x000FF1
+                    if (bitmapHex.length() >= 6) {
+                        // 3 bytes
+                        def byte0 = Integer.parseInt(bitmapHex[0..1], 16)
+                        def byte1 = Integer.parseInt(bitmapHex[2..3], 16)
+                        def byte2 = Integer.parseInt(bitmapHex[4..5], 16)
+                        rangeValue = byte0 | (byte1 << 8) | (byte2 << 16)
+                    } else if (bitmapHex.length() >= 4) {
+                        // 2 bytes
+                        def byte0 = Integer.parseInt(bitmapHex[0..1], 16)
+                        def byte1 = Integer.parseInt(bitmapHex[2..3], 16)
+                        rangeValue = byte0 | (byte1 << 8)
+                    } else if (bitmapHex.length() >= 2) {
+                        // 1 byte
+                        rangeValue = Integer.parseInt(bitmapHex[0..1], 16)
+                    }
+                    
+                    logDebug "FP300 detection range bitmap extracted: ${bitmapHex} -> 0x${String.format('%06X', rangeValue)}"
+                    
+                    // Store the bitmap value as hex string
+                    storeParamValue('detectionRangeZones', String.format('%06X', rangeValue), 'string', false)
+                    
                     def zones = []
                     for (int i = 0; i < 24; i++) {
                         if ((rangeValue & (1 << i)) != 0) {
                             def startM = i * 0.25
                             def endM = (i + 1) * 0.25
-                            zones.add("${startM}m-${endM}m")
+                            zones.add("${String.format('%.2f', startM)}-${String.format('%.2f', endM)}m")
                         }
                     }
+                    
+                    // Create human-readable consolidated ranges for display
+                    def rangeStr = consolidateZoneRanges(zones)
+                    sendEvent(name: "detectionRangeZones", value: rangeStr, type: "physical", 
+                             descriptionText: "Detection zones: ${rangeStr}")
+                    
                     logDebug "FP300 detection range zones enabled: ${zones.join(', ')}"
+                    logDebug "FP300 detection range consolidated: ${rangeStr}"
                 }
             }
             else {
@@ -1911,6 +1965,7 @@ void refresh() {
     else if (isFP300()) {
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x014D, 0x014F, 0x0197, 0x0199, 0x015D, 0x015E], [mfgCode: 0x115F], delay=200)  // FP300 attributes
         cmds += zigbee.readAttribute(0xFCC0, [0x0162, 0x0170, 0x0192, 0x0193], [mfgCode: 0x115F], delay=200)  // FP300 sampling configuration
+        cmds += zigbee.readAttribute(0xFCC0, 0x019A, [mfgCode: 0x115F], delay=200)  // FP300 detection range (separate read)
         cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)  // Temperature
         cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)  // Humidity
         cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=200)  // Illuminance
@@ -2134,6 +2189,36 @@ void updated() {
             if (settings?.logEnable) log.debug "${device.displayName} setting lightSamplingFrequency to ${['Off','Low','Medium','High','Custom'][freqValue]}"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0192, 0x20, freqValue, [mfgCode: 0x115F], delay=200)
             // Will be stored after parse() confirmation
+        }
+        
+        // Advanced detection range configuration
+        if (hasParamChanged('detectionRangeZones', settings?.detectionRangeZones)) {
+            def parseResult = parseDetectionRangeZones(settings?.detectionRangeZones ?: "")
+            
+            // Log any validation errors/warnings
+            if (parseResult.errors) {
+                parseResult.errors.each { err ->
+                    if (err.startsWith("WARNING") || err.startsWith("CRITICAL")) {
+                        logWarn "Detection range: ${err}"
+                    } else {
+                        logInfo "Detection range: ${err}"
+                    }
+                }
+            }
+            
+            if (parseResult.success) {
+                def payload = detectionRangeBitmapToPayload(parseResult.bitmap)
+                if (settings?.logEnable) {
+                    log.debug "${device.displayName} setting detection range zones: ${parseResult.zones.join(', ')}"
+                    log.debug "${device.displayName} detection range bitmap: 0x${String.format('%06X', parseResult.bitmap)}"
+                    log.debug "${device.displayName} detection range payload: ${payload}"
+                }
+                
+                cmds += zigbee.writeAttribute(0xFCC0, 0x019A, 0x41, payload, [mfgCode: 0x115F], delay=200)
+                // Will be stored after parse() confirmation
+            } else {
+                logError "Failed to configure detection range: ${parseResult.errors.join('; ')}"
+            }
         }
         
         // FP300 is battery powered - do not delete battery state
@@ -2440,6 +2525,161 @@ void initializeParamStorage() {
 void clearParamStorage() {
     state.params = []
     logInfo "Cleared all stored parameters"
+}
+
+/**
+ * Parse and validate detection range zone input
+ * @param input User input string (e.g., "0.5-2.0" or "0.25-1.5,3.0-5.0")
+ * @return Map with [success: boolean, bitmap: Integer, zones: List, errors: List]
+ */
+Map parseDetectionRangeZones(String input) {
+    def result = [success: true, bitmap: 0, zones: [], errors: []]
+    
+    // Empty input = all zones enabled (safest default)
+    if (!input || input.trim().isEmpty()) {
+        result.bitmap = 0xFFFFFF  // All 24 bits set
+        result.zones = ["0.00-6.00m (all zones)"]
+        return result
+    }
+    
+    // Parse comma-separated ranges
+    def ranges = input.split(',').collect { it.trim() }
+    def enabledBits = [] as Set
+    
+    ranges.each { range ->
+        // Parse "start-end" format
+        def parts = range.split('-')
+        if (parts.size() != 2) {
+            result.errors << "Invalid format '${range}' (expected 'start-end')"
+            return
+        }
+        
+        try {
+            def startM = parts[0].trim() as BigDecimal
+            def endM = parts[1].trim() as BigDecimal
+            
+            // Validation: Range limits
+            if (startM < 0 || startM > 6.0) {
+                result.errors << "Start ${startM}m out of range (0.00-6.00m)"
+                startM = Math.max(0, Math.min(6.0, startM))  // Auto-correct
+                result.errors << "Auto-corrected to ${startM}m"
+            }
+            if (endM < 0 || endM > 6.0) {
+                result.errors << "End ${endM}m out of range (0.00-6.00m)"
+                endM = Math.max(0, Math.min(6.0, endM))  // Auto-correct
+                result.errors << "Auto-corrected to ${endM}m"
+            }
+            
+            // Validation: Start must be less than end
+            if (startM >= endM) {
+                result.errors << "Invalid range ${startM}m-${endM}m (start >= end)"
+                // Auto-correct: swap them
+                def temp = startM
+                startM = endM
+                endM = temp
+                result.errors << "Auto-corrected to ${startM}m-${endM}m"
+            }
+            
+            // Convert to zone indices (0.25m resolution)
+            // Zone 0 = 0.00-0.25m, Zone 1 = 0.25-0.50m, etc.
+            def startZone = (int)(startM / 0.25)
+            def endZone = (int)Math.ceil(endM / 0.25) - 1
+            
+            // Cap at 23 (max zone for 6.0m)
+            startZone = Math.max(0, Math.min(23, startZone))
+            endZone = Math.max(0, Math.min(23, endZone))
+            
+            // Enable all zones in this range
+            for (int i = startZone; i <= endZone; i++) {
+                enabledBits.add(i)
+            }
+            
+            result.zones << "${startM}m-${endM}m (zones ${startZone}-${endZone})"
+            
+        } catch (NumberFormatException e) {
+            result.errors << "Invalid number in '${range}'"
+        }
+    }
+    
+    // Safety check: At least zone 0 must be enabled
+    if (!enabledBits.contains(0)) {
+        result.errors << "WARNING: Zone 0 (0.00-0.25m) disabled - adding for safety"
+        enabledBits.add(0)
+    }
+    
+    // Safety check: At least 4 zones enabled (1 meter minimum)
+    if (enabledBits.size() < 4) {
+        result.errors << "WARNING: Less than 1m enabled - extending to 1m for safety"
+        (0..3).each { enabledBits.add(it) }
+    }
+    
+    // Convert bit set to 24-bit bitmap
+    enabledBits.each { bit ->
+        result.bitmap |= (1 << bit)
+    }
+    
+    // Mark as failed if critical errors
+    if (result.bitmap == 0) {
+        result.success = false
+        result.errors << "CRITICAL: No valid zones enabled"
+    }
+    
+    return result
+}
+
+/**
+ * Convert 24-bit bitmap to Zigbee octet string payload for detection range
+ * @param bitmap 24-bit integer bitmap
+ * @return Hex string for zigbee.writeAttribute payload (with length prefix for OCTET_STRING)
+ */
+String detectionRangeBitmapToPayload(int bitmap) {
+    // OCTET_STRING format: length byte + data bytes
+    // Payload: 0x0003 prefix (2 bytes) + 24-bit bitmap (3 bytes) = 5 bytes total
+    // Result: 05 03 00 XX XX XX (length=5, then 5 data bytes in little-endian)
+    def byte1 = bitmap & 0xFF
+    def byte2 = (bitmap >> 8) & 0xFF
+    def byte3 = (bitmap >> 16) & 0xFF
+    
+    return String.format("050300%02X%02X%02X", byte1, byte2, byte3)
+}
+
+/**
+ * Consolidate consecutive 0.25m zones into readable ranges
+ * @param zones List of individual zone strings (e.g., ["0.00-0.25m", "0.25-0.50m"])
+ * @return Consolidated string (e.g., "0.00-0.50m, 1.00-2.00m")
+ */
+String consolidateZoneRanges(List zones) {
+    if (!zones) return "none"
+    
+    def ranges = []
+    def currentStart = null
+    def currentEnd = null
+    
+    zones.each { zone ->
+        def parts = zone.replace('m', '').split('-')
+        def start = parts[0] as BigDecimal
+        def end = parts[1] as BigDecimal
+        
+        if (currentStart == null) {
+            currentStart = start
+            currentEnd = end
+        } else if (start == currentEnd) {
+            // Consecutive zone - extend range
+            currentEnd = end
+        } else {
+            // Gap - save current range and start new one
+            ranges << "${String.format('%.2f', currentStart)}-${String.format('%.2f', currentEnd)}m"
+            currentStart = start
+            currentEnd = end
+        }
+    }
+    
+    // Add final range
+    if (currentStart != null) {
+        ranges << "${String.format('%.2f', currentStart)}-${String.format('%.2f', currentEnd)}m"
+    }
+    
+    return ranges.join(', ')
 }
 
 // ============================================================================================================
