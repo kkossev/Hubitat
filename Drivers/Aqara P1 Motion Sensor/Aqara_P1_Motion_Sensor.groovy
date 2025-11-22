@@ -59,6 +59,7 @@
  *                                  MAJOR CHANGE: INTELLIGENT PARAMETER CHANGE DETECTION - Implemented for FP300 and illuminance reporting - Stores parameters in state.params [n:name, t:type, v:value, l:local] and only sends changed values to prevent device instability
  * ver. 2.0.1 2025-11-20 kkossev  - forced sending temperature updates to the child device; improved trackTargetDistance() and startSpatialLearning() commands description; added _info_ messages for better user experience; pirDetection changed to active/inactive
  *                                  roomActivity attribute filtered for FP1/FP1E only; updates battery attribute for the FP300 child device
+ * ver. 2.0.2 2025-11-23 kkossev  - (dev.branch) added FP300 advanced sampling configuration parameters (temp/humidity and light sampling frequency/period) with intelligent change detection; added sampling parameters to refresh() command
  * 
  *                                 TODO: 
  *                                 TODO: 
@@ -73,8 +74,8 @@
  *
  */
 
-static String version() { "2.0.1" }
-static String timeStamp() {"2025/11/20 7:15 AM"}
+static String version() { "2.0.2" }
+static String timeStamp() {"2025/11/23 7:15 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -225,8 +226,12 @@ metadata {
                     input (name: "internalTempOffset", type: "decimal", title: "<b>Internal Temperature Offset</b>", description: "<i>Select how many degrees to adjust the internal temperature.</i>", range: "-100..100", defaultValue: 0)
                 }
                 if (isFP300()) {
+                    input (name: "tempHumiditySamplingFrequency", type: "enum", title: "<b>Temperature & Humidity Sampling Frequency</b>", description: "<i>Sampling frequency preset (use 'Custom' to enable period setting)</i>", options: ["0":"Off", "1":"Low", "2":"Medium", "3":"High", "4":"Custom"])
+                    input (name: "tempHumiditySamplingPeriod", type: "number", title: "<b>Temperature & Humidity Sampling Period</b>", description: "<i>How often to sample temp/humidity (1-3600 seconds). Use with 'Custom' frequency.</i>", range: "1..3600")
                     input (name: "tempOffset", type: "decimal", title: "<b>Temperature Offset</b>", description: "<i>Adjust the FP300 temperature reading.</i>", range: "-100..100", defaultValue: 0)
                     input (name: "humidityOffset", type: "decimal", title: "<b>Humidity Offset</b>", description: "<i>Adjust the FP300 humidity reading.</i>", range: "-100..100", defaultValue: 0)
+                    input (name: "lightSamplingFrequency", type: "enum", title: "<b>Light Sampling Frequency</b>", description: "<i>Sampling frequency preset (use 'Custom' to enable period setting)</i>", options: ["0":"Off", "1":"Low", "2":"Medium", "3":"High", "4":"Custom"])
+                    input (name: "lightSamplingPeriod", type: "number", title: "<b>Light Sampling Period</b>", description: "<i>How often to sample light (1-3600 seconds). Use with 'Custom' frequency.</i>", range: "1..3600")
                 }
                 if (isLightSensor()) {
                     input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "illuminance minimum reporting interval, seconds (4..300)", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
@@ -761,7 +766,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "0162" : // (354) FP300 Temperature & Humidity sampling period (milliseconds)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
-                logDebug "FP300 temp/humidity sampling period: ${value / 1000.0} seconds"
+                def seconds = value / 1000
+                storeParamValue('tempHumiditySamplingPeriod', seconds as Integer, 'number', false)
+                logDebug "FP300 temp/humidity sampling period: ${seconds} seconds"
             }
             else {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
@@ -827,6 +834,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 def frequencies = ["off", "low", "medium", "high", "custom"]
+                storeParamValue('tempHumiditySamplingFrequency', value.toString(), 'enum', false)
                 logDebug "FP300 temp/humidity sampling frequency: ${frequencies[value] ?: 'unknown'} (${value})"
             }
             else {
@@ -837,6 +845,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 def frequencies = ["off", "low", "medium", "high", "custom"]
+                storeParamValue('lightSamplingFrequency', value.toString(), 'enum', false)
                 logDebug "FP300 light sampling frequency: ${frequencies[value] ?: 'unknown'} (${value})"
             }
             else {
@@ -846,7 +855,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "0193" : // (403) FP300 Light sampling period (milliseconds)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
-                logDebug "FP300 light sampling period: ${value / 1000.0} seconds"
+                def seconds = value / 1000
+                storeParamValue('lightSamplingPeriod', seconds as Integer, 'number', false)
+                logDebug "FP300 light sampling period: ${seconds} seconds"
             }
             else {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
@@ -1899,6 +1910,7 @@ void refresh() {
     }
     else if (isFP300()) {
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x014D, 0x014F, 0x0197, 0x0199, 0x015D, 0x015E], [mfgCode: 0x115F], delay=200)  // FP300 attributes
+        cmds += zigbee.readAttribute(0xFCC0, [0x0162, 0x0170, 0x0192, 0x0193], [mfgCode: 0x115F], delay=200)  // FP300 sampling configuration
         cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)  // Temperature
         cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)  // Humidity
         cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=200)  // Illuminance
@@ -2096,6 +2108,32 @@ void updated() {
         if (hasParamChanged('humidityOffset', settings?.humidityOffset)) {
             storeParamValue('humidityOffset', settings.humidityOffset, 'decimal', true)
             if (settings?.logEnable) log.debug "${device.displayName} updated virtual parameter humidityOffset to ${settings.humidityOffset}"
+        }
+        
+        // Advanced sampling configuration parameters
+        if (hasParamChanged('tempHumiditySamplingPeriod', settings?.tempHumiditySamplingPeriod)) {
+            def valueMs = (settings.tempHumiditySamplingPeriod as Integer) * 1000
+            if (settings?.logEnable) log.debug "${device.displayName} setting tempHumiditySamplingPeriod to ${settings.tempHumiditySamplingPeriod} seconds"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0162, 0x23, valueMs, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('tempHumiditySamplingFrequency', settings?.tempHumiditySamplingFrequency)) {
+            def freqValue = settings.tempHumiditySamplingFrequency as Integer
+            if (settings?.logEnable) log.debug "${device.displayName} setting tempHumiditySamplingFrequency to ${['Off','Low','Medium','High','Custom'][freqValue]}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0170, 0x20, freqValue, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('lightSamplingPeriod', settings?.lightSamplingPeriod)) {
+            def valueMs = (settings.lightSamplingPeriod as Integer) * 1000
+            if (settings?.logEnable) log.debug "${device.displayName} setting lightSamplingPeriod to ${settings.lightSamplingPeriod} seconds"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0193, 0x23, valueMs, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('lightSamplingFrequency', settings?.lightSamplingFrequency)) {
+            def freqValue = settings.lightSamplingFrequency as Integer
+            if (settings?.logEnable) log.debug "${device.displayName} setting lightSamplingFrequency to ${['Off','Low','Medium','High','Custom'][freqValue]}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0192, 0x20, freqValue, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
         }
         
         // FP300 is battery powered - do not delete battery state
