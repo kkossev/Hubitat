@@ -60,7 +60,8 @@
  * ver. 2.0.1 2025-11-20 kkossev  - forced sending temperature updates to the child device; improved trackTargetDistance() and startSpatialLearning() commands description; added _info_ messages for better user experience; pirDetection changed to active/inactive
  *                                  roomActivity attribute filtered for FP1/FP1E only; updates battery attribute for the FP300 child device
  * ver. 2.0.2 2025-11-23 kkossev  - (dev.branch) added FP300 advanced sampling configuration parameters (temp/humidity and light sampling frequency/period) with intelligent change detection; added sampling parameters to refresh() command;
- *                                  added FP300 detection range zones configuration (0.25m resolution bitmap, attribute 0x019A) with validation and attribute event.
+ *                                  added FP300 detection range zones configuration (0.25m resolution bitmap, attribute 0x019A) with validation and attribute event;
+ *                                  added FP300 LED disabled at night and LED night time schedule parameters with full read/write support
  * 
  *
  *                                 TODO: 
@@ -69,15 +70,12 @@
  *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event
  *                                 TODO: resetPresence() : _info_messages and timeout check 
  *                                 TODO: scheduleCommandTimeoutCheck() - implementation for FP300 commands
- *                                 TODO: add FP300 Detection range (24-bit bitmap for 0.25m zones)
- *                                 TODO: add FP300 LED disable schedule
- *                                 TODO: add remaining ~10 FP300 advanced calibration parameters
  *                                 TODO: update the true aqaraVersion from Xiaomi struct tag:0x0D 
  *
  */
 
 static String version() { "2.0.2" }
-static String timeStamp() {"2025/11/23 11:44 PM"}
+static String timeStamp() {"2025/11/23 9:32 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -152,6 +150,8 @@ metadata {
         attribute "aiInterferenceIdentification", "enum", ["on", "off"]      // FP300
         attribute "aiSensitivityAdaptive", "enum", ["on", "off"]             // FP300
         attribute "detectionRangeZones", "string"                             // FP300 enabled detection zones
+        attribute "ledDisabledNight", "enum", ["on", "off"]                  // FP300 LED disabled at night
+        attribute "ledNightTimeSchedule", "string"                            // FP300 LED night time schedule
         
         if (_REGIONS) {
             attribute "region_last_enter", "number"
@@ -224,10 +224,6 @@ metadata {
             // Advanced options
             input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "Show advanced configuration options", defaultValue: false, submitOnChange: true)
             if (advancedOptions == true) {
-                input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "<i>The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b></i>", defaultValue: false)
-                if (internalTemperature == true) {
-                    input (name: "internalTempOffset", type: "decimal", title: "<b>Internal Temperature Offset</b>", description: "<i>Select how many degrees to adjust the internal temperature.</i>", range: "-100..100", defaultValue: 0)
-                }
                 if (isFP300()) {
                     input (name: "tempHumiditySamplingFrequency", type: "enum", title: "<b>Temperature & Humidity Sampling Frequency</b>", description: "<i>Sampling frequency preset (use 'Custom' to enable period setting)</i>", options: ["0":"Off", "1":"Low", "2":"Medium", "3":"High", "4":"Custom"])
                     input (name: "tempHumiditySamplingPeriod", type: "number", title: "<b>Temperature & Humidity Sampling Period</b>", description: "<i>How often to sample temp/humidity (1-3600 seconds). Use with 'Custom' frequency.</i>", range: "1..3600")
@@ -238,12 +234,19 @@ metadata {
                     input (name: "detectionRangeZones", type: "string", title: "<b>Detection Range Zones</b>", description: "<i>Enable detection in specific distance ranges (0.25m resolution).<br>" +
                            "Format: '0.5-2.0' or '0.25-1.5,3.0-5.0' (comma-separated ranges).<br>" +
                            "Min: 0.25m, Max: 6.0m. Leave empty to enable all zones (0-6m).</i>")
+                    input (name: "ledDisabledNight", type: "bool", title: "<b>LED Disabled at Night</b>", description: "<i>Disable LED indicator during nighttime hours</i>", defaultValue: false)
+                    input (name: "ledNightTimeSchedule", type: "string", title: "<b>LED Night Time Schedule</b>", description: "<i>LED disable schedule in 24-hour format (e.g., '21:00-09:00')<br>" +
+                           "Leave empty to use default (21:00-09:00). Only active when 'LED Disabled at Night' is enabled.</i>")
                 }
                 if (isLightSensor()) {
                     input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "illuminance minimum reporting interval, seconds (4..300)", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
                     input (name: "illuminanceMaxReportingTime", type: "number", title: "<b>Maximum time between Illuminance Reports</b>", description: "illuminance maximum reporting interval, seconds (120..10000)", range: "120..10000", defaultValue: DEFAULT_ILLUMINANCE_MAX_TIME)
                     input (name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "illuminance reporting threshold, value (1..255)<br>Bigger values will result in less frequent reporting", range: "1..255", defaultValue: 1)
                     input (name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: 'Illuminance correction coefficient, range (0.1..10.0)', range: '0..10', defaultValue: 1.00)
+                }
+                input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "<i>The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b></i>", defaultValue: false)
+                if (internalTemperature == true) {
+                    input (name: "internalTempOffset", type: "decimal", title: "<b>Internal Temperature Offset</b>", description: "<i>Select how many degrees to adjust the internal temperature.</i>", range: "-100..100", defaultValue: 0)
                 }
             }            
         }
@@ -282,6 +285,7 @@ metadata {
     'PS-S04D': [    // FP300 https://github.com/absent42/fp300/blob/main/fp300.mjs
         // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/lumi.ts#L5020
         // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/lumi.ts
+        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/lumi.ts#L1960-L2034 
         model: "lumi.sensor_occupy.agl8", manufacturer: "aqara", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D",
         capabilities: ["motionSensor":true, "temperatureMeasurement":true, "illuminanceMeasurement":true, "relativeHumidityMeasurement":true, "battery":true, "powerSource":true],
         attributes: ["roomState", "roomActivity", "targetDistance", "detectionRange", "presenceDetectionMode", "pirDetection", "absenceDelayTimer", "pirDetectionInterval", "aiInterferenceIdentification", "aiSensitivityAdaptive"],
@@ -1002,16 +1006,32 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
             break
-        case "023E" : // (574) FP300 LED schedule (start/end time)
+        case "0203":  // (515) LED disabled at night (boolean) - CORRECTED from 0x0143
             if (isFP300()) {
-                value = Integer.parseInt(it.value, 16)
-                def startHour = value & 0xFF
-                def startMin = (value >>> 8) & 0xFF
-                def endHour = (value >>> 16) & 0xFF
-                def endMin = (value >>> 24) & 0xFF
-                def startTime = String.format("%02d:%02d", startHour, startMin)
-                def endTime = String.format("%02d:%02d", endHour, endMin)
-                logDebug "FP300 LED disable schedule: ${startTime} - ${endTime}"
+                def ledState = value ? "on" : "off"
+                logDebug "FP300 LED disabled at night: ${ledState} (value=${value})"
+                sendEvent(name: "ledDisabledNight", value: ledState, type: "physical")
+                device.updateSetting("ledDisabledNight", [value: value ? true : false, type: "bool"])
+                storeParamValue('ledDisabledNight', value ? true : false, 'bool', false)
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "023E":  // (574) LED night time schedule (UINT32) - CORRECTED from 0x0159
+            if (isFP300()) {
+                // Parse UINT32 format: 0xMMHHmmhh (little-endian: endMin|endHour|startMin|startHour)
+                long scheduleValue = Long.parseLong(it.value, 16)
+                def startHour = scheduleValue & 0xFF
+                def startMin = (scheduleValue >> 8) & 0xFF
+                def endHour = (scheduleValue >> 16) & 0xFF
+                def endMin = (scheduleValue >> 24) & 0xFF
+                
+                def scheduleStr = String.format("%02d:%02d-%02d:%02d", startHour, startMin, endHour, endMin)
+                logDebug "FP300 LED night time schedule: ${scheduleStr} (raw: 0x${it.value})"
+                sendEvent(name: "ledNightTimeSchedule", value: scheduleStr, type: "physical")
+                device.updateSetting("ledNightTimeSchedule", [value: scheduleStr, type: "string"])
+                storeParamValue('ledNightTimeSchedule', scheduleStr, 'string', false)
             }
             else {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
@@ -1966,6 +1986,7 @@ void refresh() {
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x014D, 0x014F, 0x0197, 0x0199, 0x015D, 0x015E], [mfgCode: 0x115F], delay=200)  // FP300 attributes
         cmds += zigbee.readAttribute(0xFCC0, [0x0162, 0x0170, 0x0192, 0x0193], [mfgCode: 0x115F], delay=200)  // FP300 sampling configuration
         cmds += zigbee.readAttribute(0xFCC0, 0x019A, [mfgCode: 0x115F], delay=200)  // FP300 detection range (separate read)
+        cmds += zigbee.readAttribute(0xFCC0, [0x0203, 0x023E], [mfgCode: 0x115F], delay=200)  // FP300 LED disabled night (0x0203) & schedule (0x023E)
         cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)  // Temperature
         cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)  // Humidity
         cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=200)  // Illuminance
@@ -2218,6 +2239,27 @@ void updated() {
                 // Will be stored after parse() confirmation
             } else {
                 logError "Failed to configure detection range: ${parseResult.errors.join('; ')}"
+            }
+        }
+        
+        // LED disabled at night (attribute 0x0203, BOOLEAN)
+        if (hasParamChanged('ledDisabledNight', settings?.ledDisabledNight)) {
+            if (settings?.logEnable) log.debug "${device.displayName} setting ledDisabledNight to ${settings.ledDisabledNight}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0203, 0x10, settings.ledDisabledNight ? 1 : 0, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        
+        // LED night time schedule (attribute 0x023E, UINT32) - send when schedule changes OR when LED disabled night is enabled for first time
+        def scheduleValue = settings?.ledNightTimeSchedule ?: "21:00-09:00"
+        if (hasParamChanged('ledNightTimeSchedule', scheduleValue) || 
+            (settings?.ledDisabledNight == true && hasParamChanged('ledDisabledNight', settings?.ledDisabledNight))) {
+            def schedulePayload = ledNightTimeToPayload(scheduleValue)
+            if (schedulePayload != null) {
+                if (settings?.logEnable) log.debug "${device.displayName} setting ledNightTimeSchedule to ${scheduleValue} (payload: 0x${String.format('%08X', schedulePayload)})"
+                cmds += zigbee.writeAttribute(0xFCC0, 0x023E, 0x23, schedulePayload.intValue(), [mfgCode: 0x115F], delay=200)
+                // Will be stored after parse() confirmation
+            } else {
+                logWarn "Failed to set LED night time schedule: invalid format '${scheduleValue}'"
             }
         }
         
@@ -2641,6 +2683,58 @@ String detectionRangeBitmapToPayload(int bitmap) {
     def byte3 = (bitmap >> 16) & 0xFF
     
     return String.format("050300%02X%02X%02X", byte1, byte2, byte3)
+}
+
+/**
+ * Parse LED night time string to UINT32 value for Z2M-compatible format
+ * @param timeRange String in format "HH:MM-HH:MM" (e.g., "21:00-09:00")
+ * @return Long value in little-endian format 0xMMHHmmhh (endMin|endHour|startMin|startHour) or null if invalid
+ */
+Long ledNightTimeToPayload(String timeRange) {
+    // Default schedule if empty
+    if (!timeRange || timeRange.trim().isEmpty()) {
+        timeRange = "21:00-09:00"
+    }
+    
+    // Parse "HH:MM-HH:MM" format
+    def parts = timeRange?.trim()?.split('-')
+    if (!parts || parts.size() != 2) {
+        logWarn "Invalid LED night time format: ${timeRange} (expected 'HH:MM-HH:MM')"
+        return null
+    }
+    
+    try {
+        def start = parts[0].trim().split(':')
+        def end = parts[1].trim().split(':')
+        
+        if (start.size() != 2 || end.size() != 2) {
+            logWarn "Invalid time format in: ${timeRange}"
+            return null
+        }
+        
+        def startHour = start[0] as int
+        def startMin = start[1] as int
+        def endHour = end[0] as int
+        def endMin = end[1] as int
+        
+        // Validate ranges
+        if (startHour < 0 || startHour > 23 || endHour < 0 || endHour > 23) {
+            logWarn "Hour out of range (0-23) in: ${timeRange}"
+            return null
+        }
+        if (startMin < 0 || startMin > 59 || endMin < 0 || endMin > 59) {
+            logWarn "Minute out of range (0-59) in: ${timeRange}"
+            return null
+        }
+        
+        // UINT32 format (little-endian): 0xMMHHmmhh = (endMin << 24) | (endHour << 16) | (startMin << 8) | startHour
+        // Example: "21:00-09:00" = 0x00091500 = startHour=0x15(21), startMin=0x00, endHour=0x09, endMin=0x00
+        long value = (long)startHour | ((long)startMin << 8) | ((long)endHour << 16) | ((long)endMin << 24)
+        return value
+    } catch (Exception e) {
+        logWarn "Failed to parse LED night time '${timeRange}': ${e.message}"
+        return null
+    }
 }
 
 /**
