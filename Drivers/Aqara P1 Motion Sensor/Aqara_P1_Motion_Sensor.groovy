@@ -59,7 +59,7 @@
  *                                  MAJOR CHANGE: INTELLIGENT PARAMETER CHANGE DETECTION - Implemented for FP300 and illuminance reporting - Stores parameters in state.params [n:name, t:type, v:value, l:local] and only sends changed values to prevent device instability
  * ver. 2.0.1 2025-11-20 kkossev  - forced sending temperature updates to the child device; improved trackTargetDistance() and startSpatialLearning() commands description; added _info_ messages for better user experience; pirDetection changed to active/inactive
  *                                  roomActivity attribute filtered for FP1/FP1E only; updates battery attribute for the FP300 child device
- * ver. 2.0.2 2025-11-23 kkossev  - (dev.branch) added FP300 advanced sampling configuration parameters (temp/humidity and light sampling frequency/period) with intelligent change detection; added sampling parameters to refresh() command;
+ * ver. 2.1.0 2025-11-23 kkossev  - (dev.branch) added FP300 advanced sampling configuration parameters (temp/humidity and light sampling frequency/period) with intelligent change detection; added sampling parameters to refresh() command;
  *                                  added FP300 detection range zones configuration (0.25m resolution bitmap, attribute 0x019A) with validation and attribute event;
  *                                  added FP300 LED disabled at night and LED night time schedule parameters with full read/write support
  * 
@@ -74,8 +74,8 @@
  *
  */
 
-static String version() { "2.0.2" }
-static String timeStamp() {"2025/11/23 9:32 AM"}
+static String version() { "2.1.0" }
+static String timeStamp() {"2025/11/23 10:50 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -117,8 +117,7 @@ metadata {
         attribute '_status_', 'string'
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute "batteryVoltage", "string"
-        attribute "rtt", "number" 
-        attribute "parentNWK", "string"
+        attribute "rtt", "number"
         attribute "roomState", "enum", [
             "unoccupied",
             "occupied"
@@ -167,6 +166,7 @@ metadata {
         command "restartDevice", [[name: "Restart Device (FP1E/FP300)" ]]
         command "startSpatialLearning", [[name: "Wake the device with one button press.<br> Ensure the room is empty, then click Run to start a 30-second calibration (FP1E/FP300)." ]]
         command "trackTargetDistance", [[name: "Press the FP300 pairing button once to wake the device, then click Run. <br> The sensor will report the distance to the detected target for about 3 minutes (FP300)."]]
+        command "refresh", [[name: "Refreshes all parameters and states from the device.<br>Make sure to wake up the device to receive all updates.<br>Do not use frequently on battery-powered devices."]]
 
         if (_DEBUG) {
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "FCC0"]]
@@ -220,33 +220,42 @@ metadata {
                 input (name: "pirDetectionInterval", type: "number", title: "<b>PIR Detection Interval</b>", description: "PIR detection frequency (2-300 seconds)", range: "2..300", defaultValue: 30)
                 input (name: "aiInterferenceIdentification", type: "bool", title: "<b>AI Interference Identification</b>", description: "Enable AI to identify interference sources", defaultValue: false)
                 input (name: "aiSensitivityAdaptive", type: "bool", title: "<b>AI Adaptive Sensitivity</b>", description: "Enable AI adaptive sensitivity", defaultValue: false)
+                input (name: "detectionRangeZones", type: "string", title: "<b>Detection Range Zones</b>", description: "Enable detection in specific distance ranges (0.25m resolution).<br>" +
+                        "Format: '0.5-2.0' or '0.25-1.5,3.0-5.0' (comma-separated ranges).<br>" +
+                        "Min: 0.25m, Max: 6.0m. Leave empty to enable all zones (0-6m).")
             }
             // Advanced options
-            input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "Show advanced configuration options", defaultValue: false, submitOnChange: true)
+            input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "Show advanced configuration options (refresh page to see options)", defaultValue: false, submitOnChange: true)
             if (advancedOptions == true) {
                 if (isFP300()) {
-                    input (name: "tempHumiditySamplingFrequency", type: "enum", title: "<b>Temperature & Humidity Sampling Frequency</b>", description: "<i>Sampling frequency preset (use 'Custom' to enable period setting)</i>", options: ["0":"Off", "1":"Low", "2":"Medium", "3":"High", "4":"Custom"])
-                    input (name: "tempHumiditySamplingPeriod", type: "number", title: "<b>Temperature & Humidity Sampling Period</b>", description: "<i>How often to sample temp/humidity (1-3600 seconds). Use with 'Custom' frequency.</i>", range: "1..3600")
-                    input (name: "tempOffset", type: "decimal", title: "<b>Temperature Offset</b>", description: "<i>Adjust the FP300 temperature reading.</i>", range: "-100..100", defaultValue: 0)
-                    input (name: "humidityOffset", type: "decimal", title: "<b>Humidity Offset</b>", description: "<i>Adjust the FP300 humidity reading.</i>", range: "-100..100", defaultValue: 0)
-                    input (name: "lightSamplingFrequency", type: "enum", title: "<b>Light Sampling Frequency</b>", description: "<i>Sampling frequency preset (use 'Custom' to enable period setting)</i>", options: ["0":"Off", "1":"Low", "2":"Medium", "3":"High", "4":"Custom"])
-                    input (name: "lightSamplingPeriod", type: "number", title: "<b>Light Sampling Period</b>", description: "<i>How often to sample light (1-3600 seconds). Use with 'Custom' frequency.</i>", range: "1..3600")
-                    input (name: "detectionRangeZones", type: "string", title: "<b>Detection Range Zones</b>", description: "<i>Enable detection in specific distance ranges (0.25m resolution).<br>" +
-                           "Format: '0.5-2.0' or '0.25-1.5,3.0-5.0' (comma-separated ranges).<br>" +
-                           "Min: 0.25m, Max: 6.0m. Leave empty to enable all zones (0-6m).</i>")
-                    input (name: "ledDisabledNight", type: "bool", title: "<b>LED Disabled at Night</b>", description: "<i>Disable LED indicator during nighttime hours</i>", defaultValue: false)
-                    input (name: "ledNightTimeSchedule", type: "string", title: "<b>LED Night Time Schedule</b>", description: "<i>LED disable schedule in 24-hour format (e.g., '21:00-09:00')<br>" +
-                           "Leave empty to use default (21:00-09:00). Only active when 'LED Disabled at Night' is enabled.</i>")
+                    input (name: "tempHumiditySamplingFrequency", type: "enum", title: "<b>Temperature & Humidity Sampling Frequency</b>", description: "Sampling frequency preset (use 'Custom' to enable period setting)", options: ["0":"Off", "1":"Low", "2":"Medium", "3":"High", "4":"Custom"])
+                    input (name: "tempHumiditySamplingPeriod", type: "number", title: "<b>Temperature & Humidity Sampling Period</b>", description: "How often to sample temp/humidity (1-3600 seconds). Use with 'Custom' frequency.", range: "1..3600")
+                    input (name: "temperatureReportingThreshold", type: "decimal", title: "<b>Temperature Reporting Threshold</b>", description: "Minimum temperature change to trigger a report (0.1-10.0°C)", range: "0..10", defaultValue: 1.0)
+                    input (name: "temperatureReportingMode", type: "enum", title: "<b>Temperature Reporting Mode</b>", description: "How temperature changes trigger reports", options: ["1":"Threshold only", "2":"Interval only", "3":"Threshold and Interval"], defaultValue: "3")
+                    input (name: "tempOffset", type: "decimal", title: "<b>Temperature Offset</b>", description: "Adjust the FP300 temperature reading.", range: "-100..100", defaultValue: 0)
+                    input (name: "humidityReportingThreshold", type: "decimal", title: "<b>Humidity Reporting Threshold</b>", description: "Minimum humidity change to trigger a report (%)", range: "1..50", defaultValue: 5.0)
+                    input (name: "humidityReportingMode", type: "enum", title: "<b>Humidity Reporting Mode</b>", description: "How humidity changes trigger reports", options: ["1":"Threshold only", "2":"Interval only", "3":"Threshold and Interval"], defaultValue: "3")
+                    input (name: "humidityOffset", type: "decimal", title: "<b>Humidity Offset</b>", description: "Adjust the FP300 humidity reading.", range: "-100..100", defaultValue: 0)
+                    input (name: "lightSamplingFrequency", type: "enum", title: "<b>Light Sampling Frequency</b>", description: "Sampling frequency preset (use 'Custom' to enable period setting)", options: ["0":"Off", "1":"Low", "2":"Medium", "3":"High", "4":"Custom"])
+                    input (name: "lightReportingMode", type: "enum", title: "<b>Light Reporting Mode</b>", description: "How light changes trigger reports", options: ["0":"No reporting", "1":"Threshold only", "2":"Interval only", "3":"Threshold and Interval"], defaultValue: "3")
+                    input (name: "lightSamplingPeriod", type: "number", title: "<b>Light Sampling Period</b>", description: "How often to sample light (1-3600 seconds). Use with 'Custom' frequency.", range: "1..3600")
+                    input (name: "lightReportingInterval", type: "number", title: "<b>Light Reporting Interval</b>", description: "Minimum interval between light reports (1-600 seconds)", range: "1..600", defaultValue: 3600)
+                    input (name: "lightReportingThreshold", type: "decimal", title: "<b>Light Reporting Threshold</b>", description: "Minimum light change to trigger a report (%)", range: "1..50", defaultValue: 15.0)
+                    input (name: "ledDisabledNight", type: "bool", title: "<b>LED Disabled at Night</b>", description: "Disable LED indicator during nighttime hours", defaultValue: false)
+                    input (name: "ledNightTimeSchedule", type: "string", title: "<b>LED Night Time Schedule</b>", description: "LED disable schedule in 24-hour format (e.g., '21:00-09:00')<br>" +
+                           "Leave empty to use default (21:00-09:00). Only active when 'LED Disabled at Night' is enabled.")
                 }
-                if (isLightSensor()) {
+                if (isLightSensor() && !isFP300()) {
                     input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "illuminance minimum reporting interval, seconds (4..300)", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
                     input (name: "illuminanceMaxReportingTime", type: "number", title: "<b>Maximum time between Illuminance Reports</b>", description: "illuminance maximum reporting interval, seconds (120..10000)", range: "120..10000", defaultValue: DEFAULT_ILLUMINANCE_MAX_TIME)
                     input (name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "illuminance reporting threshold, value (1..255)<br>Bigger values will result in less frequent reporting", range: "1..255", defaultValue: 1)
+                }
+                if (isLightSensor()) {
                     input (name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: 'Illuminance correction coefficient, range (0.1..10.0)', range: '0..10', defaultValue: 1.00)
                 }
-                input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "<i>The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b></i>", defaultValue: false)
+                input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b>", defaultValue: false)
                 if (internalTemperature == true) {
-                    input (name: "internalTempOffset", type: "decimal", title: "<b>Internal Temperature Offset</b>", description: "<i>Select how many degrees to adjust the internal temperature.</i>", range: "-100..100", defaultValue: 0)
+                    input (name: "internalTempOffset", type: "decimal", title: "<b>Internal Temperature Offset</b>", description: "Select how many degrees to adjust the internal temperature.", range: "-100..100", defaultValue: 0)
                 }
             }            
         }
@@ -787,7 +796,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "0163" : // (355) FP300 Temperature reporting interval (milliseconds)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
-                logDebug "FP300 temperature reporting interval: ${value / 1000.0} seconds"
+                logDebug "FP300 temperature reporting interval: ${(value / 1000) as int} seconds"
             }
             else {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
@@ -796,7 +805,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "0164" : // (356) FP300 Temperature reporting threshold (centidegrees)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
-                logDebug "FP300 temperature reporting threshold: ${value / 100.0}°C"
+                def thresholdDegrees = value / 100.0
+                storeParamValue('temperatureReportingThreshold', thresholdDegrees, 'decimal', false)
+                logDebug "FP300 temperature reporting threshold: ${String.format('%.1f', thresholdDegrees)}°C"
             }
             else {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
@@ -805,6 +816,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "0165" : // (357) FP300 Temperature reporting mode
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
+                storeParamValue('temperatureReportingMode', value.toString(), 'enum', false)
                 def modes = ["unknown", "threshold", "reporting interval", "threshold and interval"]
                 logDebug "FP300 temperature reporting mode: ${modes[value] ?: 'unknown'} (${value})"
             }
@@ -815,7 +827,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "016A" : // (362) FP300 Humidity reporting interval (milliseconds)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
-                logDebug "FP300 humidity reporting interval: ${value / 1000.0} seconds"
+                logDebug "FP300 humidity reporting interval: ${(value / 1000) as int} seconds"
             }
             else {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
@@ -824,7 +836,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "016B" : // (363) FP300 Humidity reporting threshold (percentage * 100)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
-                logDebug "FP300 humidity reporting threshold: ${value / 100.0}%"
+                def thresholdPercent = value / 100.0
+                storeParamValue('humidityReportingThreshold', thresholdPercent, 'decimal', false)
+                logDebug "FP300 humidity reporting threshold: ${String.format('%.1f', thresholdPercent)}%"
             }
             else {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
@@ -833,6 +847,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "016C" : // (364) FP300 Humidity reporting mode
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
+                storeParamValue('humidityReportingMode', value.toString(), 'enum', false)
                 def modes = ["unknown", "threshold", "reporting interval", "threshold and interval"]
                 logDebug "FP300 humidity reporting mode: ${modes[value] ?: 'unknown'} (${value})"
             }
@@ -876,7 +891,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "0194" : // (404) FP300 Light reporting interval (milliseconds)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
-                logDebug "FP300 light reporting interval: ${value / 1000.0} seconds"
+                def intervalSeconds = (value / 1000) as int
+                storeParamValue('lightReportingInterval', intervalSeconds, 'number', false)
+                logDebug "FP300 light reporting interval: ${intervalSeconds} seconds"
             }
             else {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
@@ -885,7 +902,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "0195" : // (405) FP300 Light reporting threshold (percentage * 100)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
-                logDebug "FP300 light reporting threshold: ${value / 100.0}%"
+                def thresholdPercent = value / 100.0
+                storeParamValue('lightReportingThreshold', thresholdPercent, 'decimal', false)
+                logDebug "FP300 light reporting threshold: ${String.format('%.1f', thresholdPercent)}%"
             }
             else {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
@@ -894,7 +913,8 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "0196" : // (406) FP300 Light reporting mode
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
-                def modes = ["unknown", "threshold", "reporting interval", "threshold and interval"]
+                storeParamValue('lightReportingMode', value.toString(), 'enum', false)
+                def modes = ["No reporting", "Threshold only", "Interval only", "Threshold and Interval"]
                 logDebug "FP300 light reporting mode: ${modes[value] ?: 'unknown'} (${value})"
             }
             else {
@@ -1226,11 +1246,10 @@ def decodeAqaraStruct( description )
                         String nwk = intToHexStr(rawValue as Integer, 2)
                         if (state.health == null) { state.health = [:] }
                         String oldNWK = state.health['parentNWK'] ?: 'n/a'
-                        if (oldNWK != nwk || device.currentState('parentNWK')?.value != nwk) {
+                        if (oldNWK != nwk) {
                             String descriptionText = "parentNWK changed from ${oldNWK} to ${nwk}"
                             state.health['parentNWK']  = nwk
                             state.health['nwkCtr'] = (state.health['nwkCtr'] ?: 0) + 1
-                            sendEvent(name: "parentNWK", value: nwk, descriptionText: descriptionText, type: "digital")
                             logWarn "${descriptionText}"
                         }
                         break
@@ -1985,6 +2004,9 @@ void refresh() {
     else if (isFP300()) {
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x014D, 0x014F, 0x0197, 0x0199, 0x015D, 0x015E], [mfgCode: 0x115F], delay=200)  // FP300 attributes
         cmds += zigbee.readAttribute(0xFCC0, [0x0162, 0x0170, 0x0192, 0x0193], [mfgCode: 0x115F], delay=200)  // FP300 sampling configuration
+        cmds += zigbee.readAttribute(0xFCC0, [0x0163, 0x0164, 0x0165], [mfgCode: 0x115F], delay=200)  // FP300 temperature reporting config
+        cmds += zigbee.readAttribute(0xFCC0, [0x016A, 0x016B, 0x016C], [mfgCode: 0x115F], delay=200)  // FP300 humidity reporting config
+        cmds += zigbee.readAttribute(0xFCC0, [0x0194, 0x0195, 0x0196], [mfgCode: 0x115F], delay=200)  // FP300 light reporting config
         cmds += zigbee.readAttribute(0xFCC0, 0x019A, [mfgCode: 0x115F], delay=200)  // FP300 detection range (separate read)
         cmds += zigbee.readAttribute(0xFCC0, [0x0203, 0x023E], [mfgCode: 0x115F], delay=200)  // FP300 LED disabled night (0x0203) & schedule (0x023E)
         cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)  // Temperature
@@ -2039,6 +2061,11 @@ void checkDriverVersion() {
         if(device.getDataValue('aqaraModel') == null) {
             setDeviceName()
         }
+        // Remove obsolete attributes for FP300
+        if (isFP300()) {
+            if (device.currentValue('parentNWK') != null) { device.deleteCurrentState('parentNWK'); logInfo "Removed obsolete parentNWK attribute" }
+            if (device.currentValue('roomActivity') != null) { device.deleteCurrentState('roomActivity'); logInfo "Removed obsolete roomActivity attribute" }
+        }
         state.driverVersion = driverVersionAndTimeStamp()
     }
 }
@@ -2088,17 +2115,6 @@ void updated() {
         createChildDevices()
     }
 
-    /*
-    log.warn "updated(): before: DynamicSettingsMap dynamicCommands = ${DynamicSettingsMap.get(device.id).get('dynamicCommands')}"
-    if (settings?.testCommands == true) {
-        DynamicSettingsMap.get(device.id).put('dynamicCommands', 'true')
-    }
-    else {
-        DynamicSettingsMap.get(device.id).put('dynamicCommands', 'false')
-    }
-    log.warn "updated(): after: DynamicSettingsMap dynamicCommands = ${DynamicSettingsMap.get(device.id).get('dynamicCommands')}"
-   */
-    
     def value = 0
     if (isP1()) {
         if (settings?.motionLED != null ) {
@@ -2199,6 +2215,32 @@ void updated() {
             cmds += zigbee.writeAttribute(0xFCC0, 0x0170, 0x20, freqValue, [mfgCode: 0x115F], delay=200)
             // Will be stored after parse() confirmation
         }
+        if (hasParamChanged('temperatureReportingThreshold', settings?.temperatureReportingThreshold)) {
+            def valueCentiDegrees = ((settings.temperatureReportingThreshold as BigDecimal) * 100) as Integer
+            if (settings?.logEnable) log.debug "${device.displayName} setting temperatureReportingThreshold to ${settings.temperatureReportingThreshold}°C"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0164, 0x21, valueCentiDegrees, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('temperatureReportingMode', settings?.temperatureReportingMode)) {
+            def modeValue = settings.temperatureReportingMode as Integer
+            def modeNames = ["unknown", "Threshold only", "Interval only", "Threshold and Interval"]
+            if (settings?.logEnable) log.debug "${device.displayName} setting temperatureReportingMode to ${modeNames[modeValue]}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0165, 0x20, modeValue, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('humidityReportingThreshold', settings?.humidityReportingThreshold)) {
+            def valueHundredths = ((settings.humidityReportingThreshold as BigDecimal) * 100) as Integer
+            if (settings?.logEnable) log.debug "${device.displayName} setting humidityReportingThreshold to ${settings.humidityReportingThreshold}%"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x016B, 0x21, valueHundredths, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('humidityReportingMode', settings?.humidityReportingMode)) {
+            def modeValue = settings.humidityReportingMode as Integer
+            def modeNames = ["unknown", "Threshold only", "Interval only", "Threshold and Interval"]
+            if (settings?.logEnable) log.debug "${device.displayName} setting humidityReportingMode to ${modeNames[modeValue]}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x016C, 0x20, modeValue, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
         if (hasParamChanged('lightSamplingPeriod', settings?.lightSamplingPeriod)) {
             def valueMs = (settings.lightSamplingPeriod as Integer) * 1000
             if (settings?.logEnable) log.debug "${device.displayName} setting lightSamplingPeriod to ${settings.lightSamplingPeriod} seconds"
@@ -2211,11 +2253,32 @@ void updated() {
             cmds += zigbee.writeAttribute(0xFCC0, 0x0192, 0x20, freqValue, [mfgCode: 0x115F], delay=200)
             // Will be stored after parse() confirmation
         }
+        if (hasParamChanged('lightReportingInterval', settings?.lightReportingInterval)) {
+            def valueMs = (settings.lightReportingInterval as Integer) * 1000
+            if (settings?.logEnable) log.debug "${device.displayName} setting lightReportingInterval to ${settings.lightReportingInterval} seconds"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0194, 0x23, valueMs, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('lightReportingThreshold', settings?.lightReportingThreshold)) {
+            def valueHundredths = ((settings.lightReportingThreshold as BigDecimal) * 100) as Integer
+            if (settings?.logEnable) log.debug "${device.displayName} setting lightReportingThreshold to ${settings.lightReportingThreshold}%"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0195, 0x21, valueHundredths, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('lightReportingMode', settings?.lightReportingMode)) {
+            def modeValue = settings.lightReportingMode as Integer
+            def modeNames = ["No reporting", "Threshold only", "Interval only", "Threshold and Interval"]
+            if (settings?.logEnable) log.debug "${device.displayName} setting lightReportingMode to ${modeNames[modeValue]}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0196, 0x20, modeValue, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
         
         // Advanced detection range configuration
-        if (hasParamChanged('detectionRangeZones', settings?.detectionRangeZones)) {
-            def parseResult = parseDetectionRangeZones(settings?.detectionRangeZones ?: "")
-            
+        // Parse the setting to get the bitmap, then compare with stored hex value
+        def parseResult = parseDetectionRangeZones(settings?.detectionRangeZones ?: "")
+        def newBitmapHex = parseResult.success ? String.format('%06X', parseResult.bitmap) : null
+        
+        if (newBitmapHex && hasParamChanged('detectionRangeZones', newBitmapHex)) {
             // Log any validation errors/warnings
             if (parseResult.errors) {
                 parseResult.errors.each { err ->
@@ -2227,19 +2290,17 @@ void updated() {
                 }
             }
             
-            if (parseResult.success) {
-                def payload = detectionRangeBitmapToPayload(parseResult.bitmap)
-                if (settings?.logEnable) {
-                    log.debug "${device.displayName} setting detection range zones: ${parseResult.zones.join(', ')}"
-                    log.debug "${device.displayName} detection range bitmap: 0x${String.format('%06X', parseResult.bitmap)}"
-                    log.debug "${device.displayName} detection range payload: ${payload}"
-                }
-                
-                cmds += zigbee.writeAttribute(0xFCC0, 0x019A, 0x41, payload, [mfgCode: 0x115F], delay=200)
-                // Will be stored after parse() confirmation
-            } else {
-                logError "Failed to configure detection range: ${parseResult.errors.join('; ')}"
+            def payload = detectionRangeBitmapToPayload(parseResult.bitmap)
+            if (settings?.logEnable) {
+                log.debug "${device.displayName} setting detection range zones: ${parseResult.zones.join(', ')}"
+                log.debug "${device.displayName} detection range bitmap: 0x${newBitmapHex}"
+                log.debug "${device.displayName} detection range payload: ${payload}"
             }
+            
+            cmds += zigbee.writeAttribute(0xFCC0, 0x019A, 0x41, payload, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        } else if (parseResult.errors && !parseResult.success) {
+            logError "Failed to configure detection range: ${parseResult.errors.join('; ')}"
         }
         
         // LED disabled at night (attribute 0x0203, BOOLEAN)
@@ -2286,7 +2347,7 @@ void updated() {
         sendZigbeeCommands( cmds )     
     }
     else {
-        logDebug "no preferences configuration commands to send!"
+        logInfo "no preferences were changed that require configuration commands to be sent."
     }
 }    
 
@@ -2374,7 +2435,6 @@ void initializeVars(boolean fullInit = false) {
         if (fullInit == true || settings.humidityOffset == null) { device.updateSetting("humidityOffset", 0) }
     }
     if (fullInit == true ) { powerSourceEvent() }
-    if (fullInit == true ) { sendEvent(name: "parentNWK", value: "unknown", descriptionText: "parentNWK is unknown", type: "digital") }
     
     updateAqaraVersion()
 }
@@ -2641,18 +2701,6 @@ Map parseDetectionRangeZones(String input) {
         } catch (NumberFormatException e) {
             result.errors << "Invalid number in '${range}'"
         }
-    }
-    
-    // Safety check: At least zone 0 must be enabled
-    if (!enabledBits.contains(0)) {
-        result.errors << "WARNING: Zone 0 (0.00-0.25m) disabled - adding for safety"
-        enabledBits.add(0)
-    }
-    
-    // Safety check: At least 4 zones enabled (1 meter minimum)
-    if (enabledBits.size() < 4) {
-        result.errors << "WARNING: Less than 1m enabled - extending to 1m for safety"
-        (0..3).each { enabledBits.add(it) }
     }
     
     // Convert bit set to 24-bit bitmap
