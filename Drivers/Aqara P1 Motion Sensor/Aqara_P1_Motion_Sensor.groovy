@@ -75,7 +75,7 @@
  */
 
 static String version() { "2.1.0" }
-static String timeStamp() {"2025/11/23 10:50 AM"}
+static String timeStamp() {"2025/11/23 4:27 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -229,12 +229,14 @@ metadata {
             if (advancedOptions == true) {
                 if (isFP300()) {
                     input (name: "tempHumiditySamplingFrequency", type: "enum", title: "<b>Temperature & Humidity Sampling Frequency</b>", description: "Sampling frequency preset (use 'Custom' to enable period setting)", options: ["0":"Off", "1":"Low", "2":"Medium", "3":"High", "4":"Custom"])
+                    input (name: "temperatureReportingMode", type: "enum", title: "<b>Temperature Reporting Mode</b>", description: "How temperature changes trigger reports", options: ["1":"Threshold only", "2":"Interval only", "3":"Threshold and Interval"], defaultValue: "3")
                     input (name: "tempHumiditySamplingPeriod", type: "number", title: "<b>Temperature & Humidity Sampling Period</b>", description: "How often to sample temp/humidity (1-3600 seconds). Use with 'Custom' frequency.", range: "1..3600")
                     input (name: "temperatureReportingThreshold", type: "decimal", title: "<b>Temperature Reporting Threshold</b>", description: "Minimum temperature change to trigger a report (0.1-10.0°C)", range: "0..10", defaultValue: 1.0)
-                    input (name: "temperatureReportingMode", type: "enum", title: "<b>Temperature Reporting Mode</b>", description: "How temperature changes trigger reports", options: ["1":"Threshold only", "2":"Interval only", "3":"Threshold and Interval"], defaultValue: "3")
+                    input (name: "temperatureReportingInterval", type: "number", title: "<b>Temperature Reporting Interval</b>", description: "Reporting interval for temperature (10-3600 seconds)", range: "10..3600", defaultValue: 600)
                     input (name: "tempOffset", type: "decimal", title: "<b>Temperature Offset</b>", description: "Adjust the FP300 temperature reading.", range: "-100..100", defaultValue: 0)
-                    input (name: "humidityReportingThreshold", type: "decimal", title: "<b>Humidity Reporting Threshold</b>", description: "Minimum humidity change to trigger a report (%)", range: "1..50", defaultValue: 5.0)
                     input (name: "humidityReportingMode", type: "enum", title: "<b>Humidity Reporting Mode</b>", description: "How humidity changes trigger reports", options: ["1":"Threshold only", "2":"Interval only", "3":"Threshold and Interval"], defaultValue: "3")
+                    input (name: "humidityReportingInterval", type: "number", title: "<b>Humidity Reporting Interval</b>", description: "Reporting interval for humidity (10-3600 seconds)", range: "10..3600", defaultValue: 600)
+                    input (name: "humidityReportingThreshold", type: "decimal", title: "<b>Humidity Reporting Threshold</b>", description: "Minimum humidity change to trigger a report (%)", range: "1..50", defaultValue: 5.0)
                     input (name: "humidityOffset", type: "decimal", title: "<b>Humidity Offset</b>", description: "Adjust the FP300 humidity reading.", range: "-100..100", defaultValue: 0)
                     input (name: "lightSamplingFrequency", type: "enum", title: "<b>Light Sampling Frequency</b>", description: "Sampling frequency preset (use 'Custom' to enable period setting)", options: ["0":"Off", "1":"Low", "2":"Medium", "3":"High", "4":"Custom"])
                     input (name: "lightReportingMode", type: "enum", title: "<b>Light Reporting Mode</b>", description: "How light changes trigger reports", options: ["0":"No reporting", "1":"Threshold only", "2":"Interval only", "3":"Threshold and Interval"], defaultValue: "3")
@@ -796,7 +798,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "0163" : // (355) FP300 Temperature reporting interval (milliseconds)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
-                logDebug "FP300 temperature reporting interval: ${(value / 1000) as int} seconds"
+                def intervalSeconds = (value / 1000) as int
+                storeParamValue('temperatureReportingInterval', intervalSeconds, 'number', false)
+                logDebug "FP300 temperature reporting interval: ${intervalSeconds} seconds"
             }
             else {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
@@ -827,7 +831,9 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "016A" : // (362) FP300 Humidity reporting interval (milliseconds)
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
-                logDebug "FP300 humidity reporting interval: ${(value / 1000) as int} seconds"
+                def intervalSeconds = (value / 1000) as int
+                storeParamValue('humidityReportingInterval', intervalSeconds, 'number', false)
+                logDebug "FP300 humidity reporting interval: ${intervalSeconds} seconds"
             }
             else {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
@@ -2221,6 +2227,12 @@ void updated() {
             cmds += zigbee.writeAttribute(0xFCC0, 0x0164, 0x21, valueCentiDegrees, [mfgCode: 0x115F], delay=200)
             // Will be stored after parse() confirmation
         }
+        if (hasParamChanged('temperatureReportingInterval', settings?.temperatureReportingInterval)) {
+            def valueMs = (settings.temperatureReportingInterval as Integer) * 1000
+            if (settings?.logEnable) log.debug "${device.displayName} setting temperatureReportingInterval to ${settings.temperatureReportingInterval} seconds"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0163, 0x23, valueMs, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
         if (hasParamChanged('temperatureReportingMode', settings?.temperatureReportingMode)) {
             def modeValue = settings.temperatureReportingMode as Integer
             def modeNames = ["unknown", "Threshold only", "Interval only", "Threshold and Interval"]
@@ -2232,6 +2244,12 @@ void updated() {
             def valueHundredths = ((settings.humidityReportingThreshold as BigDecimal) * 100) as Integer
             if (settings?.logEnable) log.debug "${device.displayName} setting humidityReportingThreshold to ${settings.humidityReportingThreshold}%"
             cmds += zigbee.writeAttribute(0xFCC0, 0x016B, 0x21, valueHundredths, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('humidityReportingInterval', settings?.humidityReportingInterval)) {
+            def valueMs = (settings.humidityReportingInterval as Integer) * 1000
+            if (settings?.logEnable) log.debug "${device.displayName} setting humidityReportingInterval to ${settings.humidityReportingInterval} seconds"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x016A, 0x23, valueMs, [mfgCode: 0x115F], delay=200)
             // Will be stored after parse() confirmation
         }
         if (hasParamChanged('humidityReportingMode', settings?.humidityReportingMode)) {
