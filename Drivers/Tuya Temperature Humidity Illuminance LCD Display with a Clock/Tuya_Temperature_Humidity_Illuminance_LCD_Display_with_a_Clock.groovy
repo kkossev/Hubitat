@@ -68,14 +68,19 @@
  *                                  added missing model map _TZE200_bjawzodf; added Nous devices _TZE200_qrztc3ev, _TZE200_snloy4rw, _TZE200_eanjj2pa, _TZE200_ydrdfkim
  * ver. 1.9.1  2025-09-02 kkossev - added TS0601 _TZE284_oitavov2 and _TZE200_2se8efxh to 'TS0601_Soil' group; added TS0601 _TZE284_ap9owrsa to 'TS0601_Soil_2' group
  * ver. 1.9.2  2025-09-27 kkossev - temperature and humidity offset bug fix; invalid humidity values are corrected to 0% or 100% instead of ignored
- * ver. 1.9.3  2025-11-10 kkossev - (dev. branch) added humidity processing for DS18B20 group devices (0x67 DP)
- * ver. 2.0.0  2025-11-11 kkossev - (dev. branch) added child switch device support for DS18B20 group devices (relay control via DP 1)
+ * ver. 1.9.3  2025-11-10 kkossev - added humidity processing for DS18B20 group devices (0x67 DP)
+ * ver. 2.0.0  2025-11-29 kkossev - (dev. branch) added child switch device support for DS18B20 group devices (relay control via DP 1); added cluster 0x0006 (On/Off) parsing for DS18B20 relay state reporting
+ *                                  addedadd NEO NAS-STH02B2 electrical conductivity/fertility/temperature/humidity sensor TS0601 _TZE284_rqcuwlsa
+ *                                  added soilEC and soilFertility attributes; soilFertility enum values: 'normal', 'lower', 'low', 'middle', 'high', 'higher'  
+ *                                  Added ZDO 0x0000 Network Address Response and 0x0002 Node Descriptor Response handlers in an attempt to fix TS0601 _TZE284_rqcuwlsa device disconnections; Rate limiting: only respond if more than 10 seconds have passed since last response
  *
- *                                  TODO: update GitHub documentation
+ *                                  TODO: update GitHub documentation  _TZ3218_7fiyo3kv
+ *                                  TODO:  https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/636?u=kkossev
+ *                                  TODO: response to ZDO command: cluster=0002 command=00
 */
 
 @Field static final String VERSION = '2.0.0'
-@Field static final String TIME_STAMP = '2025/11/11 8:00 AM'
+@Field static final String TIME_STAMP = '2025/11/29 8:41 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -83,7 +88,7 @@ import hubitat.zigbee.zcl.DataType
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 
 metadata {
     definition(name: 'Tuya Temperature Humidity Illuminance LCD Display with a Clock', namespace: 'kkossev', author: 'Krassimir Kossev', importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Temperature%20Humidity%20Illuminance%20LCD%20Display%20with%20a%20Clock/Tuya_Temperature_Humidity_Illuminance_LCD_Display_with_a_Clock.groovy', singleThreaded: true ) {
@@ -93,6 +98,8 @@ metadata {
         capability 'TemperatureMeasurement'
         capability 'RelativeHumidityMeasurement'
         capability 'IlluminanceMeasurement'
+        attribute 'soilEC', 'number'
+        attribute 'soilFertility', 'enum', ['normal', 'lower', 'low', 'middle', 'high', 'higher']
         //capability "ContactSensor"   // uncomment for _TZE200_pay2byax contact w/ illuminance sensor
         //capability "MotionSensor"    // uncomment for SiHAS multi sensor
         capability 'Health Check'
@@ -154,6 +161,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_myd45weu", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'   // TODO - check the fingrprint !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_myd45weu", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'   // TODO - check the fingrprint !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_33bwcga2", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'   // https://community.hubitat.com/t/driver-for-tuya-soil-tester-sensor/156528?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_rqcuwlsa", deviceJoinName: 'NEO Soil Moisture Temperature EC Sensor'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_ap9owrsa", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'   // TODO - check the fingrprint !
 
         // model: 'ZG-227ZL',
@@ -248,7 +256,7 @@ metadata {
         input(name: 'humidityOffset', type: 'decimal', title: '<b>Humidity offset</b>', description: 'Enter a percentage to adjust the humidity.', defaultValue: 0.0, range: '-100..100')
         input(name: 'modelGroupPreference', type: 'enum', title: '<b>Model Group</b>', description:'The recommended setting is <b>Auto detect</b>.', defaultValue: 0, options:
                ['Auto detect':'Auto detect', 'TS0601_Tuya':'TS0601_Tuya', 'TS0601_Tuya_2':'TS0601_Tuya_2', 'TS0601_Haozee':'TS0601_Haozee', 'TS0601_AUBESS':'TS0601_AUBESS', 'TS0601_AVATTO_Ink':'TS0601_AVATTO_Ink', 'TS0201':'TS0201', 'TS0222':'TS0222', 'TS0201_LCZ030': 'TS0201_LCZ030',
-                'TS0222_2':'TS0222_2', 'TS0222_Soil':'TS0222_Soil', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', , 'TS0601_Soil_II':'TS0601_Soil_II', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
+                'TS0222_2':'TS0222_2', 'TS0222_Soil':'TS0222_Soil', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', , 'TS0601_Soil_II':'TS0601_Soil_II', 'TS0601_Soil_NEO':'TS0601_Soil_NEO', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
         input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', description: 'May not be supported by all devices!', defaultValue: false)
         if (advancedOptions == true) {
             if (isConfigurableSleepyDevice()) {
@@ -412,6 +420,7 @@ metadata {
     '_TZE284_sgabhwa6'  : 'TS0601_Soil_II',     // Soil monitoring sensor II
     '_TZE284_nhgdf6qr'  : 'TS0601_Soil_II',     // Soil monitoring sensor II
     '_TZE284_33bwcga2'  : 'TS0601_Soil_II',     // https://community.hubitat.com/t/driver-for-tuya-soil-tester-sensor/156528?u=kkossev
+    '_TZE284_rqcuwlsa'  : 'TS0601_Soil_NEO',    // NEO NAS-STH02B2 Soil moisture, temperature, and EC sensor
     '_TZE284_ap9owrsa'  : 'TS0601_Soil_II',     // Soil monitoring sensor II
     'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D, SNZB-02P
     'SONOFF'            : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D, SNZB-02P
@@ -539,6 +548,16 @@ def parse(String description) {
         else if (descMap.cluster == '0406' && descMap.attrId == '0000') {    // OWON, SiHAS
             def raw = Integer.parseInt(descMap.value, 16)
             motionEvent( raw & 0x01 )
+        }
+        else if (descMap.cluster == '0006' && descMap.attrId == '0000') {    // DS18B20 On/Off cluster
+            if (getModelGroup() == 'DS18B20') {
+                def switchValue = Integer.parseInt(descMap.value, 16)
+                updateDS18B20ChildSwitch(switchValue)
+            } else {
+                if (settings?.logEnable) { 
+                    log.debug "${device.displayName} Cluster 0x0006 OnOff report for non-DS18B20 device" 
+                }
+            }
         }
         else if (descMap.cluster == '0000' && descMap.attrId == '0001') {    // ping
             // descMap = [raw:0D310100000A01002004, dni:0D31, endpoint:01, cluster:0000, size:0A, attrId:0001, encoding:20, command:01, value:04, clusterInt:0, attrInt:1]
@@ -681,7 +700,60 @@ def parseZHAcommand( Map descMap) {
 }
 
 def parseZDOcommand( Map descMap ) {
+    List<String> cmds = []
     switch (descMap.clusterId) {
+        case '0000' : // Network Address Request (NWK_addr_req)
+            if (logEnable) { 
+                log.debug "${device.displayName} ZDO Network Address request, data=${descMap.data} (Sequence Number:${descMap.data[0]})" 
+            }
+            // Rate limiting: only respond if more than 10 seconds have passed since last response
+            def now = new Date().getTime()
+            Map lastRxMap = stringToJsonMap(state.lastRx ?: '{}')
+            def lastZdo0000 = lastRxMap['zdo0000'] ?: 0
+            if (now - lastZdo0000 < 10000) {
+                if (logEnable) { log.debug "${device.displayName} ZDO Network Address response throttled (${(now - lastZdo0000)/1000}s since last)" }
+                break
+            }
+            // Send Network Address Response (0x8000)
+            // Extract IEEE address from request data[1..8]
+            int tsn = (descMap.data[0] instanceof String) ? Integer.parseInt(descMap.data[0], 16) : (descMap.data[0] as int)
+            String seqNum = zigbee.convertToHexString(tsn & 0xFF, 2)
+            List data = descMap.data as List
+            String ieeeAddr = data[1..8].collect { it instanceof String ? it.padLeft(2, '0') : zigbee.convertToHexString((it as int) & 0xFF, 2) }.join(' ')
+            // Respond with network address 0000 (pretend requested IEEE is coordinator)
+            def nwkAddr = "00 00"
+            // Response format: seqNum + status(00=success) + IEEE address (8 bytes) + network address (2 bytes) + num assoc devices (00) + start index (00)
+            cmds += ["he raw ${device.deviceNetworkId} 0 0 0x8000 {${seqNum} 00 ${ieeeAddr} ${nwkAddr} 00 00} {0x0000}"]
+            lastRxMap['zdo0000'] = now
+            state.lastRx = mapToJsonString(lastRxMap)
+            sendZigbeeCommands(cmds)
+            break
+        case '0002' : // Node Descriptor Request (Node_Desc_req)
+            if (logEnable) { 
+                log.debug "${device.displayName} ZDO Node Descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]})" 
+            }
+            // Rate limiting: only respond if more than 10 seconds have passed since last response
+            def now = new Date().getTime()
+            Map lastRxMap = stringToJsonMap(state.lastRx ?: '{}')
+            def lastZdo0002 = lastRxMap['zdo0002'] ?: 0
+            if (now - lastZdo0002 < 10000) {
+                if (logEnable) { log.debug "${device.displayName} ZDO Node Descriptor response throttled (${(now - lastZdo0002)/1000}s since last)" }
+                break
+            }
+            // Send Node Descriptor Response (0x8002)
+            // Request format: TSN + NwkAddrOfInterest (2 bytes little-endian)
+            int tsn = (descMap.data[0] instanceof String) ? Integer.parseInt(descMap.data[0], 16) : (descMap.data[0] as int)
+            String seqNum = zigbee.convertToHexString(tsn & 0xFF, 2)
+            // Extract the requested network address from data[1..2] and echo it back
+            List data = descMap.data as List
+            String nwkAddrRequested = data[1..2].collect { it instanceof String ? it.padLeft(2, '0') : zigbee.convertToHexString((it as int) & 0xFF, 2) }.join(' ')
+            def nodeDesc = "00 40 8E 8E 11 52 52 00 00 00 52 00 00"
+            // Response format: seqNum + status(00=success) + NwkAddrOfInterest + NodeDescriptor
+            cmds += ["he raw ${device.deviceNetworkId} 0 0 0x8002 {${seqNum} 00 ${nwkAddrRequested} ${nodeDesc}} {0x0000}"]
+            lastRxMap['zdo0002'] = now
+            state.lastRx = mapToJsonString(lastRxMap)
+            sendZigbeeCommands(cmds)
+            break
         case '0006' :
             if (logEnable) { log.info "${device.displayName} Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7] + descMap.data[6]})" }
             break
@@ -761,24 +833,18 @@ def processTuyaCluster( descMap ) {
 def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
     def fncmd = fncmdPar
     switch (dp) {
-        case 0x01 : // temperature in C for most models
-            if (getModelGroup() == 'TS0601_Contact') {
+        case 0x01 : // temperature in C for most models; EC for Soil_NEO
+            if (getModelGroup() == 'TS0601_Soil_NEO') {
+                sendEvent(name: 'soilEC', value: fncmd, unit: 'µS/cm', descriptionText: "Soil EC is ${fncmd} µS/cm")
+                if (settings?.txtEnable) { log.info "${device.displayName} Soil EC is ${fncmd} µS/cm" }
+            }
+            else if (getModelGroup() == 'TS0601_Contact') {
                 def value = fncmd == 0 ? 'closed' : 'open'    // inverted!
                 sendEvent('name': 'contact', 'value': value)
                 if (settings?.txtEnable) { log.info "${device.displayName} Contact is ${value}" }
             }
             else if (getModelGroup() == 'DS18B20') {
-                def switchState = fncmd == 1 ? 'on' : 'off'
-                logInfo "DS18B20 Switch is ${switchState}"
-                
-                // Update child device state
-                def childDevice = getChildDevice("${device.deviceNetworkId}-switch")
-                if (childDevice) {
-                    childDevice.sendEvent(name: "switch", value: switchState)
-                    logDebug "Updated child switch to ${switchState}"
-                } else {
-                    logWarn "DS18B20 child switch device not found"
-                }
+                updateDS18B20ChildSwitch(fncmd)
             }
             else if (getModelGroup() != 'TS0601_AUBESS') { // temperature in C, including 'TS0601_Tuya_2', 'TS0601_AVATTO_Ink' - all Tuya EF00 models !
                 if (fncmd > 32767) {
@@ -809,7 +875,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             }
             break
         case 0x03 : // humidity or  illuminance or battery state
-            if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II']) {
+            if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II', 'TS0601_Soil_NEO']) {
                 logDebug "Soil Sensor humidity raw = ${fncmd}"
                 humidityEvent( fncmd )
             }
@@ -826,9 +892,16 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 illuminanceEvent(fncmd)
             }
             break
-        case 0x04 : // battery, including 'TS0601_AVATTO_Ink'
-            getBatteryPercentageResult(fncmd * 2)
-            if (settings?.txtEnable) { log.info "${device.displayName} battery is $fncmd %" }
+        case 0x04 : // battery or fertility
+            if (getModelGroup() == 'TS0601_Soil_NEO') {
+                def fertility = ['normal', 'lower', 'low', 'middle', 'high', 'higher'][fncmd] ?: 'unknown'
+                sendEvent(name: 'soilFertility', value: fertility, descriptionText: "Soil fertility is ${fertility}")
+                if (settings?.txtEnable) { log.info "${device.displayName} Soil fertility is ${fertility}" }
+            }
+            else {
+                getBatteryPercentageResult(fncmd * 2)
+                if (settings?.txtEnable) { log.info "${device.displayName} battery is $fncmd %" }
+            }
             break
         case 0x05 : // Soil Monitor
             if (fncmd > 32767) {
@@ -838,7 +911,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             if (getModelGroup() in ['TS0601_Soil']) {
                 temperatureEvent( fncmd )
             }
-            else if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II']) {
+            else if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II', 'TS0601_Soil_NEO']) {
                 temperatureEvent( fncmd / 10.0 )
             }
             else {
@@ -880,7 +953,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             //device.updateSetting("minHumidityAlarmPar", [value:fncmd, type:"number"])
             break
         case 0x0E : // (14) Temperature Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared
-            if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II', 'TS0601_AVATTO_Ink']) {
+            if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II', 'TS0601_Soil_NEO', 'TS0601_AVATTO_Ink']) {
                 if (settings?.txtEnable) { log.info "${device.displayName} battery_state (0x0E) is ${fncmd}" }
             }
             else if (getModelGroup() in ['DS18B20']) {
@@ -971,8 +1044,12 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
         case 0x15 : // (21) buzer switch
             if (settings?.logEnable) { log.info "${device.displayName} _TZ3000_qaaysllp buzer switch is ${fncmd} " }
             break
-        case 0x65 : // (101)
-            if (getModelGroup() in ['DS18B20']) {
+        case 0x65 : // (101) temperature alarm for Soil_NEO
+            if (getModelGroup() == 'TS0601_Soil_NEO') {
+                def alarm = ['lower_alarm', 'upper_alarm', 'cancel'][fncmd] ?: 'unknown'
+                if (settings?.txtEnable) { log.info "${device.displayName} Temperature alarm: ${alarm}" }
+            }
+            else if (getModelGroup() in ['DS18B20']) {
                 logDebug "DS18B20 Work Mode is ${fncmd}"
             }
             else if (getModelGroup() in ['TS0201_TH']) {
@@ -983,8 +1060,12 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             }
             illuminanceEventLux( safeToInt( fncmd ) )  // _TZE200_pay2byax
             break
-        case 0x66 : // (102)
-            if (getModelGroup() in ['DS18B20']) {
+        case 0x66 : // (102) humidity alarm for Soil_NEO
+            if (getModelGroup() == 'TS0601_Soil_NEO') {
+                def alarm = ['lower_alarm', 'upper_alarm', 'cancel'][fncmd] ?: 'unknown'
+                if (settings?.txtEnable) { log.info "${device.displayName} Humidity alarm: ${alarm}" }
+            }
+            else if (getModelGroup() in ['DS18B20']) {
                 if (fncmd > 32767) {
                     fncmd = fncmd - 65536
                 }
@@ -994,9 +1075,68 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             }
             break
-        case 0x67 : // (103)
-            if (getModelGroup() in ['DS18B20']) {
+        case 0x67 : // (103) max temperature alarm for Soil_NEO
+            if (getModelGroup() == 'TS0601_Soil_NEO') {
+                if (settings?.logEnable) { log.info "${device.displayName} Max temperature alarm set to ${fncmd / 10.0}°C" }
+            }
+            else if (getModelGroup() in ['DS18B20']) {
                 humidityEvent( fncmd )
+            }
+            else {
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            break
+        case 0x68 : // (104) min temperature alarm for Soil_NEO
+            if (getModelGroup() == 'TS0601_Soil_NEO') {
+                if (settings?.logEnable) { log.info "${device.displayName} Min temperature alarm set to ${fncmd / 10.0}°C" }
+            }
+            else {
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            break
+        case 0x69 : // (105) max humidity alarm for Soil_NEO
+            if (getModelGroup() == 'TS0601_Soil_NEO') {
+                if (settings?.logEnable) { log.info "${device.displayName} Max humidity alarm set to ${fncmd}%" }
+            }
+            else {
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            break
+        case 0x6A : // (106) min humidity alarm for Soil_NEO
+            if (getModelGroup() == 'TS0601_Soil_NEO') {
+                if (settings?.logEnable) { log.info "${device.displayName} Min humidity alarm set to ${fncmd}%" }
+            }
+            else {
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            break
+        case 0x6B : // (107) temperature sensitivity for Soil_NEO
+            if (getModelGroup() == 'TS0601_Soil_NEO') {
+                if (settings?.logEnable) { log.info "${device.displayName} Temperature sensitivity set to ${fncmd / 10.0}°C" }
+            }
+            else {
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            break
+        case 0x6C : // (108) humidity sensitivity for Soil_NEO
+            if (getModelGroup() == 'TS0601_Soil_NEO') {
+                if (settings?.logEnable) { log.info "${device.displayName} Humidity sensitivity set to ${fncmd}%" }
+            }
+            else {
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            break
+        case 0x6D : // (109) schedule periodic for Soil_NEO
+            if (getModelGroup() == 'TS0601_Soil_NEO') {
+                if (settings?.logEnable) { log.info "${device.displayName} Reporting interval set to ${fncmd} minutes" }
+            }
+            else {
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            break
+        case 0x6E : // (110) temperature Fahrenheit for Soil_NEO
+            if (getModelGroup() == 'TS0601_Soil_NEO') {
+                logDebug "Temperature (F): ${fncmd / 10.0}°F"
             }
             else {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -1040,6 +1180,25 @@ def getModelGroup() {
         modelGroup = modelGroupPreference
     }
     return modelGroup
+}
+
+private void updateDS18B20ChildSwitch(int value) {
+    def switchState = value == 1 ? 'on' : 'off'
+    
+    // Update child device state
+    def childDevice = getChildDevice("${device.deviceNetworkId}-switch")
+    if (childDevice) {
+        def currentState = childDevice.currentValue("switch")
+        if (currentState == switchState) {
+            logDebug "DS18B20 Switch is already ${switchState}, skipping duplicate update"
+        } else {
+            logInfo "DS18B20 Switch is ${switchState}"
+            childDevice.sendEvent(name: "switch", value: switchState)
+            logDebug "Updated child switch to ${switchState}"
+        }
+    } else {
+        logWarn "DS18B20 child switch device not found"
+    }
 }
 
 private void manageChildDevices() {
@@ -1314,7 +1473,7 @@ def updated() {
             logDebug "Humidity reporting already configured (${lastTxMap.humiCfg}), skipping ..."
             lastTxMap.humiCfgOK = true
         }
-        cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 10, 14400, 0x01, [:], 200)
+        cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 10, 14400, 0x01, [:], 200)    // if isConfigurableSleepyDevice()
 
         cmds += zigbee.reportingConfiguration(0x0402, 0x0000, [:], 250)
         cmds += zigbee.reportingConfiguration(0x0405, 0x0000, [:], 250)
@@ -1479,9 +1638,14 @@ def refresh() {
         return
     }
     List<String> cmds = []
-    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 200)
-    cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200)
-    cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay = 200)
+    if (getModelGroup() in ['DS18B20']) {
+        logDebug "skipping V/T/H refresh for ${getModelGroup()} model"
+    }
+    else {
+        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 200)
+        cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200)
+        cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay = 200)
+    }
     if (device.getDataValue('model') == 'TS0601') { // queryAllTuyaDP added 11/23/2024
         cmds += zigbee.command(0xEF00, 0x03)
     }
@@ -1887,6 +2051,16 @@ def logWarn(msg) {
     if (settings?.logEnable) {
         log.warn "${device.displayName} " + msg
     }
+}
+
+private String swapEndianHex(String hex, int width) {
+    if (hex == null) { return '0000' }
+    def normalized = hex.replaceAll('0x', '').padLeft(width, '0')
+    def pairs = []
+    for (int i = 0; i < normalized.length(); i += 2) {
+        pairs.add(normalized.substring(i, Math.min(i + 2, normalized.length())))
+    }
+    return pairs.reverse().join(' ').toUpperCase()
 }
 
 def updateInfo(msg= ' ') {
