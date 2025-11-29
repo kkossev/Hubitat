@@ -58,6 +58,7 @@
  * ver. 2.8.2 2025-05-04 kkossev     - added TS0044 _TZ3000_5tqxpine 
  * ver. 2.8.3 2025-10-07 sbohrer     - added TS0041 _TZ3000_rsqqkdxv 
  * ver. 2.8.4 2025-10-21 kkossev     - added IMOU MultIR ZE2-EN; testing TS0601 _TZE200_nojsjtj2 SOS button (not working for now)
+ * ver. 2.8.5 2025-11-29 kkossev     - (dev. branch) added HOBEIAN ZG-101ZS TS0044 _TZ3000_bgtzm4ny @bkinmuc ; added TS0044 _TZ3000_a4xycprs _TZ3000_dziaict4 _TZ3000_j61x9rxn _TZ3000_kfu8zapd _TZ3000_ygvf9xzp
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: unschedule jobs from other drivers: https://community.hubitat.com/t/moes-4-button-zigbee-switch/78119/20?u=kkossev
@@ -73,8 +74,8 @@
  *                                   - TODO: add 'auto revert to scene mode' option
  */
 
-static String version() { '2.8.4' }
-static String timeStamp() { '2025/10/21 9:31 PM' }
+static String version() { '2.8.5' }
+static String timeStamp() { '2025/11/29 1:17 PM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -154,15 +155,19 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0006', outClusters:'0019,000A', model:'TS0044', manufacturer:'_TZ3000_vp6clf9d', deviceJoinName: 'Zemismart Wireless Scene Switch'
         fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_vp6clf9d', model: 'TS0044', deviceJoinName: 'Zemismart 4 Button Remote (ESW-0ZAA-EU)'                      // needs debouncing
         fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_ufhtxr59', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'
-        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_wkai4ga5', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/79?u=kkossev
-        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_abci1hiu', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // not tested
-        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_ee8nrt2l', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // not tested
-        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_dku2cfsc', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // not tested
-        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TYZB01_cnlmkhbk', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // not tested
-        fingerprint inClusters: '0000,0001,0006', outClusters: '0019,000A', manufacturer: '_TZ3000_u3nv1jwk', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // not tested https://community.hubitat.com/t/zigbee-wireless-scene-switch/108146?u=kkossev
-        fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0006,E000,0000', outClusters: '0019,000A', model: 'TS0044', manufacturer: '_TZ3000_mh9px7cq', deviceJoinName: 'Moes 4 button controller'    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
-        fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0006,E000,0000', outClusters: '0019,000A', model: 'TS0044', manufacturer: '_TZ3000_5tqxpine', deviceJoinName: 'Tuya 4 button controller'    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/268?u=kkossev
-
+        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_wkai4ga5', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'                                   // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/79?u=kkossev
+        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_abci1hiu', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'                                   // not tested
+        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_ee8nrt2l', model: 'TS0044', deviceJoinName: 'LoraTap SS6400ZB 4 button portable remote control'            // not tested
+        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_dku2cfsc', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'                                   // not tested
+        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TYZB01_cnlmkhbk', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'                                   // not tested
+        fingerprint inClusters: '0000,0001,0006', outClusters: '0019,000A', manufacturer: '_TZ3000_u3nv1jwk', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'                                   // not tested https://community.hubitat.com/t/zigbee-wireless-scene-switch/108146?u=kkossev
+        fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0006,E000,0000', outClusters: '0019,000A', model: 'TS0044', manufacturer: '_TZ3000_mh9px7cq', deviceJoinName: 'Moes 4 button controller'                 // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
+        fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0006,E000,0000', outClusters: '0019,000A', model: 'TS0044', manufacturer: '_TZ3000_5tqxpine', deviceJoinName: 'Tuya 4 button controller'                 // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/268?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0006', outClusters:'0019,000A', model:'TS0044', manufacturer:'_TZ3000_bgtzm4ny', deviceJoinName: 'HOBEIAN ZG-101ZS Star Ring 4 Gang Scene Switch'      // https://community.hubitat.com/t/tuya-switch-what-exactly-isnt-working/159210?u=kkossev 
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0006', outClusters:'0019,000A', model:'TS0044', manufacturer:'_TZ3000_a4xycprs', deviceJoinName: 'Moes ZT-SR-EU4 Star Ring 4 Gang Scene Switch'        // not tested
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0006', outClusters:'0019,000A', model:'TS0044', manufacturer:'_TZ3000_dziaict4', deviceJoinName: 'Tuya 4 button Scene Switch'                          // not tested
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0006', outClusters:'0019,000A', model:'TS0044', manufacturer:'_TZ3000_j61x9rxn', deviceJoinName: 'Tuya 4 button Scene Switch'                          // not tested
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0006', outClusters:'0019,000A', model:'TS0044', manufacturer:'_TZ3000_kfu8zapd', deviceJoinName: 'Moes XH-SY-04Z 4 button portable remote control'     // not tested
         fingerprint inClusters: '0000,0001,0003,0004,0006,1000', outClusters: '0019,000A,0003,0004,0005,0006,0008,1000', manufacturer: '_TZ3000_abci1hiu', model: 'TS0044', deviceJoinName: 'MOES Remote TS0044'
 
         fingerprint profileId: '0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_2m38mh6k', deviceJoinName: 'LoraTap 6 button Scene Switch'
@@ -221,8 +226,13 @@ metadata {
             if (advancedOptions == true) {
                 input(name: 'forcedDebounce', type: 'bool', title: '<b>Force debounce</b>', defaultValue: false)
                 if (!isUSBpowered()) {
-                    input name: 'batteryReporting', type: 'enum', title: '<b>Battery Reporting Interval</b>', options: batteryReportingOptions.options, defaultValue: batteryReportingOptions.defaultValue, description: \
-                    '<i>Keep the battery reporting interval to <b>Default</b>, except when battery level is not reported at all for a long period.<br><b>Caution</b>:some devices are repored to deplete the battery very fast, if the battery reporting is set different than the default!</i>'
+                    if (hasBatteryConfigurationBug()) {
+                        input name: 'batteryWarning', type: 'paragraph', title: '<b style="color:red;">Caution</b>: Your device is known to have a battery configuration bug, which may cause all LEDs to blink periodically and the battery to be depleted fast.<br> Make sure you have paired the device to your hub with this driver already installed!'
+                    }
+                    else {
+                        input name: 'batteryReporting', type: 'enum', title: '<b>Battery Reporting Interval</b>', options: batteryReportingOptions.options, defaultValue: batteryReportingOptions.defaultValue, description: \
+                        '<i>Keep the battery reporting interval to <b>Default</b>, except when battery level is not reported at all for a long period.<br><b>Caution</b>:some devices are repored to deplete the battery very fast, if the battery reporting is set different than the default!</i>'
+                    }
                 }
             }
         }
@@ -252,6 +262,8 @@ boolean needsMagic() { device.getDataValue('model') in ['TS004F', 'TS0044', 'TS0
 boolean isSOSbutton() { device.getDataValue('manufacturer') in ['_TZ3000_4fsgukof', '_TZ3000_wr2ucaj9', '_TZ3000_zsh6uat3', '_TZ3000_tj4pwzzm', '_TZ3000_2izubafb', '_TZ3000_pkfazisv', '_TZE200_nojsjtj2' ] }
 boolean isUSBpowered() { device.getDataValue('manufacturer') in ['_TZ3000_b3mgfu0d', '_TZ3000_czuyt8lz'] }
 boolean isSiHAS() { device.getDataValue('manufacturer') == 'ShinaSystem' }
+boolean hasBatteryConfigurationBug()  { device.getDataValue('manufacturer') in ['_TZ3000_a4xycprs', '_TZ3000_dziaict4', '_TZ3000_j61x9rxn', '_TZ3000_mh9px7cq', '_TZ3000_5tqxpine', '_TZ3000_u3nv1jwk', '_TZ3000_bgtzm4ny', '_TZ3000_kfu8zapd', '_TZ3000_ee8nrt2l', '_TZ3000_ygvf9xzp' /* for testing, '_TZ3000_vp6clf9d'*/] }
+
 
 // Parse incoming device messages to generate events
 void parse(String description) {
@@ -845,15 +857,21 @@ void tuyaMagic() {
     }
     // binding for battery reporting was added on 2023/01/04 (ver 2.5.0), but thee are doubts that it may cause device re-joins and depletes the battery!
     int batteryReportinginterval = (settings.batteryReporting as Integer) ?: 0
-    if (batteryReportinginterval > 0) {
-        logInfo "setting the battery reporting interval to ${(batteryReportinginterval / 3600) as int} hours"
-        cmd += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 600, batteryReportinginterval, 0x01, [:], delay = 150)
-        cmd += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 600, batteryReportinginterval, 0x01, [:], delay = 150)        // 0x21 is NOT supported by all devices?
+    if (hasBatteryConfigurationBug()) {
+        batteryReportinginterval = 0    // disable battery reporting configuration for devices with known battery configuration bug
+        if (txtEnable) { log.info "${device.displayName} skipping battery reporting configuration due to known battery configuration bug in this device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}" }
     }
     else {
-        logInfo 'battery reporting interval not changed.'
+        if (batteryReportinginterval > 0) {
+            logInfo "setting the battery reporting interval to ${(batteryReportinginterval / 3600) as int} hours"
+            cmd += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 600, batteryReportinginterval, 0x01, [:], delay = 150)
+            cmd += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 600, batteryReportinginterval, 0x01, [:], delay = 150)        // 0x21 is NOT supported by all devices?
+        }
+        else {
+            logInfo 'battery reporting interval not changed.'
+        }
     }
-
+    logInfo 'sending Tuya Magic commands... Make sure the device is awake (a device button was pressed) before clicking on the Configure button!'
     sendZigbeeCommands(cmd)
 }
 
