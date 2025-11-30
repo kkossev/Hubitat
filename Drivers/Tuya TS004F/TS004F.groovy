@@ -74,9 +74,9 @@
  */
 
 static String version() { '2.8.6' }
-static String timeStamp() { '2025/11/30 10:40 PM' }
+static String timeStamp() { '2025/11/30 11:22 PM' }
 
-@Field static final Boolean DEBUG = true
+@Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
 
 import groovy.transform.Field
@@ -955,12 +955,8 @@ private void parseZDOcommand(Map descMap) {
             }
             break
 
-        case '0002': // Active_EP_req loop from TS0041 – we answer with Active_EP_rsp (0x8002)
-            handleActiveEpRequest(descMap)
-            break
-
-        case '0000': // (optional) if you still keep your 0x0000 workaround here
-            // handleNetworkAddrRequest(descMap)
+        case '0002': // Node_Desc_request
+            handleNodeDescRequest(descMap)
             break
 
         default:
@@ -971,11 +967,11 @@ private void parseZDOcommand(Map descMap) {
     }
 }
 
-private void handleActiveEpRequest(Map descMap) {
+private void handleNodeDescRequest(Map descMap) {
     List<String> data = descMap.data ?: []
     if (data.size() < 3) {
         if (logEnable) {
-            log.debug "${device.displayName} (ZDO 0002) Active_EP_req payload too short: ${data}"
+            log.debug "${device.displayName} (ZDO 0002) Node_Desc_request payload too short: ${data}"
         }
         return
     }
@@ -989,42 +985,17 @@ private void handleActiveEpRequest(Map descMap) {
     long lastZdo0002 = state.stats['zdo0002TS'] ?: 0L as long
     if (now - lastZdo0002 < 10_000L) {
         if (logEnable) {
-            log.debug "${device.displayName} (ZDO 0002) Active_EP_req throttled (${(now - lastZdo0002)/1000}s since last)"
+            log.debug "${device.displayName} (ZDO 0002) Node_Desc_request throttled (${(now - lastZdo0002)/1000}s since last)"
         }
         return
     }
     state.stats['zdo0002TS'] = now
 
     if (logEnable) {
-        log.debug "${device.displayName} (ZDO 0002) Active_EP_req from 0x${dni}, tsn=${tsn}, nwkOfInt=0x${String.format('%04X', nwkOfInt)} – sending Active_EP_rsp (0x8002)"
-    }
-    return // TODO – temporarily disable response until the root cause of the looping requests is found
-
-
-    // Build Active_EP_rsp (0x8002) payload:
-    //   Status (1) = 0x00 (SUCCESS)
-    //   NWK address of interest (2) = same as request
-    //   ActiveEPCount (1) = 0x01
-    //   ActiveEPList (N)  = [0x01]  (we pretend coordinator has endpoint 0x01)
-    String statusHex   = "00"
-    String nwkL        = String.format("%02X", (nwkOfInt & 0xFF))
-    String nwkH        = String.format("%02X", ((nwkOfInt >> 8) & 0xFF))
-    String epCountHex  = "01"
-    String epListHex   = "01"   // endpoint 0x01
-
-    String tsnHex = String.format("%02X", tsn)
-
-    String payload = "${tsnHex}${statusHex}${nwkL}${nwkH}${epCountHex}${epListHex}".toUpperCase()
-
-    // Raw ZDO response: profile 0x0000, cluster 0x8002 to the device
-    // he raw <profileId> <clusterId> <sourceEndpoint> <destinationEndpoint> <options> <radius> <destinationNwk> <handle> {payload}
-    String cmd = "he raw 0 8002 0 0 0 0 ${dni} 0 {${payload}}"
-
-    if (logEnable) {
-        log.debug "${device.displayName} (ZDO 8002) sending Active_EP_rsp: ${cmd}"
+        log.debug "${device.displayName} (ZDO 0002) Node_Desc_request from 0x${dni}, tsn=${tsn}, nwkOfInt=0x${String.format('%04X', nwkOfInt)} – sending Node_Desc_response (0x8002)"
     }
 
-    sendHubCommand(new hubitat.device.HubAction(cmd, hubitat.device.Protocol.ZIGBEE))
+    sendZigbeeCommands(["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",])
 }
 
 
