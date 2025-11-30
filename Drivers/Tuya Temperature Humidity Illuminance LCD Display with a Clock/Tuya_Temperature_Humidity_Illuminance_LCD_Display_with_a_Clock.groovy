@@ -80,7 +80,7 @@
 */
 
 @Field static final String VERSION = '2.0.0'
-@Field static final String TIME_STAMP = '2025/11/30 9:52 PM'
+@Field static final String TIME_STAMP = '2025/11/30 9:57 AM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -88,7 +88,7 @@ import hubitat.zigbee.zcl.DataType
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 
 metadata {
     definition(name: 'Tuya Temperature Humidity Illuminance LCD Display with a Clock', namespace: 'kkossev', author: 'Krassimir Kossev', importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Temperature%20Humidity%20Illuminance%20LCD%20Display%20with%20a%20Clock/Tuya_Temperature_Humidity_Illuminance_LCD_Display_with_a_Clock.groovy', singleThreaded: true ) {
