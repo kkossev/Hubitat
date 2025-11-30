@@ -69,7 +69,7 @@
  * ver. 1.9.1  2025-09-02 kkossev - added TS0601 _TZE284_oitavov2 and _TZE200_2se8efxh to 'TS0601_Soil' group; added TS0601 _TZE284_ap9owrsa to 'TS0601_Soil_2' group
  * ver. 1.9.2  2025-09-27 kkossev - temperature and humidity offset bug fix; invalid humidity values are corrected to 0% or 100% instead of ignored
  * ver. 1.9.3  2025-11-10 kkossev - added humidity processing for DS18B20 group devices (0x67 DP)
- * ver. 2.0.0  2025-11-29 kkossev - (dev. branch) added child switch device support for DS18B20 group devices (relay control via DP 1); added cluster 0x0006 (On/Off) parsing for DS18B20 relay state reporting
+ * ver. 2.0.0  2025-11-30 kkossev - (dev. branch) added child switch device support for DS18B20 group devices (relay control via DP 1); added cluster 0x0006 (On/Off) parsing for DS18B20 relay state reporting
  *                                  addedadd NEO NAS-STH02B2 electrical conductivity/fertility/temperature/humidity sensor TS0601 _TZE284_rqcuwlsa
  *                                  added soilEC and soilFertility attributes; soilFertility enum values: 'normal', 'lower', 'low', 'middle', 'high', 'higher'  
  *                                  Added ZDO 0x0000 Network Address Response and 0x0002 Node Descriptor Response handlers in an attempt to fix TS0601 _TZE284_rqcuwlsa device disconnections; Rate limiting: only respond if more than 10 seconds have passed since last response
@@ -80,7 +80,7 @@
 */
 
 @Field static final String VERSION = '2.0.0'
-@Field static final String TIME_STAMP = '2025/11/29 8:41 PM'
+@Field static final String TIME_STAMP = '2025/11/30 9:52 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1683,7 +1683,11 @@ void deviceCommandTimeout() {
 void componentOn(cd) {
     if (getModelGroup() == 'DS18B20') {
         logInfo "Turning DS18B20 switch ON via child device"
-        sendZigbeeCommands(sendTuyaCommand('01', DP_TYPE_BOOL, '01'))
+        //sendZigbeeCommands(sendTuyaCommand('01', DP_TYPE_BOOL, '01'))
+        sendZigbeeCommands([
+            "he cmd 0x${device.deviceNetworkId} 0x01 0x0006 0x01 {}",  // On
+            "delay 200"
+        ])
     } else {
         logWarn "componentOn() called but device is not DS18B20 model (${getModelGroup()})"
     }
@@ -1692,7 +1696,11 @@ void componentOn(cd) {
 void componentOff(cd) {
     if (getModelGroup() == 'DS18B20') {
         logInfo "Turning DS18B20 switch OFF via child device"
-        sendZigbeeCommands(sendTuyaCommand('01', DP_TYPE_BOOL, '00'))
+        //sendZigbeeCommands(sendTuyaCommand('01', DP_TYPE_BOOL, '00'))
+        sendZigbeeCommands([
+            "he cmd 0x${device.deviceNetworkId} 0x01 0x0006 0x00 {}",  // Off
+            "delay 200"
+        ])
     } else {
         logWarn "componentOff() called but device is not DS18B20 model (${getModelGroup()})"
     }
