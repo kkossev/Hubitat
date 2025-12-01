@@ -59,7 +59,8 @@
  * ver. 2.8.3 2025-10-07 sbohrer     - added TS0041 _TZ3000_rsqqkdxv 
  * ver. 2.8.4 2025-10-21 kkossev     - added IMOU MultIR ZE2-EN; testing TS0601 _TZE200_nojsjtj2 SOS button (not working for now)
  * ver. 2.8.5 2025-11-29 kkossev     - added HOBEIAN ZG-101ZS TS0044 _TZ3000_bgtzm4ny @bkinmuc ; added TS0044 _TZ3000_a4xycprs _TZ3000_dziaict4 _TZ3000_j61x9rxn _TZ3000_kfu8zapd _TZ3000_ygvf9xzp
- * ver. 2.8.6 2025-11-30 kkossev     - (dev. branch)  bug fix: wierd TS0041 _TZ3000_rsqqkdxv switch event handling was affecting other devices; debug loggs are automatically disabled after 24 hours; DEFAULT_DEBOUNCE = true
+ * ver. 2.8.6 2025-11-30 kkossev     - bug fix: wierd TS0041 _TZ3000_rsqqkdxv switch event handling was affecting other devices; debug loggs are automatically disabled after 24 hours; DEFAULT_DEBOUNCE = true
+ * ver. 2.9.0 2025-12-01 kkossev     - handleNodeDescRequest()
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: unschedule jobs from other drivers: https://community.hubitat.com/t/moes-4-button-zigbee-switch/78119/20?u=kkossev
  *                                   - TODO: configre (override) the numberOfButtons in the AdvancedOptions
@@ -73,8 +74,8 @@
  *                                   - TODO: add 'auto revert to scene mode' option
  */
 
-static String version() { '2.8.6' }
-static String timeStamp() { '2025/11/30 11:22 PM' }
+static String version() { '2.9.0' }
+static String timeStamp() { '2025/12/01 10:03 PM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -967,21 +968,24 @@ private void parseZDOcommand(Map descMap) {
     }
 }
 
+@Field static final String NODE_DESC_BYTES_DEFAULT = 
+        "00 40 8F CD AB 52 80 00 41 2C 80 00 00"   // From Wireshark capture
+
+private String getCoordinatorNodeDescBytes() {
+    // Could be extended to dynamically fetch descriptors later
+    return (state.nodeDescBytes ?: NODE_DESC_BYTES_DEFAULT).replace(" ", "").toUpperCase()
+}
+
 private void handleNodeDescRequest(Map descMap) {
     List<String> data = descMap.data ?: []
-    if (data.size() < 3) {
-        if (logEnable) {
-            log.debug "${device.displayName} (ZDO 0002) Node_Desc_request payload too short: ${data}"
-        }
-        return
-    }
-    state.stats['zdo0002Ctr'] = (state.stats['zdo0002Ctr'] ?: 0) + 1
-    int tsn       = Integer.parseInt(data[0], 16)
-    int nwkOfInt  = Integer.parseInt(data[2] + data[1], 16)   // LSB, MSB
-    String dni    = descMap.dni
+    if (data.size() < 3) return
+
+    int tsn      = Integer.parseInt(data[0], 16)
+    int nwkOfInt = Integer.parseInt(data[2] + data[1], 16)  // LE: [LSB][MSB]
+    String dni   = descMap.dni
 
     // Rate limiting to avoid spamming responses if something goes wrong
-    long now = new Date().time
+    long now = nowTime()
     long lastZdo0002 = state.stats['zdo0002TS'] ?: 0L as long
     if (now - lastZdo0002 < 10_000L) {
         if (logEnable) {
@@ -995,9 +999,27 @@ private void handleNodeDescRequest(Map descMap) {
         log.debug "${device.displayName} (ZDO 0002) Node_Desc_request from 0x${dni}, tsn=${tsn}, nwkOfInt=0x${String.format('%04X', nwkOfInt)} – sending Node_Desc_response (0x8002)"
     }
 
-    sendZigbeeCommands(["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",])
+    String tsnHex = hex2(tsn)
+    String nwkL   = hex2(nwkOfInt & 0xFF)
+    String nwkH   = hex2((nwkOfInt >> 8) & 0xFF)
+
+    String payload = "${tsnHex}00${nwkL}${nwkH}${getCoordinatorNodeDescBytes()}".toUpperCase()
+
+    String cmd = "he raw 0x${dni} 0 0 0x8002 {${payload}} {0x0000}"
+
+    if (logEnable) {
+        log.debug "${device.displayName} sending Node_Desc_rsp: ${cmd}"
+    }
+
+    sendHubCommand(new hubitat.device.HubAction(cmd, hubitat.device.Protocol.ZIGBEE))
+
 }
 
+private long nowTime() { return new Date().time }
+
+private String hex2(int n) {
+    return String.format("%02X", n & 0xFF)
+}
 
 void logDebug(final String msg) {
     if (settings?.logEnable) {
@@ -1023,7 +1045,10 @@ void disableDebugLog() {
 }
 
 void test(String description) {
+    
     log.warn "test: ${description}"
     parse(description)
+    
+    //handleNodeDescRequest(zigbee.parseDescriptionAsMap(description))
 }
 
