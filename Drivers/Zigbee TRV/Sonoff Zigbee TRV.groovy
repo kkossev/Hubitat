@@ -19,13 +19,14 @@
  * ver. 3.4.1  2025-03-06 kkossev  - healthCheck by pinging the TRV
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  * ver. 3.5.2  2025-05-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
- * ver. 3.6.0  2025-11-01 kkossev  - (dev. branch) autoPollThermostat() fixes; added reporting configuration; added refreshAll() command (inccluding valveOpeningDegree and valveClosingDegree)
+ * ver. 3.6.0  2025-11-01 kkossev  - autoPollThermostat() fixes; added reporting configuration; added refreshAll() command (inccluding valveOpeningDegree and valveClosingDegree)
+ * ver. 3.6.1  2025-12-06 kkossev  - (dev. branch) added [physical] or [digital] type to heatingSetpoint events; added ignoreDuplicatedZigbeeMessages setting
  *
- *                                   TODO:
+ *                                   TODO: 
  */
 
-static String version() { '3.6.0' }
-static String timeStamp() { '2025/11/01 10:46 PM' }
+static String version() { '3.6.1' }
+static String timeStamp() { '2025/12/06 10:45 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -448,8 +449,11 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
                 logWarn "customProcessDeviceProfileEvent: ignoring the thermostatMode <b>${valueScaled}</b> event, because the systemMode is off"
             }
             else {
+                boolean isDigital = state.states['isDigital'] ?: false
+                eventMap.type = isDigital ? 'digital' : 'physical'
+                eventMap.descriptionText = "${descText}${isDigital ? ' [digital]' : ' [physical]'}"
                 sendEvent(eventMap)
-                logInfo "${descText}"
+                logInfo "${eventMap.descriptionText}"
                 state.lastThermostatMode = valueScaled
             }
             break

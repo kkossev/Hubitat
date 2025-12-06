@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee OnOff Cluster Library', name: 'onOffLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/onOffLib.groovy', documentationLink: '',
-    version: '3.2.2'
+    version: '3.2.3'
 )
 /*
  *  Zigbee OnOff Cluster Library
@@ -19,12 +19,13 @@ library(
  * ver. 3.2.0  2024-06-04 kkossev  - commonLib 3.2.1 allignment; if isRefresh then sendEvent with isStateChange = true
  * ver. 3.2.1  2024-06-07 kkossev  - the advanced options are excpluded for DEVICE_TYPE Thermostat
  * ver. 3.2.2  2024-06-29 kkossev  - added on/off control for Tuya device profiles with 'switch' dp;
+ * ver. 3.2.3  2025-12-06 kkossev  - fixed a bug in off() and on() methods where clearIsDigital() was called too early
  *
  *                                   TODO:
 */
 
-static String onOffLibVersion()   { '3.2.2' }
-static String onOffLibStamp() { '2024/06/29 12:27 PM' }
+static String onOffLibVersion()   { '3.2.3' }
+static String onOffLibStamp() { '2025/12/06 10:45 PM' }
 
 @Field static final Boolean _THREE_STATE = true
 
@@ -202,7 +203,6 @@ void sendSwitchEvent(int switchValuePar) {
     }
     logInfo "${map.descriptionText}"
     sendEvent(map)
-    clearIsDigital()
     if (this.respondsTo('customSwitchEventPostProcesing')) {
         customSwitchEventPostProcesing(map)
     }

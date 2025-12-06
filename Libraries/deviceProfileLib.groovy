@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/deviceProfileLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-deviceProfileLib',
-    version: '3.5.2'
+    version: '3.5.3'
 )
 /*
  *  Device Profile Library (V3)
@@ -38,7 +38,8 @@ library(
  * ver. 3.4.3  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
  * ver. 3.5.0  2025-08-14 kkossev  - zclWriteAttribute() support for forced destinationEndpoint in the attributes map
  * ver. 3.5.1  2025-09-15 kkossev  - commonLib ver 4.0.0 allignment; log.trace leftover removed; 
- * ver. 3.5.2  2025-10-04 kkossev  - (dev. branch) SIMULATED_DEVICE_MODEL and SIMULATED_DEVICE_MANUFACTURER added (for testing with simulated devices)
+ * ver. 3.5.2  2025-10-04 kkossev  - SIMULATED_DEVICE_MODEL and SIMULATED_DEVICE_MANUFACTURER added (for testing with simulated devices)
+ * ver. 3.5.3  2025-12-06 kkossev  - (dev. branch) added digital/physical type to events in customProcessDeviceProfileEvent()
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
@@ -50,8 +51,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.5.2' }
-static String deviceProfileLibStamp() { '2025/10/04 1:07 PM' }
+static String deviceProfileLibVersion()   { '3.5.3' }
+static String deviceProfileLibStamp() { '2025/12/06 10:22 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -1383,10 +1384,13 @@ private boolean processFoundItem(final Map descMap, final Map foundItem, int val
         }
         else {
             // no custom handler - send the event as usual
-            sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
+            boolean isDigital = state.states['isDigital'] ?: false
+            String eventType = isDigital ? 'digital' : 'physical'
+            String eventDescText = "${descText}${isDigital ? ' [digital]' : ' [physical]'}"
+            sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: eventDescText, type: eventType, isStateChange: true)    // attribute value is changed - send an event !
             if (!doNotTrace) {
                 logTrace "event ${name} sent w/ valueScaled ${valueScaled}"
-                logInfo "${descText}"   // TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
+                logInfo "${eventDescText}"   // TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
             }
         }
     }
