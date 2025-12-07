@@ -1,10 +1,10 @@
 {
  "packageName":"Thermostats Sync",
  "author":"Krassimir Kossev",
- "version":"1.0.3",
+ "version":"1.0.4",
  "minimumHEVersion":"2.3.8.100",
- "dateReleased":"2025-11-16",
- "releaseNotes":"1.0.3 - fixed an accidental UTF-8 with BOM encoding that caused issues with HPM\n1.0.2 - first version published to HPM",
+ "dateReleased":"2025-12-07",
+ "releaseNotes":"1.0.4 - added syncEventType option to preserve physical/digital event designation when syncing attributes via command introspection\n1.0.3 - fixed an accidental UTF-8 with BOM encoding that caused issues with HPM\n1.0.2 - first version published to HPM",
  "communityLink":"https://community.hubitat.com/t/beta-thermostats-sync-bi-directional/156225",
  "apps": [
   {
