@@ -738,18 +738,22 @@
 
     "SONOFF_SNZB-06P_RADAR": {
       "description": "SONOFF SNZB-06P RADAR",
-      "device": { "powerSource": "battery", "ignoreIAS": true },
-      "capabilities": { "MotionSensor": true, "Battery": true },
-      "preferences": { "keepTime": "0x0406:0x0020", "sensitivity": "0x0406:0x0022" },
+      "device": { "powerSource": "dc", "isIAS": false, "isSleepy": false },
+      "capabilities": { "MotionSensor": true },
+      "preferences": { "fadingTime": "0x0406:0x0020", "radarSensitivity": "0x0406:0x0022", "detectionDelay": "0x0406:0x0021" },
+      "commands": { "printFingerprints": "", "resetStats": "", "refresh": "", "initialize": "", "updateAllPreferences": "", "resetPreferencesToDefaults": "", "validateAndFixPreferences": "" },
       "fingerprints": [
-        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0003,0406,0001", "outClusters": "0003,0019", "model": "SNZB-06P", "manufacturer": "SONOFF", "deviceJoinName": "SONOFF SNZB-06P" }
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0003,0406,0500,FC57,FC11", "outClusters": "0003,0019", "model": "SNZB-06P", "manufacturer": "SONOFF", "deviceJoinName": "SONOFF SNZB-06P RADAR" }
       ],
       "attributes": [
-        { "at": "0x0406:0x0020", "name": "keepTime", "type": "number", "dt": "0x21", "rw": "rw", "min": 5, "max": 7200, "defVal": 30, "scale": 1, "unit": "seconds", "title": "<b>Keep Time</b>", "description": "<i>PIR keep time in seconds</i>" },
-        { "at": "0x0406:0x0022", "name": "sensitivity", "type": "enum", "dt": "0x20", "rw": "rw", "min": 1, "max": 3, "defVal": "2", "scale": 1, "map": { "1": "low", "2": "medium", "3": "high" }, "unit": "", "title": "<b>Sensitivity</b>", "description": "<i>PIR sensor sensitivity (update at the time motion is activated)</i>" }
+        { "at": "0x0406:0x0000", "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "scale": 1, "map": { "0": "inactive", "1": "active" }, "unit": "", "title": "<b>Occupancy state</b>", "description": "<i>Occupancy state</i>" },
+        { "at": "0x0406:0x0022", "name": "radarSensitivity", "type": "enum", "dt": "0x20", "rw": "rw", "min": 1, "max": 3, "defVal": "1", "scale": 1, "unit": "", "map": { "1": "1 - low", "2": "2 - medium", "3": "3 - high" }, "title": "<b>Radar Sensitivity</b>", "description": "<i>Radar Sensitivity</i>" },
+        { "at": "0x0406:0x0020", "name": "fadingTime", "type": "enum", "dt": "0x21", "rw": "rw", "min": 15, "max": 999, "defVal": "30", "scale": 1, "unit": "seconds", "map": { "15": "15 seconds", "30": "30 seconds", "60": "60 seconds", "120": "120 seconds", "300": "300 seconds" }, "title": "<b>Fading Time</b>", "description": "<i>Radar fading time in seconds</i>" },
+        { "at": "0x0406:0x0021", "name": "detectionDelay", "type": "decimal", "dt": "0x21", "rw": "rw", "min": 0.0, "max": 10.0, "defVal": 0.0, "scale": 10, "unit": "seconds", "title": "<b>Detection delay</b>", "description": "<i>Presence detection delay timer</i>" },
+        { "at": "0xFC11:0x2001", "name": "illumState", "type": "enum", "dt": "0x20", "mfgCode": "0x1286", "rw": "ro", "min": 0, "max": 2, "defVal": 2, "scale": 1, "unit": "", "map": { "0": "dark", "1": "light", "2": "unknown" }, "title": "<b>Illuminance State</b>", "description": "<i>Illuminance State</i>" }
       ],
-      "refresh": ["pollBatteryPercentage"],
-      "configuration": { "0x0406": "bind" }
+      "refresh": ["motion", "radarSensitivity", "fadingTime", "detectionDelay"],
+      "configuration": { "0x0406": "bind", "0xFC57": "bind" }
     },
 
     "TS0601_MUVJRJR5_RADAR": {
@@ -915,12 +919,13 @@
       "spammyDPsToNotTrace": [19]
     } 
   },
-  "version": "4.0.9",
-  "timestamp": "2025-10-19 8:00 PM",
+  "version": "4.1.0",
+  "timestamp": "2025-12-12 12:28 AM",
   "description": "Device profiles for Tuya Zigbee mmWave Sensor",
   "author": "kkossev",
   "comments": [
     "v.4.0.8. - moved TS0601 _TZE204_qasjif9e _TZE204_ztqnh5cg back to TS0601_TUYA_RADAR profile",
-    "v.4.0.9. - added _TZE204_gkfbdvyx, LeapMMW all DPs,  "
+    "v.4.0.9. - added _TZE204_gkfbdvyx, LeapMMW all DPs,  ",
+    "v.4.1.0. - fixed SONOFF SNZB-06P radar device profile"
   ]
 }
