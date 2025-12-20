@@ -19,12 +19,13 @@
  * ver. 2.0.6  2023-07-09 kkossev  - Tuya Zigbee Light Sensor: added min/max reporting time; illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
  * ver. 3.0.6  2024-04-06 kkossev  - commonLib 3.06
  * ver. 3.2.0  2024-08-03 kkossev  - (dev.branch)
+ * ver. 3.2.1  2025-12-20 kkossev  - (dev.branch) common Lib 4.0.3 allignment; importUrl correction
  *
  *                                   TODO:
  */
 
-static String version() { '3.2.0' }
-static String timeStamp() { '2024/08/03 8:30 PM' }
+static String version() { '3.2.1' }
+static String timeStamp() { '2025/12/20 4:41 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -40,7 +41,7 @@ deviceType = 'LightSensor'
 metadata {
     definition(
         name: 'Tuya Zigbee Light Sensor',
-        importUrl: 'https://github.com/kkossev/Hubitat/blob/development/Drivers/Tuya%20Zigbee%20Light%20Sensor/Tuya_Zigbee_Light_Sensor_lib_included.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Light%20Sensor/Tuya_Zigbee_Light_Sensor_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
             capability 'Sensor'
