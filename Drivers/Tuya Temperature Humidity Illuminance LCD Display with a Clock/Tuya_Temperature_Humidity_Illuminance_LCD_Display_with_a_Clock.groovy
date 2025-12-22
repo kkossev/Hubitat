@@ -73,7 +73,7 @@
  *                                  addedadd NEO NAS-STH02B2 electrical conductivity/fertility/temperature/humidity sensor TS0601 _TZE284_rqcuwlsa
  *                                  added soilEC and soilFertility attributes; soilFertility enum values: 'normal', 'lower', 'low', 'middle', 'high', 'higher'  
  *                                  Added ZDO 0x0000 Network Address Response and 0x0002 Node Descriptor Response handlers in an attempt to fix TS0601 _TZE284_rqcuwlsa device disconnections; Rate limiting: only respond if more than 10 seconds have passed since last response
- * ver. 2.0.1  2025-12-22 kkossev - (dev. branch) fixed temperatureSensitivity preferece being reset to zero bug; added respondToZdoRequests preference (default: false)
+ * ver. 2.0.1  2025-12-22 kkossev - (dev. branch) fixed temperatureSensitivity preferece being reset to zero bug; added respondToZdoRequests preference (default: false); added TS0222 _TZ3000_hy6ncvmw illuminance only sensor
  *
  *                                  TODO: update GitHub documentation  _TZ3218_7fiyo3kv
  *                                  TODO:  https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/636?u=kkossev
@@ -81,7 +81,7 @@
 */
 
 @Field static final String VERSION = '2.0.1'
-@Field static final String TIME_STAMP = '2025/12/22 8:50 AM'
+@Field static final String TIME_STAMP = '2025/12/22 11:08 AM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -133,6 +133,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0400',      outClusters:'0019,000A', model:'TS0222', manufacturer:'_TYZB01_kvwjujy9', deviceJoinName: 'MOES ZSS-ZK-THL'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0400',      outClusters:'0019,000A', model:'TS0222', manufacturer:'_TYZB01_ftdkanlj', deviceJoinName: 'MOES ZSS-ZK-THL'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0400,0001,0500', outClusters:'0019,000A', model:'TS0222', manufacturer:'_TYZB01_4mdqxxnn', deviceJoinName: 'Tuya Illuminance Sensor TS0222_2'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,0400,0500,0000', outClusters:'0003,0019,000A', model:'TS0222', manufacturer:'_TZ3000_hy6ncvmw', deviceJoinName: 'Tuya Smart Indoor Luminance Sensor'    // https://community.hubitat.com/t/zigbee-lux-sensor-driver/159598?u=kkossev https://www.amazon.co.uk/Luminance-Detection-0-10000-Operated-Brightness/dp/B0FD9GYYKZ
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0400,0001,0500', outClusters:'0019,000A', model:'TS0222', manufacturer:'_TZ3000_lfa05ajd', deviceJoinName: 'Zemismart ZXZTH'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,0400,0000', outClusters:'0019,000A', model:'TS0222', manufacturer:'_TZ3000_kky16aay', deviceJoinName: 'Soil Temperature and Humidity Meter QT-075/THE01860'  // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/532?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_pisltm67', deviceJoinName: 'AUBESS Light Sensor S-LUX-ZB'
@@ -403,6 +404,7 @@ metadata {
     '_TYZB01_ftdkanlj'  : 'TS0222',             // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/419?u=kkossev
     '_TYZB01_fi5yftwv'  : 'TS0222',             // https://community.hubitat.com/t/konke-bond-series-enviroment-sensor/126445?u=kkossev
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
+    '_TZ3000_hy6ncvmw'  : 'TS0222_2',           // illuminance only sensor
     '_TZ3000_kky16aay'  : 'TS0222_Soil',        // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/535?u=kkossev
     '_TZE200_pay2byax'  : 'TS0601_Contact',     // Contact and illuminance sensor
     '_TZE200_nvups4nh'  : 'TS0601_Contact',     // Contact + T/H sensor added v1.9.0
