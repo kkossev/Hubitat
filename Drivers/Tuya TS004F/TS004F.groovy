@@ -61,6 +61,9 @@
  * ver. 2.8.5 2025-11-29 kkossev     - added HOBEIAN ZG-101ZS TS0044 _TZ3000_bgtzm4ny @bkinmuc ; added TS0044 _TZ3000_a4xycprs _TZ3000_dziaict4 _TZ3000_j61x9rxn _TZ3000_kfu8zapd _TZ3000_ygvf9xzp
  * ver. 2.8.6 2025-11-30 kkossev     - bug fix: wierd TS0041 _TZ3000_rsqqkdxv switch event handling was affecting other devices; debug loggs are automatically disabled after 24 hours; DEFAULT_DEBOUNCE = true
  * ver. 2.9.0 2025-12-01 kkossev     - handleNodeDescRequest()
+ * ver. 2.9.1 2025-12-22 kkossev     - (dev. branch) added respondToZdoRequests preference; respond to ZDO Node_Desc_request (0x0002) only if the preference is enabled; added TS004F _TZ3000_gwkzibhs @callumgw
+ *
+ * 
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: unschedule jobs from other drivers: https://community.hubitat.com/t/moes-4-button-zigbee-switch/78119/20?u=kkossev
  *                                   - TODO: configre (override) the numberOfButtons in the AdvancedOptions
@@ -74,8 +77,8 @@
  *                                   - TODO: add 'auto revert to scene mode' option
  */
 
-static String version() { '2.9.0' }
-static String timeStamp() { '2025/12/01 10:03 PM' }
+static String version() { '2.9.1' }
+static String timeStamp() { '2025/12/22 10:18 AM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -114,6 +117,7 @@ metadata {
         fingerprint inClusters: '0000,0001,0003,0004,0006,1000', outClusters: '0019,000A,0003,0004,0005,0006,0008,1000', manufacturer: '_TZ3000_qja6nq5z', model: 'TS004F', deviceJoinName: 'Tuya Smart Knob TS004F'    // not tested
         fingerprint inClusters: '0000,0001,0003,0004,0006,1000', outClusters: '0019,000A,0003,0004,0005,0006,0008,1000', manufacturer: '_TZ3000_csflgqj2', model: 'TS004F', deviceJoinName: 'Tuya Smart Knob TS004F'    // not tested
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0004,0006,1000,0000', outClusters:'0003,0004,0005,0006,0008,1000,0019,000A', model:'TS004F', manufacturer:'_TZ3000_abrsvsou', deviceJoinName: 'Tuya Smart Knob TS004F' //KK
+        fingerprint inClusters: '0000,0001,0003,0004,0006,1000', outClusters: '0019,000A,0003,0004,0005,0006,0008,1000', manufacturer: '_TZ3000_gwkzibhs', model: 'TS004F', deviceJoinName: 'Tuya Scene Switch TS004F'  // https://www.aliexpress.com/item/1005009944918471.html https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/308?u=kkossev
 
         fingerprint inClusters: '0000,0001,0006', outClusters: '0019,000A', manufacturer: '_TZ3400_keyjqthh', model: 'TS0041', deviceJoinName: 'Tuya YSB22 TS0041'
         fingerprint inClusters: '0000,0001,0006', outClusters: '0019,000A', manufacturer: '_TZ3400_tk3s5tyg', model: 'TS0041', deviceJoinName: 'Tuya TS0041' // not tested
@@ -234,6 +238,7 @@ metadata {
                         '<i>Keep the battery reporting interval to <b>Default</b>, except when battery level is not reported at all for a long period.<br><b>Caution</b>:some devices are repored to deplete the battery very fast, if the battery reporting is set different than the default!</i>'
                     }
                 }
+                input(name: 'respondToZdoRequests', type: 'bool', title: '<b>Respond to ZDO requests</b>', defaultValue: false, description: '<i>Enable to respond to ZDO Node Descriptor requests from the device (may help with pairing issues)</i>')
             }
         }
     }
@@ -686,6 +691,7 @@ void initializeVars(boolean fullInit = false) {
     if (fullInit == true || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', false) }
     if (fullInit == true || settings?.forcedDebounce == null) { device.updateSetting('forcedDebounce', DEFAULT_DEBOUNCE) }
     if (fullInit == true || settings?.batteryReporting == null) { device.updateSetting('batteryReporting', batteryReportingOptions.defaultValue) }
+    if (fullInit == true || settings?.respondToZdoRequests == null) { device.updateSetting('respondToZdoRequests', false) }
     if (fullInit == true || state.notPresentCounter == null) { state.notPresentCounter = 0 }
     if (fullInit == true || state.lastButtonNumber == null) { state.lastButtonNumber = 0 }
 
@@ -957,7 +963,14 @@ private void parseZDOcommand(Map descMap) {
             break
 
         case '0002': // Node_Desc_request
-            handleNodeDescRequest(descMap)
+            if (settings?.respondToZdoRequests == true) {
+                handleNodeDescRequest(descMap)
+            }
+            else {
+                if (logEnable) {
+                    log.debug "${device.displayName} (ZDO 0002) Node_Desc_request received but not responded to (respondToZdoRequests is disabled), data=${descMap.data}"
+                }
+            }
             break
 
         default:
