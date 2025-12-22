@@ -69,18 +69,19 @@
  * ver. 1.9.1  2025-09-02 kkossev - added TS0601 _TZE284_oitavov2 and _TZE200_2se8efxh to 'TS0601_Soil' group; added TS0601 _TZE284_ap9owrsa to 'TS0601_Soil_2' group
  * ver. 1.9.2  2025-09-27 kkossev - temperature and humidity offset bug fix; invalid humidity values are corrected to 0% or 100% instead of ignored
  * ver. 1.9.3  2025-11-10 kkossev - added humidity processing for DS18B20 group devices (0x67 DP)
- * ver. 2.0.0  2025-11-30 kkossev - (dev. branch) added child switch device support for DS18B20 group devices (relay control via DP 1); added cluster 0x0006 (On/Off) parsing for DS18B20 relay state reporting
+ * ver. 2.0.0  2025-11-30 kkossev - added child switch device support for DS18B20 group devices (relay control via DP 1); added cluster 0x0006 (On/Off) parsing for DS18B20 relay state reporting
  *                                  addedadd NEO NAS-STH02B2 electrical conductivity/fertility/temperature/humidity sensor TS0601 _TZE284_rqcuwlsa
  *                                  added soilEC and soilFertility attributes; soilFertility enum values: 'normal', 'lower', 'low', 'middle', 'high', 'higher'  
  *                                  Added ZDO 0x0000 Network Address Response and 0x0002 Node Descriptor Response handlers in an attempt to fix TS0601 _TZE284_rqcuwlsa device disconnections; Rate limiting: only respond if more than 10 seconds have passed since last response
+ * ver. 2.0.1  2025-12-22 kkossev - (dev. branch) fixed temperatureSensitivity preferece being reset to zero bug; added respondToZdoRequests preference (default: false)
  *
  *                                  TODO: update GitHub documentation  _TZ3218_7fiyo3kv
  *                                  TODO:  https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/636?u=kkossev
  *                                  TODO: response to ZDO command: cluster=0002 command=00
 */
 
-@Field static final String VERSION = '2.0.0'
-@Field static final String TIME_STAMP = '2025/11/30 9:57 AM'
+@Field static final String VERSION = '2.0.1'
+@Field static final String TIME_STAMP = '2025/12/22 8:50 AM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -256,7 +257,7 @@ metadata {
         input(name: 'humidityOffset', type: 'decimal', title: '<b>Humidity offset</b>', description: 'Enter a percentage to adjust the humidity.', defaultValue: 0.0, range: '-100..100')
         input(name: 'modelGroupPreference', type: 'enum', title: '<b>Model Group</b>', description:'The recommended setting is <b>Auto detect</b>.', defaultValue: 0, options:
                ['Auto detect':'Auto detect', 'TS0601_Tuya':'TS0601_Tuya', 'TS0601_Tuya_2':'TS0601_Tuya_2', 'TS0601_Haozee':'TS0601_Haozee', 'TS0601_AUBESS':'TS0601_AUBESS', 'TS0601_AVATTO_Ink':'TS0601_AVATTO_Ink', 'TS0201':'TS0201', 'TS0222':'TS0222', 'TS0201_LCZ030': 'TS0201_LCZ030',
-                'TS0222_2':'TS0222_2', 'TS0222_Soil':'TS0222_Soil', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', , 'TS0601_Soil_II':'TS0601_Soil_II', 'TS0601_Soil_NEO':'TS0601_Soil_NEO', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
+                'TS0222_2':'TS0222_2', 'TS0222_Soil':'TS0222_Soil', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', 'TS0601_Soil_II':'TS0601_Soil_II', 'TS0601_Soil_NEO':'TS0601_Soil_NEO', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
         input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', description: 'May not be supported by all devices!', defaultValue: false)
         if (advancedOptions == true) {
             if (isConfigurableSleepyDevice()) {
@@ -267,13 +268,14 @@ metadata {
                     input it.value.input
                 }
             }
+            input(name: 'respondToZdoRequests', type: 'bool', title: '<b>Respond to ZDO requests</b>', description: 'Enable responses to ZDO Network Address (0x0000) and Node Descriptor (0x0002) requests. <br>The recommended setting is <b>disabled</b>.', defaultValue: false)
         }
     }
 }
 
 @Field static Map configParams = [
         // temperatureOffset and humidityOffset moved outside of the configParams 11/23/2024
-        2: [input: [name: 'temperatureSensitivity', type: 'decimal', title: '<b>Temperature Sensitivity</b>', description: 'Temperature change for reporting, ' + '\u00B0' + 'C', defaultValue: 0.5, range: '0.1..5.0',
+        2: [input: [name: 'temperatureSensitivity', type: 'decimal', title: '<b>Temperature Sensitivity</b>', description: 'Temperature change for reporting, ' + '\u00B0' + 'C', defaultValue: 0.5, range: '0..5',
                    limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2']]],
 
         3: [input: [name: 'humiditySensitivity', type: 'number', title: '<b>Humidity Sensitivity</b>', description: 'Humidity change for reporting, %', defaultValue: 5, range: '1..10',
@@ -282,10 +284,10 @@ metadata {
         4: [input: [name: 'illuminanceSensitivity', type: 'number', title: '<b>Illuminance Sensitivity</b>', description: 'Illuminance change for reporting, %', defaultValue: 12, range: '10..100',                // TS0222 "MOES ZSS-ZK-THL"
                    limit:['TS0222']]],
 
-        5: [input: [name: 'minTempAlarmPar', type: 'decimal', title: '<b>Minimum Temperature Alarm</b>', description: 'Minimum Temperature Alarm, C', defaultValue: 0.0, range: '-20.0..60.0',
+        5: [input: [name: 'minTempAlarmPar', type: 'decimal', title: '<b>Minimum Temperature Alarm</b>', description: 'Minimum Temperature Alarm, C', defaultValue: 0.0, range: '-20..60',
                    limit:['TS0601_Tuya', /*'TS0601_Haozee',*/ 'TS0201_LCZ030']]],
 
-        6: [input: [name: 'maxTempAlarmPar', type: 'decimal', title: '<b>Maximum Temperature Alarm</b>', description: 'Maximum Temperature Alarm, C', defaultValue: 39.0, range: '-20.0..60.0',
+        6: [input: [name: 'maxTempAlarmPar', type: 'decimal', title: '<b>Maximum Temperature Alarm</b>', description: 'Maximum Temperature Alarm, C', defaultValue: 39.0, range: '-20..60',
                    limit:['TS0601_Tuya', /*'TS0601_Haozee',*/ 'TS0201_LCZ030']]],
 
         7: [input: [name: 'minHumidityAlarmPar', type: 'number', title: '<b>Minimal Humidity Alarm</b>', description: 'Minimum Humidity Alarm, %', defaultValue: 20, range: '0..100',           // 'TS0601_Haozee' only!
@@ -706,6 +708,11 @@ def parseZDOcommand( Map descMap ) {
             if (logEnable) { 
                 log.debug "${device.displayName} ZDO Network Address request, data=${descMap.data} (Sequence Number:${descMap.data[0]})" 
             }
+            // Check if ZDO responses are enabled
+            if (settings?.respondToZdoRequests != true) {
+                if (logEnable) { log.debug "${device.displayName} ZDO Network Address response disabled by preference" }
+                break
+            }
             // Rate limiting: only respond if more than 10 seconds have passed since last response
             def now = new Date().getTime()
             Map lastRxMap = stringToJsonMap(state.lastRx ?: '{}')
@@ -731,6 +738,11 @@ def parseZDOcommand( Map descMap ) {
         case '0002' : // Node Descriptor Request (Node_Desc_req)
             if (logEnable) { 
                 log.debug "${device.displayName} ZDO Node Descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]})" 
+            }
+            // Check if ZDO responses are enabled
+            if (settings?.respondToZdoRequests != true) {
+                if (logEnable) { log.debug "${device.displayName} ZDO Node Descriptor response disabled by preference" }
+                break
             }
             // Rate limiting: only respond if more than 10 seconds have passed since last response
             def now = new Date().getTime()
@@ -1853,11 +1865,11 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings?.alarmTempPar == null) { device.updateSetting('alarmTempPar', [value:'Below min temp', type:'enum']) }
     if (fullInit == true || settings?.alarmHumidityPar == null) { device.updateSetting('alarmHumidityPar', [value:'Below min hum.', type:'enum']) }
     if (fullInit == true || settings?.temperatureUnit == null) { device.updateSetting('temperatureUnit', [value:'Celsius', type:'enum']) }
+    if (fullInit == true || settings?.respondToZdoRequests == null) { device.updateSetting('respondToZdoRequests', false) }
     //
     if (fullInit == true || state.notPresentCounter == null) { state.notPresentCounter = 0 }
     if (fullInit == true || state.modelGroup == null)  { state.modelGroup = getModelGroup() }
-    //if (fullInit == true || state.lastTemp == null) state.lastTemp = now() - defaultMinReportingTime * 1000
-    //if (fullInit == true || state.lastHumi == null) state.lastHumi = now() - defaultMinReportingTime * 1000
+    
     sendHealthStatusEvent('unknown')
 }
 
