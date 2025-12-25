@@ -1,38 +1,12 @@
 /*
- * IKEA BILRESA Matter Dual Button (events-based)
+ * IKEA BILRESA Matter Dual Button (attributes and events-based)
  *
- * Last edited: 2025/12/25 7:34 PM
+ * Last edited: 2025/12/25 9:15 PM
  *
- * - No wildcard subscribe
- * - Subscribes to:
- *   * Switch (0x003B) events (all) on EP1 & EP2
- *   * Battery (0x002F) attr 0x000C on EP0
- *
- * Uses Matter Switch events (evtInt 1..6) for:
- *   - pushed       (MultiPressComplete count==1)
- *   - doubleTapped (MultiPressComplete count==2)
- *   - held         (LongPress event)
  */
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
-import groovy.transform.Field
-
-@Field static final Integer EP_BTN_1 = 0x01
-@Field static final Integer EP_BTN_2 = 0x02
-@Field static final Integer EP_BAT   = 0x00
-
-@Field static final Integer CLUS_SWITCH   = 0x003B
-@Field static final Integer CLUS_BAT      = 0x002F
-@Field static final Integer ATTR_BAT_PCT  = 0x000C   // cluster 0x002F attr 0x000C -> raw 0..200
-
-// Switch event IDs (Matter spec)
-@Field static final Integer EVT_INITIAL_PRESS     = 1
-@Field static final Integer EVT_LONG_PRESS        = 2
-@Field static final Integer EVT_SHORT_RELEASE     = 3
-@Field static final Integer EVT_LONG_RELEASE      = 4
-@Field static final Integer EVT_MULTI_ONGOING     = 5
-@Field static final Integer EVT_MULTI_COMPLETE    = 6
 
 metadata {
     definition(name: "IKEA BILRESA Matter Buttons", namespace: "community", author: "kkossev + ChatGPT") {
@@ -46,10 +20,7 @@ metadata {
         capability "DoubleTapableButton"
         capability "ReleasableButton"
 
-        attribute "lastEvent", "string"
-
         fingerprint endpointId:"01", inClusters:"0003,001D,003B", outClusters:"", model:"BILRESA dual button", manufacturer:"IKEA of Sweden", controllerType:"MAT"
-        fingerprint endpointId:"02", inClusters:"0003,001D,003B", outClusters:"", model:"BILRESA dual button", manufacturer:"IKEA of Sweden", controllerType:"MAT"
     }
 
     preferences {
@@ -92,11 +63,7 @@ void refresh() {
     List<Map<String,String>> paths = []
 
     // Battery percent (raw 0..200)
-    paths.add(matter.attributePath(EP_BAT, CLUS_BAT, ATTR_BAT_PCT))
-
-    // You *can* read switch state attributes too if you want, but not needed
-    // paths.add(matter.attributePath(EP_BTN_1, CLUS_SWITCH, 0x0001))
-    // paths.add(matter.attributePath(EP_BTN_2, CLUS_SWITCH, 0x0001))
+    paths.add(matter.attributePath(0x00, 0x002F, 0x000C))
 
     String cmd = matter.readAttributes(paths)
     sendHubCommand(new HubAction(cmd, Protocol.MATTER))
@@ -106,16 +73,12 @@ private void subscribeToPaths() {
     List<Map<String,String>> paths = []
 
     // Battery attribute
-    paths.add(matter.attributePath(EP_BAT, CLUS_BAT, ATTR_BAT_PCT))
+    paths.add(matter.attributePath(0x00, 0x002F, 0x000C))
 
-    //paths.add(matter.attributePath(EP_BTN_1, CLUS_SWITCH, -1))
-    //paths.add(matter.attributePath(EP_BTN_2, CLUS_SWITCH, -1))
-    paths.add(matter.attributePath(-1, CLUS_SWITCH, -1))
+    paths.add(matter.attributePath(-1, 0x003B, -1))
 
-    // Switch events (all IDs) for both endpoints
-    //paths.add(matter.eventPath(EP_BTN_1, CLUS_SWITCH, -1))
-    //paths.add(matter.eventPath(EP_BTN_2, CLUS_SWITCH, -1))
-    paths.add(matter.eventPath(-1, CLUS_SWITCH, -1))
+    // Switch events (all IDs) for all endpoints
+    paths.add(matter.eventPath(-1, 0x003B, -1))
 
     String cmd = matter.cleanSubscribe(1, 0xFFFF, paths)
     sendHubCommand(new HubAction(cmd, Protocol.MATTER))
@@ -127,13 +90,9 @@ private void subscribeToPaths() {
 
 void parse(String description) {
     Map msg = matter.parseDescriptionAsMap(description)
-    logDebug "parse(String): ${description} -> ${msg}"
+    logDebug "parse(String): description: ${description} -> msg: ${msg}"
     if (!msg) return
 
-    // --- KLIPPBOK-style battery decode from read-attr (EP0 / 0x002F / 0x000C) ---
-    // These messages look like:
-    //  read attr - endpoint: 00, cluster: 002F, attrId: 000C, value: 04C8
-    //  -> [endpoint:00, cluster:002F, attrId:000C, value:C8, clusterInt:47, attrInt:12]
     Integer epHex   = safeHexToInt(msg.endpoint)
     Integer clusHex = safeHexToInt(msg.cluster)
     Integer attrId  = safeHexToInt(msg.attrId)
@@ -141,7 +100,7 @@ void parse(String description) {
     String  cb      = (msg.callbackType ?: "").toString()
 
     if (cb == "" && epHex != null && clusHex != null && attrId != null &&
-        epHex == EP_BAT && clusHex == CLUS_BAT && attrId == ATTR_BAT_PCT) {
+        epHex == 0x00 && clusHex == 0x002F && attrId == 0x000C) {
 
         Integer raw = safeHexToInt(value)   // typically 0x00..0xC8
         if (raw != null) {
@@ -169,7 +128,7 @@ void parse(Map msg) {
 
     // 1) Switch events (multi-press, long-press)
     Integer evt = safeInt(msg.evtInt)
-    if (cluster == CLUS_SWITCH && evt != null && (ep == EP_BTN_1 || ep == EP_BTN_2)) {
+    if (cluster == 0x003B && evt != null && (ep == 0x01 || ep == 0x02)) {
         handleSwitchEvent(ep, evt, msg)
         return
     }
@@ -187,37 +146,36 @@ void parse(Map msg) {
 /* ---------- event handlers ---------- */
 
 private void handleSwitchEvent(Integer ep, Integer evt, Map msg) {
-    Integer buttonNumber = (ep == EP_BTN_1) ? 1 : 2
+    Integer buttonNumber = (ep == 0x01) ? 1 : 2
     Integer count        = extractMultiPressCount(msg) ?: 1
-
     switch (evt) {
-        case EVT_INITIAL_PRESS:
+        case 1:
             // evt 1 – InitialPress; usually followed by LongPress or ShortRelease/MultiPress*
             if (logEnable) { log.debug "EVT_INITIAL_PRESS"}
             break
 
-        case EVT_LONG_PRESS:
+        case 2:
             // evt 2 – LongPress
             sendButtonEvent("held", buttonNumber)
             break
 
-        case EVT_SHORT_RELEASE:
+        case 3:
             // 3 – ShortRelease
             // If you want a release after any short press, enable this:
             sendButtonEvent("released", buttonNumber)
-        	break
+            break
 
-        case EVT_LONG_RELEASE:
+        case 4:
             // 4 – LongRelease
             sendButtonEvent("released", buttonNumber)
-        	break
+            break
 
-        case EVT_MULTI_ONGOING:
+        case 5:
             // evt 5 – MultiPressOngoing; we’ll wait for MultiPressComplete
             if (logEnable) { log.debug "EVT_MULTI_ONGOING"}
             break
 
-        case EVT_MULTI_COMPLETE:
+        case 6:
             // evt 6 – MultiPressComplete; this includes press count
             if (logEnable) { log.debug "EVT_MULTI_COMPLETE count=${count}"}
             if (count == 1) {
@@ -245,12 +203,31 @@ private void handleSwitchEvent(Integer ep, Integer evt, Map msg) {
  */
 private Integer extractMultiPressCount(Map msg) {
     def values = msg.values
-    if (!(values instanceof Map)) return null
+    if (values == null) return null
 
-    def entry = values[1] ?: values[0]
-    if (!(entry instanceof Map)) return null
+    // values may be a Map with numeric keys or a List; handle both.
+    List<Integer> counts = []
 
-    return safeHexToInt(entry.value)
+    if (values instanceof Map) {
+        values.each { k, v ->
+            if (v instanceof Map && v.value != null) {
+                Integer n = safeHexToInt(v.value) ?: safeInt(v.value)
+                if (n != null) counts << n
+            }
+        }
+    } else if (values instanceof List) {
+        values.each { v ->
+            if (v instanceof Map && v.value != null) {
+                Integer n = safeHexToInt(v.value) ?: safeInt(v.value)
+                if (n != null) counts << n
+            }
+        }
+    }
+
+    if (!counts) return null
+
+    // prefer the highest parsed count (totalNumberOfPresses)
+    return counts.max()
 }
 
 /* ---------- attribute handler ---------- */
@@ -262,7 +239,7 @@ private void handleAttributeReport(Map msg) {
     def valueObj    = msg.value
 
     // Battery: EP0, cluster 0x002F, attr 0x000C, raw 0..200
-    if (ep == EP_BAT && cluster == CLUS_BAT && attr == ATTR_BAT_PCT) {
+    if (ep == 0x00 && cluster == 0x002F && attr == 0x000C) {
         Integer raw = safeInt(valueObj)
         if (raw != null) {
             Integer pct = Math.round(raw / 2.0f)
@@ -276,11 +253,11 @@ private void handleAttributeReport(Map msg) {
     // We ignore Switch attribute 0x0001 here; events already give us better info
     // (and avoid duplicate 'pushed' events).
     // Fallback: handle simple press from Switch attribute if events don’t fire
-    if (cluster == CLUS_SWITCH && attr == 0x0001 && (ep == EP_BTN_1 || ep == EP_BTN_2)) {
+    if (cluster == 0x003B && attr == 0x0001 && (ep == 0x01 || ep == 0x02)) {
         Integer v = safeInt(valueObj)
         if (v == null) return
 
-        Integer buttonNumber = (ep == EP_BTN_1) ? 1 : 2
+        Integer buttonNumber = (ep == 0x01) ? 1 : 2
 
         if (v == 1) {
             // rising edge = pressed
@@ -296,14 +273,26 @@ private void handleAttributeReport(Map msg) {
 /* ---------- helpers ---------- */
 
 private void sendButtonEvent(String type, Integer buttonNumber) {
+    // Filter 'released' events: only allow if previous action for the same
+    // button was 'held'. Otherwise ignore the release (single press).
+    if (type == "released") {
+        def lastNum = state.lastButtonNumber
+        def lastAct = state.lastAction
+        if (lastNum != buttonNumber || lastAct != "held") {
+            logDebug "Ignored release for button ${buttonNumber} (previous=${lastAct} button=${lastNum})"
+            return
+        }
+    }
+
     if (txtEnable) log.info "${device.displayName} button ${buttonNumber} ${type}"
     sendEvent(name: type, value: buttonNumber, isStateChange: true)
-    sendLastEvent("button ${buttonNumber} ${type}")
+
+    // Persist last button event parameters for future filtering
+    state.lastButtonNumber = buttonNumber
+    state.lastAction = type
+    state.lastButtonTime = now()
 }
 
-private void sendLastEvent(String text) {
-    sendEvent(name: "lastEvent", value: text, isStateChange: true)
-}
 
 private Integer safeInt(def v) {
     try {
