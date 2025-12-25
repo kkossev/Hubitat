@@ -1,7 +1,7 @@
 /*
  * IKEA BILRESA Matter Dual Button (attributes and events-based)
  *
- * Last edited: 2025/12/25 9:15 PM
+ * Last edited: 2025/12/25 10:19 PM
  *
  */
 
@@ -75,13 +75,20 @@ private void subscribeToPaths() {
     // Battery attribute
     paths.add(matter.attributePath(0x00, 0x002F, 0x000C))
 
-    paths.add(matter.attributePath(-1, 0x003B, -1))
+    // Subscribe per-endpoint for switch attributes (EP1 & EP2)
+    paths.add(matter.attributePath(0x01, 0x003B, -1))
+    paths.add(matter.attributePath(0x02, 0x003B, -1))
 
-    // Switch events (all IDs) for all endpoints
-    paths.add(matter.eventPath(-1, 0x003B, -1))
+    // Subscribe per-endpoint for switch events (EP1 & EP2)
+    paths.add(matter.eventPath(0x01, 0x003B, -1))
+    paths.add(matter.eventPath(0x02, 0x003B, -1))
 
     String cmd = matter.cleanSubscribe(1, 0xFFFF, paths)
+    logDebug "subscribeToPaths cmd=${cmd}"
     sendHubCommand(new HubAction(cmd, Protocol.MATTER))
+    // Record the time we sent the subscription so we can ignore noisy
+    // events that immediately follow subscription/initialize.
+    state.lastInitializeTime = now()
 
     if (txtEnable) log.info "${device.displayName} Subscribed to switch events (EP1/EP2) + battery (EP0/0x002F/0x000C)"
 }
@@ -146,6 +153,15 @@ void parse(Map msg) {
 /* ---------- event handlers ---------- */
 
 private void handleSwitchEvent(Integer ep, Integer evt, Map msg) {
+    // Ignore noisy events that arrive shortly after we (re)subscribed.
+    def lastInit = state.lastInitializeTime
+    if (lastInit != null) {
+        long age = now() - (lastInit as long)
+        if (age >= 0 && age < 10000) {
+            logDebug "Ignored switch event (ep=${ep} evt=${evt}) ${age}ms after initialize/subscribe"
+            return
+        }
+    }
     Integer buttonNumber = (ep == 0x01) ? 1 : 2
     Integer count        = extractMultiPressCount(msg) ?: 1
     switch (evt) {

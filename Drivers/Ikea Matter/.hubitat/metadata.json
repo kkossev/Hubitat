@@ -10,7 +10,7 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA BILRESA Matter Buttons.groovy",
       "id": 4762,
       "codeType": "driver",
-      "version": 32
+      "version": 35
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA KLIPPBOK Matter Water Leak Sensor.groovy",
