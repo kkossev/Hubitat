@@ -1,7 +1,7 @@
 /*
- * IKEA BILRESA Matter Dual Button (attributes and events-based)
+ * IKEA BILRESA Matter Dual Button (attributes and events-based). Supports both dual button and scroll wheel models.
  *
- * Last edited: 2025/12/25 10:19 PM
+ * Last edited: 2025/12/26 9:03 AM
  *
  */
 
@@ -21,6 +21,7 @@ metadata {
         capability "ReleasableButton"
 
         fingerprint endpointId:"01", inClusters:"0003,001D,003B", outClusters:"", model:"BILRESA dual button", manufacturer:"IKEA of Sweden", controllerType:"MAT"
+        fingerprint endpointId:"01", inClusters:"0003,001D,003B", outClusters:"", model:"BILRESA scroll wheel", manufacturer:"IKEA of Sweden", controllerType:"MAT"
     }
 
     preferences {
@@ -43,17 +44,40 @@ void logsOff() {
 
 void initialize() {
     logDebug "initialize()"
+    logDebug "model=${device.getDataValue('model') ?: device.model} endpoints=${endpointCount()}"
     configureButtons()
     subscribeToPaths()
     refresh()
 }
 
 private void configureButtons() {
-    sendEvent(name: "numberOfButtons", value: 2, isStateChange: true)
+    Integer count = endpointCount()
+    sendEvent(name: "numberOfButtons", value: count, isStateChange: true)
     sendEvent(name: "supportedButtonValues",
               value: ["pushed", "held", "doubleTapped", "released"].toString(),
               isStateChange: true)
 }
+
+// Return number of endpoints/buttons for this device model (2 or 9)
+private Integer endpointCount() {
+    String model = (device.getDataValue("model") ?: device.model ?: "").toString().toLowerCase().trim()
+    if (model.contains("scroll")) return 9
+    return 2
+}
+
+// Wheel helpers: preserved so callers can detect wheel models/endpoints.
+private boolean isWheelModel() {
+    String model = (device.getDataValue("model") ?: device.model ?: "").toString().toLowerCase()
+    return model.contains("scroll")
+}
+
+private boolean isWheelEndpoint(Integer ep) {
+    if (ep == null) return false
+    return [1,2,4,5,7,8].contains(ep)
+}
+
+// No special wheel rotation handling — fall back to standard multi-press/hold semantics
+// (no extra brace here)
 
 /* ---------- subscriptions & refresh ---------- */
 
@@ -74,14 +98,14 @@ private void subscribeToPaths() {
 
     // Battery attribute
     paths.add(matter.attributePath(0x00, 0x002F, 0x000C))
-
-    // Subscribe per-endpoint for switch attributes (EP1 & EP2)
-    paths.add(matter.attributePath(0x01, 0x003B, -1))
-    paths.add(matter.attributePath(0x02, 0x003B, -1))
-
-    // Subscribe per-endpoint for switch events (EP1 & EP2)
-    paths.add(matter.eventPath(0x01, 0x003B, -1))
-    paths.add(matter.eventPath(0x02, 0x003B, -1))
+    // Subscribe per-endpoint for switch attributes & events (EP1..EPN)
+    Integer epCount = endpointCount()
+    for (int ep = 1; ep <= epCount; ep++) {
+        paths.add(matter.attributePath(ep, 0x003B, -1))
+    }
+    for (int ep = 1; ep <= epCount; ep++) {
+        paths.add(matter.eventPath(ep, 0x003B, -1))
+    }
 
     String cmd = matter.cleanSubscribe(1, 0xFFFF, paths)
     logDebug "subscribeToPaths cmd=${cmd}"
@@ -89,8 +113,7 @@ private void subscribeToPaths() {
     // Record the time we sent the subscription so we can ignore noisy
     // events that immediately follow subscription/initialize.
     state.lastInitializeTime = now()
-
-    if (txtEnable) log.info "${device.displayName} Subscribed to switch events (EP1/EP2) + battery (EP0/0x002F/0x000C)"
+    if (txtEnable) log.info "${device.displayName} Subscribed to switch events (EP1..EP${epCount}) + battery (EP0/0x002F/0x000C)"
 }
 
 /* ---------- parsing ---------- */
@@ -135,7 +158,7 @@ void parse(Map msg) {
 
     // 1) Switch events (multi-press, long-press)
     Integer evt = safeInt(msg.evtInt)
-    if (cluster == 0x003B && evt != null && (ep == 0x01 || ep == 0x02)) {
+    if (cluster == 0x003B && evt != null && ep != null && ep >= 1 && ep <= endpointCount()) {
         handleSwitchEvent(ep, evt, msg)
         return
     }
@@ -157,17 +180,21 @@ private void handleSwitchEvent(Integer ep, Integer evt, Map msg) {
     def lastInit = state.lastInitializeTime
     if (lastInit != null) {
         long age = now() - (lastInit as long)
-        if (age >= 0 && age < 10000) {
+        if (age >= 0 && age < 30000) {
             logDebug "Ignored switch event (ep=${ep} evt=${evt}) ${age}ms after initialize/subscribe"
             return
         }
     }
-    Integer buttonNumber = (ep == 0x01) ? 1 : 2
+    Integer buttonNumber = ep
     Integer count        = extractMultiPressCount(msg) ?: 1
     switch (evt) {
         case 1:
             // evt 1 – InitialPress; usually followed by LongPress or ShortRelease/MultiPress*
             if (logEnable) { log.debug "EVT_INITIAL_PRESS"}
+            // If this is a wheel endpoint, log and continue with normal handling
+            if (isWheelModel() && isWheelEndpoint(ep)) {
+                if (logEnable) log.debug "Initial press for wheel ep=${ep} (logged, continuing)"
+            }
             break
 
         case 2:
@@ -177,6 +204,10 @@ private void handleSwitchEvent(Integer ep, Integer evt, Map msg) {
 
         case 3:
             // 3 – ShortRelease
+            // Log wheel short-release but continue and emit release as normal
+            if (isWheelModel() && isWheelEndpoint(ep)) {
+                if (logEnable) log.debug "Short-release for wheel ep=${ep} (logged, continuing)"
+            }
             // If you want a release after any short press, enable this:
             sendButtonEvent("released", buttonNumber)
             break
@@ -189,11 +220,20 @@ private void handleSwitchEvent(Integer ep, Integer evt, Map msg) {
         case 5:
             // evt 5 – MultiPressOngoing; we’ll wait for MultiPressComplete
             if (logEnable) { log.debug "EVT_MULTI_ONGOING"}
+            // Wheel endpoints: log and continue (no special handling)
+            if (isWheelModel() && isWheelEndpoint(ep)) {
+                if (logEnable) log.debug "Multi ongoing for wheel ep=${ep} (logged, continuing)"
+            }
             break
 
         case 6:
             // evt 6 – MultiPressComplete; this includes press count
             if (logEnable) { log.debug "EVT_MULTI_COMPLETE count=${count}"}
+            // If this is a wheel endpoint, log and continue with normal multi-complete handling
+            if (isWheelModel() && isWheelEndpoint(ep)) {
+                if (logEnable) log.debug "Multi complete for wheel ep=${ep} count=${count} (logged, continuing)"
+            }
+
             if (count == 1) {
                 sendButtonEvent("pushed", buttonNumber)
             }
@@ -269,11 +309,11 @@ private void handleAttributeReport(Map msg) {
     // We ignore Switch attribute 0x0001 here; events already give us better info
     // (and avoid duplicate 'pushed' events).
     // Fallback: handle simple press from Switch attribute if events don’t fire
-    if (cluster == 0x003B && attr == 0x0001 && (ep == 0x01 || ep == 0x02)) {
+    if (cluster == 0x003B && attr == 0x0001 && ep != null && ep >= 1 && ep <= endpointCount()) {
         Integer v = safeInt(valueObj)
         if (v == null) return
 
-        Integer buttonNumber = (ep == 0x01) ? 1 : 2
+        Integer buttonNumber = ep
 
         if (v == 1) {
             // rising edge = pressed
