@@ -1,7 +1,7 @@
 /*
  * IKEA BILRESA Matter Dual Button (attributes and events-based). Supports both dual button and scroll wheel models.
  *
- * Last edited: 2025/12/26 9:03 AM
+ * Last edited: 2025/12/26 2:31 PM
  *
  */
 
@@ -98,13 +98,16 @@ private void subscribeToPaths() {
 
     // Battery attribute
     paths.add(matter.attributePath(0x00, 0x002F, 0x000C))
+
     // Subscribe per-endpoint for switch attributes & events (EP1..EPN)
     Integer epCount = endpointCount()
+    
     for (int ep = 1; ep <= epCount; ep++) {
-        paths.add(matter.attributePath(ep, 0x003B, -1))
+        paths.add(matter.attributePath(ep, 0x003B, 1))      // Switch cluster attribute 0x0001 (current position) seems to be enough
     }
+    
     for (int ep = 1; ep <= epCount; ep++) {
-        paths.add(matter.eventPath(ep, 0x003B, -1))
+        paths.add(matter.eventPath(ep, 0x003B, -1))         // We need to subscribe for ALL events from the switch cluster 
     }
 
     String cmd = matter.cleanSubscribe(1, 0xFFFF, paths)
@@ -193,7 +196,8 @@ private void handleSwitchEvent(Integer ep, Integer evt, Map msg) {
             if (logEnable) { log.debug "EVT_INITIAL_PRESS"}
             // If this is a wheel endpoint, log and continue with normal handling
             if (isWheelModel() && isWheelEndpoint(ep)) {
-                if (logEnable) log.debug "Initial press for wheel ep=${ep} (logged, continuing)"
+                if (logEnable) log.debug "Initial press for wheel ep=${ep} (logged, emitting pushed, continuing)"
+                sendButtonEvent("pushed", buttonNumber)
             }
             break
 
