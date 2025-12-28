@@ -73,7 +73,7 @@
  *                                  addedadd NEO NAS-STH02B2 electrical conductivity/fertility/temperature/humidity sensor TS0601 _TZE284_rqcuwlsa
  *                                  added soilEC and soilFertility attributes; soilFertility enum values: 'normal', 'lower', 'low', 'middle', 'high', 'higher'  
  *                                  Added ZDO 0x0000 Network Address Response and 0x0002 Node Descriptor Response handlers in an attempt to fix TS0601 _TZE284_rqcuwlsa device disconnections; Rate limiting: only respond if more than 10 seconds have passed since last response
- * ver. 2.0.1  2025-12-22 kkossev - (dev. branch) fixed temperatureSensitivity preferece being reset to zero bug; added respondToZdoRequests preference (default: false); added TS0222 _TZ3000_hy6ncvmw illuminance only sensor
+ * ver. 2.0.1  2025-12-22 kkossev - fixed temperatureSensitivity preferece being reset to zero bug; added respondToZdoRequests preference (default: false); added TS0222 _TZ3000_hy6ncvmw illuminance only sensor
  *
  *                                  TODO: update GitHub documentation  _TZ3218_7fiyo3kv
  *                                  TODO:  https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/636?u=kkossev
