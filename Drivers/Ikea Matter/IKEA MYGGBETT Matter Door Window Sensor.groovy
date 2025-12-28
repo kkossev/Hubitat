@@ -1,7 +1,7 @@
 /*
  * IKEA MYGGBETT Matter Door/Window Sensor (minimal)
  *
- * Last edited: 2025/12/2724 10:18 PM
+ * Last edited: 2025/12/28 10:16 AM
  */
 
 import hubitat.device.HubAction
@@ -117,6 +117,7 @@ def parse(String description) {
             boolean isRef = state.lastRefreshTime ? (now() - state.lastRefreshTime <= 15000) : false
             def sfx = (isInit ? " [initialize]" : "") + (isRef ? " [refresh]" : "")
             def contactVal = device.currentValue('contact')
+            def contactTime = device.currentState('contact')?.date.time
             def batteryVal = device.currentValue('battery')
             def batteryTime = device.currentState('battery')?.date.time
             logDebug("Battery report received; current contact state is ${contactVal} contact time = ${contactTime}")

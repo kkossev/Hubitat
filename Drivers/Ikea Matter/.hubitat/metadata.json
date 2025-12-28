@@ -4,13 +4,13 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA MYGGBETT Matter Door Window Sensor.groovy",
       "id": 4761,
       "codeType": "driver",
-      "version": 2
+      "version": 17
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA BILRESA Matter Buttons.groovy",
       "id": 4762,
       "codeType": "driver",
-      "version": 56
+      "version": 113
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA KLIPPBOK Matter Water Leak Sensor.groovy",
