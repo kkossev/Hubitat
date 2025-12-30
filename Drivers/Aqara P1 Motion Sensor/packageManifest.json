@@ -1,10 +1,10 @@
 {
   "packageName": "Aqara P1 Motion Sensor",
   "author": "Krassimir Kossev",
-  "version": "1.7.4",
+  "version": "2.1.1",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2025-05-24",
-  "releaseNotes": "1.7.4 2025-05-24 - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.\n1.7.3 2025-01-16 - first ping() throwing exception bug fix tnx@user2428 \n1.7.2 2024-11-28 - HE platfrom 2.4.0.x compatibility fixes;\n...............\n1.4.0 2023-03-17 - *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added 'Works with ...'; added ping() and RTT\n...............\n1.2.2 2022-08-21 - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM\n1.2.1 2022-08-10 - code cleanup; change device name on initialize\n1.2.0 2022-07-29 - Aqara FP1 Human Presence Sensor support\n1.1.5 2022-07-09 - when going offline the battery level is set to 0 (zero); when back online, the last known battery level is restored; when switching offline, motion is reset to 'inactive'; added digital and physical events type \n1.1.4 2022-07-08 - PowerSource presence polling; FP1 support improvements\n1.1.1 2022-07-01 - added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) inital support\n1.0.0 2022-06-24 - first release version\n",
+  "dateReleased": "2025-12-30",
+  "releaseNotes": "2.1.1 2025-12-30 - fixed rounding issue for temperature attribute\n2.1.0 2025-11-23 - added FP300 advanced sampling configuration parameters (temp/humidity and light sampling frequency/period) with intelligent change detection; added sampling parameters to refresh() command;\n1.7.5 2025-09-15 bbholthome  - light sensor GZCGQ01LM maximum illuminance capped to 65500 lux\n1.7.4 2025-05-24 - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.\n1.7.3 2025-01-16 - first ping() throwing exception bug fix tnx@user2428 \n1.7.2 2024-11-28 - HE platfrom 2.4.0.x compatibility fixes;",
   "documentationLink": "https://github.com/kkossev/Hubitat/blob/main/Drivers/Aqara%20P1%20Motion%20Sensor/README.MD",
   "communityLink": "https://community.hubitat.com/t/aqara-p1-motion-sensor/92987/63?u=kkossev",
   "drivers": [

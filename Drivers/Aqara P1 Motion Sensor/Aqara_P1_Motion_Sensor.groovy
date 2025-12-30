@@ -59,9 +59,10 @@
  *                                  MAJOR CHANGE: INTELLIGENT PARAMETER CHANGE DETECTION - Implemented for FP300 and illuminance reporting - Stores parameters in state.params [n:name, t:type, v:value, l:local] and only sends changed values to prevent device instability
  * ver. 2.0.1 2025-11-20 kkossev  - forced sending temperature updates to the child device; improved trackTargetDistance() and startSpatialLearning() commands description; added _info_ messages for better user experience; pirDetection changed to active/inactive
  *                                  roomActivity attribute filtered for FP1/FP1E only; updates battery attribute for the FP300 child device
- * ver. 2.1.0 2025-11-23 kkossev  - (dev.branch) added FP300 advanced sampling configuration parameters (temp/humidity and light sampling frequency/period) with intelligent change detection; added sampling parameters to refresh() command;
+ * ver. 2.1.0 2025-11-23 kkossev  - added FP300 advanced sampling configuration parameters (temp/humidity and light sampling frequency/period) with intelligent change detection; added sampling parameters to refresh() command;
  *                                  added FP300 detection range zones configuration (0.25m resolution bitmap, attribute 0x019A) with validation and attribute event;
  *                                  added FP300 LED disabled at night and LED night time schedule parameters with full read/write support
+ * ver. 2.1.1 2025-12-30 kkossev  - fixed rounding issue for temperature attribute
  * 
  *
  *                                 TODO: 
@@ -74,8 +75,8 @@
  *
  */
 
-static String version() { "2.1.0" }
-static String timeStamp() {"2025/11/23 4:27 PM"}
+static String version() { "2.1.1" }
+static String timeStamp() {"2025/12/30 7:36 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -1677,7 +1678,7 @@ def temperatureEvent( temperature ) {
             }
             
             def tempConverted = temperature + tempOffset
-            map.value = Math.round(tempConverted * 10) / 10.0  // Round to 1 decimal place
+            map.value = new BigDecimal(tempConverted).setScale(1, BigDecimal.ROUND_HALF_UP)  // Round to 1 decimal place
             map.type = "physical"
             map.isStateChange = true
             
