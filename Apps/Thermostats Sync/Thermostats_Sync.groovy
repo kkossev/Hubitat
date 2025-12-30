@@ -1,4 +1,4 @@
-﻿/**
+/**
  *  Thermostats Sync
  *
  *  Description: Synchronizes the main attributes of two thermostats. When an attribute 
@@ -16,27 +16,29 @@
  *
  *  ver. 1.0.0  2025-08-19 kkossev  - Initial version
  *  ver. 1.0.1  2025-10-20 kkossev  - added support for temperature and operating state sync; added importUrl; 
- *  ver. 1.0.2  2025-11-09 kkossev  - (dev. branch) app is singleThreaded; Implemented 2-second global sync flag clearing across all sync methods and fixed sync counter accumulation by clearing both flags AND counters together to prevent "Maximum sync attempts reached" errors with rapid TRVZB device events.
+ *  ver. 1.0.2  2025-11-09 kkossev  - app is singleThreaded; Implemented 2-second global sync flag clearing across all sync methods and fixed sync counter accumulation by clearing both flags AND counters together to prevent "Maximum sync attempts reached" errors with rapid TRVZB device events.
  *                                    added Battery and Health Status sync support;
+ *  ver. 1.0.3  2025-11-16 kkossev  - fixed an accidental UTF-8 with BOM encoding that caused issues with HPM
+ *  ver. 1.0.4  2025-12-07 kkossev  - added syncEventType option to preserve physical/digital event designation when syncing attributes via command introspection
  * 
  *              TODO:
  *
  */
 
 import groovy.transform.Field
-@Field static final String VERSION = "1.0.2"
-@Field static final String COMPILE_TIME = '2025/11/09 1:23 PM'
+@Field static final String VERSION = "1.0.4"
+@Field static final String COMPILE_TIME = '2025/12/07 9:11 AM'
 
 definition(
     name: "Thermostats Sync",
     namespace: "kkossev",
     author: "Krassimir Kossev",
     description: "Synchronizes the main attributes of two thermostats bidirectionally",
-    category: "Climate Control",
-    //iconUrl: "",
-    //iconX2Url: "",
+    category: "Utility",
+    iconUrl: "",
+    iconX2Url: "",
     //iconX3Url: "",
-    importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Apps/Thermostats%20Sync/Thermostats_Sync.groovy",
+    importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Apps/Thermostats%20Sync/Thermostats_Sync.groovy",
     singleInstance: false,
     singleThreaded: true
 )
@@ -57,6 +59,7 @@ preferences {
             input "syncOperatingState", "bool", title: "Synchronize Operating State (using setThermostatOperatingState command)", defaultValue: true, submitOnChange: true
             input "syncBattery", "bool", title: "Synchronize Battery Level (using setBattery command)", defaultValue: false, submitOnChange: true
             input "syncHealthStatus", "bool", title: "Synchronize Health Status (using setHealthStatus command)", defaultValue: false, submitOnChange: true
+            input "syncEventType", "bool", title: "Synchronize Event Type (preserve physical/digital designation)", defaultValue: false, submitOnChange: true
         }
         
         section("Loop Prevention") {
@@ -86,7 +89,8 @@ preferences {
                          "Temperature: ${thermostat1.currentValue('temperature')}°<br>" +
                          "Operating State: ${thermostat1.currentValue('thermostatOperatingState')}<br>" +
                          "Battery: ${thermostat1.currentValue('battery')}%<br>" +
-                         "Health Status: ${thermostat1.currentValue('healthStatus')}"
+                         "Health Status: ${thermostat1.currentValue('healthStatus')}<br>" +
+                         "Event Type Support: ${supportsEventTypeParameter(thermostat1) ? '✓ Yes' : '✗ No'}"
                          
                 paragraph "<b>Second Thermostat (${thermostat2.displayName}):</b><br>" +
                          "Mode: ${thermostat2.currentValue('thermostatMode')}<br>" +
@@ -96,7 +100,8 @@ preferences {
                          "Temperature: ${thermostat2.currentValue('temperature')}°<br>" +
                          "Operating State: ${thermostat2.currentValue('thermostatOperatingState')}<br>" +
                          "Battery: ${thermostat2.currentValue('battery')}%<br>" +
-                         "Health Status: ${thermostat2.currentValue('healthStatus')}"
+                         "Health Status: ${thermostat2.currentValue('healthStatus')}<br>" +
+                         "Event Type Support: ${supportsEventTypeParameter(thermostat2) ? '✓ Yes' : '✗ No'}"
             }
         }
         
@@ -208,6 +213,15 @@ def initialize() {
         return
     }
     
+    // Detect driver support for event type parameter
+    def driverSupport = [:]
+    driverSupport[thermostat1.deviceId.toString()] = supportsEventTypeParameter(thermostat1)
+    driverSupport[thermostat2.deviceId.toString()] = supportsEventTypeParameter(thermostat2)
+    atomicState.driverSupport = driverSupport
+    
+    logInfo "Thermostat1 (${thermostat1.displayName}) event type support: ${driverSupport[thermostat1.deviceId.toString()]}"
+    logInfo "Thermostat2 (${thermostat2.displayName}) event type support: ${driverSupport[thermostat2.deviceId.toString()]}"
+    
     // Only subscribe to events if autoSync is enabled
     if (atomicState.autoSyncEnabled) {
         // Subscribe to events based on user preferences
@@ -270,7 +284,7 @@ def performManualSync(sourceDevice, targetDevice) {
     if (syncThermostatMode) {
         def mode = sourceDevice.currentValue('thermostatMode')
         if (mode) {
-            syncThermostatMode([target: targetDevice.deviceId, value: mode, source: sourceDevice.deviceId])
+            syncThermostatMode([target: targetDevice.deviceId, value: mode, source: sourceDevice.deviceId, eventType: "digital"])
         }
     }
     
@@ -278,7 +292,7 @@ def performManualSync(sourceDevice, targetDevice) {
     if (syncHeatingSetpoint) {
         def heatingSetpoint = sourceDevice.currentValue('heatingSetpoint')
         if (heatingSetpoint) {
-            syncHeatingSetpoint([target: targetDevice.deviceId, value: heatingSetpoint, source: sourceDevice.deviceId])
+            syncHeatingSetpoint([target: targetDevice.deviceId, value: heatingSetpoint, source: sourceDevice.deviceId, eventType: "digital"])
         }
     }
     
@@ -286,7 +300,7 @@ def performManualSync(sourceDevice, targetDevice) {
     if (syncCoolingSetpoint) {
         def coolingSetpoint = sourceDevice.currentValue('coolingSetpoint')
         if (coolingSetpoint) {
-            syncCoolingSetpoint([target: targetDevice.deviceId, value: coolingSetpoint, source: sourceDevice.deviceId])
+            syncCoolingSetpoint([target: targetDevice.deviceId, value: coolingSetpoint, source: sourceDevice.deviceId, eventType: "digital"])
         }
     }
     
@@ -294,7 +308,7 @@ def performManualSync(sourceDevice, targetDevice) {
     if (syncFanMode) {
         def fanMode = sourceDevice.currentValue('thermostatFanMode')
         if (fanMode) {
-            syncFanMode([target: targetDevice.deviceId, value: fanMode, source: sourceDevice.deviceId])
+            syncFanMode([target: targetDevice.deviceId, value: fanMode, source: sourceDevice.deviceId, eventType: "digital"])
         }
     }
     
@@ -302,7 +316,7 @@ def performManualSync(sourceDevice, targetDevice) {
     if (syncTemperature) {
         def temperature = sourceDevice.currentValue('temperature')
         if (temperature) {
-            syncTemperature([target: targetDevice.deviceId, value: temperature, source: sourceDevice.deviceId])
+            syncTemperature([target: targetDevice.deviceId, value: temperature, source: sourceDevice.deviceId, eventType: "digital"])
         }
     }
     
@@ -310,7 +324,7 @@ def performManualSync(sourceDevice, targetDevice) {
     if (syncOperatingState) {
         def operatingState = sourceDevice.currentValue('thermostatOperatingState')
         if (operatingState) {
-            syncOperatingState([target: targetDevice.deviceId, value: operatingState, source: sourceDevice.deviceId])
+            syncOperatingState([target: targetDevice.deviceId, value: operatingState, source: sourceDevice.deviceId, eventType: "digital"])
         }
     }
     
@@ -318,7 +332,7 @@ def performManualSync(sourceDevice, targetDevice) {
     if (syncBattery) {
         def battery = sourceDevice.currentValue('battery')
         if (battery != null) {
-            syncBattery([target: targetDevice.deviceId, value: battery, source: sourceDevice.deviceId])
+            syncBattery([target: targetDevice.deviceId, value: battery, source: sourceDevice.deviceId, eventType: "digital"])
         }
     }
     
@@ -326,7 +340,7 @@ def performManualSync(sourceDevice, targetDevice) {
     if (syncHealthStatus) {
         def healthStatus = sourceDevice.currentValue('healthStatus')
         if (healthStatus) {
-            syncHealthStatus([target: targetDevice.deviceId, value: healthStatus, source: sourceDevice.deviceId])
+            syncHealthStatus([target: targetDevice.deviceId, value: healthStatus, source: sourceDevice.deviceId, eventType: "digital"])
         }
     }
     
@@ -344,10 +358,10 @@ def thermostatModeHandler(evt) {
     def targetDevice = (sourceDevice.deviceId == thermostat1.deviceId) ? thermostat2 : thermostat1
     def newValue = evt.value
 
-    logTrace "Thermostat mode changed on ${sourceDevice.displayName}: ${newValue}"
+    logTrace "Thermostat mode changed on ${sourceDevice.displayName}: ${newValue} [${evt.type}]"
 
     if (shouldSync("thermostatMode", sourceDevice.deviceId, newValue)) {
-        runInMillis(syncDelay ?: 500, "syncThermostatMode", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId]])
+        runInMillis(syncDelay ?: 500, "syncThermostatMode", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId, eventType: evt.type]])
     }
 }
 
@@ -361,10 +375,10 @@ def heatingSetpointHandler(evt) {
     def targetDevice = (sourceDevice.deviceId == thermostat1.deviceId) ? thermostat2 : thermostat1
     def newValue = evt.value
 
-    logTrace "Heating setpoint changed on ${sourceDevice.displayName}: ${newValue}"
+    logTrace "Heating setpoint changed on ${sourceDevice.displayName}: ${newValue} [${evt.type}]"
 
     if (shouldSync("heatingSetpoint", sourceDevice.deviceId, newValue)) {
-        runInMillis(syncDelay ?: 500, "syncHeatingSetpoint", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId]])
+        runInMillis(syncDelay ?: 500, "syncHeatingSetpoint", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId, eventType: evt.type]])
     }
 }
 
@@ -378,10 +392,10 @@ def coolingSetpointHandler(evt) {
     def targetDevice = (sourceDevice.deviceId == thermostat1.deviceId) ? thermostat2 : thermostat1
     def newValue = evt.value
 
-    logTrace "Cooling setpoint changed on ${sourceDevice.displayName}: ${newValue}"
+    logTrace "Cooling setpoint changed on ${sourceDevice.displayName}: ${newValue} [${evt.type}]"
 
     if (shouldSync("coolingSetpoint", sourceDevice.deviceId, newValue)) {
-        runInMillis(syncDelay ?: 500, "syncCoolingSetpoint", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId]])
+        runInMillis(syncDelay ?: 500, "syncCoolingSetpoint", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId, eventType: evt.type]])
     }
 }
 
@@ -395,10 +409,10 @@ def fanModeHandler(evt) {
     def targetDevice = (sourceDevice.deviceId == thermostat1.deviceId) ? thermostat2 : thermostat1
     def newValue = evt.value
 
-    logTrace "Fan mode changed on ${sourceDevice.displayName}: ${newValue}"
+    logTrace "Fan mode changed on ${sourceDevice.displayName}: ${newValue} [${evt.type}]"
 
     if (shouldSync("thermostatFanMode", sourceDevice.deviceId, newValue)) {
-        runInMillis(syncDelay ?: 500, "syncFanMode", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId]])
+        runInMillis(syncDelay ?: 500, "syncFanMode", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId, eventType: evt.type]])
     }
 }
 
@@ -412,7 +426,7 @@ def temperatureHandler(evt) {
     def targetDevice = (sourceDevice.deviceId == thermostat1.deviceId) ? thermostat2 : thermostat1
     def newValue = evt.value
 
-    logTrace "Temperature changed on ${sourceDevice.displayName}: ${newValue}"
+    logTrace "Temperature changed on ${sourceDevice.displayName}: ${newValue} [${evt.type}]"
 
     // Check if target device supports setTemperature command before proceeding
     if (!targetDevice.hasCommand('setTemperature')) {
@@ -421,7 +435,7 @@ def temperatureHandler(evt) {
     }
     
     if (shouldSync("temperature", sourceDevice.deviceId, newValue)) {
-        runInMillis(syncDelay ?: 500, "syncTemperature", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId]])
+        runInMillis(syncDelay ?: 500, "syncTemperature", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId, eventType: evt.type]])
     }
 }
 
@@ -435,7 +449,7 @@ def operatingStateHandler(evt) {
     def targetDevice = (sourceDevice.deviceId == thermostat1.deviceId) ? thermostat2 : thermostat1
     def newValue = evt.value
 
-    logTrace "Operating state changed on ${sourceDevice.displayName}: ${newValue}"
+    logTrace "Operating state changed on ${sourceDevice.displayName}: ${newValue} [${evt.type}]"
 
     // Check if target device supports setThermostatOperatingState command before proceeding
     if (!targetDevice.hasCommand('setThermostatOperatingState')) {
@@ -444,7 +458,7 @@ def operatingStateHandler(evt) {
     }
     
     if (shouldSync("thermostatOperatingState", sourceDevice.deviceId, newValue)) {
-        runInMillis(syncDelay ?: 500, "syncOperatingState", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId]])
+        runInMillis(syncDelay ?: 500, "syncOperatingState", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId, eventType: evt.type]])
     }
 }
 
@@ -458,7 +472,7 @@ def batteryHandler(evt) {
     def targetDevice = (sourceDevice.deviceId == thermostat1.deviceId) ? thermostat2 : thermostat1
     def newValue = evt.value
 
-    logTrace "Battery level changed on ${sourceDevice.displayName}: ${newValue}%"
+    logTrace "Battery level changed on ${sourceDevice.displayName}: ${newValue}% [${evt.type}]"
 
     // Check if target device supports setBattery command before proceeding
     if (!targetDevice.hasCommand('setBattery')) {
@@ -467,7 +481,7 @@ def batteryHandler(evt) {
     }
     
     if (shouldSync("battery", sourceDevice.deviceId, newValue)) {
-        runInMillis(syncDelay ?: 500, "syncBattery", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId]])
+        runInMillis(syncDelay ?: 500, "syncBattery", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId, eventType: evt.type]])
     }
 }
 
@@ -481,7 +495,7 @@ def healthStatusHandler(evt) {
     def targetDevice = (sourceDevice.deviceId == thermostat1.deviceId) ? thermostat2 : thermostat1
     def newValue = evt.value
 
-    logTrace "Health status changed on ${sourceDevice.displayName}: ${newValue}"
+    logTrace "Health status changed on ${sourceDevice.displayName}: ${newValue} [${evt.type}]"
 
     // Check if target device supports setHealthStatus command before proceeding
     if (!targetDevice.hasCommand('setHealthStatus')) {
@@ -490,7 +504,7 @@ def healthStatusHandler(evt) {
     }
     
     if (shouldSync("healthStatus", sourceDevice.deviceId, newValue)) {
-        runInMillis(syncDelay ?: 500, "syncHealthStatus", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId]])
+        runInMillis(syncDelay ?: 500, "syncHealthStatus", [data: [target: targetDevice.deviceId, value: newValue, source: sourceDevice.deviceId, eventType: evt.type]])
     }
 }
 
@@ -506,8 +520,24 @@ def syncThermostatMode(data) {
         
         try {
             def oldValue = targetDevice.currentValue('thermostatMode')
-            logInfo "Syncing thermostat mode: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value} (was ${oldValue})"
-            targetDevice.setThermostatMode(data.value)
+            def eventType = data.eventType ?: "digital"
+            
+            // Check if target device supports event type parameter
+            def driverSupport = atomicState.driverSupport ?: [:]
+            def supportsEventType = driverSupport[targetDevice.deviceId.toString()] ?: false
+            
+            logInfo "Syncing thermostat mode: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value} (was ${oldValue}) [${eventType}]"
+            
+            // Pass event type only if device supports it
+            if (syncEventType && data.eventType && supportsEventType) {
+                targetDevice.setThermostatMode(data.value, data.eventType)
+                logTrace "Event type ${data.eventType} passed to ${targetDevice.displayName}"
+            } else {
+                targetDevice.setThermostatMode(data.value)
+                if (syncEventType && data.eventType && !supportsEventType) {
+                    logTrace "Event type not passed - driver doesn't support it"
+                }
+            }
             
             // Schedule clearing of ALL sync flags after 2 seconds - allows everything to sync again
             unschedule("clearAllSyncFlagsDelayed")  // Cancel any previous timer
@@ -533,8 +563,20 @@ def syncHeatingSetpoint(data) {
         
         try {
             def oldValue = targetDevice.currentValue('heatingSetpoint')
-            logInfo "Syncing heating setpoint: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value}° (was ${oldValue}°)"
-            targetDevice.setHeatingSetpoint(data.value as BigDecimal)
+            def eventType = data.eventType ?: "digital"
+            
+            // Check if target device supports event type parameter - use actual device's deviceId
+            def driverSupport = atomicState.driverSupport ?: [:]
+            def supportsEventType = driverSupport[targetDevice.deviceId.toString()] ?: false
+            
+            logInfo "Syncing heating setpoint: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value}° (was ${oldValue}°) [${eventType}]"
+            
+            // Pass event type only if device supports it
+            if (syncEventType && data.eventType && supportsEventType) {
+                targetDevice.setHeatingSetpoint(data.value as BigDecimal, data.eventType)
+            } else {
+                targetDevice.setHeatingSetpoint(data.value as BigDecimal)
+            }
             
             // Schedule clearing of ALL sync flags after 2 seconds - allows everything to sync again
             unschedule("clearAllSyncFlagsDelayed")  // Cancel any previous timer
@@ -560,8 +602,20 @@ def syncCoolingSetpoint(data) {
         
         try {
             def oldValue = targetDevice.currentValue('coolingSetpoint')
-            logInfo "Syncing cooling setpoint: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value}° (was ${oldValue}°)"
-            targetDevice.setCoolingSetpoint(data.value as BigDecimal)
+            def eventType = data.eventType ?: "digital"
+            
+            // Check if target device supports event type parameter
+            def driverSupport = atomicState.driverSupport ?: [:]
+            def supportsEventType = driverSupport[targetDevice.deviceId.toString()] ?: false
+            
+            logInfo "Syncing cooling setpoint: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value}° (was ${oldValue}°) [${eventType}]"
+            
+            // Pass event type only if device supports it
+            if (syncEventType && data.eventType && supportsEventType) {
+                targetDevice.setCoolingSetpoint(data.value as BigDecimal, data.eventType)
+            } else {
+                targetDevice.setCoolingSetpoint(data.value as BigDecimal)
+            }
             
             // Schedule clearing of ALL sync flags after 2 seconds - allows everything to sync again
             unschedule("clearAllSyncFlagsDelayed")  // Cancel any previous timer
@@ -587,8 +641,20 @@ def syncFanMode(data) {
         
         try {
             def oldValue = targetDevice.currentValue('thermostatFanMode')
-            logInfo "Syncing fan mode: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value} (was ${oldValue})"
-            targetDevice.setThermostatFanMode(data.value)
+            def eventType = data.eventType ?: "digital"
+            
+            // Check if target device supports event type parameter
+            def driverSupport = atomicState.driverSupport ?: [:]
+            def supportsEventType = driverSupport[targetDevice.deviceId.toString()] ?: false
+            
+            logInfo "Syncing fan mode: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value} (was ${oldValue}) [${eventType}]"
+            
+            // Pass event type only if device supports it
+            if (syncEventType && data.eventType && supportsEventType) {
+                targetDevice.setThermostatFanMode(data.value, data.eventType)
+            } else {
+                targetDevice.setThermostatFanMode(data.value)
+            }
             
             // Schedule clearing of ALL sync flags after 2 seconds - allows everything to sync again
             unschedule("clearAllSyncFlagsDelayed")  // Cancel any previous timer
@@ -615,8 +681,20 @@ def syncTemperature(data) {
         try {
             if (targetDevice.hasCommand('setTemperature')) {
                 def oldValue = targetDevice.currentValue('temperature')
-                logInfo "Syncing temperature: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value}° (was ${oldValue}°)"
-                targetDevice.setTemperature(data.value as BigDecimal)
+                def eventType = data.eventType ?: "digital"
+                
+                // Check if target device supports event type parameter
+                def driverSupport = atomicState.driverSupport ?: [:]
+                def supportsEventType = driverSupport[targetDevice.deviceId.toString()] ?: false
+                
+                logInfo "Syncing temperature: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value}° (was ${oldValue}°) [${eventType}]"
+                
+                // Pass event type only if device supports it
+                if (syncEventType && data.eventType && supportsEventType) {
+                    targetDevice.setTemperature(data.value as BigDecimal, data.eventType)
+                } else {
+                    targetDevice.setTemperature(data.value as BigDecimal)
+                }
                 
                 // Schedule clearing of ALL sync flags after 2 seconds - allows everything to sync again
                 unschedule("clearAllSyncFlagsDelayed")  // Cancel any previous timer
@@ -649,8 +727,20 @@ def syncOperatingState(data) {
         try {
             if (targetDevice.hasCommand('setThermostatOperatingState')) {
                 def oldValue = targetDevice.currentValue('thermostatOperatingState')
-                logInfo "Syncing operating state: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value} (was ${oldValue})"
-                targetDevice.setThermostatOperatingState(data.value)
+                def eventType = data.eventType ?: "digital"
+                
+                // Check if target device supports event type parameter
+                def driverSupport = atomicState.driverSupport ?: [:]
+                def supportsEventType = driverSupport[targetDevice.deviceId.toString()] ?: false
+                
+                logInfo "Syncing operating state: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value} (was ${oldValue}) [${eventType}]"
+                
+                // Pass event type only if device supports it
+                if (syncEventType && data.eventType && supportsEventType) {
+                    targetDevice.setThermostatOperatingState(data.value, data.eventType)
+                } else {
+                    targetDevice.setThermostatOperatingState(data.value)
+                }
                 
                 // Schedule clearing of ALL sync flags after 2 seconds - allows everything to sync again
                 unschedule("clearAllSyncFlagsDelayed")  // Cancel any previous timer
@@ -683,8 +773,20 @@ def syncBattery(data) {
         try {
             if (targetDevice.hasCommand('setBattery')) {
                 def oldValue = targetDevice.currentValue('battery')
-                logInfo "Syncing battery: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value}% (was ${oldValue}%)"
-                targetDevice.setBattery(data.value as Integer)
+                def eventType = data.eventType ?: "digital"
+                
+                // Check if target device supports event type parameter
+                def driverSupport = atomicState.driverSupport ?: [:]
+                def supportsEventType = driverSupport[targetDevice.deviceId.toString()] ?: false
+                
+                logInfo "Syncing battery: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value}% (was ${oldValue}%) [${eventType}]"
+                
+                // Pass event type only if device supports it
+                if (syncEventType && data.eventType && supportsEventType) {
+                    targetDevice.setBattery(data.value as Integer, data.eventType)
+                } else {
+                    targetDevice.setBattery(data.value as Integer)
+                }
                 
                 // Schedule clearing of ALL sync flags after 2 seconds - allows everything to sync again
                 unschedule("clearAllSyncFlagsDelayed")  // Cancel any previous timer
@@ -717,8 +819,20 @@ def syncHealthStatus(data) {
         try {
             if (targetDevice.hasCommand('setHealthStatus')) {
                 def oldValue = targetDevice.currentValue('healthStatus')
-                logInfo "Syncing health status: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value} (was ${oldValue})"
-                targetDevice.setHealthStatus(data.value)
+                def eventType = data.eventType ?: "digital"
+                
+                // Check if target device supports event type parameter
+                def driverSupport = atomicState.driverSupport ?: [:]
+                def supportsEventType = driverSupport[targetDevice.deviceId.toString()] ?: false
+                
+                logInfo "Syncing health status: ${sourceDevice.displayName} → ${targetDevice.displayName} = ${data.value} (was ${oldValue}) [${eventType}]"
+                
+                // Pass event type only if device supports it
+                if (syncEventType && data.eventType && supportsEventType) {
+                    targetDevice.setHealthStatus(data.value, data.eventType)
+                } else {
+                    targetDevice.setHealthStatus(data.value)
+                }
                 
                 // Schedule clearing of ALL sync flags after 2 seconds - allows everything to sync again
                 unschedule("clearAllSyncFlagsDelayed")  // Cancel any previous timer
@@ -888,6 +1002,43 @@ def isDuplicateEvent(evt, timeWindowMs = 3000) {
 }
 
 // Helper Methods
+def supportsEventTypeParameter(device) {
+    if (!device) return false
+    
+    try {
+        def commands = device.supportedCommands
+        if (!commands) {
+            logDebug "No commands found for ${device.displayName}"
+            return false
+        }
+        
+        // Check multiple commands to be sure
+        def commandsToCheck = ['setThermostatMode', 'setHeatingSetpoint', 'setBattery']
+        def supportsCount = 0
+        
+        commandsToCheck.each { cmdName ->
+            def cmd = commands.find { it.name == cmdName }
+            if (cmd?.parameters?.size() >= 2) {
+                supportsCount++
+                logTrace "Command ${cmdName} has ${cmd.parameters.size()} parameters"
+            }
+        }
+        
+        // If at least 2 out of 3 commands have 2+ parameters, assume support
+        def supported = supportsCount >= 2
+        logDebug "Device ${device.displayName} event type support: ${supported} (${supportsCount}/3 commands)"
+        return supported
+        
+    } catch (Exception e) {
+        logDebug "Error checking command parameters for ${device.displayName}: ${e.message}"
+        // Fallback to driver name check
+        def driverName = device.getTypeName()
+        def fallback = driverName?.contains("Virtual Thermostat w/ Battery and HealthStatus")
+        logDebug "Fallback driver name check: ${fallback}"
+        return fallback
+    }
+}
+
 def getDeviceById(deviceId) {
     if (thermostat1?.deviceId == deviceId) return thermostat1
     if (thermostat2?.deviceId == deviceId) return thermostat2

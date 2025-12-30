@@ -16,13 +16,13 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Zigbee TRV/Tuya Zigbee Thermostat.groovy",
       "codeType": "driver",
       "id": 3049,
-      "version": 73
+      "version": 81
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Zigbee TRV/Sonoff Zigbee TRV.groovy",
       "codeType": "driver",
       "id": 3050,
-      "version": 78
+      "version": 86
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Zigbee TRV/Zigbee TRVs and Thermostats (Misc).groovy",
@@ -34,7 +34,7 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Zigbee TRV/Virtual Thermostat (Battery and HealthStatus).groovy",
       "codeType": "driver",
       "id": 4621,
-      "version": 10
+      "version": 14
     }
   ]
 }

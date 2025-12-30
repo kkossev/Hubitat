@@ -19,7 +19,8 @@
  *  ver. 2.0.0  2025/10/31 kkossev  - first version : added forceEvents option; added refresh() method; 
  *  ver. 2.1.0  2025/11/01 kkossev  - removed automatic logic (manageCycle); all setter methods now work directly
  *                                    added battery capability and setBattery method; added healthStatus capability and setHealthStatus method
- *  ver. 2.1.1  2025/11/03 kkossev  - (dev.branch) isStateChange() now always returns true ?
+ *  ver. 2.1.1  2025/11/12 kkossev  - forceEvents preference hidden and isStateChange() forcibly set to true (all events should be sent!)
+ *  ver. 2.1.2  2025/12/06 kkossev  - (dev. branch) added digital/physical event type to all setter methods
  * 
  *              TODO: 
  */
@@ -27,8 +28,8 @@
 import groovy.transform.Field
 import groovy.json.JsonOutput
 
-static String version() { '2.1.1' }
-static String timeStamp() { '2025/11/03 10:00 AM' }
+static String version() { '2.1.2' }
+static String timeStamp() { '2025/12/06 11:35 PM' }
 
 @Field static final Boolean _DEBUG = true
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
@@ -52,18 +53,22 @@ metadata {
 		attribute "healthStatus", "ENUM", ["offline", "online"]
 
 		// Commands needed to change internal attributes of virtual device.
-		command "setTemperature", ["NUMBER"]
-		command "setThermostatOperatingState", ["ENUM"]
-		command "setThermostatSetpoint", ["NUMBER"]
+		command "setTemperature", [[name: "Temperature", type: "NUMBER", description: "Temperature value"], [name: "Event Type", type: "ENUM", constraints: ["digital", "physical"], description: "Event type (optional, defaults to digital)"]]
+		command "setThermostatOperatingState", [[name: "Operating State", type: "ENUM", description: "Thermostat operating state"], [name: "Event Type", type: "ENUM", constraints: ["digital", "physical"], description: "Event type (optional, defaults to digital)"]]
+		command "setThermostatSetpoint", [[name: "Setpoint", type: "NUMBER", description: "Thermostat setpoint temperature"], [name: "Event Type", type: "ENUM", constraints: ["digital", "physical"], description: "Event type (optional, defaults to digital)"]]
+		command "setThermostatMode", [[name: "Mode", type: "ENUM", constraints: ["auto", "cool", "emergency heat", "heat", "off"], description: "Thermostat mode"], [name: "Event Type", type: "ENUM", constraints: ["digital", "physical"], description: "Event type (optional, defaults to digital)"]]
+		command "setThermostatFanMode", [[name: "Fan Mode", type: "ENUM", constraints: ["auto", "circulate", "on"], description: "Thermostat fan mode"], [name: "Event Type", type: "ENUM", constraints: ["digital", "physical"], description: "Event type (optional, defaults to digital)"]]
+		command "setHeatingSetpoint", [[name: "Heating Setpoint", type: "NUMBER", description: "Heating setpoint temperature"], [name: "Event Type", type: "ENUM", constraints: ["digital", "physical"], description: "Event type (optional, defaults to digital)"]]
+		command "setCoolingSetpoint", [[name: "Cooling Setpoint", type: "NUMBER", description: "Cooling setpoint temperature"], [name: "Event Type", type: "ENUM", constraints: ["digital", "physical"], description: "Event type (optional, defaults to digital)"]]
 		command "setSupportedThermostatFanModes", ["JSON_OBJECT"]
 		command "setSupportedThermostatModes", ["JSON_OBJECT"]
-		command "setBattery", [[name: "Battery Level", type: "NUMBER", description: "Battery percentage (0-100)"]]
-		command "setHealthStatus", [[name: "Health Status", type: "ENUM", constraints: ["offline", "online"], description: "Set device health status"]]
+		command "setBattery", [[name: "Battery Level", type: "NUMBER", description: "Battery percentage (0-100)"], [name: "Event Type", type: "ENUM", constraints: ["digital", "physical"], description: "Event type (optional, defaults to digital)"]]
+		command "setHealthStatus", [[name: "Health Status", type: "ENUM", constraints: ["offline", "online"], description: "Set device health status"], [name: "Event Type", type: "ENUM", constraints: ["digital", "physical"], description: "Event type (optional, defaults to digital)"]]
 	}
 
 	preferences {
 		input( name: "hysteresis",type:"enum",title: "Thermostat hysteresis degrees", options:["0.1","0.25","0.5","1","2"], description:"", defaultValue: 0.5)
-		input( name: "forceEvents", type:"bool", title: "Force events even when values don't change", description: "Send events even when attribute values haven't changed", defaultValue: true)
+		//input( name: "forceEvents", type:"bool", title: "Force events even when values don't change", description: "Send events even when attribute values haven't changed", defaultValue: true)
 		input( name: "logEnable", type:"bool", title: "Enable debug logging",defaultValue: false)
 		input( name: "txtEnable", type:"bool", title: "Enable descriptionText logging", defaultValue: true)
 	}
@@ -112,17 +117,19 @@ def logsOff(){
 }
 
 // Commands needed to change internal attributes of virtual device.
-def setTemperature(temperature) {
+def setTemperature(temperature, eventType = 'digital') {
 	logDebug "setTemperature(${temperature}) was called"
-	sendTemperatureEvent("temperature", temperature)
+	def validatedEventType = (eventType in ['digital', 'physical']) ? eventType : 'digital'
+	sendTemperatureEvent("temperature", temperature, validatedEventType)
 }
 
-def setHumidity(humidity) {
+def setHumidity(humidity, eventType = 'digital') {
 	logDebug "setHumidity(${humidity}) was called"
-	sendEvent(name: "humidity", value: humidity, unit: "%", descriptionText: getDescriptionText("humidity set to ${humidity}%"), isStateChange: getIsStateChange())
+	def validatedEventType = (eventType in ['digital', 'physical']) ? eventType : 'digital'
+	sendEvent(name: "humidity", value: humidity, unit: "%", type: validatedEventType, descriptionText: getDescriptionText("humidity set to ${humidity}%", validatedEventType), isStateChange: getIsStateChange())
 }
 
-def setBattery(batteryLevel) {
+def setBattery(batteryLevel, eventType = 'digital') {
 	logDebug "setBattery(${batteryLevel}) was called"
 	
 	// Validate battery level range
@@ -130,10 +137,13 @@ def setBattery(batteryLevel) {
 	if (validatedLevel < 0) validatedLevel = 0
 	if (validatedLevel > 100) validatedLevel = 100
 	
-	sendEvent(name: "battery", value: validatedLevel, unit: "%", descriptionText: getDescriptionText("battery level set to ${validatedLevel}%"), isStateChange: getIsStateChange())
+	// Validate event type
+	def validatedEventType = (eventType in ['digital', 'physical']) ? eventType : 'digital'
+	
+	sendEvent(name: "battery", value: validatedLevel, unit: "%", type: validatedEventType, descriptionText: getDescriptionText("battery level set to ${validatedLevel}%", validatedEventType), isStateChange: getIsStateChange())
 }
 
-def setHealthStatus(healthStatus) {
+def setHealthStatus(healthStatus, eventType = 'digital') {
 	logDebug "setHealthStatus(${healthStatus}) was called"
 	
 	// Validate health status
@@ -143,12 +153,16 @@ def setHealthStatus(healthStatus) {
 		validStatus = "online"
 	}
 	
-	sendEvent(name: "healthStatus", value: validStatus, descriptionText: getDescriptionText("health status set to ${validStatus}"), isStateChange: getIsStateChange())
+	// Validate event type
+	def validatedEventType = (eventType in ['digital', 'physical']) ? eventType : 'digital'
+	
+	sendEvent(name: "healthStatus", value: validStatus, type: validatedEventType, descriptionText: getDescriptionText("health status set to ${validStatus}", validatedEventType), isStateChange: getIsStateChange())
 }
 
-def setThermostatOperatingState (operatingState) {
-	logDebug "setThermostatOperatingState (${operatingState}) was called"
-	sendEvent(name: "thermostatOperatingState", value: operatingState, descriptionText: getDescriptionText("thermostatOperatingState set to ${operatingState}"), isStateChange: getIsStateChange())
+def setThermostatOperatingState(operatingState, eventType = 'digital') {
+	logDebug "setThermostatOperatingState(${operatingState}) was called"
+	def validatedEventType = (eventType in ['digital', 'physical']) ? eventType : 'digital'
+	sendEvent(name: "thermostatOperatingState", value: operatingState, type: validatedEventType, descriptionText: getDescriptionText("thermostatOperatingState set to ${operatingState}", validatedEventType), isStateChange: getIsStateChange())
 }
 
 def setSupportedThermostatFanModes(fanModes) {
@@ -173,31 +187,36 @@ def emergencyHeat() { setThermostatMode("heat") }
 def heat() { setThermostatMode("heat") }
 def off() { setThermostatMode("off") }
 
-def setThermostatMode(mode) {
-	sendEvent(name: "thermostatMode", value: "${mode}", descriptionText: getDescriptionText("thermostatMode is ${mode}"), isStateChange: getIsStateChange())
+def setThermostatMode(mode, eventType = 'digital') {
+	def validatedEventType = (eventType in ['digital', 'physical']) ? eventType : 'digital'
+	sendEvent(name: "thermostatMode", value: "${mode}", type: validatedEventType, descriptionText: getDescriptionText("thermostatMode is ${mode}", validatedEventType), isStateChange: getIsStateChange())
 }
 
 def fanAuto() { setThermostatFanMode("auto") }
 def fanCirculate() { setThermostatFanMode("circulate") }
 def fanOn() { setThermostatFanMode("on") }
 
-def setThermostatFanMode(fanMode) {
-	sendEvent(name: "thermostatFanMode", value: "${fanMode}", descriptionText: getDescriptionText("thermostatFanMode is ${fanMode}"), isStateChange: getIsStateChange())
+def setThermostatFanMode(fanMode, eventType = 'digital') {
+	def validatedEventType = (eventType in ['digital', 'physical']) ? eventType : 'digital'
+	sendEvent(name: "thermostatFanMode", value: "${fanMode}", type: validatedEventType, descriptionText: getDescriptionText("thermostatFanMode is ${fanMode}", validatedEventType), isStateChange: getIsStateChange())
 }
 
-def setThermostatSetpoint(setpoint) {
+def setThermostatSetpoint(setpoint, eventType = 'digital') {
 	logDebug "setThermostatSetpoint(${setpoint}) was called"
-	sendEvent(name: "thermostatSetpoint", value: setpoint, unit: "°${getTemperatureScale()}", descriptionText: getDescriptionText("thermostatSetpoint set to ${setpoint}°${getTemperatureScale()}"), isStateChange: getIsStateChange())
+	def validatedEventType = (eventType in ['digital', 'physical']) ? eventType : 'digital'
+	sendEvent(name: "thermostatSetpoint", value: setpoint, unit: "°${getTemperatureScale()}", type: validatedEventType, descriptionText: getDescriptionText("thermostatSetpoint set to ${setpoint}°${getTemperatureScale()}", validatedEventType), isStateChange: getIsStateChange())
 }
 
-def setCoolingSetpoint(setpoint) {
+def setCoolingSetpoint(setpoint, eventType = 'digital') {
 	logDebug "setCoolingSetpoint(${setpoint}) was called"
-	sendEvent(name: "coolingSetpoint", value: setpoint, unit: "°${getTemperatureScale()}", descriptionText: getDescriptionText("coolingSetpoint set to ${setpoint}°${getTemperatureScale()}"), isStateChange: getIsStateChange())
+	def validatedEventType = (eventType in ['digital', 'physical']) ? eventType : 'digital'
+	sendEvent(name: "coolingSetpoint", value: setpoint, unit: "°${getTemperatureScale()}", type: validatedEventType, descriptionText: getDescriptionText("coolingSetpoint set to ${setpoint}°${getTemperatureScale()}", validatedEventType), isStateChange: getIsStateChange())
 }
 
-def setHeatingSetpoint(setpoint) {
+def setHeatingSetpoint(setpoint, eventType = 'digital') {
 	logDebug "setHeatingSetpoint(${setpoint}) was called"
-	sendEvent(name: "heatingSetpoint", value: setpoint, unit: "°${getTemperatureScale()}", descriptionText: getDescriptionText("heatingSetpoint set to ${setpoint}°${getTemperatureScale()}"), isStateChange: getIsStateChange())
+	def validatedEventType = (eventType in ['digital', 'physical']) ? eventType : 'digital'
+	sendEvent(name: "heatingSetpoint", value: setpoint, unit: "°${getTemperatureScale()}", type: validatedEventType, descriptionText: getDescriptionText("heatingSetpoint set to ${setpoint}°${getTemperatureScale()}", validatedEventType), isStateChange: getIsStateChange())
 }
 
 def setSchedule(schedule) {
@@ -304,8 +323,9 @@ def refresh() {
 	logInfo "All attributes refreshed"
 }
 
-private sendTemperatureEvent(name, val) {
-	sendEvent(name: "${name}", value: val, unit: "°${getTemperatureScale()}", descriptionText: getDescriptionText("${name} is ${val} °${getTemperatureScale()}"), isStateChange: getIsStateChange())
+private sendTemperatureEvent(name, val, eventType = 'digital') {
+	def validatedEventType = (eventType in ['digital', 'physical']) ? eventType : 'digital'
+	sendEvent(name: "${name}", value: val, unit: "°${getTemperatureScale()}", type: validatedEventType, descriptionText: getDescriptionText("${name} is ${val} °${getTemperatureScale()}", validatedEventType), isStateChange: getIsStateChange())
 }
 
 private getIsStateChange() {
@@ -325,8 +345,15 @@ private logInfo(msg) {
 	if (settings?.txtEnable) log.info "${msg}"
 }
 
-private getDescriptionText(msg) {
+private logWarn(msg) {
+	log.warn "${msg}"
+}
+
+private getDescriptionText(msg, eventType = null) {
 	def descriptionText = "${device.displayName} ${msg}"
+	if (eventType != null && eventType in ['digital', 'physical']) {
+		descriptionText += " [${eventType}]"
+	}
 	if (settings?.txtEnable) log.info "${descriptionText}"
 	return descriptionText
 }

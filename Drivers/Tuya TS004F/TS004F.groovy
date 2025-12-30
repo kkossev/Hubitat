@@ -58,14 +58,18 @@
  * ver. 2.8.2 2025-05-04 kkossev     - added TS0044 _TZ3000_5tqxpine 
  * ver. 2.8.3 2025-10-07 sbohrer     - added TS0041 _TZ3000_rsqqkdxv 
  * ver. 2.8.4 2025-10-21 kkossev     - added IMOU MultIR ZE2-EN; testing TS0601 _TZE200_nojsjtj2 SOS button (not working for now)
+ * ver. 2.8.5 2025-11-29 kkossev     - added HOBEIAN ZG-101ZS TS0044 _TZ3000_bgtzm4ny @bkinmuc ; added TS0044 _TZ3000_a4xycprs _TZ3000_dziaict4 _TZ3000_j61x9rxn _TZ3000_kfu8zapd _TZ3000_ygvf9xzp
+ * ver. 2.8.6 2025-11-30 kkossev     - bug fix: wierd TS0041 _TZ3000_rsqqkdxv switch event handling was affecting other devices; debug loggs are automatically disabled after 24 hours; DEFAULT_DEBOUNCE = true
+ * ver. 2.9.0 2025-12-01 kkossev     - handleNodeDescRequest()
+ * ver. 2.9.1 2025-12-22 kkossev     - (dev. branch) added respondToZdoRequests preference; respond to ZDO Node_Desc_request (0x0002) only if the preference is enabled; added TS004F _TZ3000_gwkzibhs @callumgw
  *
+ * 
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: unschedule jobs from other drivers: https://community.hubitat.com/t/moes-4-button-zigbee-switch/78119/20?u=kkossev
  *                                   - TODO: configre (override) the numberOfButtons in the AdvancedOptions
  *                                   - TODO: Lightify initialization like in the stock HE driver'; add Aqara button;
  *                                   - TODO: Sonoff button - battery reporting to be enabled by default; Refresh to read battery level/voltage';
  *                                   - TODO: add IAS Zone (0x0500) and IAS ACE (0x0501) support; enroll for TS0215/TS0215A
- *                                   - TODO: Debug logs off after 24 hours
  *                                   - TODO: Remove battery percentage reporting configuration for TS0041 and TS0046 : https://github.com/Koenkk/zigbee2mqtt/issues/6313#issuecomment-780746430 // https://github.com/Koenkk/zigbee2mqtt/issues/15340
  *                                   - TODO: Try to send default responses after button press for TS004F devices : https://github.com/Koenkk/zigbee2mqtt/issues/8149
  *                                   - TODO: Advanced option 'batteryVoltage' 'enum' ['report voltage', 'voltage + battery%'']
@@ -73,8 +77,8 @@
  *                                   - TODO: add 'auto revert to scene mode' option
  */
 
-static String version() { '2.8.4' }
-static String timeStamp() { '2025/10/21 9:31 PM' }
+static String version() { '2.9.1' }
+static String timeStamp() { '2025/12/22 10:18 AM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -113,6 +117,7 @@ metadata {
         fingerprint inClusters: '0000,0001,0003,0004,0006,1000', outClusters: '0019,000A,0003,0004,0005,0006,0008,1000', manufacturer: '_TZ3000_qja6nq5z', model: 'TS004F', deviceJoinName: 'Tuya Smart Knob TS004F'    // not tested
         fingerprint inClusters: '0000,0001,0003,0004,0006,1000', outClusters: '0019,000A,0003,0004,0005,0006,0008,1000', manufacturer: '_TZ3000_csflgqj2', model: 'TS004F', deviceJoinName: 'Tuya Smart Knob TS004F'    // not tested
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0004,0006,1000,0000', outClusters:'0003,0004,0005,0006,0008,1000,0019,000A', model:'TS004F', manufacturer:'_TZ3000_abrsvsou', deviceJoinName: 'Tuya Smart Knob TS004F' //KK
+        fingerprint inClusters: '0000,0001,0003,0004,0006,1000', outClusters: '0019,000A,0003,0004,0005,0006,0008,1000', manufacturer: '_TZ3000_gwkzibhs', model: 'TS004F', deviceJoinName: 'Tuya Scene Switch TS004F'  // https://www.aliexpress.com/item/1005009944918471.html https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/308?u=kkossev
 
         fingerprint inClusters: '0000,0001,0006', outClusters: '0019,000A', manufacturer: '_TZ3400_keyjqthh', model: 'TS0041', deviceJoinName: 'Tuya YSB22 TS0041'
         fingerprint inClusters: '0000,0001,0006', outClusters: '0019,000A', manufacturer: '_TZ3400_tk3s5tyg', model: 'TS0041', deviceJoinName: 'Tuya TS0041' // not tested
@@ -154,15 +159,19 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0006', outClusters:'0019,000A', model:'TS0044', manufacturer:'_TZ3000_vp6clf9d', deviceJoinName: 'Zemismart Wireless Scene Switch'
         fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_vp6clf9d', model: 'TS0044', deviceJoinName: 'Zemismart 4 Button Remote (ESW-0ZAA-EU)'                      // needs debouncing
         fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_ufhtxr59', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'
-        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_wkai4ga5', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/79?u=kkossev
-        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_abci1hiu', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // not tested
-        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_ee8nrt2l', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // not tested
-        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_dku2cfsc', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // not tested
-        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TYZB01_cnlmkhbk', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // not tested
-        fingerprint inClusters: '0000,0001,0006', outClusters: '0019,000A', manufacturer: '_TZ3000_u3nv1jwk', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'        // not tested https://community.hubitat.com/t/zigbee-wireless-scene-switch/108146?u=kkossev
-        fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0006,E000,0000', outClusters: '0019,000A', model: 'TS0044', manufacturer: '_TZ3000_mh9px7cq', deviceJoinName: 'Moes 4 button controller'    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
-        fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0006,E000,0000', outClusters: '0019,000A', model: 'TS0044', manufacturer: '_TZ3000_5tqxpine', deviceJoinName: 'Tuya 4 button controller'    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/268?u=kkossev
-
+        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_wkai4ga5', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'                                   // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/79?u=kkossev
+        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_abci1hiu', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'                                   // not tested
+        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_ee8nrt2l', model: 'TS0044', deviceJoinName: 'LoraTap SS6400ZB 4 button portable remote control'            // not tested
+        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TZ3000_dku2cfsc', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'                                   // not tested
+        fingerprint inClusters: '0000,000A,0001,0006', outClusters: '0019', manufacturer: '_TYZB01_cnlmkhbk', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'                                   // not tested
+        fingerprint inClusters: '0000,0001,0006', outClusters: '0019,000A', manufacturer: '_TZ3000_u3nv1jwk', model: 'TS0044', deviceJoinName: 'Tuya 4 button Scene Switch'                                   // not tested https://community.hubitat.com/t/zigbee-wireless-scene-switch/108146?u=kkossev
+        fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0006,E000,0000', outClusters: '0019,000A', model: 'TS0044', manufacturer: '_TZ3000_mh9px7cq', deviceJoinName: 'Moes 4 button controller'                 // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
+        fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0006,E000,0000', outClusters: '0019,000A', model: 'TS0044', manufacturer: '_TZ3000_5tqxpine', deviceJoinName: 'Tuya 4 button controller'                 // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/268?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0006', outClusters:'0019,000A', model:'TS0044', manufacturer:'_TZ3000_bgtzm4ny', deviceJoinName: 'HOBEIAN ZG-101ZS Star Ring 4 Gang Scene Switch'      // https://community.hubitat.com/t/tuya-switch-what-exactly-isnt-working/159210?u=kkossev 
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0006', outClusters:'0019,000A', model:'TS0044', manufacturer:'_TZ3000_a4xycprs', deviceJoinName: 'Moes ZT-SR-EU4 Star Ring 4 Gang Scene Switch'        // not tested
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0006', outClusters:'0019,000A', model:'TS0044', manufacturer:'_TZ3000_dziaict4', deviceJoinName: 'Tuya 4 button Scene Switch'                          // not tested
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0006', outClusters:'0019,000A', model:'TS0044', manufacturer:'_TZ3000_j61x9rxn', deviceJoinName: 'Tuya 4 button Scene Switch'                          // not tested
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0006', outClusters:'0019,000A', model:'TS0044', manufacturer:'_TZ3000_kfu8zapd', deviceJoinName: 'Moes XH-SY-04Z 4 button portable remote control'     // not tested
         fingerprint inClusters: '0000,0001,0003,0004,0006,1000', outClusters: '0019,000A,0003,0004,0005,0006,0008,1000', manufacturer: '_TZ3000_abci1hiu', model: 'TS0044', deviceJoinName: 'MOES Remote TS0044'
 
         fingerprint profileId: '0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_2m38mh6k', deviceJoinName: 'LoraTap 6 button Scene Switch'
@@ -215,15 +224,21 @@ metadata {
     preferences {
         input(name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_LOG_ENABLE)
         input(name: 'txtEnable', type: 'bool', title: '<b>Enable description text logging</b>', defaultValue: true)
-        input(name: 'reverseButton', type: 'bool', title: '<b>Reverse button order</b>', defaultValue: true)
-        input(name: 'advancedOptions', type: 'bool', title: 'Advanced options', defaultValue: false)
+        input(name: 'reverseButton', type: 'bool', title: '<b>Reverse button order</b>', defaultValue: true, description: '<i>Enable to reverse the button numbers (for compatibility with the stock Tuya Scene Switch driver)</i>')
+        input(name: 'advancedOptions', type: 'bool', title: 'Advanced options', defaultValue: false, description: '<i>Enable to show advanced options<br>(you need to refresh the page after changing this option)</i>')
         if (device) {
             if (advancedOptions == true) {
-                input(name: 'forcedDebounce', type: 'bool', title: '<b>Force debounce</b>', defaultValue: false)
+                input(name: 'forcedDebounce', type: 'bool', title: '<b>Force debounce</b>', defaultValue: DEFAULT_DEBOUNCE, description: '<i>Enable to prevent duplicate button events when a single press triggers multiple events. Uses a 1.2 second debounce timer to ignore repeated presses of the same button.</i>')
                 if (!isUSBpowered()) {
-                    input name: 'batteryReporting', type: 'enum', title: '<b>Battery Reporting Interval</b>', options: batteryReportingOptions.options, defaultValue: batteryReportingOptions.defaultValue, description: \
-                    '<i>Keep the battery reporting interval to <b>Default</b>, except when battery level is not reported at all for a long period.<br><b>Caution</b>:some devices are repored to deplete the battery very fast, if the battery reporting is set different than the default!</i>'
+                    if (hasBatteryConfigurationBug()) {
+                        input name: 'batteryWarning', type: 'paragraph', title: '<b style="color:red;">Caution</b>: Your device is known to have a battery configuration bug, which may cause all LEDs to blink periodically and the battery to be depleted fast.<br> Make sure you have paired the device to your hub with this driver already installed!'
+                    }
+                    else {
+                        input name: 'batteryReporting', type: 'enum', title: '<b>Battery Reporting Interval</b>', options: batteryReportingOptions.options, defaultValue: batteryReportingOptions.defaultValue, description: \
+                        '<i>Keep the battery reporting interval to <b>Default</b>, except when battery level is not reported at all for a long period.<br><b>Caution</b>:some devices are repored to deplete the battery very fast, if the battery reporting is set different than the default!</i>'
+                    }
                 }
+                input(name: 'respondToZdoRequests', type: 'bool', title: '<b>Respond to ZDO requests</b>', defaultValue: false, description: '<i>Enable to respond to ZDO Node Descriptor requests from the device (may help with pairing issues)</i>')
             }
         }
     }
@@ -233,6 +248,7 @@ metadata {
 @Field static final Integer DIMMER_MODE = 0
 @Field static final Integer SCENE_MODE  = 1
 @Field static final Integer DEBOUNCE_TIME = 1200
+@Field static final Boolean DEFAULT_DEBOUNCE = true
 @Field static final Boolean DEFAULT_LOG_ENABLE = true
 
 @Field static final Map batteryReportingOptions = [
@@ -249,9 +265,12 @@ boolean isIkea() { device.getDataValue('manufacturer') == 'IKEA of Sweden' }
 boolean isOsram() { device.getDataValue('manufacturer') == 'OSRAM' }
 boolean needsDebouncing() { (settings?.forcedDebounce == true) || (device.getDataValue('model') == 'TS004F' || (device.getDataValue('manufacturer') in ['_TZ3000_abci1hiu', '_TZ3000_vp6clf9d', '_TZ3000_ur5fpg7p', '_TZ3000_wkai4ga5']) || (device.getDataValue('model') == 'TS0043' && device.getDataValue('manufacturer') in ['TZ3000_gbm10jnj'])) }
 boolean needsMagic() { device.getDataValue('model') in ['TS004F', 'TS0044', 'TS0043', 'TS0042', 'TS0041', 'TS0046'] }
-boolean isSOSbutton() { device.getDataValue('manufacturer') in ['_TZ3000_4fsgukof', '_TZ3000_wr2ucaj9', '_TZ3000_zsh6uat3', '_TZ3000_tj4pwzzm', '_TZ3000_2izubafb', '_TZ3000_pkfazisv', '_TZE200_nojsjtj2' ] }
+boolean isSOSbutton() { device.getDataValue('manufacturer') in ['_TZ3000_4fsgukof', '_TZ3000_wr2ucaj9', '_TZ3000_zsh6uat3', '_TZ3000_tj4pwzzm', '_TZ3000_2izubafb', '_TZ3000_pkfazisv', '_TZE200_nojsjtj2', 'MultIR' ] }
 boolean isUSBpowered() { device.getDataValue('manufacturer') in ['_TZ3000_b3mgfu0d', '_TZ3000_czuyt8lz'] }
 boolean isSiHAS() { device.getDataValue('manufacturer') == 'ShinaSystem' }
+boolean hasBatteryConfigurationBug()  { device.getDataValue('manufacturer') in ['_TZ3000_a4xycprs', '_TZ3000_dziaict4', '_TZ3000_j61x9rxn', '_TZ3000_mh9px7cq', '_TZ3000_5tqxpine', '_TZ3000_u3nv1jwk', '_TZ3000_bgtzm4ny', '_TZ3000_kfu8zapd', '_TZ3000_ee8nrt2l', '_TZ3000_ygvf9xzp' /* for testing, '_TZ3000_vp6clf9d'*/] }
+boolean isWierdTS0041() { device.getDataValue('model') == 'TS0041' && device.getDataValue('manufacturer') in ['_TZ3000_rsqqkdxv'] }
+
 
 // Parse incoming device messages to generate events
 void parse(String description) {
@@ -284,10 +303,14 @@ void parse(String description) {
                     processKonkeButton(description)
                     return
                 }
+                else {
+                    if (logEnable) { log.debug "${device.displayName} Unexpected switch event: $event" }
+                    return
+                }
                 break
             default :
                 if (logEnable) { log.debug "${device.displayName} Unexpected event: $event" }
-                break
+                return
         }
         event.descriptionText = "${event.name} is ${event.value} ${event.unit}"
         event.isStateChange = true
@@ -298,6 +321,11 @@ void parse(String description) {
     else if (description?.startsWith('catchall')) {
         Map descMap = zigbee.parseDescriptionAsMap(description)
         if (logEnable) { log.debug "${device.displayName} catchall descMap: $descMap" }
+        if (descMap?.profileId == '0000') {
+            // ZDO frame – handle stack-level quirks here
+            parseZDOcommand(descMap)
+            return
+        }        
         String buttonState = 'unknown'
         // when TS004F initialized in Scene switch mode!
         if (descMap.clusterInt == 0x0006 && descMap.command == 'FD') {
@@ -352,8 +380,8 @@ void parse(String description) {
             else if (descMap.command == '03') { buttonState = 'released' }
             else { buttonState = 'unknown' }
         }
-        else if (descMap.clusterInt == 0x0006 && descMap.command in ['00', '01', '02']) {
-            // Tuya Single Button (TS0041 or similar) uses On/Off cluster commands for scene events:
+        else if (isWierdTS0041() && descMap.clusterInt == 0x0006 && descMap.command in ['00', '01', '02']) {
+            // Tuya Single Button (TS0041 _TZ3000_rsqqkdxv) uses On/Off cluster commands for scene events:
             // 02 = Toggle (Single Push)
             // 01 = Off (Double Tap)
             // 00 = On (Held/Released)
@@ -466,21 +494,21 @@ void parse(String description) {
                 else if (descMap.data[6] == '02') { buttonState = 'held' }
             }
             else {
-                if (logEnable) { log.debug "${device.displayName } unprocessed Tuya cluster EF00 command descMap: $descMap" }
+                if (logEnable) { log.debug "${device.displayName } unexpected Tuya cluster EF00 command descMap: $descMap" }
             }
         }
         else if (isIcasa()) {
             (buttonNumber,buttonState) = processIcasa(descMap)
         }
         else {
-            if (logEnable) { log.debug "${device.displayName } unprocessed catchall from cluster ${descMap.clusterInt } sourceEndpoint ${descMap.sourceEndpoint}" }
+            if (logEnable) { log.debug "${device.displayName } unexpected catchall from cluster ${descMap.clusterInt } sourceEndpoint ${descMap.sourceEndpoint}" }
             if (logEnable) { log.debug "${device.displayName } catchall descMap: $descMap" }
         }
         //
         if (buttonNumber != 0) {
             if (needsDebouncing()) {
                 if (state.lastButtonNumber == buttonNumber) {    // debouncing timer still active!
-                    if (logEnable) { log.warn "${device.displayName } ignored event for button ${state.lastButtonNumber } - still in the debouncing time period!" }
+                    if (logEnable) { log.debug "${device.displayName } ignored event for button ${state.lastButtonNumber } - still in the debouncing time period!" }
                     runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])    // restart the debouncing timer again
                     if (logEnable) { log.debug "${device.displayName } restarted debouncing timer ${DEBOUNCE_TIME }ms for button ${buttonNumber} (lastButtonNumber=${state.lastButtonNumber})" }
                     return
@@ -489,7 +517,7 @@ void parse(String description) {
             state.lastButtonNumber = buttonNumber
         }
         else {
-            if (logEnable) { log.warn "${device.displayName } UNHANDLED event for button ${buttonNumber },  lastButtonNumber=${state.lastButtonNumber}" }
+            if (logEnable) { log.debug "${device.displayName } UNHANDLED event for button ${buttonNumber },  lastButtonNumber=${state.lastButtonNumber}" }
         }
         if (buttonState != 'unknown' && buttonNumber != 0) {
             String descriptionText = "button $buttonNumber was $buttonState"
@@ -507,7 +535,11 @@ void parse(String description) {
     else {
         Map descMap = zigbee.parseDescriptionAsMap(description)
         if (logEnable) { log.debug "${device.displayName} raw: descMap: $descMap" }
-        //log.trace "${device.displayName} descMap.cluster=${descMap.cluster} descMap.attrId=${descMap.attrId} descMap.command=${descMap.command} "
+        if (descMap?.profileId == '0000') {
+            // ZDO frame – handle stack-level quirks here
+            parseZDOcommand(descMap)
+            return
+        }        //log.trace "${device.displayName} descMap.cluster=${descMap.cluster} descMap.attrId=${descMap.attrId} descMap.command=${descMap.command} "
         if (descMap.cluster == '0006' && descMap.attrId == '8004') {
             if (descMap.value == '00') {
                 sendEvent(name: 'switchMode', value: 'dimmer', isStateChange: true)
@@ -600,6 +632,11 @@ void processKonkeButton( description ) {
     String buttonState = 'unknown'
     Map descMap = zigbee.parseDescriptionAsMap(description)
     if (logEnable) { log.debug "${device.displayName} KonkeButton descMap: $descMap" }
+    if (descMap?.profileId == '0000') {
+        // ZDO frame – handle stack-level quirks here
+        parseZDOcommand(descMap)
+        return
+    }
     if (descMap.cluster != '0006' ) {
         return
     }
@@ -652,8 +689,9 @@ void initializeVars(boolean fullInit = false) {
     if (fullInit == true || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
     if (fullInit == true || settings?.reverseButton == null) { device.updateSetting('reverseButton', true) }
     if (fullInit == true || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', false) }
-    if (fullInit == true || settings?.forcedDebounce == null) { device.updateSetting('forcedDebounce', false) }
+    if (fullInit == true || settings?.forcedDebounce == null) { device.updateSetting('forcedDebounce', DEFAULT_DEBOUNCE) }
     if (fullInit == true || settings?.batteryReporting == null) { device.updateSetting('batteryReporting', batteryReportingOptions.defaultValue) }
+    if (fullInit == true || settings?.respondToZdoRequests == null) { device.updateSetting('respondToZdoRequests', false) }
     if (fullInit == true || state.notPresentCounter == null) { state.notPresentCounter = 0 }
     if (fullInit == true || state.lastButtonNumber == null) { state.lastButtonNumber = 0 }
 
@@ -773,6 +811,13 @@ void initialize() {
 void updated() {
     if (logEnable) { log.debug "${device.displayName } updated()" }
     scheduleDeviceHealthCheck()
+    // Schedule debug logging to turn off after 24 hours
+    if (logEnable == true) {
+        runIn(86400, disableDebugLog)
+        log.info "${device.displayName} Debug logging will be automatically disabled in 24 hours"
+    } else {
+        unschedule(disableDebugLog)
+    }
 }
 
 /* groovylint-disable-next-line UnusedMethodParameter */
@@ -845,15 +890,21 @@ void tuyaMagic() {
     }
     // binding for battery reporting was added on 2023/01/04 (ver 2.5.0), but thee are doubts that it may cause device re-joins and depletes the battery!
     int batteryReportinginterval = (settings.batteryReporting as Integer) ?: 0
-    if (batteryReportinginterval > 0) {
-        logInfo "setting the battery reporting interval to ${(batteryReportinginterval / 3600) as int} hours"
-        cmd += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 600, batteryReportinginterval, 0x01, [:], delay = 150)
-        cmd += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 600, batteryReportinginterval, 0x01, [:], delay = 150)        // 0x21 is NOT supported by all devices?
+    if (hasBatteryConfigurationBug()) {
+        batteryReportinginterval = 0    // disable battery reporting configuration for devices with known battery configuration bug
+        if (txtEnable) { log.info "${device.displayName} skipping battery reporting configuration due to known battery configuration bug in this device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}" }
     }
     else {
-        logInfo 'battery reporting interval not changed.'
+        if (batteryReportinginterval > 0) {
+            logInfo "setting the battery reporting interval to ${(batteryReportinginterval / 3600) as int} hours"
+            cmd += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 600, batteryReportinginterval, 0x01, [:], delay = 150)
+            cmd += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 600, batteryReportinginterval, 0x01, [:], delay = 150)        // 0x21 is NOT supported by all devices?
+        }
+        else {
+            logInfo 'battery reporting interval not changed.'
+        }
     }
-
+    logInfo 'sending Tuya Magic commands... Make sure the device is awake (a device button was pressed) before clicking on the Configure button!'
     sendZigbeeCommands(cmd)
 }
 
@@ -903,6 +954,86 @@ void ping() {
     if (logEnable) { log.debug 'ping() is not implemented' }
 }
 
+private void parseZDOcommand(Map descMap) {
+    switch (descMap.clusterId) {
+        case '0013': // Device announcement
+            if (logEnable) {
+                log.debug "${device.displayName} (ZDO 0013) device announcement from dni ${descMap.dni}, data=${descMap.data}"
+            }
+            break
+
+        case '0002': // Node_Desc_request
+            if (settings?.respondToZdoRequests == true) {
+                handleNodeDescRequest(descMap)
+            }
+            else {
+                if (logEnable) {
+                    log.debug "${device.displayName} (ZDO 0002) Node_Desc_request received but not responded to (respondToZdoRequests is disabled), data=${descMap.data}"
+                }
+            }
+            break
+
+        default:
+            if (logEnable) {
+                log.debug "${device.displayName} ZDO cluster 0x${descMap.clusterId} ignored, data=${descMap.data}"
+            }
+            break
+    }
+}
+
+@Field static final String NODE_DESC_BYTES_DEFAULT = 
+        "00 40 8F CD AB 52 80 00 41 2C 80 00 00"   // From Wireshark capture
+
+private String getCoordinatorNodeDescBytes() {
+    // Could be extended to dynamically fetch descriptors later
+    return (state.nodeDescBytes ?: NODE_DESC_BYTES_DEFAULT).replace(" ", "").toUpperCase()
+}
+
+private void handleNodeDescRequest(Map descMap) {
+    List<String> data = descMap.data ?: []
+    if (data.size() < 3) return
+
+    int tsn      = Integer.parseInt(data[0], 16)
+    int nwkOfInt = Integer.parseInt(data[2] + data[1], 16)  // LE: [LSB][MSB]
+    String dni   = descMap.dni
+
+    // Rate limiting to avoid spamming responses if something goes wrong
+    long now = nowTime()
+    long lastZdo0002 = state.stats['zdo0002TS'] ?: 0L as long
+    if (now - lastZdo0002 < 10_000L) {
+        if (logEnable) {
+            log.debug "${device.displayName} (ZDO 0002) Node_Desc_request throttled (${(now - lastZdo0002)/1000}s since last)"
+        }
+        return
+    }
+    state.stats['zdo0002TS'] = now
+
+    if (logEnable) {
+        log.debug "${device.displayName} (ZDO 0002) Node_Desc_request from 0x${dni}, tsn=${tsn}, nwkOfInt=0x${String.format('%04X', nwkOfInt)} – sending Node_Desc_response (0x8002)"
+    }
+
+    String tsnHex = hex2(tsn)
+    String nwkL   = hex2(nwkOfInt & 0xFF)
+    String nwkH   = hex2((nwkOfInt >> 8) & 0xFF)
+
+    String payload = "${tsnHex}00${nwkL}${nwkH}${getCoordinatorNodeDescBytes()}".toUpperCase()
+
+    String cmd = "he raw 0x${dni} 0 0 0x8002 {${payload}} {0x0000}"
+
+    if (logEnable) {
+        log.debug "${device.displayName} sending Node_Desc_rsp: ${cmd}"
+    }
+
+    sendHubCommand(new hubitat.device.HubAction(cmd, hubitat.device.Protocol.ZIGBEE))
+
+}
+
+private long nowTime() { return new Date().time }
+
+private String hex2(int n) {
+    return String.format("%02X", n & 0xFF)
+}
+
 void logDebug(final String msg) {
     if (settings?.logEnable) {
         log.debug "${device.displayName} " + msg
@@ -921,7 +1052,16 @@ void logWarn(final String msg) {
     }
 }
 
+void disableDebugLog() {
+    log.info "${device.displayName} Debug logging automatically disabled after 24 hours"
+    device.updateSetting('logEnable', [value: 'false', type: 'bool'])
+}
+
 void test(String description) {
+    
     log.warn "test: ${description}"
     parse(description)
+    
+    //handleNodeDescRequest(zigbee.parseDescriptionAsMap(description))
 }
+

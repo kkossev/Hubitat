@@ -26,7 +26,8 @@
  *                                   automatically load the standard JSON file from GitHub on driver installation if not present locally (one time action after installation or hub reboot)
  * ver. 4.1.0  2025-10-11 kkossev  - changed the default URLs to the development branch; added 'Update From Local Storage' command, show the JSON version and timestamp in the sendInfoEvent; 
  * ver. 4.2.0  2025-10-12 kkossev  - added 'Load User Custom Profiles From Local Storage' command and functionality (per device); show the currently loaded profile filename in the deviceProfileFile attribute;
- * ver. 4.2.1  2025-10-19 kkossev  - (dev. branch) added attributes 'switch', 'switchOnTime', 'switchState' for NEO NAS-PS10B2; added 'blockTime', 'motionDetectionDelayTime', 'radarScene', 'sensorMode', 'distanceReportMode' for TS0225_LEAPMMW_RADAR Z2M compatibility
+ * ver. 4.2.1  2025-10-19 kkossev  - added attributes 'switch', 'switchOnTime', 'switchState' for NEO NAS-PS10B2; added 'blockTime', 'motionDetectionDelayTime', 'radarScene', 'sensorMode', 'distanceReportMode' for TS0225_LEAPMMW_RADAR Z2M compatibility
+ * ver. 4.2.2  2025-12-14 kkossev  - (dev. branch)
  *                                   
  *                                   TODO: new info page on WiKi
  *                                   TODO: Show both the profile key and the profile name in the Preferences page!

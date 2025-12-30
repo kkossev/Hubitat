@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Thermostat Library', name: 'thermostatLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy', documentationLink: '',
-    version: '3.6.1')
+    version: '3.6.2')
 /*
  *  Zigbee Thermostat Library
  *
@@ -23,13 +23,14 @@ library(
  * ver. 3.5.1  2025-03-04 kkossev  - == false bug fix; disabled switching to 'cool' mode.
  * ver. 3.6.0  2025-09-15 kkossev  - deviceProfileLibV4 alignment
  * ver. 3.6.1  2025-10-31 kkossev  - added setRefreshRequest() in the autoPollThermostat() method, so that events are always sent with [refresh] tag 
+ * ver. 3.6.2  2025-12-06 kkossev  - changed setheatingSetpoint to use [digital] / [physical]  type for the event logic 
  *
  *                                   TODO: add eco() method
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
-public static String thermostatLibVersion()   { '3.6.1' }
-public static String thermostatLibStamp() { '2025/10/31 3:18 PM' }
+public static String thermostatLibVersion()   { '3.6.2' }
+public static String thermostatLibStamp() { '2025/12/06 10:22 PM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib
@@ -134,6 +135,10 @@ void setHeatingSetpoint(final Number temperaturePar ) {
     logDebug "setHeatingSetpoint: calling sendAttribute heatingSetpoint ${tempBigDecimal}"
     sendAttribute('heatingSetpoint', tempBigDecimal as double)
 
+    // Mark this as a digital command
+    state.states['isDigital'] = true
+    runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
+
     // added 02/16/2025
     state.lastTx.isSetPointReq = true
     state.lastTx.setPoint = tempBigDecimal    // BEOK - float value!
@@ -144,11 +149,19 @@ void setHeatingSetpoint(final Number temperaturePar ) {
 // TODO - use sendThermostatEvent instead!
 void sendHeatingSetpointEvent(Number temperature) {
     tempDouble = safeToDouble(temperature)
-    Map eventMap = [name: 'heatingSetpoint',  value: tempDouble, unit: '\u00B0C', type: 'physical']
+    boolean isDigital = state.states['isDigital'] ?: false
+    Map eventMap = [name: 'heatingSetpoint',  value: tempDouble, unit: '\u00B0C', type: isDigital ? 'digital' : 'physical']
     eventMap.descriptionText = "heatingSetpoint is ${tempDouble}"
     if (state.states['isRefresh'] == true) {
         eventMap.descriptionText += ' [refresh]'
         eventMap.isStateChange = true   // force event to be sent
+    }
+    if (isDigital) {
+        eventMap.descriptionText += ' [digital]'
+        eventMap.isStateChange = true   // force event to be sent
+    }
+    else {
+        eventMap.descriptionText += ' [physical]'
     }
     sendEvent(eventMap)
     if (eventMap.descriptionText != null) { logInfo "${eventMap.descriptionText}" }
@@ -223,6 +236,10 @@ public void setThermostatMode(final String requestedMode) {
     List emergencyHeatingModesList = getAttributesMap('emergencyHeating')?.map?.values() as List ?: []
 
     logDebug "setThermostatMode: sending setThermostatMode(${mode}). Natively supported: ${nativelySupportedModesList}"
+
+    // Mark this as a digital command at the very beginning
+    state.states['isDigital'] = true
+    runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
 
     // some TRVs require some checks and additional commands to be sent before setting the mode
     final String currentMode = device.currentValue('thermostatMode')
@@ -455,6 +472,8 @@ public void sendDigitalEventIfNeeded(final String eventName) {
 
 public void thermostatInitializeVars( boolean fullInit = false ) {
     logDebug "thermostatInitializeVars()... fullInit = ${fullInit}"
+    if (state.states == null) { state.states = [:] }
+    if (fullInit == true || state.states['isDigital'] == null) { state.states['isDigital'] = false }
     if (fullInit == true || state.lastThermostatMode == null) { state.lastThermostatMode = 'unknown' }
     if (fullInit == true || state.lastThermostatOperatingState == null) { state.lastThermostatOperatingState = 'unknown' }
     if (fullInit || settings?.temperaturePollingInterval == null) { device.updateSetting('temperaturePollingInterval', [value: TrvTemperaturePollingIntervalOpts.defaultValue.toString(), type: 'enum']) }
