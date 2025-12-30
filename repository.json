@@ -96,8 +96,8 @@
       "id": "7f55f65d-dc8e-4742-a2e2-bc74582613b3",
       "name": "Aqara P1 Motion Sensor",
       "category": "Control",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Aqara%20P1%20Motion%20Sensor/packageManifest.json",
-      "description": "Works with Aqara P1 Motion Sensor RTCGQ14LM, Aqara FP1 Human Presence Detector RTCZCGQ11LM, Aqara FP1E Human Presence Detector RTCZCGQ13LM, RTCGQ13LM, GZCGQ11LM, GZCGQ01LM, RTCGQ01LM, RTCGQ11LM, RTCGQ15LM",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20P1%20Motion%20Sensor/packageManifest.json",
+      "description": "Works with Aqara P1 Motion Sensor RTCGQ14LM, Aqara FP1 Human Presence Detector RTCZCGQ11LM, Aqara FP1E Human Presence Detector RTCZCGQ13LM, FP300, RTCGQ13LM, GZCGQ11LM, GZCGQ01LM, RTCGQ01LM, RTCGQ11LM, RTCGQ15LM",
       "tags": [
         "Zigbee"
       ]
