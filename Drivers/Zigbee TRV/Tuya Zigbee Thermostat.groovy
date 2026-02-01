@@ -29,14 +29,14 @@
  * ver. 3.6.0  2025-12-13 kkossev  - (dev. branch) addeed new 'Beok BOT-R15W Zigbee Thermostat Cool' TS0601 _TZE284_agcxaw3f @guy.mayhew;
  *                                   [digital] / [physical] heatingSetpoint event types; _TZE204_aoclfnxz fingerprint correction;
  *                                   added TS0601 _TZE204_6ewjlefg VRF/VRV THERMOSTAT @gnat666 (testing)
- * ver. 3.6.1  2026-02-01 kkossev  - (dev. branch) TS0601 _TZE284_agcxaw3f standard device profile and improvements; 
+ * ver. 3.6.1  2026-02-01 kkossev  - (dev. branch) TS0601 _TZE284_agcxaw3f standard device profile and improvements; STEEDSMT_VRF_VRV_THERMOSTAT commented out; added MOES_ZHT_S03_THERMOSTAT profile for TS0601 _TZE204_zxkwaztm (Moes ZHT‑S03)
  *
  *                                   TODO: Tuya VRF Gateway : https://github.com/Koenkk/zigbee2mqtt/issues/18570 https://github.com/Koenkk/zigbee2mqtt/issues/23514 
  *                                   TODO: THE STATIC DEVICE PROFILE V3 CODE SIZE is nearly its LIMIT - refactoring needed ! (same as the mmWave driver - dynamic loading of V4 JSON profiles ...)
  */
 
 static String version() { '3.6.1' }
-static String timeStamp() { '2026/02/01 8:19 PM' }
+static String timeStamp() { '2026/02/01 9:35 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -291,13 +291,6 @@ private void installBotR15wOverrides() {
             [dp:4,   name:'heatingSetpoint',    type:'decimal',         rw: 'rw', min:5.0,   max:35.0, defVal:20.0, step:1.0, scale:10, unit:'°C',  title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
             [dp:5,   name:'temperature',        type:'decimal',         rw: 'ro', min:0.0,   max:50.0, defVal:20.0, step:1.0, scale:10, unit:'°C',  description:'Temperature'],     // current_heating_setpoint
             [dp:7,   name:'childLock',          type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Child Lock</b>',  description:'Child lock'],
-            //[dp:28,  name:'scheduleMonday',     type:'number',          rw: 'ro',  description:'Schedule Monday'],
-            //[dp:29,  name:'scheduleTuesday',    type:'number',          rw: 'ro',  description:'Schedule Tueasday'],
-            //[dp:30,  name:'scheduleWednesday',  type:'number',          rw: 'ro',  description:'Schedule Wednesday'],
-            //[dp:31,  name:'scheduleThursday',   type:'number',          rw: 'ro',  description:'Schedule Thursday'],
-            //[dp:32,  name:'scheduleFriday',     type:'number',          rw: 'ro',  description:'Schedule Friday'],
-            //[dp:33,  name:'scheduleSaturday',   type:'number',          rw: 'ro',  description:'Schedule Saturday'],
-            //[dp:34,  name:'scheduleSunday',     type:'number',          rw: 'ro',  description:'Schedule Sunday'],
             [dp:35,  name:'batteryLowAlarm',    type:'enum',  dt: '01', rw: 'ro', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'lowBattery', 1:'sensorFault'], description:'Alarm'],                                            // fault_alarm tuya.valueConverter.errorOrBatteryLow]
             [dp:36,  name:'antiFreeze',         type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'], title:'<b>Anti-Freeze</b>',  description:'Anti-Freeze support'],                     // frost_protection'
             [dp:39,  name:'limescaleProtect',   type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'], title:'<b>Limescale Protect</b>',  description:'Limescale Protection support'],      // scale_protection
@@ -330,13 +323,6 @@ private void installBotR15wOverrides() {
             [dp:14,  name:'faultAlarm',         type:'enum',            rw: 'ro', defVal:'0', map:[0:'clear', 1:'faultSensor', 2:'faultMotor', 4:'faultLowBatt', 8:'faultUgLowBatt'],  description:'Fault alarm'],
             [dp:15,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,   max:15.0, defVal:10.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Minimum Temperature</b>',      description:'Minimum temperature'],
             [dp:16,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0,  max:45.0, defVal:35.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Maximum Temperature</b>',      description:'Maximum temperature'],
-            //[dp:17,  name:'scheduleMonday',     type:'number',          rw: 'ro', description:'Schedule Monday'],
-            //[dp:18,  name:'scheduleTuesday',    type:'number',          rw: 'ro', description:'Schedule Tueasday'],
-            //[dp:19,  name:'scheduleWednesday',  type:'number',          rw: 'ro', description:'Schedule Wednesday'],
-            //[dp:20,  name:'scheduleThursday',   type:'number',          rw: 'ro', description:'Schedule Thursday'],
-            //[dp:21,  name:'scheduleFriday',     type:'number',          rw: 'ro', description:'Schedule Friday'],
-            //[dp:22,  name:'scheduleSaturday',   type:'number',          rw: 'ro', description:'Schedule Saturday'],
-            //[dp:23,  name:'scheduleSunday',     type:'number',          rw: 'ro', description:'Schedule Sunday'],
             [dp:101, name:'calibrationTemp',    type:'decimal',         rw: 'rw', min:-10.0,  max:19.0,  defVal:0.0, step:0.1,   scale:10,  unit:'°C',  title:'<b>Calibration Temperature</b>', description:'Calibration Temperature'],
             [dp:108, name:'level',              type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:10,   scale:10,  unit:'%', description:'Valve level'],      // valve open degree
             [dp:109, name:'model',              type:'number',          rw: 'ro', description:'Manufacturer model'],      // STRING!
@@ -376,13 +362,6 @@ private void installBotR15wOverrides() {
             [dp:14,  name:'faultAlarm',         type:'enum',            rw: 'ro', defVal:'0', map:[0:'clear', 1:'error'],  description:'Fault alarm'],
             [dp:15,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,   max:15.0, defVal:10.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Minimum Temperature</b>',      description:'Minimum temperature'],
             [dp:16,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0,  max:45.0, defVal:35.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Maximum Temperature</b>',      description:'Maximum temperature'],
-            //[dp:17,  name:'scheduleMonday',     type:'number',          rw: 'ro', description:'Schedule Monday'],
-            //[dp:18,  name:'scheduleTuesday',    type:'number',          rw: 'ro', description:'Schedule Tueasday'],
-            //[dp:19,  name:'scheduleWednesday',  type:'number',          rw: 'ro', description:'Schedule Wednesday'],
-            //[dp:20,  name:'scheduleThursday',   type:'number',          rw: 'ro', description:'Schedule Thursday'],
-            //[dp:21,  name:'scheduleFriday',     type:'number',          rw: 'ro', description:'Schedule Friday'],
-            //[dp:22,  name:'scheduleSaturday',   type:'number',          rw: 'ro', description:'Schedule Saturday'],
-            //[dp:23,  name:'scheduleSunday',     type:'number',          rw: 'ro', description:'Schedule Sunday'],
             [dp:101, name:'calibrationTemp',    type:'decimal',         rw: 'ro', min:-10.0,  max:19.0,  defVal:0.0, step:0.1,   scale:1,  unit:'°C',  title:'<b>Calibration Temperature</b>', description:'Calibration Temperature'],
             // ^^^^^ calibrationTemp is temporary made read-only !!  https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/tuya.ts#L845
             [dp:108, name:'level',              type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:10,   scale:10,  unit:'%', description:'Valve level'],      // valve open degree
@@ -425,13 +404,6 @@ private void installBotR15wOverrides() {
             [dp:15,  name:'windowsState',       type:'enum',            rw: 'ro', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'closed', 1:'open'],  title:'<bWindow State</b>',  description:'Window state'],
             [dp:47,  name:'calibrationTemp',    type:'decimal',         rw: 'rw', min:-3.0,  max:3.0,  defVal:0.0,  step:1,   scale:1,  unit:'°C',  title:'<b>Calibration Temperature</b>', description:'Calibration Temperature'],                  // local_temperature_calibration
             // ^^ check! ^^^ tuya.valueConverter.localTempCalibration1
-            //[dp:102, name:'scheduleMonday',     type:'number',          rw: 'ro',  description:'Schedule Monday'],
-            //[dp:103, name:'scheduleTuesday',    type:'number',          rw: 'ro',  description:'Schedule Tueasday'],
-            //[dp:104, name:'scheduleWednesday',  type:'number',          rw: 'ro',  description:'Schedule Wednesday'],
-            //[dp:105, name:'scheduleThursday',   type:'number',          rw: 'ro',  description:'Schedule Thursday'],
-            //[dp:106, name:'scheduleFriday',     type:'number',          rw: 'ro',  description:'Schedule Friday'],
-            //[dp:107, name:'scheduleSaturday',   type:'number',          rw: 'ro',  description:'Schedule Saturday'],
-            //[dp:108, name:'scheduleSunday',     type:'number',          rw: 'ro',  description:'Schedule Sunday'],
             [dp:110, name:'motorThrust',        type:'enum',            rw: 'ro', defVal:'1', map:[0:'strong', 1:'middle', 2:'weak'], description:'Motor thrust'],
             [dp:111, name:'brightness',         type:'enum',            rw: 'rw', defVal:'1', map:[0:'high', 1:'medium', 2:'low'], title:'<b>Display Brightness</b>',  description:'Display brightness'],
             [dp:113, name:'orientation',        type:'enum',            rw: 'rw', defVal:'1', map:[0:'up', 1:'right', 2:'down', 3:'left'], title:'<b>Screen Orientation</b>',  description:'Screen orientation'],
@@ -520,13 +492,6 @@ private void installBotR15wOverrides() {
             [dp:14,  name:'faultAlarm',         type:'enum',            rw: 'ro', defVal:'0', map:[0:'active', 1:'clear'],  description:'Fault alarm'],
             [dp:15,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,   max:15.0, defVal:10.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Minimum Temperature</b>',      description:'Minimum temperature'],
             [dp:16,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0,  max:45.0, defVal:35.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Maximum Temperature</b>',      description:'Maximum temperature'],
-            //[dp:17,  name:'scheduleMonday',     type:'number',          rw: 'ro', description:'Schedule Monday'],
-            //[dp:18,  name:'scheduleTuesday',    type:'number',          rw: 'ro', description:'Schedule Tueasday'],
-            //[dp:19,  name:'scheduleWednesday',  type:'number',          rw: 'ro', description:'Schedule Wednesday'],
-            //[dp:20,  name:'scheduleThursday',   type:'number',          rw: 'ro', description:'Schedule Thursday'],
-            //[dp:21,  name:'scheduleFriday',     type:'number',          rw: 'ro', description:'Schedule Friday'],
-            //[dp:22,  name:'scheduleSaturday',   type:'number',          rw: 'ro', description:'Schedule Saturday'],
-            //[dp:23,  name:'scheduleSunday',     type:'number',          rw: 'ro', description:'Schedule Sunday'],
             [dp:101, name:'calibrationTemp',    type:'decimal',         rw: 'rw', min:-3.0,  max:3.0,  defVal:00.0, step:0.1,   scale:10,  unit:'°C',  title:'<b>Calibration Temperature</b>', description:'Calibration Temperature'],
             [dp:108, name:'level',              type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:1,   scale:1,  unit:'%',          description:'Valve level'],      // position
             [dp:111, name:'brightness',         type:'enum',            rw: 'rw', defVal:'1', map:[0:'high', 1:'medium', 2:'low'], title:'<b>Display Brightness</b>',  description:'Display brightness'],
@@ -721,13 +686,10 @@ private void installBotR15wOverrides() {
             [dp:101, name:'thermostatOperatingState',  type:'enum',     rw: 'rw', defVal:'0', map:[1:'heating', 0:'idle'] ,  unit:'', description:'Thermostat Operating State(working state)'],      //  'running_state' valve state?
             [dp:102, name:'antiFreeze',         type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Anti-Freeze</b>',  description:'Anti-Freeze / Frost Protection'],     // 'frost_protection'
             [dp:103, name:'reset',              type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Factory Reset</b>',  description:'Full factory reset, use with caution!'],
-            //[dp:104, name:'workdaySet',         type:'enum',            rw: 'ro',             map:[0:'disabled', 1:'6-1', 2:'5-2', 3:'7'], description:'Workday Set'],
-            //[dp:105, name:'unknown105',         type:'enum',  dt: '01', rw: 'ro', defVal:'0', map:[0:'off', 1:'on'], description:'Unknown 105'],
             [dp:106, name:'sensor',             type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'internal', 1:'external', 2:'both'], title:'<b>Sensor Selection</b>',  description:'Sensor Selection'],  // only in/out for BEOK
             [dp:107, name:'hysteresis',         type:'decimal',         rw: 'rw', min:1.0,    max:9.5,  defVal:1.0,  step:0.5, scale:10,  title: '<b>Hysteresis</b>', description:'hysteresis'],
             [dp:109, name:'heatingSchedule',    type:'number',          rw: 'ro', description:'Heating Schedule'],
-            [dp:110, name:'brightness',         type:'enum',            rw: 'rw', defVal:'2', map:[0:'off', 1:'low', 2:'medium', 3:'high'], title:'<b>LCD Brightness</b>',  description:'LCD brightness'],
-            //[dp:111, name:'unknown111',         type:'enum',  dt: '01', rw: 'ro', defVal:'0', map:[0:'off', 1:'on'], description:'Unknown 111'],
+            [dp:110, name:'brightness',         type:'enum',            rw: 'rw', defVal:'2', map:[0:'off', 1:'low', 2:'medium', 3:'high'], title:'<b>LCD Brightness</b>',  description:'LCD brightness']
         ],
         supportedThermostatModes: ['off', 'heat', 'auto'],
         refresh: ['pollTuya'],
@@ -770,6 +732,38 @@ private void installBotR15wOverrides() {
         configuration : [:]
     ],
 
+    // Moes ZHT-S03 wall thermostat (_TZE204_zxkwaztm)
+    // Based on Zigbee2MQTT converter datapoints
+	'MOES_ZHT_S03_THERMOSTAT' : [
+        description   : 'Moes ZHT-S03 Zigbee Wall Thermostat',
+        device        : [models: ['TS0601'], type: 'Thermostat', powerSource: 'ac', isSleepy:false],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint': true, 'ThermostatMode': true, 'TemperatureMeasurement': true],
+        preferences   : [childLock:'40', antiFreeze:'10', hysteresis:'112', temperatureCalibration:'109', preset:'2', programmingMode:'31'],
+        fingerprints  : [
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_zxkwaztm', deviceJoinName: 'Moes ZHT-S03 Thermostat'],
+        ],
+        commands      : ['sendSupportedThermostatModes':'', 'setHeatingSetpoint':'', 'resetStats':'', 'refresh':'', 'initialize':'', 'updateAllPreferences': '', 'resetPreferencesToDefaults':'', 'validateAndFixPreferences':''],
+        tuyaDPs       : [
+            [dp:1,   name:'thermostatMode',     type:'enum',  dt:'01', rw:'rw', defVal:'1', map:[0:'off', 1:'heat'], title:'<b>System Mode</b>', description:'System mode (off/heat)'],
+            [dp:2,   name:'preset',             type:'enum',           rw:'rw', defVal:'0', map:[0:'schedule', 1:'manual'], title:'<b>Preset</b>', description:'Preset (schedule/manual)'],
+            [dp:10,  name:'antiFreeze',         type:'enum',  dt:'01', rw:'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Frost Protection</b>', description:'Antifreeze function'],
+            [dp:16,  name:'heatingSetpoint',    type:'decimal',        rw:'rw', min:5.0,  max:35.0, defVal:20.0, step:0.5, scale:10, unit:'°C', title:'<b>Current Heating Setpoint</b>', description:'Current heating setpoint'],
+            [dp:24,  name:'temperature',        type:'decimal',        rw:'ro', defVal:20.0, scale:10, unit:'°C', description:'Local temperature'],
+            [dp:31,  name:'programmingMode',    type:'enum',           rw:'rw', defVal:'0', map:[0:'mon_fri', 1:'mon_sat', 2:'mon_sun'], title:'<b>Working Day</b>', description:'Workday setting'],
+            [dp:36,  name:'thermostatOperatingState', type:'enum',      rw:'ro', defVal:'0', map:[0:'idle', 1:'heating', 2:'cooling'], description:'Running state (idle/heating/cooling?)'],
+            [dp:40,  name:'childLock',          type:'enum',  dt:'01', rw:'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Child Lock</b>', description:'Child lock'],
+            [dp:109, name:'temperatureCalibration', type:'decimal',    rw:'rw', min:-9.9, max:9.9, defVal:0.0, step:0.1, scale:10, unit:'°C', title:'<b>Local Temperature Calibration</b>', description:'Local temperature calibration'],
+            [dp:112, name:'hysteresis',         type:'decimal',        rw:'rw', min:0.1, max:10.0, defVal:1.0, step:0.1, scale:10, unit:'°C', title:'<b>Temperature Delta</b>', description:'Delta between temperature and setpoint to trigger heat'],
+            // Schedule placeholders (Z2M uses ZWT198_schedule conversion; needs custom parsing/encoding)
+            [dp:67,  name:'scheduleWeekday',    type:'number',         rw:'ro', description:'Schedule weekday (placeholder; ZWT198_schedule)'],
+            [dp:68,  name:'scheduleHoliday',    type:'number',         rw:'ro', description:'Schedule holiday (placeholder; ZWT198_schedule)'],
+        ],
+        supportedThermostatModes: ['off', 'heat'],
+        refresh: ['pollTuya'],
+        deviceJoinName: 'Moes ZHT-S03 Thermostat',
+        configuration : [:]
+    ],
+
     // BOT-R15W-Zigbee (_TZE284_agcxaw3f)
 	// Based on https://github.com/Koenkk/zigbee-herdsman-converters/issues/10644#issue-3583460679 
 	'BOT_R15W_ZB_THERMOSTAT' : [
@@ -802,7 +796,7 @@ private void installBotR15wOverrides() {
         refresh: ['pollTuya'],
         configuration : [:]
     ],    
-
+/*
     'STEEDSMT_VRF_VRV_THERMOSTAT'   : [     // https://www.aliexpress.us/item/3256809455660487.html https://community.hubitat.com/t/release-tuya-zigbee-thermostats-and-trvs-driver/128916/127?u=kkossev 
         // Work In Progress - not tested yet! Not all DPs are known!
         description   : 'STEEDSMT VRF/VRV Thermostat BVRF-L001',
@@ -839,7 +833,7 @@ private void installBotR15wOverrides() {
         refresh: ['pollTuya'],
         configuration : [:]
     ],
-
+*/
     
 ]
 
