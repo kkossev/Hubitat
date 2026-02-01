@@ -30,6 +30,7 @@
  * ver 1.3.1 2025-02-19 kkossev - added TS0210 _TZ3000_lqpt3mvr _TZ3000_lzdjjfss _TYZB01_geigpsy4
  * ver 1.4.0 2025-03-01 kkossev - added ShockSensor capability; added shockSensor option (default:enabled)
  * ver 1.4.1 2025-08-30 kkossev - added TS0210 _TZ3210100000_5oy7cysk for tests @masachapa34
+ * ver 1.4.2 2026-02-01 kkossev - added TS0210 _TZ32101000000_5oy7cysk (alternative variant); added _TZE200_hggxgsjj _TZE200_yjryxpot _TZE200_afycb3cg (ZG-103Z variants); added Tuya sensitivity setting for some models;
  * 
  *                                TODO: save the configuration commands in a state and send them on device wakes up
  *                                TODO: this driver does not process ZCL battery percentage reports, only voltage reports!
@@ -41,8 +42,8 @@
  *                                TODO: handle tamper: (zoneStatus & 1<<2); handle battery_low: (zoneStatus & 1<<3); TODO: check const sens = {'high': 0, 'medium': 2, 'low': 6}[value];
  */
 
-static String version() { "1.4.1" }
-static String timeStamp() { "2025/08/30 7:23 PM" }
+static String version() { "1.4.2" }
+static String timeStamp() { "2026/02/01 11:17 AM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -69,6 +70,7 @@ metadata {
         attribute 'rtt', 'number'
         attribute 'batteryStatus', 'enum', ["normal", "replace"]
         attribute 'sensitivity', 'number'
+        attribute 'tuyaSensitivity', 'enum', ['low', 'middle', 'high']
         attribute 'lastBattery', 'date'         // last battery event time - added in 1.2.1 05/21/2024
         attribute 'tilt', 'enum', ["clear", "detected"]
         
@@ -86,6 +88,11 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0500,0B05,FC02", outClusters:"0003,0019", model:"multi", manufacturer:"Samjin"          // Samsung Multisensor
 		fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_kzm5w4iz"         // https://github.com/flatsiedatsie/zigbee-herdsman-converters/blob/ef4d559ccba0a39cd6957d2270352e29fb1d0296/converters/fromZigbee.js#L7449-L7467
 		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_iba1ckek"         // https://nl.aliexpress.com/item/1005007520278259.html Tilt Xyz Axis Sensor (ZG-103Z)
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_hggxgsjj"         // ZG-103Z variant
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_yjryxpot"         // ZG-103Z variant
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_afycb3cg"         // ZG-103Z variant
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZ3210100000_5oy7cysk"   // ZG-103Z family variant (reported by Hubitat)
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZ32101000000_5oy7cysk"  // ZG-103Z family variant (alt ID)
         fingerprint profileId:"0104", endpointId:"01", inClusters: "0000,E000,0003,0001,0500,E002,EF00", outClusters:"000A,0019", manufacturer:"_TZ3210100000_5oy7cysk", model: "TS0210"  // @masachapa34
 
 	}
@@ -93,8 +100,11 @@ metadata {
 	preferences {
 		input name: "txtEnable", type: "bool", title: "<b>Enable info message logging</b>", description: ""
 		input name: "logEnable", type: "bool", title: "<b>Enable debug message logging</b>", description: ""
-        if (device && isTuya()) {
+        if (device && supportsIasSensitivity()) {
             input name: "sensitivity", type: "enum", title: "<b>Vibration Sensitivity</b>", description: "Select Vibration Sensitivity", defaultValue: "3", options:["0":"0 - Maximum", "1":"1", "2":"2", "3":"3 - Medium", "4":"4", "5":"5", "6":"6 - Minimum"]
+        }
+        if (device && supportsTuyaSensitivity()) {
+            input name: 'tuyaSensitivity', type: 'enum', title: '<b>Tuya Sensitivity</b>', description: 'Vibration detection sensitivity (ZG-103Z family)', defaultValue: TuyaSensitivityOpts.defaultValue, options: TuyaSensitivityOpts.options
         }
 		input "vibrationReset", "number", title: "After vibration is detected, wait $vibrationReset second(s) until <b>resetting to inactive state</b>. Default = $VIBRATION_RESET seconds.", description: "", range: "1..7200", defaultValue: VIBRATION_RESET
         if (device && (!isTuya() || isTuyaTiltXyzAxisSensor )) {
@@ -117,7 +127,24 @@ boolean isTuyaVibrationDoorSensor() {
 }
 
 boolean isTuyaTiltXyzAxisSensor() {
-    return device.getDataValue("manufacturer") == "_TZE200_iba1ckek"    // Tuya TS0601 Tilt Xyz Axis Sensor
+    return TuyaTiltXyzAxisSensorManufacturers.contains(device.getDataValue('manufacturer'))
+}
+
+@Field static final Set<String> TuyaTiltXyzAxisSensorManufacturers = [
+    '_TZE200_iba1ckek',
+    '_TZE200_hggxgsjj',
+    '_TZE200_yjryxpot',
+    '_TZE200_afycb3cg',
+    '_TZ3210100000_5oy7cysk',
+    '_TZ32101000000_5oy7cysk',
+].toSet()
+
+boolean supportsTuyaSensitivity() {
+    return isTuya() && isTuyaTiltXyzAxisSensor()
+}
+
+boolean supportsIasSensitivity() {
+    return isTuya() && !supportsTuyaSensitivity()
 }
 
 @Field static final Integer COMMAND_TIMEOUT = 10             // timeout time in seconds
@@ -134,6 +161,10 @@ boolean isTuyaTiltXyzAxisSensor() {
 ]
 @Field static final Map ThreeAxisOpts = [
     defaultValue: 1, options: [0: 'Disabled', 1: 'Enabled - Events only', 2: 'Enabled - Events and Logs']
+]
+
+@Field static final Map TuyaSensitivityOpts = [
+	defaultValue: 'middle', options: ['low': 'low', 'middle': 'middle', 'high': 'high']
 ]
 
 // e8ZoneState is a mandatory attribute which indicates the membership status of the device in an IAS system (enrolled or not enrolled) - one of:
@@ -405,6 +436,23 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
             break
         case 0x68:  // (104) Sensitivity Setting
             logDebug "Tuya Sensitivity Setting cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            if (supportsTuyaSensitivity()) {
+                String sens
+                switch (fncmd) {
+                    case 0: sens = 'low'    ; break
+                    case 1: sens = 'middle' ; break
+                    case 2: sens = 'high'   ; break
+                    default:
+                        logWarn "unsupported Tuya sensitivity value ${fncmd}"
+                        break
+                }
+                if (sens != null) {
+                    sendEvent(name: 'tuyaSensitivity', value: sens, descriptionText: "Tuya sensitivity is ${sens}")
+                    if (settings?.tuyaSensitivity != sens) {
+                        device.updateSetting('tuyaSensitivity', [value: sens, type: 'enum'])
+                    }
+                }
+            }
             break
         case 0x69:  // (105) Battery Percentage
             logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -756,6 +804,8 @@ void refresh() {
 
 // updated() runs every time user saves preferences
 void updated() {
+    checkDriverVersion(state)
+    logInfo("Updating settings...") // added 2026-02-01
     unschedule()        // added 05/21/2024
     if (logEnable == true) {
         runIn(86400, 'logsOff', [overwrite: true, misfire: 'ignore'])    // turn off debug logging after 30 minutes
