@@ -74,14 +74,15 @@
  *                                  added soilEC and soilFertility attributes; soilFertility enum values: 'normal', 'lower', 'low', 'middle', 'high', 'higher'  
  *                                  Added ZDO 0x0000 Network Address Response and 0x0002 Node Descriptor Response handlers in an attempt to fix TS0601 _TZE284_rqcuwlsa device disconnections; Rate limiting: only respond if more than 10 seconds have passed since last response
  * ver. 2.0.1  2025-12-22 kkossev - fixed temperatureSensitivity preferece being reset to zero bug; added respondToZdoRequests preference (default: false); added TS0222 _TZ3000_hy6ncvmw illuminance only sensor
+ * ver. 2.0.2  2026-02-01 kkossev - (dev. branch) fixed null preference values causing GroovyCastException in updated() reporting configuration (safe defaults for sleepy devices and Haozee)
  *
  *                                  TODO: update GitHub documentation  _TZ3218_7fiyo3kv
  *                                  TODO:  https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/636?u=kkossev
  *                                  TODO: response to ZDO command: cluster=0002 command=00
 */
 
-@Field static final String VERSION = '2.0.1'
-@Field static final String TIME_STAMP = '2025/12/22 11:08 AM'
+@Field static final String VERSION = '2.0.2'
+@Field static final String TIME_STAMP = '2026/02/01 10:15 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1436,15 +1437,15 @@ def updated() {
         cmds += sendTuyaCommand('0B', DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
     }
     if (getModelGroup() in ['TS0601_Haozee']) {
-        Integer intValue = settings?.humiditySensitivity as int
+        Integer intValue = safeToInt(settings?.humiditySensitivity, 5)
         if (settings?.logEnable) { log.trace "${device.displayName} setting  humiditySensitivity to ${intValue} %" }
         cmds += sendTuyaCommand('14', DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
         //
-        intValue = ((settings?.maxReportingTimeTemp * 2.5) as int) / 60
+        intValue = ((safeToDouble(settings?.maxReportingTimeTemp, 3600.0) * 2.5) as int) / 60
         if (settings?.logEnable) { log.trace "${device.displayName} setting Temperature Max reporting time to ${(intValue / 2.5) as int} minutes" }
         cmds += sendTuyaCommand('11', DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
         //
-        intValue = ((settings?.maxReportingTimeHumidity * 2.5) as int) / 60
+        intValue = ((safeToDouble(settings?.maxReportingTimeHumidity, 3600.0) * 2.5) as int) / 60
         if (settings?.logEnable) { log.trace "${device.displayName} setting Humidity Max reporting time to ${(intValue / 2.5) as int} minutes" }
         cmds += sendTuyaCommand('12', DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
 
@@ -1466,11 +1467,19 @@ def updated() {
     }
     if (isConfigurableSleepyDevice()) {    // ["Zigbee NON-Tuya", "TS0201_TH"]
 
-        lastTxMap.tempCfg = (settings?.minReportingTimeTemp as int).toString() + ',' + (settings?.maxReportingTimeTemp as int).toString() + ',' + ((settings?.temperatureSensitivity * 100) as int).toString()
-        lastTxMap.humiCfg = (settings?.minReportingTimeHumidity as int).toString() + ',' + (settings?.maxReportingTimeHumidity as int).toString() + ',' + ((settings?.humiditySensitivity * 100) as int).toString()
+        final Integer minRptTemp = safeToInt(settings?.minReportingTimeTemp, 10)
+        final Integer maxRptTemp = safeToInt(settings?.maxReportingTimeTemp, 3600)
+        final Integer tempChange = (safeToDouble(settings?.temperatureSensitivity, 0.5) * 100) as int
+
+        final Integer minRptHumi = safeToInt(settings?.minReportingTimeHumidity, 10)
+        final Integer maxRptHumi = safeToInt(settings?.maxReportingTimeHumidity, 3600)
+        final Integer humiChange = (safeToDouble(settings?.humiditySensitivity, 5.0) * 100) as int
+
+        lastTxMap.tempCfg = minRptTemp.toString() + ',' + maxRptTemp.toString() + ',' + tempChange.toString()
+        lastTxMap.humiCfg = minRptHumi.toString() + ',' + maxRptHumi.toString() + ',' + humiChange.toString()
 
         if (lastTxMap.tempCfg != lastRxMap.tempCfg) {
-            cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, settings?.minReportingTimeTemp as int, settings?.maxReportingTimeTemp as int, (settings?.temperatureSensitivity * 100) as int, [:], 200)
+            cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, minRptTemp, maxRptTemp, tempChange, [:], 200)
             log.info "configure temperature reporting (${lastTxMap.tempCfg}) pending ..."
             lastTxMap.tempCfgOK = false
         }
@@ -1479,7 +1488,7 @@ def updated() {
             lastTxMap.tempCfgOK = true
         }
         if (lastTxMap.humiCfg != lastRxMap.humiCfg) {
-            cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.UINT16, settings?.minReportingTimeHumidity as int, settings?.maxReportingTimeHumidity as int, (settings?.humiditySensitivity * 100) as int, [:], 200)
+            cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.UINT16, minRptHumi, maxRptHumi, humiChange, [:], 200)
             log.info "configure humidity reporting (${lastTxMap.humiCfg}) pending ..."
             lastTxMap.humiCfgOK = false
         }
