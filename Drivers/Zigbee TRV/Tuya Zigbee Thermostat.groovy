@@ -29,14 +29,14 @@
  * ver. 3.6.0  2025-12-13 kkossev  - (dev. branch) addeed new 'Beok BOT-R15W Zigbee Thermostat Cool' TS0601 _TZE284_agcxaw3f @guy.mayhew;
  *                                   [digital] / [physical] heatingSetpoint event types; _TZE204_aoclfnxz fingerprint correction;
  *                                   added TS0601 _TZE204_6ewjlefg VRF/VRV THERMOSTAT @gnat666 (testing)
+ * ver. 3.6.1  2026-02-01 kkossev  - (dev. branch) TS0601 _TZE284_agcxaw3f standard device profile and improvements; 
  *
  *                                   TODO: Tuya VRF Gateway : https://github.com/Koenkk/zigbee2mqtt/issues/18570 https://github.com/Koenkk/zigbee2mqtt/issues/23514 
- *                                   TODO: add a standard device profile for 'Beok BOT-R15W Zigbee Thermostat' TS0601 _TZE284_agcxaw3f  
  *                                   TODO: THE STATIC DEVICE PROFILE V3 CODE SIZE is nearly its LIMIT - refactoring needed ! (same as the mmWave driver - dynamic loading of V4 JSON profiles ...)
  */
 
-static String version() { '3.6.0' }
-static String timeStamp() { '2025/12/13 9:51 PM' }
+static String version() { '3.6.1' }
+static String timeStamp() { '2026/02/01 8:19 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -99,8 +99,13 @@ metadata {
         attribute 'motorThrust', 'enum', ['strong', 'middle', 'weak']   // TRV602Z
         attribute 'fanSpeed', 'enum', ['auto', 'low', 'medium', 'high']   // VRF/VRV Thermostat
 
+        attribute 'sound', 'enum', ['off', 'on']                       // BEOK BOT-R15W, BEOK thermostats
+        attribute 'temperatureCalibration', 'number'                   // Thermostat temperature offset
+        attribute 'operationMode', 'enum', ['heating', 'cooling']       // BEOK BOT-R15W (heating/cooling selection)
+
         // Aqaura E1 attributes     TODO - consolidate a common set of attributes
-        attribute 'preset', 'enum', ['manual', 'auto', 'away']      // TODO - remove?
+        // Note: used by multiple device profiles; keep this list broad.
+        attribute 'preset', 'enum', ['manual', 'auto', 'temporary', 'away', 'temporary manual', 'program', 'eco']      // TODO - remove?
         attribute 'awayPresetTemperature', 'number'
 
         command 'sendCommand', [
@@ -138,6 +143,50 @@ metadata {
 
 @Field static final Integer MaxRetries = 5
 @Field static final Integer NOT_SET = -1
+
+@Field static final String PROFILE_BOT_R15W = 'BOT_R15W_ZB_THERMOSTAT'
+
+private boolean isBotR15w() { return getDeviceProfile() == PROFILE_BOT_R15W }
+
+/**
+ * BOT-R15W special handling: the device uses a single setpoint (dp2) for both heating and cooling,
+ * plus a separate heating/cooling selector (dp111). Hubitat apps expect thermostatMode='cool' and
+ * setCoolingSetpoint() to send a real command.
+ */
+@SuppressWarnings('GroovyUnusedDeclaration')
+private void installBotR15wOverrides() {
+    if (!isBotR15w()) { return }
+    if (state?.botR15wOverridesInstalled == true) { return }
+
+    try {
+        this.metaClass.setCoolingSetpoint = { Number temperaturePar ->
+            logDebug "setCoolingSetpoint(${temperaturePar}) [BOT-R15W override]"
+
+            BigDecimal maxTemp = settings?.maxHeatingSetpoint ? new BigDecimal(settings.maxHeatingSetpoint) : new BigDecimal(40)
+            BigDecimal minTemp = settings?.minHeatingSetpoint ? new BigDecimal(settings.minHeatingSetpoint) : new BigDecimal(5)
+            BigDecimal tempBigDecimal = new BigDecimal(safeToDouble(temperaturePar, 0.0))
+            tempBigDecimal = tempBigDecimal.min(maxTemp).max(minTemp).setScale(1, BigDecimal.ROUND_HALF_UP)
+
+            logDebug "setCoolingSetpoint: calling sendAttribute heatingSetpoint ${tempBigDecimal}"
+            sendAttribute('heatingSetpoint', tempBigDecimal as double)
+
+            // Mark this as a digital command
+            state.states['isDigital'] = true
+            runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
+
+            // keep the resendFailed / receiveCheck logic consistent with setHeatingSetpoint()
+            state.lastTx.isSetPointReq = true
+            state.lastTx.setPoint = tempBigDecimal
+            runIn(3, setpointReceiveCheck)
+        }
+    }
+    catch (e) {
+        logWarn "installBotR15wOverrides: exception '${e}'"
+        return
+    }
+
+    state.botR15wOverridesInstalled = true
+}
 
 @Field static final Map deviceProfilesV3 = [    // https://github.com/jacekk015/zha_quirks
     // BRT-100-B0
@@ -697,7 +746,7 @@ metadata {
         commands      : ['sendSupportedThermostatModes':'', 'setHeatingSetpoint':'', 'resetStats':'', 'refresh':'', 'initialize':'', 'updateAllPreferences': '', 'resetPreferencesToDefaults':'', 'validateAndFixPreferences':''],
         tuyaDPs       : [
             [dp:1,   name:'systemMode',         type:'enum',            rw: 'rw', defVal:'1', map:[0: 'off', 1: 'heat'],  title:'<b>Thermostat Switch</b>',  description:'Thermostat switch (system mode)'],
-            [dp:2,   name:'preset',             type:'enum',            rw: 'rw', defVal:'0', map:[0:'manual', 1:'temporary manual', 2:'program', 3:'eco'], description:'Preset mode'],
+            [dp:2,   name:'preset',             type:'enum',            rw: 'rw', defVal:'0', map:[0:'manual', 1:'temporary manual', 2:'program', 3:'eco'], title:'<b>Preset Mode</b>', description:'Preset mode'],
             [dp:16,  name:'temperature',        type:'decimal',         rw: 'ro', min:-20.0, max:60.0, defVal:20.0, step:0.1, scale:10, unit:'°C',  description:'Measured temperature'],
             [dp:18,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:1.0,   max:15.0, defVal:5.0, step:0.5, scale:10, unit:'°C',  title:'<b>Minimum Heating Setpoint</b>', description:'Minimum comfort temperature limit'],
             [dp:32,  name:'sensor',             type:'enum',            rw: 'rw', defVal:'0', map:[0:'internal', 1:'dual', 2:'external'], title:'<b>Sensor Selection</b>', description:'Temperature sensor mode'],
@@ -722,27 +771,34 @@ metadata {
     ],
 
     // BOT-R15W-Zigbee (_TZE284_agcxaw3f)
-	// Based on Z2M DPs: https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/beok.ts
-	'BOT_R15W_ZB_THERMOSTAT_COOL' : [
-        description   : 'Beok BOT-R15W Zigbee Thermostat Cool',
+	// Based on https://github.com/Koenkk/zigbee-herdsman-converters/issues/10644#issue-3583460679 
+	'BOT_R15W_ZB_THERMOSTAT' : [
+        description   : 'Beok BOT-R15W Zigbee Thermostat',
         device        : [models: ['TS0601'], type: 'Thermostat', powerSource: 'battery', isSleepy:false],
-        capabilities  : ['ThermostatCoolingSetpoint': true, 'ThermostatMode': true, 'ThermostatSetpoint': true, 'TemperatureMeasurement': true],
-        preferences   : ['childLock':'26'],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatCoolingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatMode': true, 'ThermostatSetpoint': true, 'TemperatureMeasurement': true],
+        preferences   : [childLock:'9', minHeatingSetpoint:'16', maxHeatingSetpoint:'15', hysteresis:'112', temperatureCalibration:'19', antiFreeze:'102', sound:'114', preset:'4', operationMode:'111'],
         fingerprints  : [
-            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,ED00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_agcxaw3f', deviceJoinName: 'Beok BOT-R15W Thermostat Cool']
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,ED00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_agcxaw3f', deviceJoinName: 'Beok BOT-R15W Thermostat']
         ],
         commands      : ['sendSupportedThermostatModes':'', 'setHeatingSetpoint':'', 'resetStats':'', 'refresh':'', 'initialize':'', 'updateAllPreferences': '', 'resetPreferencesToDefaults':'', 'validateAndFixPreferences':''],
         tuyaDPs       : [
-            [dp:1, 	 name:'thermostatMode',  	type:'enum',  	rw: 'rw', min:0, max:1, defVal:'1', step:1, scale:1, map:[0:'off', 1:'cool'], unit:'', title:'<b>Thermostat Mode</b>', description:'Thermostat mode (cool-only remapped)'],
-            [dp:2,   name:'coolingSetpoint',    type:'decimal', rw: 'rw', min:5.0, max:60.0, defVal:20.0, step:0.5, scale:10, unit:'°C', title:'<b>Cooling Setpoint</b>', description:'Target temperature'],
-            [dp:3,   name:'temperature',        type:'decimal', rw: 'ro', min:0, max:60.0, defVal:20.0, step:0.1, scale:10, unit:'°C', description:'Current room temperature'],
-            [dp:19,  name:'preset',             type:'enum',    rw: 'rw', min:0, max:1, defVal:'0', step:1, scale:1, map:[0:'manual', 1:'program'], unit:'', description:'Preset mode'],
-            [dp:26,  name:'childLock',          type:'enum',    rw: 'rw', min:0, max:1, defVal:'0', step:1, scale:1, map:[0:'off', 1:'on'], unit:'', title:'<b>Child Lock</b>', description:'Child lock'],
-            [dp:27,  name:'schedule',           type:'raw',     rw: 'rw', defVal:null, description:'Weekly Schedule'],
-            [dp:101, name:'thermostatOperatingState', type:'enum', rw:'ro', map:[0:'idle', 1:'cooling'], description:'Thermostat operating state (idle or actively cooling)'],
-            [dp:113, name:'battery',            type:'number', rw:'ro', min:0, max:100, defVal:100, step:1, scale:1, unit:'%', description:'Battery Level'],
+            // dp1 is on/off only, but we expose a Hubitat-friendly "cool" mode too (handled in customSetThermostatMode)
+            [dp:1,   name:'thermostatMode',     type:'enum',            rw: 'rw', defVal:'1', map:[0:'off', 1:'heat', 2:'cool'], title:'<b>System Mode</b>', description:'System mode (off/heat), plus cooling (virtual)'],
+            [dp:2,   name:'heatingSetpoint',    type:'decimal',         rw: 'rw', min:5.0,  max:35.0, defVal:20.0, step:0.5, scale:10, unit:'°C', title:'<b>Current Heating Setpoint</b>', description:'Target temperature'],
+            [dp:3,   name:'temperature',        type:'decimal',         rw: 'ro', min:0.0,  max:60.0, defVal:20.0, step:0.1, scale:10, unit:'°C', description:'Current room temperature'],
+            [dp:4,   name:'preset',             type:'enum',            rw: 'rw', defVal:'0', map:[0:'manual', 1:'auto', 2:'temporary', 3:'away'], title:'<b>Preset Mode</b>', description:'Preset mode'],
+            [dp:9,   name:'childLock',          type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Child Lock</b>', description:'Child lock'],
+            [dp:15,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0, max:40.0, defVal:32.0, step:0.5, scale:10, unit:'°C', title:'<b>Maximum Temperature Limit</b>', description:'Maximum set temperature'],
+            [dp:16,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,  max:20.0, defVal:10.0, step:0.5, scale:10, unit:'°C', title:'<b>Minimum Temperature Limit</b>', description:'Minimum set temperature'],
+            [dp:19,  name:'temperatureCalibration', type:'decimal',     rw: 'rw', min:-9.9, max:9.9,  defVal:0.0,  step:0.1, scale:10, unit:'°C', title:'<b>Local Temperature Calibration</b>', description:'Temperature calibration offset'],
+            [dp:101, name:'thermostatOperatingState', type:'enum',       rw: 'ro', defVal:'0', map:[0:'idle', 1:'heating'], description:'Running state (idle/active)'],
+            [dp:102, name:'antiFreeze',         type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Frost Protection</b>', description:'Antifreeze function'],
+            [dp:111, name:'operationMode',      type:'enum',            rw: 'rw', defVal:'0', map:[0:'heating', 1:'cooling'], title:'<b>Operation Mode</b>', description:'Switch between heating and cooling modes'],
+            [dp:112, name:'hysteresis',         type:'decimal',         rw: 'rw', min:0.5,  max:10.0, defVal:1.0,  step:0.5, scale:10, unit:'°C', title:'<b>Temperature Delta</b>', description:'Delta between temperature and setpoint to trigger active heating/cooling'],
+            [dp:113, name:'battery',            type:'number',          rw: 'ro', min:0,    max:100,  defVal:100,  step:1,   scale:1,  unit:'%', description:'Battery level'],
+            [dp:114, name:'sound',              type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Sound</b>', description:'Beep sound on/off'],
         ],
-        supportedThermostatModes: ['off', 'cool'],
+        supportedThermostatModes: ['off', 'heat', 'cool'],
         refresh: ['pollTuya'],
         configuration : [:]
     ],    
@@ -926,7 +982,44 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
             handleHumidityEvent(valueScaled)
             break
         case 'heatingSetpoint' :
-            sendHeatingSetpointEvent(valueScaled)
+            if (isBotR15w() && ((device.currentValue('thermostatMode') == 'cool') || (device.currentValue('operationMode') == 'cooling'))) {
+                final double tempDouble = safeToDouble(valueScaled, 0.0)
+                final boolean isDigital = state.states['isDigital'] ?: false
+                Map spEvent = [name: 'coolingSetpoint', value: tempDouble, unit: '\u00B0C', type: isDigital ? 'digital' : 'physical']
+                spEvent.descriptionText = "coolingSetpoint is ${tempDouble}"
+                if (state.states['isRefresh'] == true) { spEvent.descriptionText += ' [refresh]'; spEvent.isStateChange = true }
+                if (isDigital) { spEvent.descriptionText += ' [digital]'; spEvent.isStateChange = true } else { spEvent.descriptionText += ' [physical]' }
+                sendEvent(spEvent)
+                if (spEvent.descriptionText != null) { logInfo "${spEvent.descriptionText}" }
+
+                // keep thermostatSetpoint in sync for dashboards/assistants
+                spEvent.name = 'thermostatSetpoint'
+                sendEvent(spEvent)
+                updateDataValue('lastRunningMode', 'cool')
+                state.lastRx.setPoint = tempDouble
+            }
+            else {
+                sendHeatingSetpointEvent(valueScaled)
+            }
+            break
+        case 'thermostatOperatingState' :
+            // BOT-R15W uses dp101 for "running_state" (idle/active). If operationMode is cooling, translate active->cooling.
+            if (device.currentValue('operationMode') == 'cooling' && valueScaled == 'heating') {
+                eventMap.value = 'cooling'
+                eventMap.descriptionText = "thermostatOperatingState is cooling"
+            }
+            sendEvent(eventMap)
+            logInfo "${eventMap.descriptionText}"
+            break
+        case 'operationMode' :
+            sendEvent(eventMap)
+            logInfo "${descText}"
+            // keep Hubitat thermostatMode aligned with the active operationMode (cooling/heating)
+            if (isBotR15w() && device.currentValue('thermostatMode') != 'off') {
+                String tm = (valueScaled == 'cooling') ? 'cool' : 'heat'
+                sendEvent(name: 'thermostatMode', value: tm, isStateChange: true, descriptionText: "thermostatMode is ${tm}", type: 'physical')
+                state.lastThermostatMode = tm
+            }
             break
         case 'systemMode' : // Aqara E1 and AVATTO thermostat (off/on)
             sendEvent(eventMap)
@@ -940,6 +1033,18 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
             }
             break
         case 'thermostatMode' :  // AVATTO send the thermostat mode a second after being switched off - ignore it !
+            if (isBotR15w()) {
+                String tm = valueScaled
+                if (tm == 'heat' && device.currentValue('operationMode') == 'cooling') {
+                    tm = 'cool'
+                }
+                eventMap.value = tm
+                eventMap.descriptionText = "thermostatMode is ${tm}"
+                sendEvent(eventMap)
+                logInfo "${eventMap.descriptionText}"
+                state.lastThermostatMode = tm
+                break
+            }
             if (device.currentValue('systemMode') == 'off' ) {
                 logWarn "customProcessDeviceProfileEvent: ignoring the thermostatMode <b>${valueScaled}</b> event, because the systemMode is off"
             }
@@ -1011,6 +1116,40 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
             //}
             break
     }
+}
+
+/**
+ * BOT-R15W: translate Hubitat thermostatMode 'cool' into dp111 operationMode=cooling and dp1 thermostatMode=on.
+ * dp1 is on/off only; dp111 is the real heat/cool selector.
+ */
+@SuppressWarnings('GroovyUnusedDeclaration')
+List<String> customSetThermostatMode(final Integer scaledValue) {
+    if (!isBotR15w()) { return [] }
+    Map tmMap = getAttributesMap('thermostatMode')
+    Map opMap = getAttributesMap('operationMode')
+    String requestedMode = tmMap?.map?.get(scaledValue)
+    if (requestedMode == null) {
+        logWarn "customSetThermostatMode: unknown scaledValue=${scaledValue}"
+        return []
+    }
+    List<String> cmds = []
+    switch (requestedMode) {
+        case 'off':
+            cmds += sendTuyaParameter(tmMap, 'thermostatMode', 0)
+            break
+        case 'heat':
+            cmds += sendTuyaParameter(opMap, 'operationMode', 0)
+            cmds += sendTuyaParameter(tmMap, 'thermostatMode', 1)
+            break
+        case 'cool':
+            cmds += sendTuyaParameter(opMap, 'operationMode', 1)
+            cmds += sendTuyaParameter(tmMap, 'thermostatMode', 1)
+            break
+        default:
+            logWarn "customSetThermostatMode: unsupported mode ${requestedMode}"
+            break
+    }
+    return cmds
 }
 
 void customParseTuyaCluster(final Map descMap) {

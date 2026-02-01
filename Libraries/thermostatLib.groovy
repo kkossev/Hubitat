@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Thermostat Library', name: 'thermostatLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy', documentationLink: '',
-    version: '3.6.2')
+    version: '3.6.3')
 /*
  *  Zigbee Thermostat Library
  *
@@ -23,14 +23,15 @@ library(
  * ver. 3.5.1  2025-03-04 kkossev  - == false bug fix; disabled switching to 'cool' mode.
  * ver. 3.6.0  2025-09-15 kkossev  - deviceProfileLibV4 alignment
  * ver. 3.6.1  2025-10-31 kkossev  - added setRefreshRequest() in the autoPollThermostat() method, so that events are always sent with [refresh] tag 
- * ver. 3.6.2  2025-12-06 kkossev  - changed setheatingSetpoint to use [digital] / [physical]  type for the event logic 
+ * ver. 3.6.2  2025-12-06 kkossev  - changed setheatingSetpoint to use [digital] / [physical]  type for the event logic 77
+ * ver. 3.6.3  2026-02-01 kkossev  - setCoolingSetpoint() BOT-R15W_ZB_THERMOSTAT special handling
  *
  *                                   TODO: add eco() method
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
-public static String thermostatLibVersion()   { '3.6.2' }
-public static String thermostatLibStamp() { '2025/12/06 10:22 PM' }
+public static String thermostatLibVersion()   { '3.6.3' }
+public static String thermostatLibStamp() { '2026/02/01 6:11 PM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib
@@ -175,9 +176,44 @@ void sendHeatingSetpointEvent(Number temperature) {
 }
 
 // thermostat capability standard command
-// do nothing in TRV - just send an event
+// Default behavior: do nothing in TRV - just send an event.
+// Exception: BOT_R15W_ZB_THERMOSTAT uses a shared setpoint (dp2) for both heating and cooling,
+// so setting coolingSetpoint must send a real command (write heatingSetpoint).
 void setCoolingSetpoint(Number temperaturePar) {
     logDebug "setCoolingSetpoint(${temperaturePar}) called!"
+
+    // BOT-R15W special handling (profile-driven via deviceProfileLib)
+    if (this.respondsTo('getDeviceProfile') && (getDeviceProfile() == 'BOT_R15W_ZB_THERMOSTAT')) {
+        logDebug "setCoolingSetpoint(${temperaturePar}) [BOT-R15W]"
+
+        BigDecimal temperature = temperaturePar.toBigDecimal()
+        /* groovylint-disable-next-line ParameterReassignment */
+        BigDecimal tempDouble = (temperature * 2).setScale(0, RoundingMode.HALF_UP) / 2
+
+        BigDecimal maxTemp = settings?.maxHeatingSetpoint ? new BigDecimal(settings.maxHeatingSetpoint) : new BigDecimal(40)
+        BigDecimal minTemp = settings?.minHeatingSetpoint ? new BigDecimal(settings.minHeatingSetpoint) : new BigDecimal(5)
+        tempBigDecimal = new BigDecimal(tempDouble)
+        tempBigDecimal = tempDouble.min(maxTemp).max(minTemp).setScale(1, BigDecimal.ROUND_HALF_UP)
+
+        logDebug "setCoolingSetpoint: calling sendAttribute heatingSetpoint ${tempBigDecimal}"
+        sendAttribute('heatingSetpoint', tempBigDecimal as double)
+
+        // Mark this as a digital command
+        state.states['isDigital'] = true
+        runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
+
+        // keep the resendFailed / receiveCheck logic consistent with setHeatingSetpoint()
+        state.lastTx.isSetPointReq = true
+        state.lastTx.setPoint = tempBigDecimal
+        runIn(3, setpointReceiveCheck)
+
+        // keep existing user feedback (event + log)
+        String descText = "coolingSetpoint is set to ${tempBigDecimal} \u00B0C"
+        sendEvent(name: 'coolingSetpoint', value: tempBigDecimal, unit: '\u00B0C', descriptionText: descText, type: 'digital')
+        logInfo "${descText}"
+        return
+    }
+
     /* groovylint-disable-next-line ParameterReassignment */
     BigDecimal temperature = Math.round(temperaturePar * 2) / 2
     String descText = "coolingSetpoint is set to ${temperature} \u00B0C"
