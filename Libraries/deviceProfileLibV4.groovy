@@ -1045,7 +1045,7 @@ public Map inputIt(String paramPar, boolean debug = false) {
     if (input.type in ['number', 'decimal']) {
         if (foundMap.min != null && foundMap.max != null) {
             //input.range = "${foundMap.min}..${foundMap.max}"
-            input.range = "${Math.ceil(foundMap.min) as int}..${Math.ceil(foundMap.max) as int}"
+            input.range = "${Math.floor(foundMap.min) as int}..${Math.ceil(foundMap.max) as int}"
         }
         if (input.range != null && input.description != null) {
             if (input.description != '') { input.description += '<br>' }

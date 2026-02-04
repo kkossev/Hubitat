@@ -3104,7 +3104,7 @@ public Map inputIt(String paramPar, boolean debug = false) { // library marker k
     if (input.type in ['number', 'decimal']) { // library marker kkossev.deviceProfileLib, line 803
         if (foundMap.min != null && foundMap.max != null) { // library marker kkossev.deviceProfileLib, line 804
             //input.range = "${foundMap.min}..${foundMap.max}" // library marker kkossev.deviceProfileLib, line 805
-            input.range = "${Math.ceil(foundMap.min) as int}..${Math.ceil(foundMap.max) as int}" // library marker kkossev.deviceProfileLib, line 806
+            input.range = "${Math.floor(foundMap.min) as int}..${Math.ceil(foundMap.max) as int}" // library marker kkossev.deviceProfileLib, line 806
         } // library marker kkossev.deviceProfileLib, line 807
         if (input.range != null && input.description != null) { // library marker kkossev.deviceProfileLib, line 808
             if (input.description != '') { input.description += '<br>' } // library marker kkossev.deviceProfileLib, line 809
