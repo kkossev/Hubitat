@@ -30,7 +30,7 @@
  * ver 1.3.1 2025-02-19 kkossev - added TS0210 _TZ3000_lqpt3mvr _TZ3000_lzdjjfss _TYZB01_geigpsy4
  * ver 1.4.0 2025-03-01 kkossev - added ShockSensor capability; added shockSensor option (default:enabled)
  * ver 1.4.1 2025-08-30 kkossev - added TS0210 _TZ3210100000_5oy7cysk for tests @masachapa34
- * ver 1.4.2 2026-02-01 kkossev - added TS0210 _TZ32101000000_5oy7cysk (alternative variant); added _TZE200_hggxgsjj _TZE200_yjryxpot _TZE200_afycb3cg (ZG-103Z variants); added Tuya sensitivity setting for some models;
+ * ver 1.4.2 2026-02-04 kkossev - added TS0210 _TZ32101000000_5oy7cysk (alternative variant); added _TZE200_hggxgsjj _TZE200_yjryxpot _TZE200_afycb3cg (ZG-103Z variants); added Tuya sensitivity setting for some models;
  * 
  *                                TODO: save the configuration commands in a state and send them on device wakes up
  *                                TODO: this driver does not process ZCL battery percentage reports, only voltage reports!
@@ -43,7 +43,7 @@
  */
 
 static String version() { "1.4.2" }
-static String timeStamp() { "2026/02/01 11:17 AM" }
+static String timeStamp() { "2026/02/04 7:32 AM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -93,7 +93,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_afycb3cg"         // ZG-103Z variant
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZ3210100000_5oy7cysk"   // ZG-103Z family variant (reported by Hubitat)
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZ32101000000_5oy7cysk"  // ZG-103Z family variant (alt ID)
-        fingerprint profileId:"0104", endpointId:"01", inClusters: "0000,E000,0003,0001,0500,E002,EF00", outClusters:"000A,0019", manufacturer:"_TZ3210100000_5oy7cysk", model: "TS0210"  // @masachapa34
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,E000,0003,0001,0500,E002,EF00", outClusters:"000A,0019", manufacturer:"_TZ3210100000_5oy7cysk", model: "TS0210"  // @masachapa34
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,E000,0003,0001,0500,E002,EF00", outClusters:"000A,0019", model:"TS0210", manufacturer:"_TZ32101000000_5oy7cysk" // https://community.hubitat.com/t/release-tuya-zigbee-vibration-sensor/138208/70?u=kkossev
 
 	}
 
@@ -124,6 +125,10 @@ metadata {
 
 boolean isTuyaVibrationDoorSensor() {
     return device.getDataValue("manufacturer") == "_TZE200_kzm5w4iz"    // Tuya TS0601 Vibration and Door Sensor
+}
+
+boolean isTuyaVibrationSensorTZ32101000000() {
+    return device?.getDataValue('manufacturer') == '_TZ32101000000_5oy7cysk'
 }
 
 boolean isTuyaTiltXyzAxisSensor() {
@@ -394,7 +399,11 @@ private int getTuyaAttributeValue(final List<String> _data, final int index) {
 void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd) {
     switch (dp) {
         case 0x01:
-            if (isTuyaVibrationDoorSensor()) {
+            if (isTuyaVibrationSensorTZ32101000000()) {
+                // per Z2M converter this model reports vibration on DP 0x68 (104)
+                logDebug "Tuya cmd (TZ32101000000): ignoring dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            else if (isTuyaVibrationDoorSensor()) {
                 logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
                 logInfo "TuyaVibrationDoorSensor: contact is ${fncmd == 1 ? 'open' : 'closed'}"
             // TODO - create a child device?
@@ -412,6 +421,16 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
             logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             sendBatteryPercentageEvent(fncmd)
             sendLastBatteryEvent()
+            break
+        case 0x04:  // (4) Battery percentage (TZ32101000000 per Z2M)
+            if (isTuyaVibrationSensorTZ32101000000()) {
+                logDebug "Tuya battery cmd (TZ32101000000): dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                sendBatteryPercentageEvent(fncmd)
+                sendLastBatteryEvent()
+            }
+            else {
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
             break
         case 0x07 :// tilt
             logDebug "Tuya tilt cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -435,29 +454,59 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
             sendTuyaThreeAxisEvent(state.lastAcceleration.x, state.lastAcceleration.y, state.lastAcceleration.z)
             break
         case 0x68:  // (104) Sensitivity Setting
-            logDebug "Tuya Sensitivity Setting cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
-            if (supportsTuyaSensitivity()) {
-                String sens
-                switch (fncmd) {
-                    case 0: sens = 'low'    ; break
-                    case 1: sens = 'middle' ; break
-                    case 2: sens = 'high'   ; break
-                    default:
-                        logWarn "unsupported Tuya sensitivity value ${fncmd}"
-                        break
-                }
-                if (sens != null) {
-                    sendEvent(name: 'tuyaSensitivity', value: sens, descriptionText: "Tuya sensitivity is ${sens}")
-                    if (settings?.tuyaSensitivity != sens) {
-                        device.updateSetting('tuyaSensitivity', [value: sens, type: 'enum'])
+            if (isTuyaVibrationSensorTZ32101000000()) {
+                // per Z2M converter this model reports vibration on DP 0x68 (104)
+                logDebug "Tuya vibration cmd (TZ32101000000): dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                sendVibrationEvent(fncmd != 0)
+            }
+            else {
+                logDebug "Tuya Sensitivity Setting cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                if (supportsTuyaSensitivity()) {
+                    String sens
+                    switch (fncmd) {
+                        case 0: sens = 'low'    ; break
+                        case 1: sens = 'middle' ; break
+                        case 2: sens = 'high'   ; break
+                        default:
+                            logWarn "unsupported Tuya sensitivity value ${fncmd}"
+                            break
+                    }
+                    if (sens != null) {
+                        sendEvent(name: 'tuyaSensitivity', value: sens, descriptionText: "Tuya sensitivity is ${sens}")
+                        if (settings?.tuyaSensitivity != sens) {
+                            device.updateSetting('tuyaSensitivity', [value: sens, type: 'enum'])
+                        }
                     }
                 }
             }
             break
         case 0x69:  // (105) Battery Percentage
-            logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
-            sendBatteryPercentageEvent(fncmd)
-            sendLastBatteryEvent()
+            if (isTuyaVibrationSensorTZ32101000000()) {
+                // per Z2M converter this model reports sensitivity on DP 0x69 (105)
+                logDebug "Tuya sensitivity cmd (TZ32101000000): dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                if (supportsTuyaSensitivity()) {
+                    String sens
+                    switch (fncmd) {
+                        case 0: sens = 'low'    ; break
+                        case 1: sens = 'middle' ; break
+                        case 2: sens = 'high'   ; break
+                        default:
+                            logWarn "unsupported Tuya sensitivity value ${fncmd}"
+                            break
+                    }
+                    if (sens != null) {
+                        sendEvent(name: 'tuyaSensitivity', value: sens, descriptionText: "Tuya sensitivity is ${sens}")
+                        if (settings?.tuyaSensitivity != sens) {
+                            device.updateSetting('tuyaSensitivity', [value: sens, type: 'enum'])
+                        }
+                    }
+                }
+            }
+            else {
+                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                sendBatteryPercentageEvent(fncmd)
+                sendLastBatteryEvent()
+            }
             break
         default :
             logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -788,7 +837,9 @@ void refresh() {
 	logInfo("Refreshing...")
     List<String> cmds = []
     cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, [:], delay=200) // battery voltage
-    cmds += zigbee.readAttribute(0x0500, 0x0013, [:], delay=200)    // sensitivity
+    if (supportsIasSensitivity()) {
+        cmds += zigbee.readAttribute(0x0500, 0x0013, [:], delay=200)    // IAS sensitivity
+    }
     if (device?.getDataValue('manufacturer') == 'Samjin') {
         cmds += zigbee.readAttribute(0xFC02, [0x0010, 0x0012], [:], delay=200) // vibration and three axis
     }
@@ -842,7 +893,7 @@ void updated() {
     }
 
     String currentTreeAxis = device.currentState('threeAxis')?.value
-	logInfo("Updating preference settings, sensitivity = ${settings.sensitivity}, threeAxisOpt = ${settings.threeAxis}, currentTreeAxis = $currentTreeAxis}")
+    logInfo("Updating preference settings, sensitivity = ${settings.sensitivity}, tuyaSensitivity = ${settings.tuyaSensitivity}, threeAxisOpt = ${settings.threeAxis}, currentTreeAxis = $currentTreeAxis}")
     if (settings.threeAxis as int == 0 && currentTreeAxis != null) {
         logInfo "Three Axis reporting is now disabled"
         device.deleteCurrentState('threeAxis')
@@ -851,6 +902,39 @@ void updated() {
         logInfo "Three Axis reporting is now enabled with option ${settings.threeAxis}"
     }
     configureReporting()
+}
+
+private int getTuyaSensitivityDp() {
+    // Default Tuya XYZ family uses DP 0x68 for sensitivity; _TZ32101000000_5oy7cysk uses DP 0x69 per Z2M converter
+    return isTuyaVibrationSensorTZ32101000000() ? 0x69 : 0x68
+}
+
+private List<String> tuyaSetEnumDp(final int dp, final int value, final int transId = null) {
+    int tid = transId
+    if (tid == null) {
+        int prev = (state?.tuyaTransId ?: 0) as int
+        tid = (prev + 1) & 0xFF
+        state.tuyaTransId = tid
+    }
+    // Tuya EF00 payload format (common): status(00) + transId + dpId + dpType(enum=04) + lenHi(00) + lenLo(01) + value
+    String payload = "00" + zigbee.convertToHexString(tid, 2) + zigbee.convertToHexString(dp, 2) + "04" + "00" + "01" + zigbee.convertToHexString(value & 0xFF, 2)
+    return zigbee.command(0xEF00, 0x00, payload)
+}
+
+private List<String> setTuyaSensitivity(final String sens) {
+    if (!supportsTuyaSensitivity()) { return [] }
+    Integer enumVal = null
+    switch (sens) {
+        case 'low':    enumVal = 0 ; break
+        case 'middle': enumVal = 1 ; break
+        case 'high':   enumVal = 2 ; break
+        default:
+            logWarn "setTuyaSensitivity: unsupported value ${sens}"
+            return []
+    }
+    int dp = getTuyaSensitivityDp()
+    logDebug "Sending Tuya sensitivity set command dp=${dp} value=${sens} (${enumVal})"
+    return tuyaSetEnumDp(dp, enumVal)
 }
 
 boolean isTuya() {
@@ -1145,12 +1229,15 @@ void configureReporting() {
     // added 03/07/2023
     cmds += zigbee.enrollResponse(200) + zigbee.readAttribute(0x0500, 0x0000, [:], delay=200)
     //
-    if (settings?.sensitivity != null && isTuya()) {
-    logDebug("Configuring vibration sensitivity to : ${settings?.sensitivity}")
+    if (settings?.sensitivity != null && supportsIasSensitivity()) {
+        logDebug("Configuring IAS vibration sensitivity to : ${settings?.sensitivity}")
             int iSens = settings.sensitivity?.toInteger()
             if (iSens>=0 && iSens<7)  {
                 cmds += zigbee.writeAttribute(0x0500, 0x0013,  DataType.UINT8, iSens, [:], delay=200)
             }    
+    }
+    if (supportsTuyaSensitivity() && settings?.tuyaSensitivity != null) {
+        cmds += setTuyaSensitivity(settings.tuyaSensitivity as String)
     }
     sendZigbeeCommands(cmds)
 }
