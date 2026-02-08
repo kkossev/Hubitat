@@ -1112,39 +1112,7 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
     }
 }
 
-/**
- * BOT-R15W: translate Hubitat thermostatMode 'cool' into dp111 operationMode=cooling and dp1 thermostatMode=on.
- * dp1 is on/off only; dp111 is the real heat/cool selector.
- */
-@SuppressWarnings('GroovyUnusedDeclaration')
-List<String> customSetThermostatMode(final Integer scaledValue) {
-    if (!isBotR15w()) { return [] }
-    Map tmMap = getAttributesMap('thermostatMode')
-    Map opMap = getAttributesMap('operationMode')
-    String requestedMode = tmMap?.map?.get(scaledValue)
-    if (requestedMode == null) {
-        logWarn "customSetThermostatMode: unknown scaledValue=${scaledValue}"
-        return []
-    }
-    List<String> cmds = []
-    switch (requestedMode) {
-        case 'off':
-            cmds += sendTuyaParameter(tmMap, 'thermostatMode', 0)
-            break
-        case 'heat':
-            cmds += sendTuyaParameter(opMap, 'operationMode', 0)
-            cmds += sendTuyaParameter(tmMap, 'thermostatMode', 1)
-            break
-        case 'cool':
-            cmds += sendTuyaParameter(opMap, 'operationMode', 1)
-            cmds += sendTuyaParameter(tmMap, 'thermostatMode', 1)
-            break
-        default:
-            logWarn "customSetThermostatMode: unsupported mode ${requestedMode}"
-            break
-    }
-    return cmds
-}
+// NOTE: BOT-R15W thermostatMode translation is handled in thermostatLib.groovy (setThermostatMode).
 
 void customParseTuyaCluster(final Map descMap) {
     boolean isDuplicated = false

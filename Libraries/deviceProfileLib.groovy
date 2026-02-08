@@ -636,7 +636,7 @@ public boolean sendAttribute(String par=null, val=null ) {
             return true
         }
         else {
-            logWarn "sendAttribute: customSetFunction <b>$customSetFunction</b>(<b>$scaledValue</b>) returned null or empty list, continue with the default processing"
+            logDebug "sendAttribute: customSetFunction <b>$customSetFunction</b>(<b>$scaledValue</b>) returned null or empty list, continue with the default processing"
         // continue with the default processing
         }
     }
@@ -659,7 +659,7 @@ public boolean sendAttribute(String par=null, val=null ) {
         return true
     }
     else {
-        logDebug "sendAttribute: not a virtual device (device.controllerType = ${device.controllerType}), continue "
+        logTrace "sendAttribute: not a virtual device (device.controllerType = ${device.controllerType}), continue "
     }
     boolean isTuyaDP
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */

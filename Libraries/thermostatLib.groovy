@@ -24,14 +24,14 @@ library(
  * ver. 3.6.0  2025-09-15 kkossev  - deviceProfileLibV4 alignment
  * ver. 3.6.1  2025-10-31 kkossev  - added setRefreshRequest() in the autoPollThermostat() method, so that events are always sent with [refresh] tag 
  * ver. 3.6.2  2025-12-06 kkossev  - changed setheatingSetpoint to use [digital] / [physical]  type for the event logic 77
- * ver. 3.6.3  2026-02-01 kkossev  - setCoolingSetpoint() BOT-R15W_ZB_THERMOSTAT special handling
+ * ver. 3.6.3  2026-02-08 kkossev  - setCoolingSetpoint() BOT-R15W_ZB_THERMOSTAT special handling; moved 'systemMode' 'off' check before 'eco' mode check in setThermostatMode(); info messages when unsupported modes are attempted to be set;
  *
  *                                   TODO: add eco() method
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
 public static String thermostatLibVersion()   { '3.6.3' }
-public static String thermostatLibStamp() { '2026/02/01 6:11 PM' }
+public static String thermostatLibStamp() { '2026/02/08 9:34 PM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib
@@ -285,6 +285,34 @@ public void setThermostatMode(final String requestedMode) {
     setLastTx( mode = requestedMode, isModeSetReq = true)
     runIn(4, modeReceiveCheck)
 
+    // Exception: BOT_R15W_ZB_THERMOSTAT exposes a virtual 'cool' mode on dp1.
+    // The physical dp1 is on/off only; dp111 (operationMode) selects heating/cooling.
+    // Handle the translation here so we don't rely on a driver-specific customSetThermostatMode().
+    if (this.respondsTo('getDeviceProfile') && (getDeviceProfile() == 'BOT_R15W_ZB_THERMOSTAT')) {
+        logDebug "setThermostatMode: [BOT-R15W] requestedMode=${requestedMode}"
+        switch (requestedMode) {
+            case 'off':
+                sendAttribute('thermostatMode', 'off')
+                return
+            case 'heat':
+                if (device.hasAttribute('operationMode')) {
+                    sendAttribute('operationMode', 'heating')
+                }
+                sendAttribute('thermostatMode', 'heat')
+                return
+            case 'cool':
+                if (device.hasAttribute('operationMode')) {
+                    sendAttribute('operationMode', 'cooling')
+                }
+                // dp1 must be ON (mapped as 'heat'); the UI will still show 'cool' based on operationMode.
+                sendAttribute('thermostatMode', 'heat')
+                return
+            default:
+                // fall back to the generic logic below
+                break
+        }
+    }
+
     switch (mode) {
         case 'heat':
         case 'auto':
@@ -303,29 +331,8 @@ public void setThermostatMode(final String requestedMode) {
             break
         case 'cool':        // disabled the cool mode 03/04/2025
             if (!('cool' in DEVICE.supportedThermostatModes)) {
-                // why shoud we replace 'cool' with 'eco' and 'off' modes ????
-                /*
-                // replace cool with 'eco' mode, if supported by the device
-                if ('eco' in DEVICE.supportedThermostatModes) {
-                    logDebug 'setThermostatMode: pre-processing: switching to eco mode instead'
-                    mode = 'eco'
-                    break
-                }
-                else if ('off' in DEVICE.supportedThermostatModes) {
-                    logDebug 'setThermostatMode: pre-processing: switching to off mode instead'
-                    mode = 'off'
-                    break
-                }
-                else if (device.currentValue('ecoMode') != null) {
-                    // BRT-100 has a dediceted 'ecoMode' command   // TODO - check how to switch BRT-100 low temp protection mode (5 degrees) ?
-                    logDebug "setThermostatMode: pre-processing: setting eco mode on (${settings.ecoTemp} &degC)"
-                    sendAttribute('ecoMode', 1)
-                }
-                */
-                //else {
-                    logDebug "setThermostatMode: pre-processing: switching to 'cool' mode is not supported by this device!"
+                    logInfo "'cool' mode is not supported by this device"
                     return
-                //}
             }
             break
         case 'emergency heat':     // TODO for Aqara and Sonoff TRVs
@@ -336,6 +343,10 @@ public void setThermostatMode(final String requestedMode) {
             if ('on' in emergencyHeatingModesList)  {
                 logInfo "setThermostatMode: pre-processing: switching the emergencyMode mode on for (${settings.emergencyHeatingTime} seconds )"
                 sendAttribute('emergencyHeating', 'on')
+                return
+            }
+            else {
+                logInfo "'emergency heat' mode is not supported by this device"
                 return
             }
             break
@@ -350,7 +361,7 @@ public void setThermostatMode(final String requestedMode) {
                 return
             }
             else {
-                logWarn "setThermostatMode: pre-processing: switching to 'eco' mode is not supported by this device!"
+                logInfo "'eco' mode is not supported by this device"
                 return
             }
             break
@@ -359,6 +370,12 @@ public void setThermostatMode(final String requestedMode) {
                 break
             }
             logDebug "setThermostatMode: pre-processing: switching to 'off' mode"
+            // look for a dedicated 'systemMode' attribute with map 'off' (Aqara E1, MOES Star Ring ...)  - 2026-02-04 :  moved this check before the 'eco' mode checks
+            if ('off' in systemModesList)  {
+                logDebug 'setThermostatMode: pre-processing: switching the systemMode off'
+                sendAttribute('systemMode', 'off')
+                return
+            }
             // if the 'off' mode is not directly supported, try substituting it with 'eco' mode
             if ('eco' in nativelySupportedModesList) {
                 logDebug 'setThermostatMode: pre-processing: switching to eco mode instead'
@@ -369,12 +386,6 @@ public void setThermostatMode(final String requestedMode) {
             if ('on' in ecoModesList)  {
                 logDebug 'setThermostatMode: pre-processing: switching the eco mode on'
                 sendAttribute('ecoMode', 'on')
-                return
-            }
-            // look for a dedicated 'systemMode' attribute with map 'off' (Aqara E1)
-            if ('off' in systemModesList)  {
-                logDebug 'setThermostatMode: pre-processing: switching the systemMode off'
-                sendAttribute('systemMode', 'off')
                 return
             }
             break
