@@ -30,6 +30,7 @@
  *                                   [digital] / [physical] heatingSetpoint event types; _TZE204_aoclfnxz fingerprint correction;
  *                                   added TS0601 _TZE204_6ewjlefg VRF/VRV THERMOSTAT @gnat666 (testing)
  * ver. 3.6.1  2026-02-08 kkossev  - (dev. branch) TS0601 _TZE284_agcxaw3f standard device profile and improvements; STEEDSMT_VRF_VRV_THERMOSTAT commented out; added MOES_ZHT_S03_THERMOSTAT profile for TS0601 _TZE204_zxkwaztm (Moes ZHT‑S03)
+ *                                   BOT_R15W_ZB_THERMOSTAT refactored;
  *
  *                                   TODO: check all calibrationTemp vs temperatureCalibration attributes and unify;
  *                                   TODO: Tuya VRF Gateway : https://github.com/Koenkk/zigbee2mqtt/issues/18570 https://github.com/Koenkk/zigbee2mqtt/issues/23514 
@@ -37,7 +38,7 @@
  */
 
 static String version() { '3.6.1' }
-static String timeStamp() { '2026/02/08 9:37 PM' }
+static String timeStamp() { '2026/02/08 11:47 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -144,49 +145,7 @@ metadata {
 @Field static final Integer MaxRetries = 5
 @Field static final Integer NOT_SET = -1
 
-@Field static final String PROFILE_BOT_R15W = 'BOT_R15W_ZB_THERMOSTAT'
-
-private boolean isBotR15w() { return getDeviceProfile() == PROFILE_BOT_R15W }
-
-/**
- * BOT-R15W special handling: the device uses a single setpoint (dp2) for both heating and cooling,
- * plus a separate heating/cooling selector (dp111). Hubitat apps expect thermostatMode='cool' and
- * setCoolingSetpoint() to send a real command.
- */
-@SuppressWarnings('GroovyUnusedDeclaration')
-private void installBotR15wOverrides() {
-    if (!isBotR15w()) { return }
-    if (state?.botR15wOverridesInstalled == true) { return }
-
-    try {
-        this.metaClass.setCoolingSetpoint = { Number temperaturePar ->
-            logDebug "setCoolingSetpoint(${temperaturePar}) [BOT-R15W override]"
-
-            BigDecimal maxTemp = settings?.maxHeatingSetpoint ? new BigDecimal(settings.maxHeatingSetpoint) : new BigDecimal(40)
-            BigDecimal minTemp = settings?.minHeatingSetpoint ? new BigDecimal(settings.minHeatingSetpoint) : new BigDecimal(5)
-            BigDecimal tempBigDecimal = new BigDecimal(safeToDouble(temperaturePar, 0.0))
-            tempBigDecimal = tempBigDecimal.min(maxTemp).max(minTemp).setScale(1, BigDecimal.ROUND_HALF_UP)
-
-            logDebug "setCoolingSetpoint: calling sendAttribute heatingSetpoint ${tempBigDecimal}"
-            sendAttribute('heatingSetpoint', tempBigDecimal as double)
-
-            // Mark this as a digital command
-            state.states['isDigital'] = true
-            runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
-
-            // keep the resendFailed / receiveCheck logic consistent with setHeatingSetpoint()
-            state.lastTx.isSetPointReq = true
-            state.lastTx.setPoint = tempBigDecimal
-            runIn(3, setpointReceiveCheck)
-        }
-    }
-    catch (e) {
-        logWarn "installBotR15wOverrides: exception '${e}'"
-        return
-    }
-
-    state.botR15wOverridesInstalled = true
-}
+public boolean isBotR15w() { return getDeviceProfile() == 'BOT_R15W_ZB_THERMOSTAT' }
 
 @Field static final Map deviceProfilesV3 = [    // https://github.com/jacekk015/zha_quirks
     // BRT-100-B0
@@ -765,22 +724,20 @@ private void installBotR15wOverrides() {
 
     // BOT-R15W-Zigbee (_TZE284_agcxaw3f)
 	// Based on https://github.com/Koenkk/zigbee-herdsman-converters/issues/10644#issue-3583460679 
-
 	'BOT_R15W_ZB_THERMOSTAT' : [
         description   : 'Beok BOT-R15W Zigbee Thermostat',
         device        : [models: ['TS0601'], type: 'Thermostat', powerSource: 'battery', isSleepy:false],
         capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatCoolingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatMode': true, 'ThermostatSetpoint': true, 'TemperatureMeasurement': true],
-        preferences   : [childLock:'9', minHeatingSetpoint:'16', maxHeatingSetpoint:'15', hysteresis:'112', temperatureCalibration:'19', antiFreeze:'102', sound:'114', preset:'4', operationMode:'111'],
+        preferences   : [childLock:'9', minHeatingSetpoint:'16', maxHeatingSetpoint:'15', hysteresis:'112', temperatureCalibration:'19', antiFreeze:'102', sound:'114', operationMode:'111'],
         fingerprints  : [
             [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,ED00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_agcxaw3f', deviceJoinName: 'Beok BOT-R15W Thermostat']
         ],
         commands      : ['sendSupportedThermostatModes':'', 'setHeatingSetpoint':'', 'resetStats':'', 'refresh':'', 'initialize':'', 'updateAllPreferences': '', 'resetPreferencesToDefaults':'', 'validateAndFixPreferences':''],
         tuyaDPs       : [
-            // dp1 is on/off only, but we expose a Hubitat-friendly "cool" mode too (handled in thermostatLib.setThermostatMode)
-            [dp:1,   name:'systemMode',         type:'enum',            rw: 'rw', defVal:'1', map:[0:'off', 1:'on'], title:'<b>System Mode</b>', description:'System mode (off/heat), plus cooling (virtual)'],
+            [dp:1,   name:'systemMode',         type:'enum',   dt:'01', rw: 'rw', defVal:'1', map:[0:'off', 1:'on'], title:'<b>System Mode</b>', description:'System mode (off/on)'],
             [dp:2,   name:'heatingSetpoint',    type:'decimal',         rw: 'rw', min:5.0,  max:35.0, defVal:20.0, step:0.5, scale:10, unit:'°C', title:'<b>Current Heating Setpoint</b>', description:'Target temperature'],
             [dp:3,   name:'temperature',        type:'decimal',         rw: 'ro', min:0.0,  max:60.0, defVal:20.0, step:0.1, scale:10, unit:'°C', description:'Current room temperature'],
-            [dp:4,   name:'preset',             type:'enum',            rw: 'rw', defVal:'0', map:[0:'manual', 1:'auto', 2:'temporary', 3:'away'], title:'<b>Preset Mode</b>', description:'Preset mode'],
+            [dp:4,   name:'thermostatMode',     type:'enum',            rw: 'rw', defVal:'0', map:[0:'heat', 1:'auto', 2:'auto+manual', 3:'eco'], title:'<b>Thermostat Mode</b>', description:'Thermostat mode'],   // Preset modes: 0: heat, 1: auto+manual, 2: auto, 3: eco (Z2M mapping; device may differ)
             [dp:9,   name:'childLock',          type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Child Lock</b>', description:'Child lock'],
             [dp:15,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0, max:40.0, defVal:32.0, step:0.5, scale:10, unit:'°C', title:'<b>Maximum Temperature Limit</b>', description:'Maximum set temperature'],
             [dp:16,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,  max:20.0, defVal:10.0, step:0.5, scale:10, unit:'°C', title:'<b>Minimum Temperature Limit</b>', description:'Minimum set temperature'],
@@ -792,7 +749,7 @@ private void installBotR15wOverrides() {
             [dp:113, name:'battery',            type:'number',          rw: 'ro', min:0,    max:100,  defVal:100,  step:1,   scale:1,  unit:'%', description:'Battery level'],
             [dp:114, name:'sound',              type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Sound</b>', description:'Beep sound on/off'],
         ],
-        supportedThermostatModes: ['off', 'heat', 'cool'],
+        supportedThermostatModes: ['off', 'heat', 'auto', 'eco', 'cool'],
         refresh: ['pollTuya'],
         configuration : [:]
     ],    
@@ -964,7 +921,6 @@ void customInitEvents(final boolean fullInit=false) {
 
 // called from processFoundItem  (processTuyaDPfromDeviceProfile and ) processClusterAttributeFromDeviceProfile in deviceProfileLib when a Zigbee message was found defined in the device profile map
 //
-/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
 void customProcessDeviceProfileEvent(final Map descMap, final String name, final valueScaled, final String unitText, final String descText) {
     logTrace "customProcessDeviceProfileEvent(${name}, ${valueScaled}) called"
     Map eventMap = [name: name, value: valueScaled, unit: unitText, descriptionText: descText, type: 'physical', isStateChange: true]
@@ -977,20 +933,7 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
             break
         case 'heatingSetpoint' :
             if (isBotR15w() && ((device.currentValue('thermostatMode') == 'cool') || (device.currentValue('operationMode') == 'cooling'))) {
-                final double tempDouble = safeToDouble(valueScaled, 0.0)
-                final boolean isDigital = state.states['isDigital'] ?: false
-                Map spEvent = [name: 'coolingSetpoint', value: tempDouble, unit: '\u00B0C', type: isDigital ? 'digital' : 'physical']
-                spEvent.descriptionText = "coolingSetpoint is ${tempDouble}"
-                if (state.states['isRefresh'] == true) { spEvent.descriptionText += ' [refresh]'; spEvent.isStateChange = true }
-                if (isDigital) { spEvent.descriptionText += ' [digital]'; spEvent.isStateChange = true } else { spEvent.descriptionText += ' [physical]' }
-                sendEvent(spEvent)
-                if (spEvent.descriptionText != null) { logInfo "${spEvent.descriptionText}" }
-
-                // keep thermostatSetpoint in sync for dashboards/assistants
-                spEvent.name = 'thermostatSetpoint'
-                sendEvent(spEvent)
-                updateDataValue('lastRunningMode', 'cool')
-                state.lastRx.setPoint = tempDouble
+                sendCoolingSetpointEvent(valueScaled)
             }
             else {
                 sendHeatingSetpointEvent(valueScaled)
@@ -1163,6 +1106,46 @@ void setBrightnessReceiveCheck() {
         state.lastTx.isSetBrightnessReq = false
     }
 }
+
+import java.math.RoundingMode
+
+def localTempCalibration1 = [
+    from: { long raw ->
+        // device-specific: positives are small; huge means "wrapped negative"
+        if (raw > 55L) raw -= 0x100000000L
+        return raw / 10      // BigDecimal in Groovy
+    },
+    to: { BigDecimal v ->
+        if (v == 0) return 0L
+        long scaled = (v * 10).setScale(0, RoundingMode.HALF_UP).longValue()
+        if (scaled < 0L) return scaled + 0x100000000L
+        return scaled
+    },
+]
+
+def localTempCalibration2 = [
+    from: { long raw ->
+        return raw
+    },
+    to: { long v ->
+        if (v < 0L) return v + 0x100000000L
+        return v
+    },
+]
+
+def localTempCalibration3 = [
+    from: { long raw ->
+        // standard signed-32 detection
+        if (raw > 0x7FFFFFFFL) raw -= 0x100000000L
+        return raw / 10
+    },
+    to: { BigDecimal v ->
+        if (v == 0) return 0L
+        long scaled = (v * 10).setScale(0, RoundingMode.HALF_UP).longValue()
+        if (scaled < 0L) return scaled + 0x100000000L
+        return scaled
+    },
+]
 
 
 void testT(String par) {

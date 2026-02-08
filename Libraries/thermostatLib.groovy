@@ -24,14 +24,14 @@ library(
  * ver. 3.6.0  2025-09-15 kkossev  - deviceProfileLibV4 alignment
  * ver. 3.6.1  2025-10-31 kkossev  - added setRefreshRequest() in the autoPollThermostat() method, so that events are always sent with [refresh] tag 
  * ver. 3.6.2  2025-12-06 kkossev  - changed setheatingSetpoint to use [digital] / [physical]  type for the event logic 77
- * ver. 3.6.3  2026-02-08 kkossev  - setCoolingSetpoint() BOT-R15W_ZB_THERMOSTAT special handling; moved 'systemMode' 'off' check before 'eco' mode check in setThermostatMode(); info messages when unsupported modes are attempted to be set;
+ * ver. 3.6.3  2026-02-08 kkossev  - setCoolingSetpoint() BOT-R15W_ZB_THERMOSTAT special handling; added sendCoolingSetpointEvent(); moved 'systemMode' 'off' check before 'eco' mode check in setThermostatMode(); info messages when unsupported modes are attempted to be set;
  *
  *                                   TODO: add eco() method
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
 public static String thermostatLibVersion()   { '3.6.3' }
-public static String thermostatLibStamp() { '2026/02/08 9:34 PM' }
+public static String thermostatLibStamp() { '2026/02/08 11:23 PM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib
@@ -47,7 +47,7 @@ metadata {
     capability 'ThermostatFanMode'
     // no attributes
 
-    command 'setThermostatMode', [[name: 'thermostat mode (not all are available!)', type: 'ENUM', constraints: ['--- select ---'] + AllPossibleThermostatModesOpts.options.values() as List<String>]]
+    command 'setThermostatMode', [[name: 'thermostat mode (not all are available!)', type: 'ENUM', constraints: AllPossibleThermostatModesOpts.options.values() as List<String>]]
     //    command 'setTemperature', ['NUMBER']                        // Virtual thermostat  TODO - decide if it is needed
 
     preferences {
@@ -175,6 +175,28 @@ void sendHeatingSetpointEvent(Number temperature) {
     state.lastRx.setPoint = tempDouble
 }
 
+void sendCoolingSetpointEvent(Number temperature) {
+    tempDouble = safeToDouble(temperature)
+    boolean isDigital = state.states['isDigital'] ?: false
+    Map eventMap = [name: 'coolingSetpoint',  value: tempDouble, unit: '\u00B0C', type: isDigital ? 'digital' : 'physical']
+    eventMap.descriptionText = "coolingSetpoint is ${tempDouble}"
+    if (state.states['isRefresh'] == true) {
+        eventMap.descriptionText += ' [refresh]'
+        eventMap.isStateChange = true   // force event to be sent
+    }
+    if (isDigital) {
+        eventMap.descriptionText += ' [digital]'
+        eventMap.isStateChange = true   // force event to be sent
+    }
+    else {
+        eventMap.descriptionText += ' [physical]'
+    }
+    sendEvent(eventMap)
+    if (eventMap.descriptionText != null) { logInfo "${eventMap.descriptionText}" }
+
+    updateDataValue('lastRunningMode', 'cool')
+}
+
 // thermostat capability standard command
 // Default behavior: do nothing in TRV - just send an event.
 // Exception: BOT_R15W_ZB_THERMOSTAT uses a shared setpoint (dp2) for both heating and cooling,
@@ -185,36 +207,10 @@ void setCoolingSetpoint(Number temperaturePar) {
     // BOT-R15W special handling (profile-driven via deviceProfileLib)
     if (this.respondsTo('getDeviceProfile') && (getDeviceProfile() == 'BOT_R15W_ZB_THERMOSTAT')) {
         logDebug "setCoolingSetpoint(${temperaturePar}) [BOT-R15W]"
-
-        BigDecimal temperature = temperaturePar.toBigDecimal()
-        /* groovylint-disable-next-line ParameterReassignment */
-        BigDecimal tempDouble = (temperature * 2).setScale(0, RoundingMode.HALF_UP) / 2
-
-        BigDecimal maxTemp = settings?.maxHeatingSetpoint ? new BigDecimal(settings.maxHeatingSetpoint) : new BigDecimal(40)
-        BigDecimal minTemp = settings?.minHeatingSetpoint ? new BigDecimal(settings.minHeatingSetpoint) : new BigDecimal(5)
-        tempBigDecimal = new BigDecimal(tempDouble)
-        tempBigDecimal = tempDouble.min(maxTemp).max(minTemp).setScale(1, BigDecimal.ROUND_HALF_UP)
-
-        logDebug "setCoolingSetpoint: calling sendAttribute heatingSetpoint ${tempBigDecimal}"
-        sendAttribute('heatingSetpoint', tempBigDecimal as double)
-
-        // Mark this as a digital command
-        state.states['isDigital'] = true
-        runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
-
-        // keep the resendFailed / receiveCheck logic consistent with setHeatingSetpoint()
-        state.lastTx.isSetPointReq = true
-        state.lastTx.setPoint = tempBigDecimal
-        runIn(3, setpointReceiveCheck)
-
-        // keep existing user feedback (event + log)
-        String descText = "coolingSetpoint is set to ${tempBigDecimal} \u00B0C"
-        sendEvent(name: 'coolingSetpoint', value: tempBigDecimal, unit: '\u00B0C', descriptionText: descText, type: 'digital')
-        logInfo "${descText}"
+        sendCoolingSetpointEvent(temperaturePar)
         return
     }
 
-    /* groovylint-disable-next-line ParameterReassignment */
     BigDecimal temperature = Math.round(temperaturePar * 2) / 2
     String descText = "coolingSetpoint is set to ${temperature} \u00B0C"
     sendEvent(name: 'coolingSetpoint', value: temperature, unit: '\u00B0C', descriptionText: descText, type: 'digital')
@@ -270,6 +266,7 @@ public void setThermostatMode(final String requestedMode) {
     List systemModesList = getAttributesMap('systemMode')?.map?.values() as List ?: []
     List ecoModesList = getAttributesMap('ecoMode')?.map?.values() as List ?: []
     List emergencyHeatingModesList = getAttributesMap('emergencyHeating')?.map?.values() as List ?: []
+    List operationModesList = getAttributesMap('operationMode')?.map?.values() as List ?: []
 
     logDebug "setThermostatMode: sending setThermostatMode(${mode}). Natively supported: ${nativelySupportedModesList}"
 
@@ -285,36 +282,13 @@ public void setThermostatMode(final String requestedMode) {
     setLastTx( mode = requestedMode, isModeSetReq = true)
     runIn(4, modeReceiveCheck)
 
-    // Exception: BOT_R15W_ZB_THERMOSTAT exposes a virtual 'cool' mode on dp1.
-    // The physical dp1 is on/off only; dp111 (operationMode) selects heating/cooling.
-    // Handle the translation here so we don't rely on a driver-specific customSetThermostatMode().
-    if (this.respondsTo('getDeviceProfile') && (getDeviceProfile() == 'BOT_R15W_ZB_THERMOSTAT')) {
-        logDebug "setThermostatMode: [BOT-R15W] requestedMode=${requestedMode}"
-        switch (requestedMode) {
-            case 'off':
-                sendAttribute('thermostatMode', 'off')
-                return
-            case 'heat':
-                if (device.hasAttribute('operationMode')) {
-                    sendAttribute('operationMode', 'heating')
-                }
-                sendAttribute('thermostatMode', 'heat')
-                return
-            case 'cool':
-                if (device.hasAttribute('operationMode')) {
-                    sendAttribute('operationMode', 'cooling')
-                }
-                // dp1 must be ON (mapped as 'heat'); the UI will still show 'cool' based on operationMode.
-                sendAttribute('thermostatMode', 'heat')
-                return
-            default:
-                // fall back to the generic logic below
-                break
-        }
-    }
-
     switch (mode) {
         case 'heat':
+            if ('heating' in operationModesList) {
+                logDebug 'setThermostatMode: pre-processing: switching the operationMode to heating'
+                sendAttribute('operationMode', 'heating')
+            }
+            // continue 
         case 'auto':
             if (device.currentValue('ecoMode') == 'on') {
                 logDebug 'setThermostatMode: pre-processing: switching first the eco mode off'
@@ -330,6 +304,11 @@ public void setThermostatMode(final String requestedMode) {
             }
             break
         case 'cool':        // disabled the cool mode 03/04/2025
+            if ('cooling' in operationModesList) {
+                logDebug 'setThermostatMode: pre-processing: switching the operationMode to cooling'
+                sendAttribute('operationMode', 'cooling')
+                return
+            }
             if (!('cool' in DEVICE.supportedThermostatModes)) {
                     logInfo "'cool' mode is not supported by this device"
                     return
@@ -409,7 +388,7 @@ public void setThermostatMode(final String requestedMode) {
             logTrace "setThermostatMode: post-processing: no post-processing required for mode ${mode}"
             break
         case 'emergency heat' :
-            logDebug "setThermostatMode: post-processing: setting emergency heat mode on (${settings.emergencyHeatingTime} minutes)"
+            logInfo "setting emergency heat mode on (${settings.emergencyHeatingTime} minutes)"
             sendAttribute('emergencyHeating', 1)
             break
         default :
