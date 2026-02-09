@@ -26,17 +26,19 @@
  * ver. 3.5.1  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  * ver. 3.5.2  2025-05-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
  * ver. 3.5.3  2025-10-03 kkossev  - added TS0601 _TZE204_lpedvtvr into new 'MOES_RING_THERMOSTAT' profile
- * ver. 3.6.0  2025-12-13 kkossev  - (dev. branch) addeed new 'Beok BOT-R15W Zigbee Thermostat Cool' TS0601 _TZE284_agcxaw3f @guy.mayhew;
+ * ver. 3.6.0  2025-12-13 kkossev  - addeed new 'Beok BOT-R15W Zigbee Thermostat Cool' TS0601 _TZE284_agcxaw3f @guy.mayhew;
  *                                   [digital] / [physical] heatingSetpoint event types; _TZE204_aoclfnxz fingerprint correction;
  *                                   added TS0601 _TZE204_6ewjlefg VRF/VRV THERMOSTAT @gnat666 (testing)
+ * ver. 3.6.1  2026-02-08 kkossev  - (dev. branch) TS0601 _TZE284_agcxaw3f standard device profile and improvements; STEEDSMT_VRF_VRV_THERMOSTAT commented out; added MOES_ZHT_S03_THERMOSTAT profile for TS0601 _TZE204_zxkwaztm (Moes ZHT‑S03)
+ *                                   BOT_R15W_ZB_THERMOSTAT refactored;
  *
+ *                                   TODO: check all calibrationTemp vs temperatureCalibration attributes and unify;
  *                                   TODO: Tuya VRF Gateway : https://github.com/Koenkk/zigbee2mqtt/issues/18570 https://github.com/Koenkk/zigbee2mqtt/issues/23514 
- *                                   TODO: add a standard device profile for 'Beok BOT-R15W Zigbee Thermostat' TS0601 _TZE284_agcxaw3f  
  *                                   TODO: THE STATIC DEVICE PROFILE V3 CODE SIZE is nearly its LIMIT - refactoring needed ! (same as the mmWave driver - dynamic loading of V4 JSON profiles ...)
  */
 
-static String version() { '3.6.0' }
-static String timeStamp() { '2025/12/13 9:51 PM' }
+static String version() { '3.6.1' }
+static String timeStamp() { '2026/02/08 11:47 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -87,20 +89,24 @@ metadata {
         attribute 'maxHeatingSetpoint', 'number'                    // BRT-100, Sonoff, AVATTO
         attribute 'minHeatingSetpoint', 'number'                    // BRT-100, Sonoff, AVATTO
         attribute 'sensor', 'enum', ['internal', 'external', 'both']         // Aqara E1, AVATTO
-        attribute 'systemMode', 'enum', ['off', 'on']               // Aqara E1, AVATTO
+        attribute 'systemMode', 'enum', ['off', 'on']               // Aqara E1, AVATTO, MOES ZHT-S03
         attribute 'valveAlarm', 'enum',  ['false', 'true']          // Aqara E1
         attribute 'valveDetection', 'enum', ['off', 'on']           // Aqara E1
-        attribute 'weeklyProgram', 'number'                         // BRT-100
+        //attribute 'weeklyProgram', 'number'                         // BRT-100    commented out 2026-02-08 
         attribute 'windowOpenDetection', 'enum', ['off', 'on']      // BRT-100, Aqara E1, Sonoff
         attribute 'windowsState', 'enum', ['open', 'closed']        // BRT-100, Aqara E1
         attribute 'batteryLowAlarm', 'enum', ['batteryOK', 'batteryLow']        // TUYA_SASWELL
-        //attribute 'workingState', "enum", ["open", "closed"]        // BRT-100
         attribute 'faultAlarm', 'enum', ['clear', 'faultSensor', 'faultMotor', 'faultLowBatt', 'faultUgLowBatt', 'error']        // TUYA
         attribute 'motorThrust', 'enum', ['strong', 'middle', 'weak']   // TRV602Z
         attribute 'fanSpeed', 'enum', ['auto', 'low', 'medium', 'high']   // VRF/VRV Thermostat
 
+        attribute 'sound', 'enum', ['off', 'on']                       // BEOK BOT-R15W, BEOK thermostats
+        attribute 'temperatureCalibration', 'number'                   // Thermostat temperature offset
+        attribute 'operationMode', 'enum', ['heating', 'cooling']       // BEOK BOT-R15W (heating/cooling selection)
+
         // Aqaura E1 attributes     TODO - consolidate a common set of attributes
-        attribute 'preset', 'enum', ['manual', 'auto', 'away']      // TODO - remove?
+        // Note: used by multiple device profiles; keep this list broad.
+        attribute 'preset', 'enum', ['manual', 'auto', 'temporary', 'away', 'temporary manual', 'program', 'eco']      // TODO - remove?
         attribute 'awayPresetTemperature', 'number'
 
         command 'sendCommand', [
@@ -138,6 +144,8 @@ metadata {
 
 @Field static final Integer MaxRetries = 5
 @Field static final Integer NOT_SET = -1
+
+public boolean isBotR15w() { return getDeviceProfile() == 'BOT_R15W_ZB_THERMOSTAT' }
 
 @Field static final Map deviceProfilesV3 = [    // https://github.com/jacekk015/zha_quirks
     // BRT-100-B0
@@ -242,13 +250,6 @@ metadata {
             [dp:4,   name:'heatingSetpoint',    type:'decimal',         rw: 'rw', min:5.0,   max:35.0, defVal:20.0, step:1.0, scale:10, unit:'°C',  title: '<b>Current Heating Setpoint</b>',      description:'Current heating setpoint'],
             [dp:5,   name:'temperature',        type:'decimal',         rw: 'ro', min:0.0,   max:50.0, defVal:20.0, step:1.0, scale:10, unit:'°C',  description:'Temperature'],     // current_heating_setpoint
             [dp:7,   name:'childLock',          type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'] ,   unit:'', title:'<b>Child Lock</b>',  description:'Child lock'],
-            //[dp:28,  name:'scheduleMonday',     type:'number',          rw: 'ro',  description:'Schedule Monday'],
-            //[dp:29,  name:'scheduleTuesday',    type:'number',          rw: 'ro',  description:'Schedule Tueasday'],
-            //[dp:30,  name:'scheduleWednesday',  type:'number',          rw: 'ro',  description:'Schedule Wednesday'],
-            //[dp:31,  name:'scheduleThursday',   type:'number',          rw: 'ro',  description:'Schedule Thursday'],
-            //[dp:32,  name:'scheduleFriday',     type:'number',          rw: 'ro',  description:'Schedule Friday'],
-            //[dp:33,  name:'scheduleSaturday',   type:'number',          rw: 'ro',  description:'Schedule Saturday'],
-            //[dp:34,  name:'scheduleSunday',     type:'number',          rw: 'ro',  description:'Schedule Sunday'],
             [dp:35,  name:'batteryLowAlarm',    type:'enum',  dt: '01', rw: 'ro', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'lowBattery', 1:'sensorFault'], description:'Alarm'],                                            // fault_alarm tuya.valueConverter.errorOrBatteryLow]
             [dp:36,  name:'antiFreeze',         type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'], title:'<b>Anti-Freeze</b>',  description:'Anti-Freeze support'],                     // frost_protection'
             [dp:39,  name:'limescaleProtect',   type:'enum',  dt: '01', rw: 'rw', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'off', 1:'on'], title:'<b>Limescale Protect</b>',  description:'Limescale Protection support'],      // scale_protection
@@ -281,13 +282,6 @@ metadata {
             [dp:14,  name:'faultAlarm',         type:'enum',            rw: 'ro', defVal:'0', map:[0:'clear', 1:'faultSensor', 2:'faultMotor', 4:'faultLowBatt', 8:'faultUgLowBatt'],  description:'Fault alarm'],
             [dp:15,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,   max:15.0, defVal:10.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Minimum Temperature</b>',      description:'Minimum temperature'],
             [dp:16,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0,  max:45.0, defVal:35.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Maximum Temperature</b>',      description:'Maximum temperature'],
-            //[dp:17,  name:'scheduleMonday',     type:'number',          rw: 'ro', description:'Schedule Monday'],
-            //[dp:18,  name:'scheduleTuesday',    type:'number',          rw: 'ro', description:'Schedule Tueasday'],
-            //[dp:19,  name:'scheduleWednesday',  type:'number',          rw: 'ro', description:'Schedule Wednesday'],
-            //[dp:20,  name:'scheduleThursday',   type:'number',          rw: 'ro', description:'Schedule Thursday'],
-            //[dp:21,  name:'scheduleFriday',     type:'number',          rw: 'ro', description:'Schedule Friday'],
-            //[dp:22,  name:'scheduleSaturday',   type:'number',          rw: 'ro', description:'Schedule Saturday'],
-            //[dp:23,  name:'scheduleSunday',     type:'number',          rw: 'ro', description:'Schedule Sunday'],
             [dp:101, name:'calibrationTemp',    type:'decimal',         rw: 'rw', min:-10.0,  max:19.0,  defVal:0.0, step:0.1,   scale:10,  unit:'°C',  title:'<b>Calibration Temperature</b>', description:'Calibration Temperature'],
             [dp:108, name:'level',              type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:10,   scale:10,  unit:'%', description:'Valve level'],      // valve open degree
             [dp:109, name:'model',              type:'number',          rw: 'ro', description:'Manufacturer model'],      // STRING!
@@ -327,13 +321,6 @@ metadata {
             [dp:14,  name:'faultAlarm',         type:'enum',            rw: 'ro', defVal:'0', map:[0:'clear', 1:'error'],  description:'Fault alarm'],
             [dp:15,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,   max:15.0, defVal:10.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Minimum Temperature</b>',      description:'Minimum temperature'],
             [dp:16,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0,  max:45.0, defVal:35.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Maximum Temperature</b>',      description:'Maximum temperature'],
-            //[dp:17,  name:'scheduleMonday',     type:'number',          rw: 'ro', description:'Schedule Monday'],
-            //[dp:18,  name:'scheduleTuesday',    type:'number',          rw: 'ro', description:'Schedule Tueasday'],
-            //[dp:19,  name:'scheduleWednesday',  type:'number',          rw: 'ro', description:'Schedule Wednesday'],
-            //[dp:20,  name:'scheduleThursday',   type:'number',          rw: 'ro', description:'Schedule Thursday'],
-            //[dp:21,  name:'scheduleFriday',     type:'number',          rw: 'ro', description:'Schedule Friday'],
-            //[dp:22,  name:'scheduleSaturday',   type:'number',          rw: 'ro', description:'Schedule Saturday'],
-            //[dp:23,  name:'scheduleSunday',     type:'number',          rw: 'ro', description:'Schedule Sunday'],
             [dp:101, name:'calibrationTemp',    type:'decimal',         rw: 'ro', min:-10.0,  max:19.0,  defVal:0.0, step:0.1,   scale:1,  unit:'°C',  title:'<b>Calibration Temperature</b>', description:'Calibration Temperature'],
             // ^^^^^ calibrationTemp is temporary made read-only !!  https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/tuya.ts#L845
             [dp:108, name:'level',              type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:10,   scale:10,  unit:'%', description:'Valve level'],      // valve open degree
@@ -376,13 +363,6 @@ metadata {
             [dp:15,  name:'windowsState',       type:'enum',            rw: 'ro', min:0,     max:1 ,   defVal:'0',  step:1,   scale:1,  map:[0:'closed', 1:'open'],  title:'<bWindow State</b>',  description:'Window state'],
             [dp:47,  name:'calibrationTemp',    type:'decimal',         rw: 'rw', min:-3.0,  max:3.0,  defVal:0.0,  step:1,   scale:1,  unit:'°C',  title:'<b>Calibration Temperature</b>', description:'Calibration Temperature'],                  // local_temperature_calibration
             // ^^ check! ^^^ tuya.valueConverter.localTempCalibration1
-            //[dp:102, name:'scheduleMonday',     type:'number',          rw: 'ro',  description:'Schedule Monday'],
-            //[dp:103, name:'scheduleTuesday',    type:'number',          rw: 'ro',  description:'Schedule Tueasday'],
-            //[dp:104, name:'scheduleWednesday',  type:'number',          rw: 'ro',  description:'Schedule Wednesday'],
-            //[dp:105, name:'scheduleThursday',   type:'number',          rw: 'ro',  description:'Schedule Thursday'],
-            //[dp:106, name:'scheduleFriday',     type:'number',          rw: 'ro',  description:'Schedule Friday'],
-            //[dp:107, name:'scheduleSaturday',   type:'number',          rw: 'ro',  description:'Schedule Saturday'],
-            //[dp:108, name:'scheduleSunday',     type:'number',          rw: 'ro',  description:'Schedule Sunday'],
             [dp:110, name:'motorThrust',        type:'enum',            rw: 'ro', defVal:'1', map:[0:'strong', 1:'middle', 2:'weak'], description:'Motor thrust'],
             [dp:111, name:'brightness',         type:'enum',            rw: 'rw', defVal:'1', map:[0:'high', 1:'medium', 2:'low'], title:'<b>Display Brightness</b>',  description:'Display brightness'],
             [dp:113, name:'orientation',        type:'enum',            rw: 'rw', defVal:'1', map:[0:'up', 1:'right', 2:'down', 3:'left'], title:'<b>Screen Orientation</b>',  description:'Screen orientation'],
@@ -471,13 +451,6 @@ metadata {
             [dp:14,  name:'faultAlarm',         type:'enum',            rw: 'ro', defVal:'0', map:[0:'active', 1:'clear'],  description:'Fault alarm'],
             [dp:15,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,   max:15.0, defVal:10.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Minimum Temperature</b>',      description:'Minimum temperature'],
             [dp:16,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0,  max:45.0, defVal:35.0, step:1.0, scale:10,  unit:'°C',  title: '<b>Maximum Temperature</b>',      description:'Maximum temperature'],
-            //[dp:17,  name:'scheduleMonday',     type:'number',          rw: 'ro', description:'Schedule Monday'],
-            //[dp:18,  name:'scheduleTuesday',    type:'number',          rw: 'ro', description:'Schedule Tueasday'],
-            //[dp:19,  name:'scheduleWednesday',  type:'number',          rw: 'ro', description:'Schedule Wednesday'],
-            //[dp:20,  name:'scheduleThursday',   type:'number',          rw: 'ro', description:'Schedule Thursday'],
-            //[dp:21,  name:'scheduleFriday',     type:'number',          rw: 'ro', description:'Schedule Friday'],
-            //[dp:22,  name:'scheduleSaturday',   type:'number',          rw: 'ro', description:'Schedule Saturday'],
-            //[dp:23,  name:'scheduleSunday',     type:'number',          rw: 'ro', description:'Schedule Sunday'],
             [dp:101, name:'calibrationTemp',    type:'decimal',         rw: 'rw', min:-3.0,  max:3.0,  defVal:00.0, step:0.1,   scale:10,  unit:'°C',  title:'<b>Calibration Temperature</b>', description:'Calibration Temperature'],
             [dp:108, name:'level',              type:'number',          rw: 'ro', min:0,     max:100,  defVal:100,  step:1,   scale:1,  unit:'%',          description:'Valve level'],      // position
             [dp:111, name:'brightness',         type:'enum',            rw: 'rw', defVal:'1', map:[0:'high', 1:'medium', 2:'low'], title:'<b>Display Brightness</b>',  description:'Display brightness'],
@@ -588,7 +561,6 @@ metadata {
         commands      : ['sendSupportedThermostatModes':'', 'setHeatingSetpoint':'', 'resetStats':'', 'refresh':'', 'initialize':'', 'updateAllPreferences': '', 'resetPreferencesToDefaults':'', 'validateAndFixPreferences':''],
         tuyaDPs       : [
             [dp:1,   name:'systemMode',         type:'enum',  dt: '01',  rw: 'rw', defVal:'1', map:[0: 'off', 1: 'on'],  title:'<b>Thermostat Switch</b>',  description:'Thermostat Switch (system mode)'],
-            // [dp:1,   name:'systemMode',         type:'enum',            rw: 'rw', defVal:'1', map:[0: 'on', 1: 'off'],  title:'<b>Thermostat Switch</b>',  description:'Thermostat Switch (system mode)'],
             [dp:2,   name:'thermostatMode',     type:'enum',            rw: 'rw', defVal:'0', map:[0:'heat', 1:'auto', 2:'auto+manual'], description:'Thermostat Working Mode'],                             // 2:auto w/ temporary changed setpoint
             [dp:3,   name:'thermostatOperatingState',  type:'enum',     rw: 'rw', defVal:'0', map:[0:'idle', 1:'heating'] ,  unit:'', description:'Thermostat Operating State(working state)'],
             [dp:7,   name:'sound',   type:'enum',            rw: 'rw', defVal:'0', map:[0:'off', 1:'on'] ,  unit:'', title: '<b>Sound</b>', description:'Sound on/off'],
@@ -672,13 +644,10 @@ metadata {
             [dp:101, name:'thermostatOperatingState',  type:'enum',     rw: 'rw', defVal:'0', map:[1:'heating', 0:'idle'] ,  unit:'', description:'Thermostat Operating State(working state)'],      //  'running_state' valve state?
             [dp:102, name:'antiFreeze',         type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Anti-Freeze</b>',  description:'Anti-Freeze / Frost Protection'],     // 'frost_protection'
             [dp:103, name:'reset',              type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Factory Reset</b>',  description:'Full factory reset, use with caution!'],
-            //[dp:104, name:'workdaySet',         type:'enum',            rw: 'ro',             map:[0:'disabled', 1:'6-1', 2:'5-2', 3:'7'], description:'Workday Set'],
-            //[dp:105, name:'unknown105',         type:'enum',  dt: '01', rw: 'ro', defVal:'0', map:[0:'off', 1:'on'], description:'Unknown 105'],
             [dp:106, name:'sensor',             type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'internal', 1:'external', 2:'both'], title:'<b>Sensor Selection</b>',  description:'Sensor Selection'],  // only in/out for BEOK
             [dp:107, name:'hysteresis',         type:'decimal',         rw: 'rw', min:1.0,    max:9.5,  defVal:1.0,  step:0.5, scale:10,  title: '<b>Hysteresis</b>', description:'hysteresis'],
             [dp:109, name:'heatingSchedule',    type:'number',          rw: 'ro', description:'Heating Schedule'],
-            [dp:110, name:'brightness',         type:'enum',            rw: 'rw', defVal:'2', map:[0:'off', 1:'low', 2:'medium', 3:'high'], title:'<b>LCD Brightness</b>',  description:'LCD brightness'],
-            //[dp:111, name:'unknown111',         type:'enum',  dt: '01', rw: 'ro', defVal:'0', map:[0:'off', 1:'on'], description:'Unknown 111'],
+            [dp:110, name:'brightness',         type:'enum',            rw: 'rw', defVal:'2', map:[0:'off', 1:'low', 2:'medium', 3:'high'], title:'<b>LCD Brightness</b>',  description:'LCD brightness']
         ],
         supportedThermostatModes: ['off', 'heat', 'auto'],
         refresh: ['pollTuya'],
@@ -696,8 +665,8 @@ metadata {
         ],
         commands      : ['sendSupportedThermostatModes':'', 'setHeatingSetpoint':'', 'resetStats':'', 'refresh':'', 'initialize':'', 'updateAllPreferences': '', 'resetPreferencesToDefaults':'', 'validateAndFixPreferences':''],
         tuyaDPs       : [
-            [dp:1,   name:'systemMode',         type:'enum',            rw: 'rw', defVal:'1', map:[0: 'off', 1: 'heat'],  title:'<b>Thermostat Switch</b>',  description:'Thermostat switch (system mode)'],
-            [dp:2,   name:'preset',             type:'enum',            rw: 'rw', defVal:'0', map:[0:'manual', 1:'temporary manual', 2:'program', 3:'eco'], description:'Preset mode'],
+            [dp:1,   name:'systemMode',         type:'enum',  dt: '01', rw: 'rw', defVal:'1', map:[0:'off', 1:'on'],  title:'<b>Thermostat Switch</b>',  description:'Thermostat switch (system mode)'],
+            [dp:2,   name:'thermostatMode',     type:'enum',            rw: 'rw', defVal:'0', map:[0:'heat', 1:'auto+manual', 2:'auto', 3:'eco'], title:'<b>Thermostat Mode</b>', description:'Preset mode'],
             [dp:16,  name:'temperature',        type:'decimal',         rw: 'ro', min:-20.0, max:60.0, defVal:20.0, step:0.1, scale:10, unit:'°C',  description:'Measured temperature'],
             [dp:18,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:1.0,   max:15.0, defVal:5.0, step:0.5, scale:10, unit:'°C',  title:'<b>Minimum Heating Setpoint</b>', description:'Minimum comfort temperature limit'],
             [dp:32,  name:'sensor',             type:'enum',            rw: 'rw', defVal:'0', map:[0:'internal', 1:'dual', 2:'external'], title:'<b>Sensor Selection</b>', description:'Temperature sensor mode'],
@@ -709,44 +678,82 @@ metadata {
             [dp:101, name:'temperatureCalibration', type:'decimal',    rw: 'rw', min:-10.0, max:10.0, defVal:0.0, step:1.0, scale:1,  unit:'°C',  title:'<b>Temperature Calibration</b>', description:'Temperature calibration offset'],
             [dp:109, name:'floorTemperature',   type:'decimal',         rw: 'ro', min:0.0,   max:70.0, defVal:20.0, step:0.5, scale:10, unit:'°C', description:'Floor temperature'],
             [dp:110, name:'hysteresis',         type:'decimal',         rw: 'rw', min:0.5,   max:5.0,  defVal:1.0, step:0.5, scale:10, title:'<b>Temperature Deadzone</b>', description:'Temperature delta before heating engages'],
-            [dp:111, name:'highProtectTemperature', type:'decimal',    rw: 'rw', min:10.0,  max:70.0, defVal:50.0, step:1.0, scale:1,  unit:'°C',  title:'<b>High Protect Temperature</b>', description:'High temperature protection threshold'],
+            [dp:111, name:'highProtectTemperature', type:'decimal',    rw: 'rw', min:10.0,  max:70.0, defVal:50.0, step:1.0, scale:10,  unit:'°C',  title:'<b>High Protect Temperature</b>', description:'High temperature protection threshold'],
             [dp:112, name:'lowProtectTemperature',  type:'decimal',    rw: 'rw', min:0.0,   max:10.0, defVal:5.0,  step:0.5, scale:10, unit:'°C',  title:'<b>Low Protect Temperature</b>', description:'Low temperature protection threshold'],
             [dp:113, name:'ecoTemp',           type:'decimal',         rw: 'rw', min:10.0,  max:30.0, defVal:18.0, step:0.5, scale:10, unit:'°C',  title:'<b>Eco Temperature</b>', description:'Temperature used in Eco preset'],
             [dp:114, name:'screenTime',        type:'enum',            rw: 'rw', defVal:'2', map:[0:'10 seconds', 1:'20 seconds', 2:'30 seconds', 3:'40 seconds', 4:'50 seconds', 5:'60 seconds'], title:'<b>Screen Timeout</b>', description:'Screen backlight timeout'],
             [dp:115, name:'rgbLight',          type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>RGB Accent Light</b>', description:'Enable the RGB accent light'],
         ],
-        supportedThermostatModes: ['off', 'heat'],
+        supportedThermostatModes: ['off', 'heat', 'auto', 'eco'  ],
         refresh: ['pollTuya'],
         deviceJoinName: 'Moes Ring Thermostat',
         configuration : [:]
     ],
 
-    // BOT-R15W-Zigbee (_TZE284_agcxaw3f)
-	// Based on Z2M DPs: https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/beok.ts
-	'BOT_R15W_ZB_THERMOSTAT_COOL' : [
-        description   : 'Beok BOT-R15W Zigbee Thermostat Cool',
-        device        : [models: ['TS0601'], type: 'Thermostat', powerSource: 'battery', isSleepy:false],
-        capabilities  : ['ThermostatCoolingSetpoint': true, 'ThermostatMode': true, 'ThermostatSetpoint': true, 'TemperatureMeasurement': true],
-        preferences   : ['childLock':'26'],
+    // Moes ZHT-S03 wall thermostat (_TZE204_zxkwaztm)
+    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/c72493edd5c8818ab0f8d4a8832bf18dac3db172/src/devices/moes.ts#L26 
+	'MOES_ZHT_S03_THERMOSTAT' : [
+        description   : 'Moes ZHT-S03 Zigbee Wall Thermostat',
+        device        : [models: ['TS0601'], type: 'Thermostat', powerSource: 'ac', isSleepy:false],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint': true, 'ThermostatMode': true, 'TemperatureMeasurement': true],
+        preferences   : [hysteresis:'112', temperatureCalibration:'109', childLock:'40', antiFreeze:'10'],
         fingerprints  : [
-            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,ED00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_agcxaw3f', deviceJoinName: 'Beok BOT-R15W Thermostat Cool']
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_zxkwaztm', deviceJoinName: 'Moes ZHT-S03 Thermostat'],
         ],
         commands      : ['sendSupportedThermostatModes':'', 'setHeatingSetpoint':'', 'resetStats':'', 'refresh':'', 'initialize':'', 'updateAllPreferences': '', 'resetPreferencesToDefaults':'', 'validateAndFixPreferences':''],
         tuyaDPs       : [
-            [dp:1, 	 name:'thermostatMode',  	type:'enum',  	rw: 'rw', min:0, max:1, defVal:'1', step:1, scale:1, map:[0:'off', 1:'cool'], unit:'', title:'<b>Thermostat Mode</b>', description:'Thermostat mode (cool-only remapped)'],
-            [dp:2,   name:'coolingSetpoint',    type:'decimal', rw: 'rw', min:5.0, max:60.0, defVal:20.0, step:0.5, scale:10, unit:'°C', title:'<b>Cooling Setpoint</b>', description:'Target temperature'],
-            [dp:3,   name:'temperature',        type:'decimal', rw: 'ro', min:0, max:60.0, defVal:20.0, step:0.1, scale:10, unit:'°C', description:'Current room temperature'],
-            [dp:19,  name:'preset',             type:'enum',    rw: 'rw', min:0, max:1, defVal:'0', step:1, scale:1, map:[0:'manual', 1:'program'], unit:'', description:'Preset mode'],
-            [dp:26,  name:'childLock',          type:'enum',    rw: 'rw', min:0, max:1, defVal:'0', step:1, scale:1, map:[0:'off', 1:'on'], unit:'', title:'<b>Child Lock</b>', description:'Child lock'],
-            [dp:27,  name:'schedule',           type:'raw',     rw: 'rw', defVal:null, description:'Weekly Schedule'],
-            [dp:101, name:'thermostatOperatingState', type:'enum', rw:'ro', map:[0:'idle', 1:'cooling'], description:'Thermostat operating state (idle or actively cooling)'],
-            [dp:113, name:'battery',            type:'number', rw:'ro', min:0, max:100, defVal:100, step:1, scale:1, unit:'%', description:'Battery Level'],
+            [dp:1,   name:'systemMode',         type:'enum',  dt:'01', rw:'rw', defVal:'1', map:[0:'off', 1:'on'], title:'<b>System Mode</b>', description:'System mode (off/heat)'],
+            [dp:2,   name:'thermostatMode',     type:'enum',           rw:'rw', defVal:'0', map:[0:'auto', 1:'heat'], title:'<b>Thermostat Mode</b>', description:'Preset (auto/manual)'],
+            [dp:10,  name:'antiFreeze',         type:'enum',  dt:'01', rw:'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Frost Protection</b>', description:'Antifreeze function'],
+            [dp:16,  name:'heatingSetpoint',    type:'decimal',        rw:'rw', min:5.0,  max:35.0, defVal:20.0, step:0.5, scale:10, unit:'°C', title:'<b>Current Heating Setpoint</b>', description:'Current heating setpoint'],
+            [dp:24,  name:'temperature',        type:'decimal',        rw:'ro', defVal:20.0, scale:10, unit:'°C', description:'Local temperature'],
+            [dp:31,  name:'programmingMode',    type:'enum',           rw:'ro', defVal:'0', map:[0:'mon_fri', 1:'mon_sat', 2:'mon_sun'], title:'<b>Working Day</b>', description:'Workday setting'],
+            [dp:36,  name:'thermostatOperatingState', type:'enum',     rw:'ro', defVal:'0', map:[0:'idle', 1:'heating', 2:'cooling'], description:'Running state (idle/heating/cooling?)'],
+            [dp:40,  name:'childLock',          type:'enum',  dt:'01', rw:'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Child Lock</b>', description:'Child lock'],
+            [dp:109, name:'temperatureCalibration', type:'decimal',    rw:'rw', min:-9.9, max:9.9, defVal:0.0, step:0.1, scale:10, unit:'°C', title:'<b>Local Temperature Calibration</b>', description:'Local temperature calibration'],
+            [dp:112, name:'hysteresis',         type:'decimal',        rw:'rw', min:0.1, max:10.0, defVal:1.0, step:0.1, scale:10, unit:'°C', title:'<b>Temperature Delta</b>', description:'Delta between temperature and setpoint to trigger heat'],
+            // Schedule placeholders (Z2M uses ZWT198_schedule conversion; needs custom parsing/encoding)
+            [dp:67,  name:'scheduleWeekday',    type:'number',         rw:'ro', description:'Schedule weekday (placeholder; ZWT198_schedule)'],
+            [dp:68,  name:'scheduleHoliday',    type:'number',         rw:'ro', description:'Schedule holiday (placeholder; ZWT198_schedule)'],
         ],
-        supportedThermostatModes: ['off', 'cool'],
+        supportedThermostatModes: ['off', 'heat', 'auto', 'on'],
+        refresh: ['pollTuya'],
+        deviceJoinName: 'Moes ZHT-S03 Thermostat',
+        configuration : [:]
+    ],
+
+    // BOT-R15W-Zigbee (_TZE284_agcxaw3f)
+	// Based on https://github.com/Koenkk/zigbee-herdsman-converters/issues/10644#issue-3583460679 
+	'BOT_R15W_ZB_THERMOSTAT' : [
+        description   : 'Beok BOT-R15W Zigbee Thermostat',
+        device        : [models: ['TS0601'], type: 'Thermostat', powerSource: 'battery', isSleepy:false],
+        capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatCoolingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatMode': true, 'ThermostatSetpoint': true, 'TemperatureMeasurement': true],
+        preferences   : [childLock:'9', minHeatingSetpoint:'16', maxHeatingSetpoint:'15', hysteresis:'112', temperatureCalibration:'19', antiFreeze:'102', sound:'114', operationMode:'111'],
+        fingerprints  : [
+            [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,ED00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_agcxaw3f', deviceJoinName: 'Beok BOT-R15W Thermostat']
+        ],
+        commands      : ['sendSupportedThermostatModes':'', 'setHeatingSetpoint':'', 'resetStats':'', 'refresh':'', 'initialize':'', 'updateAllPreferences': '', 'resetPreferencesToDefaults':'', 'validateAndFixPreferences':''],
+        tuyaDPs       : [
+            [dp:1,   name:'systemMode',         type:'enum',   dt:'01', rw: 'rw', defVal:'1', map:[0:'off', 1:'on'], title:'<b>System Mode</b>', description:'System mode (off/on)'],
+            [dp:2,   name:'heatingSetpoint',    type:'decimal',         rw: 'rw', min:5.0,  max:35.0, defVal:20.0, step:0.5, scale:10, unit:'°C', title:'<b>Current Heating Setpoint</b>', description:'Target temperature'],
+            [dp:3,   name:'temperature',        type:'decimal',         rw: 'ro', min:0.0,  max:60.0, defVal:20.0, step:0.1, scale:10, unit:'°C', description:'Current room temperature'],
+            [dp:4,   name:'thermostatMode',     type:'enum',            rw: 'rw', defVal:'0', map:[0:'heat', 1:'auto', 2:'auto+manual', 3:'eco'], title:'<b>Thermostat Mode</b>', description:'Thermostat mode'],   // Preset modes: 0: heat, 1: auto+manual, 2: auto, 3: eco (Z2M mapping; device may differ)
+            [dp:9,   name:'childLock',          type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Child Lock</b>', description:'Child lock'],
+            [dp:15,  name:'maxHeatingSetpoint', type:'decimal',         rw: 'rw', min:15.0, max:40.0, defVal:32.0, step:0.5, scale:10, unit:'°C', title:'<b>Maximum Temperature Limit</b>', description:'Maximum set temperature'],
+            [dp:16,  name:'minHeatingSetpoint', type:'decimal',         rw: 'rw', min:5.0,  max:20.0, defVal:10.0, step:0.5, scale:10, unit:'°C', title:'<b>Minimum Temperature Limit</b>', description:'Minimum set temperature'],
+            [dp:19,  name:'temperatureCalibration', type:'decimal',     rw: 'rw', min:-9.9, max:9.9,  defVal:0.0,  step:0.1, scale:10, unit:'°C', title:'<b>Local Temperature Calibration</b>', description:'Temperature calibration offset'],
+            [dp:101, name:'thermostatOperatingState', type:'enum',       rw: 'ro', defVal:'0', map:[0:'idle', 1:'heating'], description:'Running state (idle/active)'],
+            [dp:102, name:'antiFreeze',         type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Frost Protection</b>', description:'Antifreeze function'],
+            [dp:111, name:'operationMode',      type:'enum',            rw: 'rw', defVal:'0', map:[0:'heating', 1:'cooling'], title:'<b>Operation Mode</b>', description:'Switch between heating and cooling modes'],
+            [dp:112, name:'hysteresis',         type:'decimal',         rw: 'rw', min:0.5,  max:10.0, defVal:1.0,  step:0.5, scale:10, unit:'°C', title:'<b>Temperature Delta</b>', description:'Delta between temperature and setpoint to trigger active heating/cooling'],
+            [dp:113, name:'battery',            type:'number',          rw: 'ro', min:0,    max:100,  defVal:100,  step:1,   scale:1,  unit:'%', description:'Battery level'],
+            [dp:114, name:'sound',              type:'enum',  dt: '01', rw: 'rw', defVal:'0', map:[0:'off', 1:'on'], title:'<b>Sound</b>', description:'Beep sound on/off'],
+        ],
+        supportedThermostatModes: ['off', 'heat', 'auto', 'eco', 'cool'],
         refresh: ['pollTuya'],
         configuration : [:]
     ],    
-
+/*
     'STEEDSMT_VRF_VRV_THERMOSTAT'   : [     // https://www.aliexpress.us/item/3256809455660487.html https://community.hubitat.com/t/release-tuya-zigbee-thermostats-and-trvs-driver/128916/127?u=kkossev 
         // Work In Progress - not tested yet! Not all DPs are known!
         description   : 'STEEDSMT VRF/VRV Thermostat BVRF-L001',
@@ -783,7 +790,7 @@ metadata {
         refresh: ['pollTuya'],
         configuration : [:]
     ],
-
+*/
     
 ]
 
@@ -914,7 +921,6 @@ void customInitEvents(final boolean fullInit=false) {
 
 // called from processFoundItem  (processTuyaDPfromDeviceProfile and ) processClusterAttributeFromDeviceProfile in deviceProfileLib when a Zigbee message was found defined in the device profile map
 //
-/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
 void customProcessDeviceProfileEvent(final Map descMap, final String name, final valueScaled, final String unitText, final String descText) {
     logTrace "customProcessDeviceProfileEvent(${name}, ${valueScaled}) called"
     Map eventMap = [name: name, value: valueScaled, unit: unitText, descriptionText: descText, type: 'physical', isStateChange: true]
@@ -926,7 +932,31 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
             handleHumidityEvent(valueScaled)
             break
         case 'heatingSetpoint' :
-            sendHeatingSetpointEvent(valueScaled)
+            if (isBotR15w() && ((device.currentValue('thermostatMode') == 'cool') || (device.currentValue('operationMode') == 'cooling'))) {
+                sendCoolingSetpointEvent(valueScaled)
+            }
+            else {
+                sendHeatingSetpointEvent(valueScaled)
+            }
+            break
+        case 'thermostatOperatingState' :
+            // BOT-R15W uses dp101 for "running_state" (idle/active). If operationMode is cooling, translate active->cooling.
+            if (device.currentValue('operationMode') == 'cooling' && valueScaled == 'heating') {
+                eventMap.value = 'cooling'
+                eventMap.descriptionText = "thermostatOperatingState is cooling"
+            }
+            sendEvent(eventMap)
+            logInfo "${eventMap.descriptionText}"
+            break
+        case 'operationMode' :
+            sendEvent(eventMap)
+            logInfo "${descText}"
+            // keep Hubitat thermostatMode aligned with the active operationMode (cooling/heating)
+            if (isBotR15w() && device.currentValue('thermostatMode') != 'off') {
+                String tm = (valueScaled == 'cooling') ? 'cool' : 'heat'
+                sendEvent(name: 'thermostatMode', value: tm, isStateChange: true, descriptionText: "thermostatMode is ${tm}", type: 'physical')
+                state.lastThermostatMode = tm
+            }
             break
         case 'systemMode' : // Aqara E1 and AVATTO thermostat (off/on)
             sendEvent(eventMap)
@@ -940,6 +970,18 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
             }
             break
         case 'thermostatMode' :  // AVATTO send the thermostat mode a second after being switched off - ignore it !
+            if (isBotR15w()) {
+                String tm = valueScaled
+                if (tm == 'heat' && device.currentValue('operationMode') == 'cooling') {
+                    tm = 'cool'
+                }
+                eventMap.value = tm
+                eventMap.descriptionText = "thermostatMode is ${tm}"
+                sendEvent(eventMap)
+                logInfo "${eventMap.descriptionText}"
+                state.lastThermostatMode = tm
+                break
+            }
             if (device.currentValue('systemMode') == 'off' ) {
                 logWarn "customProcessDeviceProfileEvent: ignoring the thermostatMode <b>${valueScaled}</b> event, because the systemMode is off"
             }
@@ -991,18 +1033,6 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
                 sendEvent(name: 'thermostatOperatingState', value: 'heating', isStateChange: true, description: 'BRT-100 valve is open %{valueScaled} %')
             }
             break
-            /*
-        case "workingState" :      // BRT-100   replaced with thermostatOperatingState
-            sendEvent(eventMap)
-            logInfo "${descText}"
-            if (valueScaled == "closed") {  // the valve is closed
-                sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: "BRT-100 workingState is closed")
-            }
-            else {
-                sendEvent(name: "thermostatOperatingState", value: "heating", isStateChange: true, description: "BRT-100 workingState is open")
-            }
-            break
-            */
         default :
             sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
                 //if (!doNotTrace) {
@@ -1015,7 +1045,7 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
 
 void customParseTuyaCluster(final Map descMap) {
     boolean isDuplicated = false
-/*    
+/*    TODO
     int dp = zigbee.convertHexToInt(descMap?.data[2])
     int fncmd = getTuyaAttributeValue(descMap?.data, 0) // PATCH! zero-based index
     if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '0B') {    // ZCL Command Default Response
@@ -1076,6 +1106,46 @@ void setBrightnessReceiveCheck() {
         state.lastTx.isSetBrightnessReq = false
     }
 }
+
+import java.math.RoundingMode
+
+def localTempCalibration1 = [
+    from: { long raw ->
+        // device-specific: positives are small; huge means "wrapped negative"
+        if (raw > 55L) raw -= 0x100000000L
+        return raw / 10      // BigDecimal in Groovy
+    },
+    to: { BigDecimal v ->
+        if (v == 0) return 0L
+        long scaled = (v * 10).setScale(0, RoundingMode.HALF_UP).longValue()
+        if (scaled < 0L) return scaled + 0x100000000L
+        return scaled
+    },
+]
+
+def localTempCalibration2 = [
+    from: { long raw ->
+        return raw
+    },
+    to: { long v ->
+        if (v < 0L) return v + 0x100000000L
+        return v
+    },
+]
+
+def localTempCalibration3 = [
+    from: { long raw ->
+        // standard signed-32 detection
+        if (raw > 0x7FFFFFFFL) raw -= 0x100000000L
+        return raw / 10
+    },
+    to: { BigDecimal v ->
+        if (v == 0) return 0L
+        long scaled = (v * 10).setScale(0, RoundingMode.HALF_UP).longValue()
+        if (scaled < 0L) return scaled + 0x100000000L
+        return scaled
+    },
+]
 
 
 void testT(String par) {

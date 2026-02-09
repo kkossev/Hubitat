@@ -604,7 +604,7 @@
         { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_gkfbdvyx", "deviceJoinName": "Tuya Human Presence Detector ZY-M100-24GV3.1" }
       ],
       "tuyaDPs": [
-        { "dp": 1, "name": "humanMotionState", "type": "enum", "rw": "ro", "map": { "0": "none", "1": "present", "2": "moving", "3": "none" }, "description": "Presence state" },
+        { "dp": 1, "name": "humanMotionState", "preProc": "motionOrNotYA4FT0W4", "type": "enum", "rw": "ro", "map": { "0": "none", "1": "present", "2": "moving", "3": "none" }, "description": "Presence state" },
         { "dp": 2, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 1, "max": 10, "defVal": 5, "title": "<b>Motion sensitivity</b>", "description": "Radar motion sensitivity" },
         { "dp": 3, "name": "minimumDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 8.25, "defVal": 0.75, "step": 75, "scale": 100, "unit": "meters", "title": "<b>Minimum distance</b>", "description": "Shield range of the radar" },
         { "dp": 4, "name": "maximumDistance", "type": "decimal", "rw": "rw", "min": 0.75, "max": 9.00, "defVal": 6.00, "step": 75, "scale": 100, "unit": "meters", "title": "<b>Maximum distance</b>", "description": "Detection range of the radar" },
@@ -935,13 +935,14 @@
       "spammyDPsToNotTrace": [19]
     } 
   },
-  "version": "4.1.0",
-  "timestamp": "2025-12-12 12:28 AM",
+  "version": "4.1.1",
+  "timestamp": "2026-02-01 10:41 PM",
   "description": "Device profiles for Tuya Zigbee mmWave Sensor",
   "author": "kkossev",
   "comments": [
     "v.4.0.8. - moved TS0601 _TZE204_qasjif9e _TZE204_ztqnh5cg back to TS0601_TUYA_RADAR profile",
     "v.4.0.9. - added _TZE204_gkfbdvyx, LeapMMW all DPs,  ",
-    "v.4.1.0. - fixed SONOFF SNZB-06P radar device profile"
+    "v.4.1.0. - fixed SONOFF SNZB-06P radar device profile",
+    "v.4.1.1. - fixed TS0601_YA4FT0W4_RADAR radar device profile - thanks @lukaszbet"
   ]
 }

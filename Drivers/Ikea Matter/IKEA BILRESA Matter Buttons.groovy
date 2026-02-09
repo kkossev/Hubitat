@@ -1,7 +1,7 @@
 /*
  * IKEA BILRESA Matter Dual Button (events-based). Supports both dual button and scroll wheel models.
  *
- * Last edited: 2025/12/28 10:24 PM
+ * Last edited: 2026/01/04 11:41 AM
  *
  * WARNING:
  * This driver runs on pure magic, optimism, and several offerings to the Hubitat gods.
@@ -67,7 +67,7 @@ void parse(Map msg) {
         if (raw != null) {
             Integer pct = Math.round(raw / 2.0f)
             pct = Math.max(0, Math.min(100, pct))
-            sendEvent(name: "battery", value: pct, unit: "%")
+            sendEvent(name: "battery", value: pct, unit: "%", type: "physical")
             logInfo "Battery is ${pct}%"
         }
         return
@@ -328,6 +328,40 @@ private void sendButtonEventFiltered(String type, Integer buttonNumber) {
     state.lastButtonNumber = buttonNumber
     state.lastAction = type
     state.lastButtonTime = now()
+}
+
+/* ---------- dashboard commands ---------- */
+
+void push(buttonNumber) {
+    Integer btn = safeInt(buttonNumber)
+    if (btn == null) return
+    String descriptionText = "${device.displayName} button ${btn} was pushed"
+    if (txtEnable) log.info descriptionText
+    sendEvent(name: "pushed", value: btn, descriptionText: descriptionText, isStateChange: true, type: "digital")
+}
+
+void hold(buttonNumber) {
+    Integer btn = safeInt(buttonNumber)
+    if (btn == null) return
+    String descriptionText = "${device.displayName} button ${btn} was held"
+    if (txtEnable) log.info descriptionText
+    sendEvent(name: "held", value: btn, descriptionText: descriptionText, isStateChange: true, type: "digital")
+}
+
+void doubleTap(buttonNumber) {
+    Integer btn = safeInt(buttonNumber)
+    if (btn == null) return
+    String descriptionText = "${device.displayName} button ${btn} was doubleTapped"
+    if (txtEnable) log.info descriptionText
+    sendEvent(name: "doubleTapped", value: btn, descriptionText: descriptionText, isStateChange: true, type: "digital")
+}
+
+void release(buttonNumber) {
+    Integer btn = safeInt(buttonNumber)
+    if (btn == null) return
+    String descriptionText = "${device.displayName} button ${btn} was released"
+    if (txtEnable) log.info descriptionText
+    sendEvent(name: "released", value: btn, descriptionText: descriptionText, isStateChange: true, type: "digital")
 }
 
 /* ---------- helpers ---------- */

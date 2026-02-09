@@ -2,11 +2,13 @@
   "packageName": "Tuya Scene Switch TS004F",
   "author": "Krassimir Kossev",
   "version": "2.8.3",
+  "betaVersion": "2.9.1",
   "minimumHEVersion": "1.0.0",
-  "dateReleased": "2025-10-07",
+  "dateReleased": "2026-02-04",
   "documentationLink": "https://github.com/kkossev/Hubitat/blob/main/Drivers/Tuya%20TS004F/README.md",
   "communityLink": "https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823",
   "releaseNotes": "2.8.3 2025-10-07 - added TS0041 _TZ3000_rsqqkdxv \n2.8.2 2025-05-04 - added TS0044 _TZ3000_5tqxpine \n2.8.1 2025-01-12 - added SiHAS models SBM300Z2, SBM300Z3, SBM300Z4, SBM300Z5, SBM300Z6, ISM300Z3\n2.8.0 2024-12-04 - added forcedDebounce preference; default debounce timer changed to 1200ms\n2.7.4 2024-12-03 - debounce for TS0043 TZ3000_gbm10jnj\n2.7.3 2024-06-22 - added TS0041 _TZ3000_s0i14ubi; added TS0041 _TZ3000_mrpevh8p\n2.7.2 2024-05-06 - bug fix: TS0044 _TZ3000_vp6clf9d _TZ3000_ur5fpg7p _TZ3000_wkai4ga5 needed to be pushed twice to active a button; Configure button will reset the statistics; \n2.7.1 2024-04-23 - added _TZ3000_wkai4ga5 to the needsDebouncing() list; added TS004F _TZ3000_b3mgfu0d and _TZ3000_czuyt8lz ;\n2.7.0 2024-03-06 - Groovy lint; added TS0021 _TZ3210_3ulg9kp\n2.6.10 2023-12-01 - added _TZ3000_ur5fpg7p in the needsDebouncing list; added Sonoff SNZB-01P\n2.6.9 2023-10-03 - REVERTED BACK TO VERSION 2.6.6 timeStamp 2023/05/30 1:51 PM\n2.6.6 2023-05-30 - reverseButton default value bug fix;\n2.6.5 2023-05-15 - TS0215A _TZ3000_pkfazisv iAlarm (Meian) SOS button fingerprint correction; number of buttons and supportedValues correction for SOS buttons; added _TZ3000_abrsvsou\n",
+  "betaReleaseNotes": "2.9.1  2025-12-22 - (dev. branch) added respondToZdoRequests preference; respond to ZDO Node_Desc_request (0x0002) only if the preference is enabled; added TS004F _TZ3000_gwkzibhs @callumgw",	
   "drivers": [
     {
       "id": "0135dcaf-2335-457f-bda3-ffdaa2249d2e",
@@ -17,4 +19,6 @@
     }
   ]
 }
+
 	
+

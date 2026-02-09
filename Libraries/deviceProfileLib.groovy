@@ -1,8 +1,7 @@
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NestedBlockDepth, NoDouble, NoFloat, NoWildcardImports, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/deviceProfileLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-deviceProfileLib',
-    version: '3.5.3'
+    version: '3.5.4'
 )
 /*
  *  Device Profile Library (V3)
@@ -39,7 +38,8 @@ library(
  * ver. 3.5.0  2025-08-14 kkossev  - zclWriteAttribute() support for forced destinationEndpoint in the attributes map
  * ver. 3.5.1  2025-09-15 kkossev  - commonLib ver 4.0.0 allignment; log.trace leftover removed; 
  * ver. 3.5.2  2025-10-04 kkossev  - SIMULATED_DEVICE_MODEL and SIMULATED_DEVICE_MANUFACTURER added (for testing with simulated devices)
- * ver. 3.5.3  2025-12-06 kkossev  - (dev. branch) added digital/physical type to events in customProcessDeviceProfileEvent()
+ * ver. 3.5.3  2025-12-06 kkossev  - added digital/physical type to events in customProcessDeviceProfileEvent()
+ * ver. 3.5.4  2026-02-04 kkossev  - changed inputIt min param rounding to floor instead of ceil
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
@@ -51,8 +51,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.5.3' }
-static String deviceProfileLibStamp() { '2025/12/06 10:22 PM' }
+static String deviceProfileLibVersion()   { '3.5.4' }
+static String deviceProfileLibStamp() { '2026/02/04 8:02 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -636,7 +636,7 @@ public boolean sendAttribute(String par=null, val=null ) {
             return true
         }
         else {
-            logWarn "sendAttribute: customSetFunction <b>$customSetFunction</b>(<b>$scaledValue</b>) returned null or empty list, continue with the default processing"
+            logDebug "sendAttribute: customSetFunction <b>$customSetFunction</b>(<b>$scaledValue</b>) returned null or empty list, continue with the default processing"
         // continue with the default processing
         }
     }
@@ -659,7 +659,7 @@ public boolean sendAttribute(String par=null, val=null ) {
         return true
     }
     else {
-        logDebug "sendAttribute: not a virtual device (device.controllerType = ${device.controllerType}), continue "
+        logTrace "sendAttribute: not a virtual device (device.controllerType = ${device.controllerType}), continue "
     }
     boolean isTuyaDP
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
@@ -813,7 +813,7 @@ public Map inputIt(String paramPar, boolean debug = false) {
     if (input.type in ['number', 'decimal']) {
         if (foundMap.min != null && foundMap.max != null) {
             //input.range = "${foundMap.min}..${foundMap.max}"
-            input.range = "${Math.ceil(foundMap.min) as int}..${Math.ceil(foundMap.max) as int}"
+            input.range = "${Math.floor(foundMap.min) as int}..${Math.ceil(foundMap.max) as int}"
         }
         if (input.range != null && input.description != null) {
             if (input.description != '') { input.description += '<br>' }

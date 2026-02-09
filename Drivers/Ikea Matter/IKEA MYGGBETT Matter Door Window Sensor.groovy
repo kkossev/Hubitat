@@ -1,14 +1,16 @@
 /*
  * IKEA MYGGBETT Matter Door/Window Sensor (minimal)
  *
- * Last edited: 2025/12/28 10:16 AM
+ * https://community.hubitat.com/t/what-do-i-need-at-ikea/158182/76?u=kkossev
+ *
+ * Last edited: 2026/01/11 12:55 AM
  */
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 
 metadata {
-    definition(name: "IKEA MYGGBETT Matter Door/Window Sensor", namespace: "community", author: "kkossev + ChatGPT") {
+    definition(name: "IKEA MYGGBETT Matter Door/Window Sensor", namespace: "community", author: "kkossev + ChatGPT", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Ikea%20Matter/IKEA%20MYGGBETT%20Matter%20Door%20Window%20Sensor.groovy") {
 
         capability "Sensor"
         capability "ContactSensor"
@@ -101,7 +103,7 @@ def parse(String description) {
             String txt = (prev != null && prev.toString() == contact) ? "Contact is ${contact}${sfx}" : "Contact was ${contact}${sfx}"
             // for contact attribute, isStateChange should never be forced to true to avoid apps triggering repeatedly on same contact state
             sendEvent(name: "contact", value: contact, descriptionText: txtEnable ? txt : null, type: "physical")
-            def contactTime = device.currentState('contact')?.date.time
+            def contactTime = device.currentState('contact')?.date?.time
             logInfo(txt)
         }
         return
@@ -117,9 +119,9 @@ def parse(String description) {
             boolean isRef = state.lastRefreshTime ? (now() - state.lastRefreshTime <= 15000) : false
             def sfx = (isInit ? " [initialize]" : "") + (isRef ? " [refresh]" : "")
             def contactVal = device.currentValue('contact')
-            def contactTime = device.currentState('contact')?.date.time
+            def contactTime = device.currentState('contact')?.date?.time
             def batteryVal = device.currentValue('battery')
-            def batteryTime = device.currentState('battery')?.date.time
+            def batteryTime = device.currentState('battery')?.date?.time
             logDebug("Battery report received; current contact state is ${contactVal} contact time = ${contactTime}")
             if (sfx == "") sfx = " (contact is ${contactVal})"
             // for battery, we can safely mark isStateChange true during init/refresh without causing issues in apps

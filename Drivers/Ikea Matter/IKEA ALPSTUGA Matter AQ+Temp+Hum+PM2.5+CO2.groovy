@@ -1,7 +1,7 @@
 /*
  * IKEA ALPSTUGA Matter Air Quality Monitor (minimal)
  * 
- * Last edited: 2025/12/24 1:48 PM
+ * Last edited: 2026/01/03 10:24 AM
  *
  */
 
@@ -9,7 +9,7 @@ import hubitat.device.HubAction
 import hubitat.device.Protocol
 
 metadata {
-    definition(name: "IKEA ALPSTUGA Matter AQ+Temp+Hum+PM2.5+CO2", namespace: "community", author: "kkossev + ChatGPT") {
+    definition(name: "IKEA ALPSTUGA Matter", namespace: "community", author: "kkossev + ChatGPT") {
         capability "Sensor"
         capability "Switch"
         capability "TemperatureMeasurement"
@@ -18,6 +18,9 @@ metadata {
         capability "CarbonDioxideMeasurement"
         capability "Refresh"
         capability "Initialize"
+        
+        attribute "airQuality", "string"
+        attribute "pm25", "number"
     }
     preferences {
         input name: "txtEnable", type: "bool", title: "Enable descriptionText logging", defaultValue: true
@@ -108,7 +111,8 @@ def parse(String description) {
         if (aq != null) {
             String aqText = airQualityToText(aq)
             sendEvent(name: "airQuality", value: aqText, descriptionText: txtEnable ? "Air quality is ${aqText}" : null)
-            if (txtEnable) log.info "Air quality is ${aqText}"
+            sendEvent(name: "airQualityIndex", value: aq)
+            if (txtEnable) log.info "Air quality is ${aqText} (index: ${aq})"
         }
         return
     }
@@ -117,7 +121,7 @@ def parse(String description) {
     if (clus == 0x0402 && attrId == 0x0000) {
         Integer raw = safeHexToInt(value)   // e.g. 0x0927 => 2343 => 23.43°C
         if (raw != null) {
-            BigDecimal c = raw / 100.0
+            BigDecimal c = ((short) raw) / 100.0
             BigDecimal cRounded = c.setScale(1, BigDecimal.ROUND_HALF_UP)
 
             // Convert to hub's scale if needed (F hubs will get °F)
