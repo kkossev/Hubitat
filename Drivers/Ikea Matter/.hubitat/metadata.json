@@ -35,6 +35,12 @@
       "id": 4757,
       "codeType": "driver",
       "version": 23
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/Matter Thread Diagnostic.groovy",
+      "codeType": "driver",
+      "id": 4929,
+      "version": 5
     }
   ]
 }
