@@ -29,6 +29,12 @@
       "id": 4758,
       "codeType": "driver",
       "version": 21
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA MYGGSPRAY Matter Motion+Lux+Bat.groovy",
+      "id": 4757,
+      "codeType": "driver",
+      "version": 23
     }
   ]
 }
