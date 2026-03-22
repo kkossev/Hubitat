@@ -25,7 +25,7 @@
  *  ver. 1.2.0 2024-02-20 kkossev - Groovy lint; added TZE204_ntcy3xu1
  *  ver. 1.2.1 2024-03-27 kkossev - merged main branch ver. 1.1.3 commit by hubivlad
  *  ver. 1.3.0 2025-05-13 kkossev - added TS0601 _TZE204_iuk8kupi @John_Land; added GasDetector and CarbonMonoxideDetector capabilities
- *  ver. 1.4.0 2026-03-22 kkossev - (dev.branch) added MOES TS0601 _TZE284_uo8qcagc @tomobiki.mn 
+ *  ver. 1.4.0 2026-03-22 kkossev - (dev.branch) added MOES TS0601 _TZE284_uo8qcagc @tomobiki.mn ; added _TZE284_chbyv06x (TS0601) Zigbee Combustible Gas Detector @hayfever-zz
  *                                  added TS0601_gas_sensor_4 _TZE200_mby4kbtq (gas, gas_value LEL, preheat, fault_alarm, alarm_switch, silence)
  *                                  added TS0601_gas_sensor_2 support (_TZE200_yojqa8xn, _TZE204_zougpkpy, _TZE204_chbyv06x, _TZE204_yojqa8xn): gas alarm, LEL% value, alarm ringtone/time, self-test, preheat, silence
  *                                  added TS0601_gas_sensor_1 support (_TZE200_ggev5fsl, _TZE200_u319yc66, _TZE200_kvpwq8z7): gas alarm, self-test, self-test result, fault alarm, silence
@@ -42,7 +42,7 @@ import groovy.json.*
 import groovy.transform.Field
 
 def version() { '1.4.0' }
-def timeStamp() { '2026/03/22 11:01 PM' }
+def timeStamp() { '2026/03/22 11:36 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -53,8 +53,8 @@ metadata {
         capability 'Smoke Detector'    // attributes: smoke ("detected","clear","tested")    ea.STATE, true, false).withDescription('Smoke alarm status'),  [dp=1]
         capability 'TamperAlert'       // attributes: tamper - ENUM ["clear", "detected"]    [dp=4 ]  values 1/0
         capability 'TestCapability'
-        capability 'Battery'            //  ea.STATE, ['low', 'middle', 'high']).withDescription('Battery level state'),    dp14 0=25% 1=50% 2=90% [dp=14] battery low   value 2 (FULL)
-        capability 'PowerSource'        //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
+        capability 'Battery'           // ea.STATE, ['low', 'middle', 'high']).withDescription('Battery level state'),    dp14 0=25% 1=50% 2=90% [dp=14] battery low   value 2 (FULL)
+        capability 'PowerSource'       // powerSource - ENUM ["battery", "dc", "mains", "unknown"]
         capability 'Health Check'
         capability 'GasDetector'                // Methane (CH4) Attributes: naturalGas - ENUM ["clear", "tested", "detected"]
         capability 'CarbonMonoxideDetector'     // Attributes: carbonMonoxide - ENUM ["clear", "tested", "detected"]
@@ -66,13 +66,13 @@ metadata {
         attribute 'naturalGasValue', 'number'
         attribute 'carbonMonoxideValue', 'number'
         attribute 'rtt', 'number'
-        attribute 'preheat', 'enum', ['true', 'false']         // TS0601_gas_sensor_4
+        attribute 'preheat', 'enum', ['true', 'false']          // TS0601_gas_sensor_4
         attribute 'alarmSwitch', 'enum', ['enable', 'disable']  // TS0601_gas_sensor_4
-        attribute 'faultAlarm', 'enum', ['active', 'clear']      // TS0601_gas_sensor_4
-        attribute 'silence', 'enum', ['active', 'inactive']    // TS0601_gas_sensor_4
+        attribute 'faultAlarm', 'enum', ['active', 'clear']     // TS0601_gas_sensor_4
+        attribute 'silence', 'enum', ['active', 'inactive']     // TS0601_gas_sensor_4
         attribute 'alarmRingtone', 'enum', ['melody_1', 'melody_2', 'melody_3', 'melody_4', 'melody_5']    // TS0601_gas_sensor_2
-        attribute 'alarmTime', 'number'                                                                     // TS0601_gas_sensor_2
-        attribute 'selfTest', 'enum', ['active', 'inactive']                                                // TS0601_gas_sensor_2
+        attribute 'alarmTime', 'number'                                                                    // TS0601_gas_sensor_2
+        attribute 'selfTest', 'enum', ['active', 'inactive']                                               // TS0601_gas_sensor_2
         attribute 'selfTestResult', 'enum', ['checking', 'success', 'failure', 'unsupported']              // TS0601_gas_sensor_2
 
         command 'clear'
@@ -115,6 +115,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_zougpkpy'    // TS0601_gas_sensor_2 Gas sensor
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_chbyv06x'    // TS0601_gas_sensor_2 Gas sensor
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_yojqa8xn'    // TS0601_gas_sensor_2 Gas sensor
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE284_chbyv06x'    // TS0601_gas_sensor_2 Gas sensor (DYGSM DY-RQ500A) https://github.com/kkossev/Hubitat/issues/141 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_ggev5fsl'    // TS0601_gas_sensor_1 Gas sensor
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_u319yc66'    // TS0601_gas_sensor_1 Gas sensor
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_kvpwq8z7'    // TS0601_gas_sensor_1 Gas sensor
@@ -156,7 +157,7 @@ private getDP_TYPE_BITMAP()     { '05' }    // [ 1,2,4 bytes ] as bits
 def isTS0601()       { return device.getDataValue('model') in ['TS0601'] }
 def isTuya2in1()     { return device.getDataValue('manufacturer') in ['_TZE204_iuk8kupi', '_TZE200_iuk8kupi', '_TZE200_8isdky6j'] }                         // Gas & Carbon Monoxide detector (CO&CH4)?
 def isGasSensor1()   { return device.getDataValue('manufacturer') in ['_TZE200_ggev5fsl', '_TZE200_u319yc66', '_TZE200_kvpwq8z7'] }                         // TS0601_gas_sensor_1 Gas sensor (gas, self_test, self_test_result, fault_alarm, silence)
-def isGasSensor2()   { return device.getDataValue('manufacturer') in ['_TZE200_yojqa8xn', '_TZE204_zougpkpy', '_TZE204_chbyv06x', '_TZE204_yojqa8xn'] }     // TS0601_gas_sensor_2 Gas sensor (gas, gas_value LEL, ringtone, alarm_time, self_test, preheat, silence)
+def isGasSensor2()   { return device.getDataValue('manufacturer') in ['_TZE200_yojqa8xn', '_TZE204_zougpkpy', '_TZE204_chbyv06x', '_TZE204_yojqa8xn', '_TZE284_chbyv06x'] }     // TS0601_gas_sensor_2 Gas sensor (gas, gas_value LEL, ringtone, alarm_time, self_test, preheat, silence)
 def isGasSensor3()   { return device.getDataValue('manufacturer') in ['_TZE200_nus5kk3n'] }                                                                 // TS0601_gas_sensor_3 Gas sensor (gas, self_test_result, fault_alarm)
 def isGasSensor4()   { return device.getDataValue('manufacturer') in ['_TZE200_mby4kbtq', '_TZE204_mby4kbtq', '_TZE204_uo8qcagc', '_TZE284_uo8qcagc'] }     // TS0601_gas_sensor_4 Gas sensor (gas, gas_value LEL, preheat, fault_alarm, alarm_switch, silence)
 
