@@ -19,12 +19,45 @@ The driver can be also installed manually from this [Github link](https://raw.gi
 
 * Tuya specific cluster 0xEF00 Smoke Detectors
   * model:"TS0601", manufacturer:"_TZE200_ntcy3xu1"
-  * model:"TS0601", manufacturer:"_TZE200_uebojraa" (not tested)
+  * model:"TS0601", manufacturer:"_TZE204_ntcy3xu1"
+  * model:"TS0601", manufacturer:"_TZE200_uebojraa"
   * model:"TS0601", manufacturer:"_TZE200_t5p1vj8r" (not tested)
+  * model:"TS0601", manufacturer:"_TZE200_e2bedvo9"
   * model:"TS0601", manufacturer:"_TZE200_yh7aoahi" (not tested)
   * model:"TS0601", manufacturer:"_TZE200_5d3vhjro" (not tested)
   * model:"TS0601", manufacturer:"_TZE200_aycxwiau" (not tested)
   * model:"TS0601", manufacturer:"_TZE200_vzekyi4c" (not tested)
+  * model:"TS0601", manufacturer:"_TZE200_m9skfctm"
+  * model:"TS0601", manufacturer:"_TZE200_dq1mfjug" (not tested)
+  * model:"TS0601", manufacturer:"_TZE200_ux5v4dbd" (not tested)
+  * model:"TS0601", manufacturer:"_TZE200_ytibqbra" (not tested)
+  * model:"TS0601", manufacturer:"_TZE200_dnz6yvl2" (not tested)
+  * model:"TS0601", manufacturer:"_TZE200_rccxox8p"
+
+* Tuya specific cluster 0xEF00 Gas & CO Detectors (TS0601_gas_2in1)
+  * model:"TS0601", manufacturer:"_TZE204_iuk8kupi"
+  * model:"TS0601", manufacturer:"_TZE200_iuk8kupi"
+  * model:"TS0601", manufacturer:"_TZE200_8isdky6j" (not tested)
+
+* Tuya specific cluster 0xEF00 Gas Detectors — TS0601_gas_sensor_4 (gas alarm, LEL%, preheat, fault alarm, alarm switch, silence)
+  * model:"TS0601", manufacturer:"_TZE200_mby4kbtq"
+  * model:"TS0601", manufacturer:"_TZE204_mby4kbtq"
+  * model:"TS0601", manufacturer:"_TZE284_uo8qcagc"
+
+* Tuya specific cluster 0xEF00 Gas Detectors — TS0601_gas_sensor_2 (gas alarm, LEL%, alarm ringtone/time, self-test, preheat, silence)
+  * model:"TS0601", manufacturer:"_TZE200_yojqa8xn"
+  * model:"TS0601", manufacturer:"_TZE204_zougpkpy"
+  * model:"TS0601", manufacturer:"_TZE204_chbyv06x"
+  * model:"TS0601", manufacturer:"_TZE204_yojqa8xn"
+  * model:"TS0601", manufacturer:"_TZE284_chbyv06x"
+
+* Tuya specific cluster 0xEF00 Gas Detectors — TS0601_gas_sensor_1 (gas alarm, self-test, self-test result, fault alarm, silence)
+  * model:"TS0601", manufacturer:"_TZE200_ggev5fsl"
+  * model:"TS0601", manufacturer:"_TZE200_u319yc66"
+  * model:"TS0601", manufacturer:"_TZE200_kvpwq8z7"
+
+* Tuya specific cluster 0xEF00 Gas Detectors — TS0601_gas_sensor_3 (gas alarm, self-test result, fault alarm)
+  * model:"TS0601", manufacturer:"_TZE200_nus5kk3n"
 
 
 -----------------------------------
