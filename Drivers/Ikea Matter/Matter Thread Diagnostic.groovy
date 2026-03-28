@@ -7,7 +7,7 @@
  * - Software Diagnostics (0x0034)
  *
  * Based on Matter 1.5 Specification
- * Last edited: 2026/02/14
+ * Last edited: 2026/02/14 7:30 PM
  */
 
 import hubitat.device.HubAction
@@ -26,6 +26,9 @@ metadata {
         capability "MotionSensor"
         capability "IlluminanceMeasurement"
         capability "Battery"
+        capability "TemperatureMeasurement"
+        capability "RelativeHumidityMeasurement"
+        capability "HealthCheck"
         
         // Thread Network Diagnostics Attributes
         attribute "channel", "number"
@@ -48,9 +51,14 @@ metadata {
         attribute "heapFree", "number"
         attribute "heapUsed", "number"
         
+        // Health Check Attributes
+        attribute "healthStatus", "enum", ["offline", "online", "unknown"]
+        attribute "rtt", "number"  // Round-trip time in milliseconds
+        
         command "readThreadDiagnostics"
         command "readGeneralDiagnostics"
         command "readSoftwareDiagnostics"
+        command "ping"
     }
     
     preferences {
@@ -82,9 +90,11 @@ void logsOff() {
 void initialize() {
     logInfo "initialize()"
     device.updateDataValue('newParse', "true")  // Enable new MAP parse format
+    sendEvent(name: "healthStatus", value: "unknown")
     subscribeToAttributes()
     refresh()
     scheduleAutoRefresh()
+    runIn(30, "ping")  // Initial health check after 30 seconds
 }
 
 void scheduleAutoRefresh() {
@@ -118,6 +128,38 @@ void refresh() {
     runIn(4, "readSoftwareDiagnostics")
 }
 
+void ping() {
+    logInfo "ping() - measuring round-trip time..."
+    
+    // Store ping start time in state
+    Long pingStart = now()
+    state.pingStart = pingStart
+    state.pingId = UUID.randomUUID().toString()
+    
+    // Send a simple read request to Basic Information cluster
+    // Cluster 0x0028 (40), Attribute 0x0000 (DataModelRevision) - always supported
+    List<Map<String,String>> paths = []
+    paths.add(matter.attributePath(0x00, 0x0028, 0x0000)) // DataModelRevision
+    
+    String cmd = matter.readAttributes(paths)
+    sendHubCommand(new HubAction(cmd, Protocol.MATTER))
+    
+    // Set timeout - if no response in 30 seconds, mark as offline
+    runIn(30, "pingTimeout")
+    
+    logDebug "Ping sent at ${pingStart}"
+}
+
+void pingTimeout() {
+    // Check if ping is still waiting for response
+    if (state.pingStart) {
+        logWarn "Ping timeout - no response received within 30 seconds"
+        state.remove('pingStart')
+        state.remove('pingId')
+        sendEvent(name: "healthStatus", value: "offline")
+    }
+}
+
 void readThreadDiagnostics() {
     logInfo "Reading Thread Network Diagnostics (0x0035)..."
     List<Map<String,String>> paths = []
@@ -140,6 +182,8 @@ void readThreadDiagnostics() {
     paths.add(matter.attributePath(0x01, 0x0400, 0x0000)) // Illuminance
     paths.add(matter.attributePath(0x02, 0x0406, 0x0000)) // Occupancy (Motion)
     paths.add(matter.attributePath(0x00, 0x002F, 0x000C)) // Battery
+    paths.add(matter.attributePath(0x01, 0x0402, 0x0000)) // Temperature
+    paths.add(matter.attributePath(0x02, 0x0405, 0x0000)) // Humidity
     
     String cmd = matter.readAttributes(paths)
     sendHubCommand(new HubAction(cmd, Protocol.MATTER))
@@ -193,8 +237,10 @@ private void subscribeToAttributes() {
     paths.add(matter.attributePath(0x01, 0x0400, 0x0000)) // Illuminance
     paths.add(matter.attributePath(0x02, 0x0406, 0x0000)) // Occupancy
     paths.add(matter.attributePath(0x00, 0x002F, 0x000C)) // Battery
+    paths.add(matter.attributePath(0x01, 0x0402, 0x0000)) // Temperature
+    paths.add(matter.attributePath(0x02, 0x0405, 0x0000)) // Humidity
     
-    String cmd = matter.cleanSubscribe(1, 0xFFFF, paths)
+    String cmd = matter.cleanSubscribe(1, 600, paths)       // 10 minute refresh for diagnostics
     sendHubCommand(new HubAction(cmd, Protocol.MATTER))
     
     logInfo "Subscribed to Matter diagnostic + sensor attributes"
@@ -218,8 +264,31 @@ def parse(Map msg) {
 
     if (ep == null || clus == null || attrId == null) return
     
+    // Calculate RTT if this is a ping response
+    if (state.pingStart) {
+        Long pingStart = state.pingStart as Long
+        Long rtt = now() - pingStart
+        state.remove('pingStart')
+        state.remove('pingId')
+        
+        // Cancel timeout since we got a response
+        unschedule("pingTimeout")
+        
+        sendEvent(name: "rtt", value: rtt, unit: "ms")
+        sendEvent(name: "healthStatus", value: "online")
+        logInfo "Ping response: RTT = ${rtt} ms"
+        
+        // Don't process further if this was just a ping (Basic Information cluster)
+        if (clus == 40) {
+            return
+        }
+    }
+    
     // Route to appropriate handler
     switch (clus) {
+        case 40:  // Basic Information (0x0028) - for ping responses
+            handleBasicInformation(ep, attrId, msg)
+            break
         case 53:  // Thread Network Diagnostics (0x0035)
             handleThreadNetworkDiagnostics(ep, attrId, msg)
             break
@@ -238,6 +307,12 @@ def parse(Map msg) {
         case 1030: // Occupancy Sensing (0x0406)
             handleOccupancy(ep, attrId, msg)
             break
+        case 1026: // Temperature Measurement (0x0402)
+            handleTemperature(ep, attrId, msg)
+            break
+        case 1029: // Relative Humidity Measurement (0x0405)
+            handleHumidity(ep, attrId, msg)
+            break
         default:
             logDebug "Unhandled cluster: ${clus} (0x${Integer.toHexString(clus).toUpperCase()})"
             break
@@ -252,6 +327,35 @@ def parse(String description) {
     
     // Convert to new format and delegate
     parse(msg)
+}
+
+private void handleBasicInformation(Integer ep, Integer attrId, Map msg) {
+    // Basic Information cluster (0x0028) - used for ping/health check
+    def value = msg.value
+    
+    switch (attrId) {
+        case 0: // DataModelRevision
+            logDebug "Data Model Revision: ${value}"
+            break
+        case 1: // VendorName
+            if (value) logDebug "Vendor Name: ${value}"
+            break
+        case 2: // VendorID
+            if (value) logDebug "Vendor ID: 0x${Integer.toHexString(value as Integer).toUpperCase()}"
+            break
+        case 3: // ProductName
+            if (value) logDebug "Product Name: ${value}"
+            break
+        case 4: // ProductID
+            if (value) logDebug "Product ID: 0x${Integer.toHexString(value as Integer).toUpperCase()}"
+            break
+        case 5: // NodeLabel
+            if (value) logDebug "Node Label: ${value}"
+            break
+        default:
+            logDebug "Basic Information attr ${attrId}: ${value}"
+            break
+    }
 }
 
 private void handleThreadNetworkDiagnostics(Integer ep, Integer attrId, Map msg) {
@@ -577,6 +681,35 @@ private void handleOccupancy(Integer ep, Integer attrId, Map msg) {
             String motion = ((raw & 0x01) != 0) ? "active" : "inactive"
             sendEvent(name: "motion", value: motion)
             logInfo "Motion: ${motion}"
+        }
+    }
+}
+
+private void handleTemperature(Integer ep, Integer attrId, Map msg) {
+    // Temperature Measurement cluster (0x0402)
+    if (attrId == 0) { // MeasuredValue (0.01 °C)
+        Integer raw = msg.value as Integer
+        if (raw != null) {
+            BigDecimal c = raw / 100.0
+            BigDecimal cRounded = c.setScale(1, BigDecimal.ROUND_HALF_UP)
+            def t = convertTemperatureIfNeeded(cRounded, "C", 1)
+            String unit = (location.temperatureScale == "F") ? "°F" : "°C"
+            String descText = "Temperature is ${t} ${unit}"
+            sendEvent(name: "temperature", value: t, unit: unit, descriptionText: txtEnable ? descText : null)
+            if (txtEnable) logInfo descText
+        }
+    }
+}
+
+private void handleHumidity(Integer ep, Integer attrId, Map msg) {
+    // Relative Humidity Measurement cluster (0x0405)
+    if (attrId == 0) { // MeasuredValue (0.01 %)
+        Integer raw = msg.value as Integer
+        if (raw != null) {
+            BigDecimal rh = (raw / 100.0).setScale(1, BigDecimal.ROUND_HALF_UP)
+            String descText = "Humidity is ${rh}%"
+            sendEvent(name: "humidity", value: rh, unit: "%", descriptionText: txtEnable ? descText : null)
+            if (txtEnable) logInfo descText
         }
     }
 }
