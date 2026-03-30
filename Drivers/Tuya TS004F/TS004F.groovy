@@ -62,6 +62,7 @@
  * ver. 2.8.6 2025-11-30 kkossev     - bug fix: wierd TS0041 _TZ3000_rsqqkdxv switch event handling was affecting other devices; debug loggs are automatically disabled after 24 hours; DEFAULT_DEBOUNCE = true
  * ver. 2.9.0 2025-12-01 kkossev     - handleNodeDescRequest()
  * ver. 2.9.1 2025-12-22 kkossev     - added respondToZdoRequests preference; respond to ZDO Node_Desc_request (0x0002) only if the preference is enabled; added TS004F _TZ3000_gwkzibhs @callumgw
+ * ver. 2.9.2 2026-03-30 kkossev     - (dev. branch) added model TS0215A manufacturer '_TZ3000_0dumfk2', '_TZ3000_ssp0maqm', '_TZ3000_p3fph1go' as a SOS button @callumgw; added TS0041 _TZ3000_8rppvwda @sales8
  *
  * 
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
@@ -77,8 +78,8 @@
  *                                   - TODO: add 'auto revert to scene mode' option
  */
 
-static String version() { '2.9.1' }
-static String timeStamp() { '2025/12/22 10:18 AM' }
+static String version() { '2.9.2' }
+static String timeStamp() { '2026/03/30 9:57 PM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -131,6 +132,7 @@ metadata {
         fingerprint profileId: '0104', endpointId:'01', inClusters:'0001,0006,E000,0000', outClusters:'0019,000A', model:'TS0041', manufacturer:'_TZ3000_s0i14ubi'    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/231?u=kkossev https://www.aliexpress.us/item/2255800908957715.html
         fingerprint profileId: '0104', endpointId:'01', inClusters:'0001,0006,E000,0000', outClusters:'0019,000A', model:'TS0041', manufacturer:'_TZ3000_mrpevh8p'    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/236?u=kkossev
         fingerprint inClusters: '0000,0001,0006', outClusters: '0019,000A', manufacturer: '_TZ3000_rsqqkdxv', model: 'TS0041', deviceJoinName: 'Zigbee Tuya 1 Button' // https://github.com/kkossev/Hubitat/pull/43#issue-3484293750 
+        fingerprint inClusters: '0000,0003,0001,0020,0004', outClusters: '0019,0006,0004', manufacturer: '_TZ3000_8rppvwda', model: 'TS0041', deviceJoinName: 'Zigbee Tuya 1 Button'    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/313?u=kkossev
 
         fingerprint inClusters: '0000,0001,0003,0004,0006,1000,E001', outClusters: '0019,000A,0003,0004,0006,0008,1000', manufacturer: '_TZ3000_ja5osu5g', model: 'TS004F', deviceJoinName: 'MOES Smart Button (ZT-SY-SR-MS)' // MOES ZigBee IP55 Waterproof Smart Button Scene Switch & Wireless Remote Dimmer (ZT-SY-SR-MS)
         fingerprint inClusters: '0000,0001,0003,0004,0006,1000,E001', outClusters: '0019,000A,0003,0004,0005,0006,0008,1000', manufacturer: '_TZ3000_rco1yzb1', model: 'TS004F', deviceJoinName: 'LIDL Smart Button SSBM A1'
@@ -207,6 +209,9 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,0501', outClusters: '0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_tj4pwzzm', deviceJoinName: 'Tuya SOS button'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0500,0000', outClusters: '0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_2izubafb', deviceJoinName: 'Tuya SOS button'    // @abraham
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0500,0000', outClusters: '0501,0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_pkfazisv', deviceJoinName: 'iAlarm (Meian) SOS button'    // https://community.hubitat.com/t/request-adding-fingerprints-for-ialarm-devices/118166/2?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,0501', outClusters: '0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_0dumfk2z', deviceJoinName: 'Tuya SOS button'    // 1 button    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/321?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,0501', outClusters: '0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_ssp0maqm', deviceJoinName: 'Tuya SOS button'    // 1 button
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,0501', outClusters: '0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_p3fph1go', deviceJoinName: 'Tuya SOS button'    // 1 button
 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0500,EF00,0000', outClusters: '0019,000A', model: 'TS0021', manufacturer: '_TZ3210_3ulg9kpo', deviceJoinName: 'Tuya 2 button'    // https://community.hubitat.com/t/request-adding-fingerprints-for-ialarm-devices/118166/2?u=kkossev
 
@@ -265,7 +270,7 @@ boolean isIkea() { device.getDataValue('manufacturer') == 'IKEA of Sweden' }
 boolean isOsram() { device.getDataValue('manufacturer') == 'OSRAM' }
 boolean needsDebouncing() { (settings?.forcedDebounce == true) || (device.getDataValue('model') == 'TS004F' || (device.getDataValue('manufacturer') in ['_TZ3000_abci1hiu', '_TZ3000_vp6clf9d', '_TZ3000_ur5fpg7p', '_TZ3000_wkai4ga5']) || (device.getDataValue('model') == 'TS0043' && device.getDataValue('manufacturer') in ['TZ3000_gbm10jnj'])) }
 boolean needsMagic() { device.getDataValue('model') in ['TS004F', 'TS0044', 'TS0043', 'TS0042', 'TS0041', 'TS0046'] }
-boolean isSOSbutton() { device.getDataValue('manufacturer') in ['_TZ3000_4fsgukof', '_TZ3000_wr2ucaj9', '_TZ3000_zsh6uat3', '_TZ3000_tj4pwzzm', '_TZ3000_2izubafb', '_TZ3000_pkfazisv', '_TZE200_nojsjtj2', 'MultIR' ] }
+boolean isSOSbutton() { device.getDataValue('manufacturer') in ['_TZ3000_4fsgukof', '_TZ3000_wr2ucaj9', '_TZ3000_zsh6uat3', '_TZ3000_tj4pwzzm', '_TZ3000_2izubafb', '_TZ3000_pkfazisv', '_TZE200_nojsjtj2', 'MultIR', '_TZ3000_0dumfk2z', '_TZ3000_ssp0maqm', '_TZ3000_p3fph1go' ] }
 boolean isUSBpowered() { device.getDataValue('manufacturer') in ['_TZ3000_b3mgfu0d', '_TZ3000_czuyt8lz'] }
 boolean isSiHAS() { device.getDataValue('manufacturer') == 'ShinaSystem' }
 boolean hasBatteryConfigurationBug()  { device.getDataValue('manufacturer') in ['_TZ3000_a4xycprs', '_TZ3000_dziaict4', '_TZ3000_j61x9rxn', '_TZ3000_mh9px7cq', '_TZ3000_5tqxpine', '_TZ3000_u3nv1jwk', '_TZ3000_bgtzm4ny', '_TZ3000_kfu8zapd', '_TZ3000_ee8nrt2l', '_TZ3000_ygvf9xzp' /* for testing, '_TZ3000_vp6clf9d'*/] }
@@ -726,8 +731,6 @@ void initialize() {
         sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x03 0x01 0x0006 {${device.zigbeeId}} {}", 'delay 50', ])
         sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x03 0x01 0x0008 {${device.zigbeeId}} {}", 'delay 50', ])
         sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x03 0x01 0x0300 {${device.zigbeeId}} {}", 'delay 50', ])
-    //sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x04 0x01 0x0006 {${device.zigbeeId}} {}", "delay 50", ])
-    //sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x04 0x01 0x0008 {${device.zigbeeId}} {}", "delay 50", ])
     }
     else {
         if (logEnable) { log.debug "${device.displayName} skipped TuyaMagic() for non-Tuya device ${device.getDataValue('model')} ..." }
