@@ -61,7 +61,7 @@
  * ver. 2.8.5 2025-11-29 kkossev     - added HOBEIAN ZG-101ZS TS0044 _TZ3000_bgtzm4ny @bkinmuc ; added TS0044 _TZ3000_a4xycprs _TZ3000_dziaict4 _TZ3000_j61x9rxn _TZ3000_kfu8zapd _TZ3000_ygvf9xzp
  * ver. 2.8.6 2025-11-30 kkossev     - bug fix: wierd TS0041 _TZ3000_rsqqkdxv switch event handling was affecting other devices; debug loggs are automatically disabled after 24 hours; DEFAULT_DEBOUNCE = true
  * ver. 2.9.0 2025-12-01 kkossev     - handleNodeDescRequest()
- * ver. 2.9.1 2025-12-22 kkossev     - (dev. branch) added respondToZdoRequests preference; respond to ZDO Node_Desc_request (0x0002) only if the preference is enabled; added TS004F _TZ3000_gwkzibhs @callumgw
+ * ver. 2.9.1 2025-12-22 kkossev     - added respondToZdoRequests preference; respond to ZDO Node_Desc_request (0x0002) only if the preference is enabled; added TS004F _TZ3000_gwkzibhs @callumgw
  *
  * 
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
