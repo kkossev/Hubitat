@@ -27,7 +27,7 @@
  * ver. 4.1.0  2025-10-11 kkossev  - changed the default URLs to the development branch; added 'Update From Local Storage' command, show the JSON version and timestamp in the sendInfoEvent; 
  * ver. 4.2.0  2025-10-12 kkossev  - added 'Load User Custom Profiles From Local Storage' command and functionality (per device); show the currently loaded profile filename in the deviceProfileFile attribute;
  * ver. 4.2.1  2025-10-19 kkossev  - added attributes 'switch', 'switchOnTime', 'switchState' for NEO NAS-PS10B2; added 'blockTime', 'motionDetectionDelayTime', 'radarScene', 'sensorMode', 'distanceReportMode' for TS0225_LEAPMMW_RADAR Z2M compatibility
- * ver. 4.2.2  2025-12-14 kkossev  - (dev. branch)
+ * ver. 4.2.2  2026-03-28 kkossev  - (dev. branch)
  *                                   
  *                                   TODO: new info page on WiKi
  *                                   TODO: Show both the profile key and the profile name in the Preferences page!
@@ -37,8 +37,8 @@
  *                                   TODO: 
 */
 
-static String version() { "4.2.1" }
-static String timeStamp() {"2025/10/19 8:31 PM"}
+static String version() { "4.2.2" }
+static String timeStamp() {"2026/03/28 9:11 PM"}
 
 @Field static final Boolean _DEBUG = false           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
