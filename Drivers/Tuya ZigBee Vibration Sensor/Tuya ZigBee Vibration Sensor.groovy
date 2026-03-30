@@ -31,6 +31,7 @@
  * ver 1.4.0 2025-03-01 kkossev - added ShockSensor capability; added shockSensor option (default:enabled)
  * ver 1.4.1 2025-08-30 kkossev - added TS0210 _TZ3210100000_5oy7cysk for tests @masachapa34
  * ver 1.4.2 2026-02-04 kkossev - added TS0210 _TZ32101000000_5oy7cysk (alternative variant); added _TZE200_hggxgsjj _TZE200_yjryxpot _TZE200_afycb3cg (ZG-103Z variants); added Tuya sensitivity setting for some models;
+ * ver 1.4.3 2026-03-22 kkossev - _TZ32101000000_5oy7cysk bugfix
  * 
  *                                TODO: save the configuration commands in a state and send them on device wakes up
  *                                TODO: this driver does not process ZCL battery percentage reports, only voltage reports!
@@ -42,8 +43,8 @@
  *                                TODO: handle tamper: (zoneStatus & 1<<2); handle battery_low: (zoneStatus & 1<<3); TODO: check const sens = {'high': 0, 'medium': 2, 'low': 6}[value];
  */
 
-static String version() { "1.4.2" }
-static String timeStamp() { "2026/02/04 7:32 AM" }
+static String version() { "1.4.3" }
+static String timeStamp() { "2026/03/22 9:07 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -909,10 +910,10 @@ private int getTuyaSensitivityDp() {
     return isTuyaVibrationSensorTZ32101000000() ? 0x69 : 0x68
 }
 
-private List<String> tuyaSetEnumDp(final int dp, final int value, final int transId = null) {
-    int tid = transId
+private List<String> tuyaSetEnumDp(final int dp, final int value, final Integer transId = null) {
+    Integer tid = transId
     if (tid == null) {
-        int prev = (state?.tuyaTransId ?: 0) as int
+        int prev = (state.tuyaTransId ?: 0) as int
         tid = (prev + 1) & 0xFF
         state.tuyaTransId = tid
     }
@@ -932,7 +933,7 @@ private List<String> setTuyaSensitivity(final String sens) {
             logWarn "setTuyaSensitivity: unsupported value ${sens}"
             return []
     }
-    int dp = getTuyaSensitivityDp()
+    Integer dp = getTuyaSensitivityDp()
     logDebug "Sending Tuya sensitivity set command dp=${dp} value=${sens} (${enumVal})"
     return tuyaSetEnumDp(dp, enumVal)
 }
@@ -1187,11 +1188,12 @@ void initializeVars( boolean fullInit = false ) {
         state.driverVersion = driverVersionAndTimeStamp()
     }
 
-    if (state.stats == null)  { state.stats  = [:] }
-    if (state.states == null) { state.states = [:] }
-    if (state.lastRx == null) { state.lastRx = [:] }
-    if (state.lastTx == null) { state.lastTx = [:] }
-    if (state.health == null) { state.health = [:] }
+    if (state.stats == null)       { state.stats       = [:] }
+    if (state.states == null)      { state.states      = [:] }
+    if (state.lastRx == null)      { state.lastRx      = [:] }
+    if (state.lastTx == null)      { state.lastTx      = [:] }
+    if (state.health == null)      { state.health      = [:] }
+    if (state.tuyaTransId == null) { state.tuyaTransId = 0   }
 
     if (fullInit || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
     if (fullInit || settings?.logEnable == null) { device.updateSetting('logEnable', DEFAULT_DEBUG_LOGGING ?: false) }

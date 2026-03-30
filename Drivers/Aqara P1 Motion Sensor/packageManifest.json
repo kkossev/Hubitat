@@ -1,10 +1,10 @@
 {
   "packageName": "Aqara P1 Motion Sensor",
   "author": "Krassimir Kossev",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2025-12-30",
-  "releaseNotes": "2.1.1 2025-12-30 - fixed rounding issue for temperature attribute\n2.1.0 2025-11-23 - added FP300 advanced sampling configuration parameters (temp/humidity and light sampling frequency/period) with intelligent change detection; added sampling parameters to refresh() command;\n1.7.5 2025-09-15 bbholthome  - light sensor GZCGQ01LM maximum illuminance capped to 65500 lux\n1.7.4 2025-05-24 - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.\n1.7.3 2025-01-16 - first ping() throwing exception bug fix tnx@user2428 \n1.7.2 2024-11-28 - HE platfrom 2.4.0.x compatibility fixes;",
+  "dateReleased": "2026-03-30",
+  "releaseNotes": "2.1.2 2026-03-30 - commented out the Aqara FP300 fingerprint to prevent interference with the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver.\n2.1.1 2025-12-30 - fixed rounding issue for temperature attribute\n2.1.0 2025-11-23 - added FP300 advanced sampling configuration parameters (temp/humidity and light sampling frequency/period) with intelligent change detection; added sampling parameters to refresh() command;\n1.7.5 2025-09-15 bbholthome  - light sensor GZCGQ01LM maximum illuminance capped to 65500 lux\n1.7.4 2025-05-24 - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.\n1.7.3 2025-01-16 - first ping() throwing exception bug fix tnx@user2428 \n1.7.2 2024-11-28 - HE platfrom 2.4.0.x compatibility fixes;",
   "documentationLink": "https://github.com/kkossev/Hubitat/blob/main/Drivers/Aqara%20P1%20Motion%20Sensor/README.MD",
   "communityLink": "https://community.hubitat.com/t/aqara-p1-motion-sensor/92987/63?u=kkossev",
   "drivers": [

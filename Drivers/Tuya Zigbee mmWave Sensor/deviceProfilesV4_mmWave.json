@@ -396,6 +396,7 @@
       "preferences": { "fadingTime": "120", "blockTime": "121", "ledIndicator": "119", "minimumDistance": "3", "maximumDistance": "4", "radarScene": "128" },
       "commands": { "resetSettings": "", "resetStats": "", "printFingerprints": "", "printPreferences": "" },
       "fingerprints": [
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_aai5grix", "deviceJoinName": "Wenzhi MTD285-ZB Human Presence Sensor" },
         { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0004,0005,EF00", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE284_aai5grix", "deviceJoinName": "Wenzhi MTD285-ZB Human Presence Sensor" }
       ],
       "tuyaDPs": [
@@ -940,9 +941,10 @@
   "description": "Device profiles for Tuya Zigbee mmWave Sensor",
   "author": "kkossev",
   "comments": [
-    "v.4.0.8. - moved TS0601 _TZE204_qasjif9e _TZE204_ztqnh5cg back to TS0601_TUYA_RADAR profile",
-    "v.4.0.9. - added _TZE204_gkfbdvyx, LeapMMW all DPs,  ",
-    "v.4.1.0. - fixed SONOFF SNZB-06P radar device profile",
-    "v.4.1.1. - fixed TS0601_YA4FT0W4_RADAR radar device profile - thanks @lukaszbet"
+    "v.4.0.8 - moved TS0601 _TZE204_qasjif9e _TZE204_ztqnh5cg back to TS0601_TUYA_RADAR profile",
+    "v.4.0.9 - added _TZE204_gkfbdvyx, LeapMMW all DPs,  ",
+    "v.4.1.0 - fixed SONOFF SNZB-06P radar device profile",
+    "v.4.1.1 - fixed TS0601_YA4FT0W4_RADAR radar device profile - thanks @lukaszbet",
+    "v.4.1.2 - added TS0601 _TZE204_aai5grix fingerprint to WENZHI_MTD285_ZB profile"
   ]
 }

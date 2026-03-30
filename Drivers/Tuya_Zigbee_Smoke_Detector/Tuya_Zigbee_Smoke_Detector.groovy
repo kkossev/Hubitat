@@ -20,12 +20,21 @@
  *  ver. 1.1.0 2023-04-07 kkossev - extended tuyaMagic (hopefully activates check-in every 4 hours); added capability 'Health Check'; added ping() command and rtt measurement;
  *  ver. 1.1.1 2023-04-29 kkossev - ping() exception bug fix
  *  ver. 1.1.2 2023-08-01 kkossev - added _TZE200_m9skfctm _TZE200_dq1mfjug _TZE200_ux5v4dbd _TZE200_ytibqbra _TZE200_dnz6yvl2
- *  ver. 1.1.3 2023-11-19 kkossev - (dev. branch) fixed _TZE200_m9skfctm battery reporting; fix RTT negative values bug
- *  ver. 1.1.3 2024-03-26 hubivlad -(main branch) added _TZE200_rccxox8p
- *  ver. 1.2.0 2024-02-20 kkossev - (dev. branch) Groovy lint; added TZE204_ntcy3xu1
+ *  ver. 1.1.3 2023-11-19 kkossev - fixed _TZE200_m9skfctm battery reporting; fix RTT negative values bug
+ *  ver. 1.1.3 2024-03-26 hubivlad - added _TZE200_rccxox8p
+ *  ver. 1.2.0 2024-02-20 kkossev - Groovy lint; added TZE204_ntcy3xu1
  *  ver. 1.2.1 2024-03-27 kkossev - merged main branch ver. 1.1.3 commit by hubivlad
- *  ver. 1.3.0 2025-05-13 kkossev - (dev.branch) added TS0601 _TZE204_iuk8kupi @John_Land; added GasDetector and CarbonMonoxideDetector capabilities
+ *  ver. 1.3.0 2025-05-13 kkossev - added TS0601 _TZE204_iuk8kupi @John_Land; added GasDetector and CarbonMonoxideDetector capabilities
+ *  ver. 1.4.0 2026-03-23 kkossev - (dev.branch) added MOES TS0601 _TZE284_uo8qcagc @tomobiki.mn ; added _TZE284_chbyv06x (TS0601) Zigbee Combustible Gas Detector @hayfever-zz
+ *                                  added TS0601_gas_sensor_4 _TZE200_mby4kbtq (gas, gas_value LEL, preheat, fault_alarm, alarm_switch, silence)
+ *                                  added TS0601_gas_sensor_2 support (_TZE200_yojqa8xn, _TZE204_zougpkpy, _TZE204_chbyv06x, _TZE204_yojqa8xn): gas alarm, LEL% value, alarm ringtone/time, self-test, preheat, silence
+ *                                  added TS0601_gas_sensor_1 support (_TZE200_ggev5fsl, _TZE200_u319yc66, _TZE200_kvpwq8z7): gas alarm, self-test, self-test result, fault alarm, silence
+ *                                  added TS0601_gas_sensor_3 support (_TZE200_nus5kk3n): gas alarm, self-test result, fault alarm
+ *                                  replaced pollPresence with a scheduled periodic job; logging improvements;
  *
+ *            TODO: check gas_sensor_2 gas value divider : https://github.com/Koenkk/zigbee-herdsman-converters/blob/3b82d20a4d0f966734f1fa469dc17bd803b31fbe/src/devices/tuya.ts#L1434-L1478 
+ *            TODO: check Moes HS2A-1 Smoke Detector TS0601 _TZE204_vawy74yh // https://community.hubitat.com/t/release-tuya-zigbee-smoke-gas-detectors/104159/89?u=kkossev // https://github.com/Koenkk/zigbee-herdsman-converters/blob/b405404c2d8db02d94feb3a114c9baf2bd2fcf4e/src/devices/moes.ts#L409 
+ *            TODO: check Moes ZC-HM _TZE200_rjxqso4a https://github.com/Koenkk/zigbee-herdsman-converters/blob/b405404c2d8db02d94feb3a114c9baf2bd2fcf4e/src/devices/moes.ts#L390-L408 
  *            TODO: re-send the powerSource event on every check-in, so that HE Active state is refreshed ...
  *            TODO: more tuyaMagic, if the periodic check-in patch doesn't work.
  *            TODO: send the check-in messages as an event / show as Info log
@@ -35,8 +44,8 @@
 import groovy.json.*
 import groovy.transform.Field
 
-def version() { '1.3.0' }
-def timeStamp() { '2025/05/13 7:21 AM' }
+def version() { '1.4.0' }
+def timeStamp() { '2026/03/23 7:53 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -47,8 +56,8 @@ metadata {
         capability 'Smoke Detector'    // attributes: smoke ("detected","clear","tested")    ea.STATE, true, false).withDescription('Smoke alarm status'),  [dp=1]
         capability 'TamperAlert'       // attributes: tamper - ENUM ["clear", "detected"]    [dp=4 ]  values 1/0
         capability 'TestCapability'
-        capability 'Battery'            //  ea.STATE, ['low', 'middle', 'high']).withDescription('Battery level state'),    dp14 0=25% 1=50% 2=90% [dp=14] battery low   value 2 (FULL)
-        capability 'PowerSource'        //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
+        capability 'Battery'           // ea.STATE, ['low', 'middle', 'high']).withDescription('Battery level state'),    dp14 0=25% 1=50% 2=90% [dp=14] battery low   value 2 (FULL)
+        capability 'PowerSource'       // powerSource - ENUM ["battery", "dc", "mains", "unknown"]
         capability 'Health Check'
         capability 'GasDetector'                // Methane (CH4) Attributes: naturalGas - ENUM ["clear", "tested", "detected"]
         capability 'CarbonMonoxideDetector'     // Attributes: carbonMonoxide - ENUM ["clear", "tested", "detected"]
@@ -60,13 +69,21 @@ metadata {
         attribute 'naturalGasValue', 'number'
         attribute 'carbonMonoxideValue', 'number'
         attribute 'rtt', 'number'
+        attribute 'preheat', 'enum', ['active', 'inactive']     // TS0601_gas_sensor_4
+        attribute 'alarmSwitch', 'enum', ['enable', 'disable']  // TS0601_gas_sensor_4
+        attribute 'faultAlarm', 'enum', ['active', 'clear']     // TS0601_gas_sensor_4
+        attribute 'silence', 'enum', ['active', 'inactive']     // TS0601_gas_sensor_4
+        attribute 'alarmRingtone', 'enum', ['melody_1', 'melody_2', 'melody_3', 'melody_4', 'melody_5']    // TS0601_gas_sensor_2
+        attribute 'alarmTime', 'number'                                                                    // TS0601_gas_sensor_2
+        attribute 'selfTest', 'enum', ['active', 'inactive']                                               // TS0601_gas_sensor_2
+        attribute 'selfTestResult', 'enum', ['checking', 'success', 'failure', 'unsupported']              // TS0601_gas_sensor_2
 
         command 'clear'
         command 'detected'
         command 'tested'
-
-        //command "silenceSiren", [[name:"Silence Siren", type: "ENUM", description: "Silence the Siren", constraints: ["--- Select ---", "true", "false" ]]]        // 'Silence the siren' ea.STATE_SET, true, false)    HE->Tuya  dp=16, BOOL
-        //command "enableAlarm",  [[name:"Enable Alarm",  type: "ENUM", description: "Enable the Alarm",  constraints: ["--- Select ---", "true", "false" ]]]          //'Enable the alarm' ea.STATE_SET, true, false     HE->Tuya  dp=20, ENUM, true: 0, false: 1
+        command 'silenceSiren', [[name:'Silence Siren', type: 'ENUM', description: 'Silence the Siren (TS0601_gas_sensor_4)', constraints: ['active', 'inactive']]]     // dp=16, BOOL
+        command 'enableAlarm', [[name:'Enable Alarm', type: 'ENUM', description: 'Enable/disable the alarm', constraints: ['enable', 'disable']]]    // TS0601_gas_sensor_4: dp=13 BOOL; others: dp=20 ENUM
+        command 'selfTest', [[name:'Self Test', type: 'ENUM', description: 'Trigger self-test (TS0601_gas_sensor_2)', constraints: ['active', 'inactive']]]    // dp=08, BOOL
 
         if (_DEBUG == true) {
             command 'test', [
@@ -91,14 +108,33 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_ytibqbra'    // not tested
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_dnz6yvl2'    // not tested
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_rccxox8p'    // being tested by hubivlad
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE284_rccxox8p'    // @Don604 https://community.hubitat.com/t/release-tuya-zigbee-smoke-gas-detectors/104159/92?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_iuk8kupi'    // https://community.hubitat.com/t/tuya-natural-gas-co-detector-need-driver/153418?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_iuk8kupi'    // 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_8isdky6j'    // not tested (Gas sensor)
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_mby4kbtq'    // TS0601_gas_sensor_4 Gas sensor (LEL)
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_mby4kbtq'    // TS0601_gas_sensor_4 Gas sensor (LEL)
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE284_uo8qcagc'    // TS0601_gas_sensor_4 https://community.hubitat.com/t/release-tuya-zigbee-smoke-detector/104159/104?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_yojqa8xn'    // TS0601_gas_sensor_2 Gas sensor
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_zougpkpy'    // TS0601_gas_sensor_2 Gas sensor
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_chbyv06x'    // TS0601_gas_sensor_2 Gas sensor
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE204_yojqa8xn'    // TS0601_gas_sensor_2 Gas sensor
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE284_chbyv06x'    // TS0601_gas_sensor_2 Gas sensor (DYGSM DY-RQ500A) https://github.com/kkossev/Hubitat/issues/141 
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_ggev5fsl'    // TS0601_gas_sensor_1 Gas sensor
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_u319yc66'    // TS0601_gas_sensor_1 Gas sensor
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_kvpwq8z7'    // TS0601_gas_sensor_1 Gas sensor
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_nus5kk3n'    // TS0601_gas_sensor_3 Gas sensor
     }
 
     preferences {
         input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: '<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>', defaultValue: true)
         input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: '<i>Display measured values in HE log page. Recommended value is <b>true</b></i>', defaultValue: true)
+        if (device) {
+            if (isGasSensor2()) {
+                input(name: 'alarmRingtone', type: 'enum', title: '<b>Alarm Ringtone</b>', description: '<i>Select the alarm melody (TS0601_gas_sensor_2)</i>', defaultValue: 'melody_1', options: ['melody_1', 'melody_2', 'melody_3', 'melody_4', 'melody_5'])
+                input(name: 'alarmTime', type: 'number', title: '<b>Alarm Time</b>', description: '<i>Alarm duration in seconds, 1-180 (TS0601_gas_sensor_2)</i>', defaultValue: 30, range: '1..180')
+            }
+        }
     }
 }
 
@@ -122,8 +158,12 @@ private getDP_TYPE_STRING()     { '03' }    // [ N byte string ]
 private getDP_TYPE_ENUM()       { '04' }    // [ 0-255 ]
 private getDP_TYPE_BITMAP()     { '05' }    // [ 1,2,4 bytes ] as bits
 
-def isTS0601()   { return device.getDataValue('model') in ['TS0601'] }
-def isTuya2in1() { return device.getDataValue('manufacturer') in ['_TZE204_iuk8kupi', '_TZE200_iuk8kupi', '_TZE200_8isdky6j'] } // Gas & Carbon Monoxide detector (CO&CH4)?
+def isTS0601()       { return device.getDataValue('model') in ['TS0601'] }
+def isTuya2in1()     { return device.getDataValue('manufacturer') in ['_TZE204_iuk8kupi', '_TZE200_iuk8kupi', '_TZE200_8isdky6j'] }                         // Gas & Carbon Monoxide detector (CO&CH4)?
+def isGasSensor1()   { return device.getDataValue('manufacturer') in ['_TZE200_ggev5fsl', '_TZE200_u319yc66', '_TZE200_kvpwq8z7'] }                         // TS0601_gas_sensor_1 Gas sensor (gas, self_test, self_test_result, fault_alarm, silence)
+def isGasSensor2()   { return device.getDataValue('manufacturer') in ['_TZE200_yojqa8xn', '_TZE204_zougpkpy', '_TZE204_chbyv06x', '_TZE204_yojqa8xn', '_TZE284_chbyv06x'] }     // TS0601_gas_sensor_2 Gas sensor (gas, gas_value LEL, ringtone, alarm_time, self_test, preheat, silence)
+def isGasSensor3()   { return device.getDataValue('manufacturer') in ['_TZE200_nus5kk3n'] }                                                                 // TS0601_gas_sensor_3 Gas sensor (gas, self_test_result, fault_alarm)
+def isGasSensor4()   { return device.getDataValue('manufacturer') in ['_TZE200_mby4kbtq', '_TZE204_mby4kbtq', '_TZE204_uo8qcagc', '_TZE284_uo8qcagc'] }     // TS0601_gas_sensor_4 Gas sensor (gas, gas_value LEL, preheat, fault_alarm, alarm_switch, silence)
 
 def parse(String description) {
     if (logEnable) { log.debug "${device.displayName } description is $description" }
@@ -288,16 +328,15 @@ def parseZHAcommand( Map descMap) {
             else {
                 switch (descMap.clusterId) {
                     case 'EF00' :
-                        if (logEnable) { log.debug "${device.displayName} Tuya cluster read attribute response: code ${status} Attributte ${attrId} cluster ${descMap.clusterId} data ${descMap.data}" }
+                        //if (logEnable) { log.debug "${device.displayName} Tuya cluster read attribute response: code ${status} Attributte ${attrId} cluster ${descMap.clusterId} data ${descMap.data}" }
                         def cmd = descMap.data[2]
                         def value = getAttributeValue(descMap.data)
-                        //if (logEnable==true) log.trace "${device.displayName} Tuya cluster cmd=${cmd} value=${value} ()"
-                        //def map = [:]
+                        //if (logEnable==true) log.debug "${device.displayName} Tuya cluster cmd=${cmd} value=${value}"
                         switch (cmd) {
                             case '01' : 
-                                if (isTuya2in1()) {
-                                    if (logEnable) { log.info "${device.displayName} smnatural gas alarm (dp=${cmd}) is: ${value}" }
-                                    sendNaturalGasAlarmEvent( value, true)
+                                if (isTuya2in1() || isGasSensor4() || isGasSensor2() || isGasSensor1() || isGasSensor3()) {
+                                    if (logEnable) { log.info "${device.displayName} natural gas alarm (dp=${cmd}) is: ${value}" }
+                                    sendNaturalGasAlarmEvent( value, false)
                                 }
                                 else { // smoke alarm for all other models
                                     if (logEnable) { log.info "${device.displayName} smoke alarm (dp=${cmd}) is: ${value}" }
@@ -305,8 +344,12 @@ def parseZHAcommand( Map descMap) {
                                 }
                                 break
                             case '02' : // raw data from _TZE200_m9skfctm '_TZE200_e2bedvo9', '_TZE200_dnz6yvl2'
-                                if (isTuya2in1()) {
-                                    if (logEnable) { log.info "${device.displayName} Natural Gas concentration (dp=${cmd}) is: ${value / 1000} (raw:${value})" }
+                                if (isGasSensor4() || isGasSensor2()) {
+                                    if (logEnable) { log.info "${device.displayName} Natural Gas concentration groups 2 & 4 (dp=${cmd}) is: ${value / 10} LEL% (raw:${value})" }
+                                    sendNaturalGasValueEvent( value / 10, 'LEL')
+                                }
+                                else if (isTuya2in1()) {
+                                    if (logEnable) { log.info "${device.displayName} Natural Gas concentration Tuya2in1 (dp=${cmd}) is: ${value / 1000} (raw:${value})" }
                                     sendNaturalGasValueEvent( value / 1000)
                                 }
                                 else {
@@ -318,8 +361,66 @@ def parseZHAcommand( Map descMap) {
                                 if (logEnable) { log.info "${device.displayName} tamper alert (dp=${cmd}) is: ${value}" }
                                 sendTamperAlertEvent( value )
                                 break
-                            case '0B' : // (11) "Fault Alarm" for _TZE200_yh7aoahi _TZE200_m9skfctm
+                            case '06' : // (6) "alarm_ringtone" for TS0601_gas_sensor_2
+                                if (logEnable) { log.info "${device.displayName} alarm_ringtone (dp=${cmd}) is: ${value}" }
+                                if (isGasSensor2()) {
+                                    def ringtone = value == 0 ? 'melody_1' : value == 1 ? 'melody_2' : value == 2 ? 'melody_3' : value == 3 ? 'melody_4' : 'melody_5'
+                                    sendEvent(name: 'alarmRingtone', value: ringtone, descriptionText: "alarmRingtone is ${ringtone}", type: 'physical', isStateChange: true)
+                                    if (txtEnable) { log.info "${device.displayName} alarmRingtone is ${ringtone}" }
+                                }
+                                break
+                            case '07' : // (7) "alarm_time" for TS0601_gas_sensor_2
+                                if (logEnable) { log.info "${device.displayName} alarm_time (dp=${cmd}) is: ${value} seconds" }
+                                if (isGasSensor2()) {
+                                    sendEvent(name: 'alarmTime', value: value, descriptionText: "alarmTime is ${value} seconds", unit: 'seconds', type: 'physical', isStateChange: true)
+                                    if (txtEnable) { log.info "${device.displayName} alarmTime is ${value} seconds" }
+                                }
+                                break
+                            case '08' : // (8) "self_test" for TS0601_gas_sensor_2 and TS0601_gas_sensor_1
+                                if (logEnable) { log.info "${device.displayName} self_test (dp=${cmd}) is: ${value}" }
+                                if (isGasSensor2() || isGasSensor1()) {
+                                    sendEvent(name: 'selfTest', value: value == 1 ? 'active' : 'inactive', descriptionText: "selfTest is ${value == 1 ? 'active' : 'inactive'}", type: 'physical', isStateChange: true)
+                                    if (txtEnable) { log.info "${device.displayName} selfTest is ${value == 1 ? 'active' : 'inactive'}" }
+                                }
+                                break
+                            case '09' : // (9) "self_test_result" for TS0601_gas_sensor_2, TS0601_gas_sensor_1, TS0601_gas_sensor_3
+                                if (logEnable) { log.info "${device.displayName} self_test_result (dp=${cmd}) is: ${value}" }
+                                if (isGasSensor2() || isGasSensor1() || isGasSensor3()) {
+                                    def result = value == 0 ? 'checking' : value == 1 ? 'success' : value == 2 ? 'failure' : 'unsupported'
+                                    sendEvent(name: 'selfTestResult', value: result, descriptionText: "selfTestResult is ${result}", type: 'physical', isStateChange: true)
+                                    if (txtEnable) { log.info "${device.displayName} selfTestResult is ${result}" }
+                                }
+                                break
+                            case '0A' : // (10) "preheat" for TS0601_gas_sensor_4 _TZE200_mby4kbtq and TS0601_gas_sensor_2
+                                if (logEnable) { log.info "${device.displayName} preheat (dp=${cmd}) is: ${value}" }
+                                if (isGasSensor4() || isGasSensor2()) {
+                                    def preheatVal = value == 1 ? 'active' : 'inactive'
+                                    if (device.currentValue('preheat') != preheatVal) {
+                                        sendEvent(name: 'preheat', value: preheatVal, descriptionText: "preheat is ${preheatVal}", type: 'physical')
+                                        if (txtEnable) { log.info "${device.displayName} preheat is ${preheatVal}" }
+                                    } else {
+                                        if (logEnable) { log.debug "${device.displayName} preheat is ${preheatVal} (no change)" }
+                                    }
+                                }
+                                break
+                            case '0B' : // (11) "Fault Alarm" for _TZE200_yh7aoahi _TZE200_m9skfctm _TZE200_mby4kbtq TS0601_gas_sensor_1 TS0601_gas_sensor_3
                                 if (logEnable) { log.info "${device.displayName} Fault Alarm (dp=${cmd}) is: ${value}" }
+                                if (isGasSensor4() || isGasSensor1() || isGasSensor3()) {   // BITMAP: any non-zero bit = fault active
+                                    def faultAlarmVal = value != 0 ? 'active' : 'clear'
+                                    if (device.currentValue('faultAlarm') != faultAlarmVal) {
+                                        sendEvent(name: 'faultAlarm', value: faultAlarmVal, descriptionText: "faultAlarm is ${faultAlarmVal}", type: 'physical')
+                                        if (txtEnable) { log.info "${device.displayName} faultAlarm is ${faultAlarmVal}" }
+                                    } else {
+                                        if (logEnable) { log.debug "${device.displayName} faultAlarm is ${faultAlarmVal} (no change)" }
+                                    }
+                                }
+                                break
+                            case '0D' : // (13) "alarm_switch" for TS0601_gas_sensor_4 _TZE200_mby4kbtq
+                                if (logEnable) { log.info "${device.displayName} alarm_switch (dp=${cmd}) is: ${value}" }
+                                if (isGasSensor4()) {
+                                    sendEvent(name: 'alarmSwitch', value: value == 1 ? 'enable' : 'disable', descriptionText: "alarmSwitch is ${value == 1 ? 'enable' : 'disable'}", type: 'physical', isStateChange: true)
+                                    if (txtEnable) { log.info "${device.displayName} alarmSwitch is ${value == 1 ? 'enable' : 'disable'}" }
+                                }
                                 break
                             case '0E' : // (14) "battery level state" ['low', 'middle', 'high'] dp14 0=25% 1=50% 2=90% also for _TZE200_yh7aoahi
                                 if (logEnable) { log.info "${device.displayName} Battery level state (dp=${cmd}) is: ${value}" }
@@ -329,8 +430,12 @@ def parseZHAcommand( Map descMap) {
                                 if (logEnable) { log.info "${device.displayName} Battery level % (dp=${cmd}) is: ${value}%" }
                                 sendBatteryPercentEvent( value )
                                 break
-                            case '10' : // (16) "silence" for _TZE200_yh7aoahi _TZE200_ytibqbra
-                                if (txtEnable) { log.info "${device.displayName} 'silence' state (dp=${cmd}) is: ${value}" }
+                            case '10' : // (16) "silence" for _TZE200_yh7aoahi _TZE200_ytibqbra _TZE200_mby4kbtq TS0601_gas_sensor_2 TS0601_gas_sensor_1
+                                if (logEnable) { log.info "${device.displayName} 'silence' state (dp=${cmd}) is: ${value}" }
+                                if (isGasSensor4() || isGasSensor2() || isGasSensor1()) {   // 1=silence active, 0=silence inactive
+                                    sendEvent(name: 'silence', value: value == 1 ? 'active' : 'inactive', descriptionText: "silence is ${value == 1 ? 'active' : 'inactive'}", type: 'physical', isStateChange: true)
+                                    if (txtEnable) { log.info "${device.displayName} silence is ${value == 1 ? 'active' : 'inactive'}" }
+                                }
                                 break
                             case '11' : // (17) "alarm" for  _TZE200_ytibqbra
                                 if (txtEnable) { log.info "${device.displayName} 'alarm' state (dp=${cmd}) is: ${value}" }
@@ -495,11 +600,11 @@ def sendNaturalGasAlarmEvent( value, isDigital=false ) {    // attributes: natur
     sendEvent(map)
 }
 
-def sendNaturalGasValueEvent( value, isDigital=false ) {    // attributes: naturalGasValue, number
+def sendNaturalGasValueEvent( value, unit='ppm', isDigital=false ) {    // attributes: naturalGasValue, number
     def map = [:]
-    map.value = value > 10000 ? 10000 : value
+    map.value = (unit == 'LEL') ? (value > 100 ? 100 : value) : (value > 10000 ? 10000 : value)
     map.name = 'naturalGasValue'
-    map.unit = 'ppm'
+    map.unit = unit
     map.type = isDigital == true ? 'digital' : 'physical'
     map.isStateChange = true
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
@@ -537,31 +642,63 @@ def sendBatteryPercentEvent( value, isDigital=false ) {
     sendEvent(map)
 }
 
-def silenceSiren( state ) {    //  command "silenceSiren"  'Silence the siren' ea.STATE_SET, true, false)    HE->Tuya  dp=16, BOOL
+def silenceSiren( state ) {    //  command "silenceSiren"  'Silence the siren'  HE->Tuya  dp=16, BOOL  active=1, inactive=0
     if (logEnable) { log.debug "${device.displayName } silenceSiren ${state }" }
     ArrayList<String> cmds = []
-    def dpVal = state == 'true' ? 1 : state == 'false' ? 0 : null
+    def dpVal = state == 'active' ? 1 : state == 'inactive' ? 0 : null
     if (dpVal != null) {
         def dpValHex = zigbee.convertToHexString(dpVal, 2)
         cmds = sendTuyaCommand('10', DP_TYPE_BOOL, dpValHex)
         sendZigbeeCommands( cmds )
     }
     else {
-        if (txtEnable) { log.warn "${device.displayName } silenceSiren : please select true or false" }
+        if (txtEnable) { log.warn "${device.displayName } silenceSiren : please select active or inactive" }
     }
 }
 
-def enableAlarm( state ) {    //  command "enableAlarm"         //'Enable the alarm' ea.STATE_SET, true, false       HE->Tuya  dp=20, ENUM, true: 0, false: 1
-    if (logEnable) { log.debug "${device.displayName} silenceSiren ${state }" }
+def enableAlarm( value ) {    // command 'enableAlarm'  TS0601_gas_sensor_4: dp=13 BOOL enable=1/disable=0;  others: dp=20 ENUM enable=1/disable=0
+    if (logEnable) { log.debug "${device.displayName} enableAlarm ${value}" }
     ArrayList<String> cmds = []
-    def dpVal = state == 'true' ? 1 : state == 'false' ? 0 : null
+    def dpVal = value == 'enable' ? 1 : value == 'disable' ? 0 : null
     if (dpVal != null) {
         def dpValHex = zigbee.convertToHexString(dpVal, 2)
-        cmds = sendTuyaCommand('14', DP_TYPE_ENUM, dpValHex)
+        if (isGasSensor4()) {
+            cmds = sendTuyaCommand('0D', DP_TYPE_BOOL, dpValHex)
+        } else {
+            cmds = sendTuyaCommand('14', DP_TYPE_ENUM, dpValHex)
+        }
         sendZigbeeCommands( cmds )
     }
     else {
-        if (txtEnable) { log.warn "${device.displayName} enableAlarm : please select true or false" }
+        if (txtEnable) { log.warn "${device.displayName} enableAlarm : please select enable or disable" }
+    }
+}
+
+private void setAlarmRingtone() {    // preference 'alarmRingtone'  TS0601_gas_sensor_2: dp=06, ENUM  melody_1=0..melody_5=4
+    def ringtone = settings?.alarmRingtone ?: 'melody_1'
+    if (logEnable) { log.debug "${device.displayName} setAlarmRingtone ${ringtone}" }
+    def dpVal = ringtone == 'melody_1' ? 0 : ringtone == 'melody_2' ? 1 : ringtone == 'melody_3' ? 2 : ringtone == 'melody_4' ? 3 : 4
+    def dpValHex = zigbee.convertToHexString(dpVal, 2)
+    sendZigbeeCommands( sendTuyaCommand('06', DP_TYPE_ENUM, dpValHex) )
+}
+
+private void setAlarmTime() {    // preference 'alarmTime'  TS0601_gas_sensor_2: dp=07, VALUE  1-180 seconds
+    def secs = (settings?.alarmTime as Integer) ?: 30
+    secs = secs < 1 ? 1 : secs > 180 ? 180 : secs
+    if (logEnable) { log.debug "${device.displayName} setAlarmTime ${secs} seconds" }
+    def dpValHex = zigbee.convertToHexString(secs, 8)
+    sendZigbeeCommands( sendTuyaCommand('07', DP_TYPE_VALUE, dpValHex) )
+}
+
+def selfTest( state ) {    // command 'selfTest'  TS0601_gas_sensor_2: dp=08, BOOL  active=1, inactive=0
+    if (logEnable) { log.debug "${device.displayName} selfTest ${state}" }
+    def dpVal = state == 'active' ? 1 : state == 'inactive' ? 0 : null
+    if (dpVal != null) {
+        def dpValHex = zigbee.convertToHexString(dpVal, 2)
+        sendZigbeeCommands( sendTuyaCommand('08', DP_TYPE_BOOL, dpValHex) )
+    }
+    else {
+        if (txtEnable) { log.warn "${device.displayName} selfTest : please select active or inactive" }
     }
 }
 
@@ -612,7 +749,11 @@ private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
 
 private void scheduleDeviceHealthCheck(int intervalMins) {
     Random rnd = new Random()
-    schedule("${rnd.nextInt(59)} ${rnd.nextInt(9)}/${intervalMins} * ? * * *", 'ping')
+    if (intervalMins < 60) {
+        schedule("${rnd.nextInt(59)} 0/${intervalMins} * ? * * *", 'checkIfNotPresent')
+    } else {
+        schedule("${rnd.nextInt(59)} ${rnd.nextInt(59)} 0/${intervalMins / 60} ? * * *", 'checkIfNotPresent')
+    }
 }
 
 void deviceCommandTimeout() {
@@ -629,12 +770,11 @@ def tuyaBlackMagic() {
 /*
     configure() method is called:
        *  unconditionally during the initial pairing, immediately after Installed() method
-       *  when Initialize button is pressed
-       *  from updated() when preferencies are saved
+       *  when Initialize command button is pressed
 */
 def configure() {
     if (txtEnable) { log.info "${device.displayName} configure().." }
-    runIn( DEFAULT_POLLING_INTERVAL, pollPresence, [overwrite: true])
+    scheduleDeviceHealthCheck(60)
     List<String> cmds = []
     cmds += tuyaBlackMagic()
     sendZigbeeCommands(cmds)
@@ -653,7 +793,12 @@ def updated() {
     }
 
     if (txtEnable) { log.info 'updated()...' }
-    configure()
+    scheduleDeviceHealthCheck(60)
+    if (isGasSensor2()) {
+        setAlarmRingtone()
+        setAlarmTime()
+    }
+    // calling the configure() removed 2026-03-22 version 1.4.0 
 }
 
 void initializeVars( boolean fullInit = true ) {
@@ -710,7 +855,8 @@ def initialize() {
     if (txtEnable) { log.info "${device.displayName} Initialize()..." }
     unschedule()
     initializeVars(fullInit = false)
-    updated()            // calls also configure()
+    configure()     // calls also scheduleDeviceHealthCheck()
+    updated()
     runIn( 5, logInitializeRezults, [overwrite: true])
 }
 
@@ -719,7 +865,7 @@ def installed() {
     if (txtEnable) { log.info "${device.displayName} Installed()..." }
     initializeVars()
     def descText = 'driver just installed'
-    if (isTuya2in1()) {
+    if (isTuya2in1() || isGasSensor4() || isGasSensor2() || isGasSensor1() || isGasSensor3()) {
         sendEvent(name: 'naturalGas', value: 'unknown', descriptionText: descText, type:  'digital' , isStateChange: true )
         sendEvent(name: 'naturalGasValue', value: 0, descriptionText: descText, type:  'digital' , isStateChange: true )
     }
@@ -728,9 +874,8 @@ def installed() {
     }
     sendEvent(name: 'healthStatus', value: 'unknown', descriptionText: descText, type:  'digital' , isStateChange: true )
     sendEvent(name: 'powerSource', value: 'unknown', descriptionText: descText, type:  'digital' , isStateChange: true )
-    runIn( 5, initialize, [overwrite: true])
-    if (logEnable) { log.debug 'calling initialize() after 5 seconds...' }
-    // HE will autoomaticall call configure() method here
+    runIn( 1, initialize, [overwrite: true])
+    if (logEnable) { log.debug 'calling initialize() after 1 second...' }
 }
 
 void uninstalled() {
@@ -748,7 +893,7 @@ def setPresent() {
     unschedule('deviceCommandTimeout')
 }
 
-// called from pollPresence()
+// called from the scheduled health check (every 60 minutes)
 def checkIfNotPresent() {
     if (state.notPresentCounter != null) {
         state.notPresentCounter = state.notPresentCounter + 1
@@ -764,11 +909,10 @@ def checkIfNotPresent() {
     }
 }
 
-// check for device offline every 60 minutes
+// kept for backward compatibility - no longer schedules itself
 def pollPresence() {
     logDebug 'pollPresence()...'
     checkIfNotPresent()
-    runIn( DEFAULT_POLLING_INTERVAL, pollPresence, [overwrite: true])
 }
 
 def sendHealthStatusEvent(value) {
