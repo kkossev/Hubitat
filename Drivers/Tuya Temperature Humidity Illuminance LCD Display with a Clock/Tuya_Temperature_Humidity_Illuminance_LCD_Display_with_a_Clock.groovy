@@ -75,15 +75,16 @@
  *                                  Added ZDO 0x0000 Network Address Response and 0x0002 Node Descriptor Response handlers in an attempt to fix TS0601 _TZE284_rqcuwlsa device disconnections; Rate limiting: only respond if more than 10 seconds have passed since last response
  * ver. 2.0.1  2025-12-22 kkossev - fixed temperatureSensitivity preferece being reset to zero bug; added respondToZdoRequests preference (default: false); added TS0222 _TZ3000_hy6ncvmw illuminance only sensor
  * ver. 2.0.2  2026-02-01 kkossev - fixed null preference values causing GroovyCastException in updated() reporting configuration (safe defaults for sleepy devices and Haozee)
- * ver. 2.1.0  2026-03-31 kkossev - (dev. branch) added TS0601 _TZE284_hodyryli Tuya Temperature Humidity Sensor with External Probe into a new 'TS0601_ZTH03PRO' group, using child device for the probe @njanda
+ * ver. 2.1.0  2026-03-31 kkossev - added TS0601 _TZE284_hodyryli Tuya Temperature Humidity Sensor with External Probe into a new 'TS0601_ZTH03PRO' group, using child device for the probe @njanda
+ * ver. 2.1.1  2026-04-14 kkossev - (dev. branch) added support for four switch child devices for _TZ3218_ya5d6wth @pauljneil2 ; added TS0601 _TZE284_9ern5sfh @rlynch into a new group TS0601_Tuya_3
  *
  *                                  TODO: update GitHub documentation  _TZ3218_7fiyo3kv
  *                                  TODO:  https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/636?u=kkossev
  *                                  TODO: response to ZDO command: cluster=0002 command=00
 */
 
-@Field static final String VERSION = '2.1.0'
-@Field static final String TIME_STAMP = '2026/03/31 7:38 AM'
+@Field static final String VERSION = '2.1.1'
+@Field static final String TIME_STAMP = '2026/04/14 7:37 AM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -234,6 +235,7 @@ metadata {
     fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_hodyryli', deviceJoinName: 'Tuya Temperature Humidity Sensor with External Probe'
     fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_wtikaxzs', deviceJoinName: 'Tuya Temperature Humidity Sensor'                           // NOUS E6 (fingerprint only)
     fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_wtikaxzs', deviceJoinName: 'Tuya Temperature Humidity Sensor'                           // NOUS E6 (fingerprint only)
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_9ern5sfh', deviceJoinName: 'Tuya Temperature Humidity Sensor'                           // added v2.1.2
     // Contact + T/H variant
     fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_nvups4nh', deviceJoinName: 'Tuya Contact Temperature Humidity Sensor'
     // Illuminance + T/H variants
@@ -261,7 +263,7 @@ metadata {
         input(name: 'temperatureOffset', type: 'decimal', title: '<b>Temperature offset</b>', description: 'Select how many degrees to adjust the temperature.', defaultValue: 0.0, range: '-100..100')
         input(name: 'humidityOffset', type: 'decimal', title: '<b>Humidity offset</b>', description: 'Enter a percentage to adjust the humidity.', defaultValue: 0.0, range: '-100..100')
         input(name: 'modelGroupPreference', type: 'enum', title: '<b>Model Group</b>', description:'The recommended setting is <b>Auto detect</b>.', defaultValue: 0, options:
-             ['Auto detect':'Auto detect', 'TS0601_Tuya':'TS0601_Tuya', 'TS0601_Tuya_2':'TS0601_Tuya_2', 'TS0601_ZTH03PRO':'TS0601_ZTH03PRO', 'TS0601_Haozee':'TS0601_Haozee', 'TS0601_AUBESS':'TS0601_AUBESS', 'TS0601_AVATTO_Ink':'TS0601_AVATTO_Ink', 'TS0201':'TS0201', 'TS0222':'TS0222', 'TS0201_LCZ030': 'TS0201_LCZ030',
+             ['Auto detect':'Auto detect', 'TS0601_Tuya':'TS0601_Tuya', 'TS0601_Tuya_2':'TS0601_Tuya_2', 'TS0601_Tuya_3':'TS0601_Tuya_3', 'TS0601_ZTH03PRO':'TS0601_ZTH03PRO', 'TS0601_Haozee':'TS0601_Haozee', 'TS0601_AUBESS':'TS0601_AUBESS', 'TS0601_AVATTO_Ink':'TS0601_AVATTO_Ink', 'TS0201':'TS0201', 'TS0222':'TS0222', 'TS0201_LCZ030': 'TS0201_LCZ030',
                 'TS0222_2':'TS0222_2', 'TS0222_Soil':'TS0222_Soil', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', 'TS0601_Soil_II':'TS0601_Soil_II', 'TS0601_Soil_NEO':'TS0601_Soil_NEO', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
         input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', description: 'May not be supported by all devices!', defaultValue: false)
         if (advancedOptions == true) {
@@ -281,10 +283,10 @@ metadata {
 @Field static Map configParams = [
         // temperatureOffset and humidityOffset moved outside of the configParams 11/23/2024
         2: [input: [name: 'temperatureSensitivity', type: 'decimal', title: '<b>Temperature Sensitivity</b>', description: 'Temperature change for reporting, ' + '\u00B0' + 'C', defaultValue: 0.5, range: '0..5',
-                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2']]],
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2', 'TS0601_Tuya_3']]],
 
         3: [input: [name: 'humiditySensitivity', type: 'number', title: '<b>Humidity Sensitivity</b>', description: 'Humidity change for reporting, %', defaultValue: 5, range: '1..10',
-                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2']]],
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2', 'TS0601_Tuya_3']]],
 
         4: [input: [name: 'illuminanceSensitivity', type: 'number', title: '<b>Illuminance Sensitivity</b>', description: 'Illuminance change for reporting, %', defaultValue: 12, range: '10..100',                // TS0222 "MOES ZSS-ZK-THL"
                    limit:['TS0222']]],
@@ -365,6 +367,7 @@ metadata {
     '_TZE204_vvmbj46n'  : 'TS0601_Tuya_2',       //
     '_TZE200_wtikaxzs'  : 'TS0601_Tuya_2',       // NOUS E6 (added v1.9.0 fingerprint only)
     '_TZE284_wtikaxzs'  : 'TS0601_Tuya_2',       // NOUS E6 (added v1.9.0 fingerprint only)
+    '_TZE284_9ern5sfh'  : 'TS0601_Tuya_3',       // added v2.1.1 https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/675?u=kkossev
 
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
     '_TZE284_locansqn'  : 'TS0601_Haozee',       // Haozee/Nous variant (fingerprint only)
@@ -438,7 +441,7 @@ metadata {
     'Third Reality, Inc': 'Zigbee NON-Tuya',    //
     'OWON'              : 'OWON',               // model:"THS317-ET", manufacturer:"OWON"
     '_TZ3218_7fiyo3kv'  : 'DS18B20',            // MHCOZY switch with temp sensor
-    '_TZ3218_ya5d6wth'  : 'DS18B20',            // MHCOZY switch with temp sensor
+    '_TZ3218_ya5d6wth'  : 'DS18B20',            // MHCOZY switch (x4) with temp sensor
     ''                  : 'UNKNOWN',
     'ALL'               : 'ALL',
     'TEST'              : 'TEST'
@@ -477,6 +480,12 @@ def isConfigurableSleepyDevice()  { getModelGroup() in ['Zigbee NON-Tuya', 'TS02
 @Field static final Integer COMMAND_TIMEOUT = 10
 @Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
 @Field static String UNKNOWN = 'UNKNOWN'
+
+@Field static final Integer DS18B20_MAX_RELAYS = 4
+@Field static final Map<String, Integer> DS18B20_RELAY_COUNT_BY_MANUFACTURER = [
+    '_TZ3218_7fiyo3kv': 1,
+    '_TZ3218_ya5d6wth': 4
+]
 
 private getCLUSTER_TUYA()       { 0xEF00 }
 private getSETDATA()            { 0x00 }
@@ -560,8 +569,9 @@ def parse(String description) {
         }
         else if (descMap.cluster == '0006' && descMap.attrId == '0000') {    // DS18B20 On/Off cluster
             if (getModelGroup() == 'DS18B20') {
+                Integer relayEndpoint = descMap?.endpoint ? Integer.parseInt(descMap.endpoint, 16) : 1
                 def switchValue = Integer.parseInt(descMap.value, 16)
-                updateDS18B20ChildSwitch(switchValue)
+                updateDS18B20ChildSwitch(relayEndpoint, switchValue)
             } else {
                 if (settings?.logEnable) { 
                     log.debug "${device.displayName} Cluster 0x0006 OnOff report for non-DS18B20 device" 
@@ -863,7 +873,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 if (settings?.txtEnable) { log.info "${device.displayName} Contact is ${value}" }
             }
             else if (getModelGroup() == 'DS18B20') {
-                updateDS18B20ChildSwitch(fncmd)
+                updateDS18B20ChildSwitch(1, fncmd)
             }
             else if (getModelGroup() != 'TS0601_AUBESS') { // temperature in C, including 'TS0601_Tuya_2', 'TS0601_AVATTO_Ink' - all Tuya EF00 models !
                 if (fncmd > 32767) {
@@ -885,8 +895,8 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 getBatteryPercentageResult(fncmd * 2)
             }
             else {
-                if (device.getDataValue('manufacturer') in ['_TZE200_bjawzodf', '_TZE200_zl1kmjqx']) {
-                    humidityEvent( (fncmd / 10.0) as int )
+                if (getModelGroup() == 'TS0601_Tuya_3' || device.getDataValue('manufacturer') in ['_TZE200_bjawzodf', '_TZE200_zl1kmjqx']) {
+                    humidityEvent( fncmd / 10.0 )
                 }
                 else {
                     humidityEvent( fncmd )        // including 'TS0601_Tuya_2', 'TS0601_AVATTO_Ink' - all Tuya EF00 models !
@@ -900,11 +910,11 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             }
             else if (getModelGroup() in ['TS0601_Tuya_2', 'TS0601_ZTH03PRO']) {
                 logDebug "battery_state (0x03) is ${fncmd}"         // ['low', 'medium', 'high']
-                def rawValue = 0
-                /* groovylint-disable-next-line CouldBeSwitchStatement */
-                if (fncmd == 2) { rawValue = 100 }          // Battery High
-                    else if (fncmd == 1) { rawValue = 66 }      // Battery Medium
-                    else if (fncmd == 0) { rawValue = 33 }      // Battery Low
+                Integer rawValue = fncmd == 2 ? 100 : fncmd == 1 ? 66 : fncmd == 0 ? 33 : null
+                if (rawValue == null) {
+                    logWarn "unsupported battery_state (0x03) value ${fncmd}"
+                    break
+                }
                 getBatteryPercentageResult(rawValue * 2)
             }
             else { // _TZE200_zl1kmjqx link quality?
@@ -1212,22 +1222,51 @@ def getModelGroup() {
     return modelGroup
 }
 
-private void updateDS18B20ChildSwitch(int value) {
+private Integer getDS18B20DefaultRelayCount() {
+    Integer defaultCount = DS18B20_RELAY_COUNT_BY_MANUFACTURER[device.getDataValue('manufacturer')] ?: 1
+    return Math.min(Math.max(defaultCount, 1), DS18B20_MAX_RELAYS)
+}
+
+private Integer getDS18B20RelayIndexFromChild(def childDevice) {
+    String dni = childDevice?.deviceNetworkId ?: ''
+    String prefix = "${device.deviceNetworkId}-relay"
+    if (!dni.startsWith(prefix)) {
+        return null
+    }
+    String relayPart = dni.substring(prefix.length())
+    Integer relay = safeToInt(relayPart)
+    if (relay == null || relay < 1 || relay > DS18B20_MAX_RELAYS) {
+        return null
+    }
+    return relay
+}
+
+private void updateDS18B20ChildSwitch(Integer endpoint, int value) {
+    Integer relayEndpoint = endpoint ?: 1
+    Integer relayCount = getDS18B20DefaultRelayCount()
+    if (relayEndpoint > relayCount) {
+        logDebug "Skipping DS18B20 relay update for endpoint ${relayEndpoint}; relay count is ${relayCount}"
+        return
+    }
+
+    if (!getChildDevice("${device.deviceNetworkId}-relay${relayEndpoint}")) {
+        manageDS18B20ChildDevices()
+    }
+
     def switchState = value == 1 ? 'on' : 'off'
-    
-    // Update child device state
-    def childDevice = getChildDevice("${device.deviceNetworkId}-switch")
+
+    def childDevice = getChildDevice("${device.deviceNetworkId}-relay${relayEndpoint}")
     if (childDevice) {
-        def currentState = childDevice.currentValue("switch")
+        def currentState = childDevice.currentValue('switch')
         if (currentState == switchState) {
-            logDebug "DS18B20 Switch is already ${switchState}, skipping duplicate update"
+            logDebug "DS18B20 Relay ${relayEndpoint} is already ${switchState}, skipping duplicate update"
         } else {
-            logInfo "DS18B20 Switch is ${switchState}"
-            childDevice.sendEvent(name: "switch", value: switchState)
-            logDebug "Updated child switch to ${switchState}"
+            logInfo "DS18B20 Relay ${relayEndpoint} is ${switchState}"
+            childDevice.sendEvent(name: 'switch', value: switchState)
+            logDebug "Updated child relay ${relayEndpoint} to ${switchState}"
         }
     } else {
-        logWarn "DS18B20 child switch device not found"
+        logWarn "DS18B20 child relay ${relayEndpoint} device not found"
     }
 }
 
@@ -1259,7 +1298,7 @@ private void manageChildDevices() {
     // Define which model groups support child devices and what type
     switch (modelGroup) {
         case 'DS18B20':
-            manageChildDevice('switch', 'Generic Component Switch', 'Switch')
+            manageDS18B20ChildDevices()
             break
         case 'TS0601_ZTH03PRO':
             manageChildDevice('probe', 'Generic Component Temperature Sensor', 'Probe Temperature')
@@ -1268,6 +1307,39 @@ private void manageChildDevices() {
             // Remove any existing child devices for unsupported model groups
             removeAllChildDevices()
             break
+    }
+}
+
+private void manageDS18B20ChildDevices() {
+    Integer relayCount = getDS18B20DefaultRelayCount()
+
+    // Remove the old single relay child device id used in v2.0.0 before creating new dynamic children.
+    String legacyChildId = "${device.deviceNetworkId}-switch"
+    def legacyChild = getChildDevice(legacyChildId)
+    if (legacyChild) {
+        logInfo "Removing legacy DS18B20 child device ${legacyChild.displayName}"
+        try {
+            deleteChildDevice(legacyChildId)
+        } catch (Exception e) {
+            logWarn "Failed to remove legacy DS18B20 child switch: ${e.message}"
+        }
+    }
+
+    for (int relay = 1; relay <= relayCount; relay++) {
+        manageChildDevice("relay${relay}", 'Generic Component Switch', "Relay ${relay}")
+    }
+
+    for (int relay = relayCount + 1; relay <= DS18B20_MAX_RELAYS; relay++) {
+        String childId = "${device.deviceNetworkId}-relay${relay}"
+        def child = getChildDevice(childId)
+        if (child) {
+            logInfo "Removing unused DS18B20 child device ${child.displayName}"
+            try {
+                deleteChildDevice(childId)
+            } catch (Exception e) {
+                logWarn "Failed to remove DS18B20 child relay ${relay}: ${e.message}"
+            }
+        }
     }
 }
 
@@ -1737,10 +1809,20 @@ void deviceCommandTimeout() {
 // Child device component commands for DS18B20 switch
 void componentOn(cd) {
     if (getModelGroup() == 'DS18B20') {
-        logInfo "Turning DS18B20 switch ON via child device"
-        //sendZigbeeCommands(sendTuyaCommand('01', DP_TYPE_BOOL, '01'))
+        Integer relay = getDS18B20RelayIndexFromChild(cd)
+        if (relay == null) {
+            logWarn "componentOn() called from unknown DS18B20 child device ${cd?.deviceNetworkId}"
+            return
+        }
+        Integer relayCount = getDS18B20DefaultRelayCount()
+        if (relay > relayCount) {
+            logWarn "componentOn() ignoring relay ${relay}; resolved relay count is ${relayCount}"
+            return
+        }
+        String epHex = zigbee.convertToHexString(relay, 2)
+        logInfo "Turning DS18B20 relay ${relay} ON via child device"
         sendZigbeeCommands([
-            "he cmd 0x${device.deviceNetworkId} 0x01 0x0006 0x01 {}",  // On
+            "he cmd 0x${device.deviceNetworkId} 0x${epHex} 0x0006 0x01 {}",
             "delay 200"
         ])
     } else {
@@ -1750,10 +1832,20 @@ void componentOn(cd) {
 
 void componentOff(cd) {
     if (getModelGroup() == 'DS18B20') {
-        logInfo "Turning DS18B20 switch OFF via child device"
-        //sendZigbeeCommands(sendTuyaCommand('01', DP_TYPE_BOOL, '00'))
+        Integer relay = getDS18B20RelayIndexFromChild(cd)
+        if (relay == null) {
+            logWarn "componentOff() called from unknown DS18B20 child device ${cd?.deviceNetworkId}"
+            return
+        }
+        Integer relayCount = getDS18B20DefaultRelayCount()
+        if (relay > relayCount) {
+            logWarn "componentOff() ignoring relay ${relay}; resolved relay count is ${relayCount}"
+            return
+        }
+        String epHex = zigbee.convertToHexString(relay, 2)
+        logInfo "Turning DS18B20 relay ${relay} OFF via child device"
         sendZigbeeCommands([
-            "he cmd 0x${device.deviceNetworkId} 0x01 0x0006 0x00 {}",  // Off
+            "he cmd 0x${device.deviceNetworkId} 0x${epHex} 0x0006 0x00 {}",
             "delay 200"
         ])
     } else {
