@@ -17,6 +17,7 @@
  *      Dan Gibson (@absent42) - Zigbee2MQTT P100 external converter (https://github.com/absent42/Aqara-P100-Sensor)
  *
  * ver. 0.1.0 2026-04-18 kkossev  - initial version; dedicated P100 driver based on Aqara P1 Motion Sensor driver template
+ * ver. 0.1.1 2026-04-18 kkossev  - updated inClusters list; bugfixes
  *
  *                                 TODO: refine fingerprint inClusters/outClusters after real device pairing data
  *                                 TODO: verify aqaraBlackMagic() init sequence with real hardware
@@ -24,8 +25,8 @@
  *
  */
 
-static String version() { "0.1.0" }
-static String timeStamp() {"2026/04/18 12:00 PM"}
+static String version() { "0.1.1" }
+static String timeStamp() {"2026/04/18 10:46 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -116,8 +117,8 @@ metadata {
             command "initialize", [[name: "Manually initialize the device"]]
         }
 
-        // Fingerprint — model/manufacturer only; inClusters/outClusters TBD after real pairing data
-        fingerprint profileId:"0104", endpointId:"01", model:"lumi.vibration.agl002", manufacturer:"LUMI", deviceJoinName: "Aqara P100 Multi-State Sensor DWZTCGQ11LM"
+        // Fingerprint from zigbee2mqtt issue #31503 (devId:0x0402, epList:[1,2])
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0006,000C,0101,FCC0", outClusters:"000A,0019", model:"lumi.vibration.agl002", manufacturer:"LUMI", deviceJoinName: "Aqara P100 Multi-State Sensor DWZTCGQ11LM"
     }
 
     preferences {
@@ -129,12 +130,12 @@ metadata {
             input (name: "motionSensitivity", type: "number", title: "<b>Detection Sensitivity</b>", description: "Detection sensitivity (1 = low, 10 = high)", range: "1..10", defaultValue: 5)
             input (name: "reportInterval", type: "number", title: "<b>Report Interval</b>", description: "How often the device reports state (5-300 seconds)", range: "5..300", defaultValue: 60)
             // Door/window mode preference
-            if (getDeviceMode() == "door_window") {
+            if (settings?.deviceMode == "door_window") {
                 input (name: "doorWindowType", type: "enum", title: "<b>Door/Window Type</b>", description: "Type of door or window being monitored", defaultValue: "hinged_door",
                     options: ["casement_window":"Casement Window", "hopper_window":"Hopper Window", "composite_window":"Composite Window", "hinged_door":"Hinged Door"])
             }
             // Object mode preferences
-            if (getDeviceMode() == "object") {
+            if (settings?.deviceMode == null || settings?.deviceMode == "object") {
                 input (name: "movementDetection", type: "bool", title: "<b>Movement Detection</b>", description: "Enable movement event detection", defaultValue: true)
                 input (name: "vibrationDetection", type: "bool", title: "<b>Vibration Detection</b>", description: "Enable vibration event detection", defaultValue: true)
                 input (name: "orientationDetection", type: "bool", title: "<b>Orientation Detection</b>", description: "Enable orientation event detection", defaultValue: true)
