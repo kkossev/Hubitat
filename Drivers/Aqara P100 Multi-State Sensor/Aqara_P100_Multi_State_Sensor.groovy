@@ -17,7 +17,7 @@
  *      Dan Gibson (@absent42) - Zigbee2MQTT P100 external converter (https://github.com/absent42/Aqara-P100-Sensor)
  *
  * ver. 0.1.0 2026-04-18 kkossev  - initial version; dedicated P100 driver based on Aqara P1 Motion Sensor driver template
- * ver. 0.1.1 2026-04-18 kkossev  - updated inClusters list; bugfixes
+ * ver. 0.1.1 2026-04-19 kkossev  - updated inClusters list; bugfixes
  *
  *                                 TODO: refine fingerprint inClusters/outClusters after real device pairing data
  *                                 TODO: verify aqaraBlackMagic() init sequence with real hardware
@@ -26,7 +26,7 @@
  */
 
 static String version() { "0.1.1" }
-static String timeStamp() {"2026/04/18 10:46 PM"}
+static String timeStamp() {"2026/04/19 7:52 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -193,9 +193,9 @@ void initializeParamStorage() {
         state.params = []
         logDebug "Initialized parameter storage"
     }
-    if (state.driverVersion != version()) {
-        logInfo "Driver version changed from ${state.driverVersion} to ${version()}"
-        state.driverVersion = version()
+    if (state.driverVersion != driverVersionAndTimeStamp()) {
+        logInfo "Driver version changed from ${state.driverVersion} to ${driverVersionAndTimeStamp()}"
+        state.driverVersion = driverVersionAndTimeStamp()
     }
 }
 
@@ -1055,10 +1055,15 @@ void checkDriverVersion() {
 void updateAqaraVersion() {
     def application = device.getDataValue("application")
     if (application != null) {
-        def str = "0.0.0_" + String.format("%04d", zigbee.convertHexToInt(application.substring(0, Math.min(application.length(), 2))))
-        if (device.getDataValue("aqaraVersion") != str) {
-            device.updateDataValue("aqaraVersion", str)
-            logInfo "aqaraVersion set to $str"
+        if (application ==~ /(?i)^[0-9a-f]+$/) {
+            def str = "0.0.0_" + String.format("%04d", zigbee.convertHexToInt(application.substring(0, Math.min(application.length(), 2))))
+            if (device.getDataValue("aqaraVersion") != str) {
+                device.updateDataValue("aqaraVersion", str)
+                logInfo "aqaraVersion set to $str"
+            }
+        }
+        else {
+            logWarn "application data ${application} is not a valid hex string"
         }
     }
 }
