@@ -76,15 +76,15 @@
  * ver. 2.0.1  2025-12-22 kkossev - fixed temperatureSensitivity preferece being reset to zero bug; added respondToZdoRequests preference (default: false); added TS0222 _TZ3000_hy6ncvmw illuminance only sensor
  * ver. 2.0.2  2026-02-01 kkossev - fixed null preference values causing GroovyCastException in updated() reporting configuration (safe defaults for sleepy devices and Haozee)
  * ver. 2.1.0  2026-03-31 kkossev - added TS0601 _TZE284_hodyryli Tuya Temperature Humidity Sensor with External Probe into a new 'TS0601_ZTH03PRO' group, using child device for the probe @njanda
- * ver. 2.1.1  2026-04-14 kkossev - (dev. branch) added support for four switch child devices for _TZ3218_ya5d6wth @pauljneil2 ; added TS0601 _TZE284_9ern5sfh @rlynch into a new group TS0601_Tuya_3
+ * ver. 2.1.1  2026-04-19 kkossev - (dev. branch) added support for four switch child devices for _TZ3218_ya5d6wth @pauljneil2 ; added TS0601 _TZE284_9ern5sfh @rlynch into a new group TS0601_Tuya_3; bug fixes
  *
  *                                  TODO: update GitHub documentation  _TZ3218_7fiyo3kv
- *                                  TODO:  https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/636?u=kkossev
+ *                                  TODO: https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/636?u=kkossev
  *                                  TODO: response to ZDO command: cluster=0002 command=00
 */
 
 @Field static final String VERSION = '2.1.1'
-@Field static final String TIME_STAMP = '2026/04/14 7:37 AM'
+@Field static final String TIME_STAMP = '2026/04/19 10:50 AM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1073,7 +1073,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
         case 0x15 : // (21) buzer switch
             if (settings?.logEnable) { log.info "${device.displayName} _TZ3000_qaaysllp buzer switch is ${fncmd} " }
             break
-        case 0x38 : // (56) external probe temperature for TS0601_ZTH03PRO
+        case 0x26 : // (38) external probe temperature for TS0601_ZTH03PRO
             if (getModelGroup() in ['TS0601_ZTH03PRO']) {
                 if (fncmd > 32767) {
                     fncmd = fncmd - 65536
