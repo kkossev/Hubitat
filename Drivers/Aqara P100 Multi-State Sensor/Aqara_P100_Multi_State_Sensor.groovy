@@ -17,16 +17,15 @@
  *      Dan Gibson (@absent42) - Zigbee2MQTT P100 external converter (https://github.com/absent42/Aqara-P100-Sensor)
  *
  * ver. 0.1.0 2026-04-18 kkossev  - initial version; dedicated P100 driver based on Aqara P1 Motion Sensor driver template
- * ver. 0.1.1 2026-04-19 kkossev  - updated inClusters list; bugfixes
+ * ver. 0.1.1 2026-04-19 kkossev  - corrected fingerprint; bugfixes
  *
- *                                 TODO: refine fingerprint inClusters/outClusters after real device pairing data
  *                                 TODO: verify aqaraBlackMagic() init sequence with real hardware
  *                                 TODO: test mode switching (object <-> door_window) behavior
  *
  */
 
 static String version() { "0.1.1" }
-static String timeStamp() {"2026/04/19 7:52 AM"}
+static String timeStamp() {"2026/04/19 3:02 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -117,8 +116,8 @@ metadata {
             command "initialize", [[name: "Manually initialize the device"]]
         }
 
-        // Fingerprint from zigbee2mqtt issue #31503 (devId:0x0402, epList:[1,2])
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0006,000C,0101,FCC0", outClusters:"000A,0019", model:"lumi.vibration.agl002", manufacturer:"LUMI", deviceJoinName: "Aqara P100 Multi-State Sensor DWZTCGQ11LM"
+        // Fingerprint from real device pairing data (devId:0x0402, epList:[1,2])
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0101,000C,0006,0003,0000,FCC0", outClusters:"000A,0019", model:"lumi.vibration.agl002", manufacturer:"Aqara", deviceJoinName: "Aqara P100 Multi-State Sensor DWZTCGQ11LM"
     }
 
     preferences {
