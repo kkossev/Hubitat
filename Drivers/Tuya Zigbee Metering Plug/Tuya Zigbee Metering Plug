@@ -68,7 +68,8 @@
  *  ver. 1.9.8 2024-11-22 kkossev - added TS011F _TZ3000_xzhnra8x _TZ3000_rdfh8cfs _TZ3000_fgwhjm9j _TZ3000_waho4jtj
  *  ver. 2.0.0 2024-11-30 kkossev - HE platform ver 2.4.0.x improved compatibility; added rtt measurement in ping(); added TS011F _TZ3000_ww6drja5; ThirdReality 3RSP02028BZ Energy divisor set to 3600000
  *  ver. 2.0.1 2025-04-12 kkossev - added Shelly 1PM (Gen 4); added  Frient Monitor 2 EMIZB-141;
- *  ver. 2.0.2 2025-08-19 kkossev - (dev. branch) EMIZB-141 fix attempt
+ *  ver. 2.0.2 2025-08-19 kkossev - EMIZB-141 fix attempt
+ *  ver. 2.0.3 2026-04-20 kkossev - bug fix: breaker threshold boolean variables declared as int in processTuyaThresholdsCommands(); AC Frequency polling (0x0300) now auto-disabled after first unsupported-attribute response;
  *
  *                                 TODO: change the ping() command to cluster 0x0000 attribute 0x0000 (ZCL Version)
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
@@ -91,8 +92,8 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
-static String version() { '2.0.2' }
-static String timeStamp() { '2025/08/19 8:29 PM' }
+static String version() { '2.0.3' }
+static String timeStamp() { '2026/04/20 11:23 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -1144,6 +1145,10 @@ void disableUnsupportedAttribute(String clusterId, String attrId) {
                     logWarn 'Power polling is not supported! -> Power polling will be disabled.'
                     state.powerPollingSupported = false
                     break
+                case '0300' :     // AC Frequency
+                    logWarn 'AC Frequency polling is not supported -> Frequency polling will be disabled.'
+                    state.frequencyPollingSupported = false
+                    break
                 default :
                     logWarn "Read attribute response: unsupported Attribute ${attrId} for Electrical Measurement cluster ${clusterId}"
                     break
@@ -1719,11 +1724,11 @@ void processTuyaThresholdsCommands(Map descMap) {
         //                                                === temp ====        === power ===
         int temperature_threshold = zigbee.convertHexToInt(descMap.data[2]) * 256 + zigbee.convertHexToInt(descMap.data[3])
         device.updateSetting('overTemperatureBreakerThreshold', [value:temperature_threshold as int , type:'number'])
-        int temperature_breaker = zigbee.convertHexToInt(descMap.data[1]) ? true : false
+        boolean temperature_breaker = zigbee.convertHexToInt(descMap.data[1]) ? true : false
         device.updateSetting('overTemperatureBreaker', [value:temperature_breaker, type:'bool'])
         int power_threshold = zigbee.convertHexToInt(descMap.data[6]) * 256 + zigbee.convertHexToInt(descMap.data[7])
         device.updateSetting('overPowerBreakerThreshold', [value:power_threshold as int , type:'number'])
-        int power_breaker = zigbee.convertHexToInt(descMap.data[5]) ? true : false
+        boolean power_breaker = zigbee.convertHexToInt(descMap.data[5]) ? true : false
         device.updateSetting('overPowerBreaker', [value:power_breaker, type:'bool'])
         logInfo "temperature_threshold=${temperature_threshold} (${temperature_breaker ? 'enabled' : 'disabled'}) power_threshold=${power_threshold} (${power_breaker ? 'enabled' : 'disabled'})"
     }
@@ -1736,15 +1741,15 @@ void processTuyaThresholdsCommands(Map descMap) {
         //                                                          === current ===      === overVolt ===      === underVolt ===
         int over_current_threshold = zigbee.convertHexToInt(descMap.data[2]) * 256 + zigbee.convertHexToInt(descMap.data[3])
         device.updateSetting('overCurrentBreakerThreshold', [value:over_current_threshold as int , type:'number'])
-        int over_current_breaker = zigbee.convertHexToInt(descMap.data[1]) ? true : false
+        boolean over_current_breaker = zigbee.convertHexToInt(descMap.data[1]) ? true : false
         device.updateSetting('overCurrentBreaker', [value:over_current_breaker, type:'bool'])
         int over_voltage_threshold = zigbee.convertHexToInt(descMap.data[6]) * 256 + zigbee.convertHexToInt(descMap.data[7])
         device.updateSetting('overVoltageBreakerThreshold', [value:over_voltage_threshold as int , type:'number'])
-        int over_voltage_breaker = zigbee.convertHexToInt(descMap.data[5]) ? true : false
+        boolean over_voltage_breaker = zigbee.convertHexToInt(descMap.data[5]) ? true : false
         device.updateSetting('overVoltageBreaker', [value:over_voltage_breaker, type:'bool'])
         int under_voltage_threshold = zigbee.convertHexToInt(descMap.data[10]) * 256 + zigbee.convertHexToInt(descMap.data[11])
         device.updateSetting('underVoltageBreakerThreshold', [value:under_voltage_threshold as int , type:'number'])
-        int under_voltage_breaker = zigbee.convertHexToInt(descMap.data[9]) ? true : false
+        boolean under_voltage_breaker = zigbee.convertHexToInt(descMap.data[9]) ? true : false
         device.updateSetting('underVoltageBreaker', [value:under_voltage_breaker, type:'bool'])
         logInfo "over_current_threshold=${over_current_threshold} (${over_current_breaker ? 'enabled' : 'disabled'}) over_voltage_threshold=${over_voltage_threshold} (${over_voltage_breaker ? 'enabled' : 'disabled'}) under_voltage_threshold=${under_voltage_threshold} (${under_voltage_breaker ? 'enabled' : 'disabled'})"
     }
@@ -1859,8 +1864,8 @@ void poll(boolean refreshAll = false) {
     if (state.powerPollingSupported && state.voltagePollingSupported && state.currentPollingSupported) {
         if (settings?.reportPower == true || settings?.reportVoltage == true || settings?.reportAmperage == true) {
             logDebug 'polling all 0x0B04 attributes'
-            if (settings?.reportPowerFactor == true) {
-                cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508, 0x0300], [destEndpoint :ep], delay = 200)    // Power, Voltage and Amperage at once. Frequency added 03/27/2023
+            if (settings?.reportFrequency == true && state.frequencyPollingSupported != false) {
+                cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508, 0x0300], [destEndpoint :ep], delay = 200)    // Power, Voltage, Amperage and Frequency at once
             }
             else {
                 /* groovylint-disable-next-line DuplicateListLiteral */
@@ -1878,7 +1883,7 @@ void poll(boolean refreshAll = false) {
         if (state.currentPollingSupported == true  && settings?.reportAmperage == true) {
             cmds += zigbee.readAttribute(0x0B04, 0x0508, [destEndpoint :ep], delay = 100)        // current
         }
-        if (/*state.currentPollingSupported == true  && */settings?.reportFrequency == true) {
+        if (/*state.currentPollingSupported == true  && */settings?.reportFrequency == true && state.frequencyPollingSupported != false) {
             cmds += zigbee.readAttribute(0x0B04, 0x0300, [destEndpoint :ep], delay = 200)        // frequency
         }
         if (/*state.currentPollingSupported == true  && */settings?.reportPowerFactor == true) {
