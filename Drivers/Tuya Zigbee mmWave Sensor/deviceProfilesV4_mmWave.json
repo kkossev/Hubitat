@@ -945,7 +945,7 @@
     "v.4.0.9 - added _TZE204_gkfbdvyx, LeapMMW all DPs,  ",
     "v.4.1.0 - fixed SONOFF SNZB-06P radar device profile",
     "v.4.1.1 - fixed TS0601_YA4FT0W4_RADAR radar device profile - thanks @lukaszbet",
-    "v.4.1.2 - added TS0601 _TZE204_aai5grix fingerprint to WENZHI_MTD285_ZB profile"
-    "v.4.1.3 - WENZHI_MTD285_ZB profile improvements"
+    "v.4.1.2 - added TS0601 _TZE204_aai5grix fingerprint to WENZHI_MTD285_ZB profile",
+    "v.4.1.3 - WENZHI_MTD285_ZB profile improvements (+ JSON Standard Profile bugfix)"
   ]
 }
