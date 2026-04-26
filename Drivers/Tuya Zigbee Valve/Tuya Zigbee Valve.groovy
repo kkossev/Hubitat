@@ -47,19 +47,24 @@
  *  ver. 1.6.2 2025-07-05 kkossev - added TS0601 _TZE204_a7sghmms _TZE200_7ytb3h8u _TZE284_7ytb3h8u into TS0601_GIEX_VALVE group
  *  ver. 1.6.3 2025-10-21 kkossev - Sonoff SWV valve specific configurations
  *  ver. 1.6.4 2025-10-25 kkossev - added 'Update Zigbee Firmware' command for non-Tuya devices; added sonoffAutoShutOff attribute and preference (requires firmware 1.0.4); sonoff switch and valve states are updated (digitally) when irrigation starts/stops (workaround)
- *  ver. 1.6.5 2025-11-02 kkossev - (dev.branch)
+ *  ver. 1.6.5 2025-11-02 kkossev - version bump only
+ *  ver. 1.7.0 2026-04-25 kkossev - Sonoff SWV bug fixes: version check fixed; valve status 'shortage and leakage' now reported correctly; water flow unit corrected to m³/h; daily irrigation volume now shown as waterConsumed attribute; auto shut-off (firmware 1.0.4+) now configures and reads reliably; valve work state no longer causes errors on unexpected values;
+ *                                  added getSonoffFwVersion()/isSonoffFwGte() helpers; irrigation start/end timestamps (0x500D/0x500E) epoch offset now firmware-conditional (fw<1.0.4 uses Zigbee year-2000 epoch, fw>=1.0.4 uses Unix epoch);
+ *                                  fixed spurious valve/switch open flips on Refresh: 500D/500E state inference now skipped when isRefresh=true (only applied for autonomous unsolicited reports)
+ *  ver. 1.7.1 2026-04-26 kkossev - added Sonoff SWV-ZN series (SWV-ZNE, SWV-ZFE, SWV-ZNU, SWV-ZFU);
+ *                                  fixed setDeviceNameAndProfile() fingerprint fallback matching for multi-model profiles;
+ *                                  SWV-ZFE, SWV-ZNU, SWV-ZFU are now auto-detected as SONOFF_SWV_ZN_VALVE without manual forcedProfile override.
  *
  *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes ''
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
- *                                  TODO: set the device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
  *                                  TODO: clear the old states on update; add rejoinCtr;
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-static String version() { '1.6.5' }
-static String timeStamp() { '2025/11/02 5:349 PM' }
+static String version() { '1.7.1' }
+static String timeStamp() { '2026/04/26 9:15 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true                // disable it for the production release !
@@ -93,8 +98,8 @@ metadata {
         attribute 'irrigationVolume', 'number'
         attribute 'irrigationDuration', 'number'        // Sonoff SWV, frankEver FK_V02
         attribute 'irrigationCapacity', 'number'
-        attribute 'valveStatus',  'enum', ['normal', 'shortage', 'leakage', 'shortageAndLeakage', 'clear', 'manual', 'auto', 'idle']    // SONOFF {ID: 0x500c, type: 0x20},
-        attribute 'valveStatus2', 'enum', ['normal', 'shortage', 'leakage', 'shortageAndLeakage', 'clear', 'manual', 'auto', 'idle']    // isTZE284()
+        attribute 'valveStatus',  'enum', ['normal', 'shortage', 'leakage', 'shortage and leakage', 'clear', 'manual', 'auto', 'idle']    // SONOFF {ID: 0x500c, type: 0x20},
+        attribute 'valveStatus2', 'enum', ['normal', 'shortage', 'leakage', 'shortage and leakage', 'clear', 'manual', 'auto', 'idle']    // isTZE284()
         attribute 'valveOpenThreshold', 'number'        // FrankEver FK_V02 - the set threshold for valve open 
         attribute 'valveOpenPercentage', 'number'       // FrankEver FK_V02 - the current valve open percentage reported by the device
         attribute 'workState', 'enum', ['manual control', 'Cycle timing / quantity control', 'Schedule control']
@@ -136,7 +141,7 @@ metadata {
                 input(name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options: powerOnBehaviourOptions)
             }
             if (isSASWELL() || isGIEX() || isSonoff() || isFankEver() || isTZE284()) {
-                input(name: 'autoOffTimer', type: 'number', title: '<b>Auto off timer (Irrigation Duration)</b> ', description: 'Automatically turn off after how many seconds or minutes<br>(depending on the model).<br>Zero value disables the auto-off!', defaultValue: DEFAULT_AUTOOFF_TIMER, required: false)
+                input(name: 'autoOffTimer', type: 'number', title: '<b>Auto off timer (Irrigation Duration)</b> ', description: 'Automatically turn off after how many <b>seconds</b> (most models) or <b>minutes</b> (SWV-ZN: 0–719 min; TZE284).<br>Zero value disables the auto-off!', defaultValue: DEFAULT_AUTOOFF_TIMER, required: false)
             }
             if (isSASWELL() || isGIEX()) {
                 input(name: 'irrigationCapacity', type: 'number', title: '<b>Irrigation Capacity</b>', description: 'Automatically turn off agter how many liters?', defaultValue: DEFAULT_CAPACITY, required: false)
@@ -161,6 +166,9 @@ metadata {
                 if (isSonoff()) {
                     input(name: 'sonoffAutoShutOff', type: 'number', title: '<b>Sonoff Auto Shut Off</b>', description: 'Automatically shut down the water valve after the water shortage exceeds the specified time (minutes). Zero value disables the auto shut-off!<br>Requires firmware version 1.0.4 or later!', defaultValue: 30, required: false)
                 }
+                if (isSonoffZN()) {
+                    input(name: 'ignoreDuplicatePackets', type: 'bool', title: '<b>Ignore Duplicate 501F Packets</b>', description: 'Skip consecutive identical FC11/501F irrigation status packets (reduces log noise during active irrigation)', defaultValue: true)
+                }
             }
         }
     }
@@ -181,6 +189,9 @@ boolean isBatteryPowered()       { return isGIEX() || isSASWELL() || isTS0049() 
 boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') }
 boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
 boolean isTZE284()               { return getModelGroup().contains('TZE284') || _DEBUG == true }
+Integer getSonoffFwVersion()     { String fw = device.getDataValue('softwareBuild') ?: '0'; try { return Integer.parseInt(fw.replaceAll(/^0+(?!$)/, '')) } catch (e) { return 0 } }
+boolean isSonoffFwGte(Integer v) { return getSonoffFwVersion() >= v }
+boolean isSonoffZN()             { return getModelGroup().contains('SONOFF_SWV_ZN') }  // Sonoff SWV-ZN series (SWV-ZNE, SWV-ZFE, SWV-ZNU, SWV-ZFU)
 
 // Constants
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3
@@ -446,6 +457,22 @@ boolean isTZE284()               { return getModelGroup().contains('TZE284') || 
             ]
     ],
 
+    'SONOFF_SWV_ZN_VALVE' : [           // isSonoffZN() - Sonoff ZN series: SWV-ZNE, SWV-ZFE, SWV-ZNU, SWV-ZFU
+            model         : 'SWV-ZNE',  // https://www.zigbee2mqtt.io/devices/SWV-ZNE.html
+            manufacturers : ['SONOFF'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0006,0020,FC57,FC11', outClusters:'0003,0019', model:'SWV-ZNE', manufacturer:'SONOFF'],
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0006,0020,FC57,FC11', outClusters:'0003,0019', model:'SWV-ZFE', manufacturer:'SONOFF'],
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0006,0020,FC57,FC11', outClusters:'0003,0019', model:'SWV-ZNU', manufacturer:'SONOFF'],
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0006,0020,FC57,FC11', outClusters:'0003,0019', model:'SWV-ZFU', manufacturer:'SONOFF'],
+            ],
+            deviceJoinName: 'Sonoff Zigbee smart water valve (ZN series)',
+            capabilities  : ['valve': true, 'battery': true, 'powerOnBehaviour': false],
+            configuration : ['battery': false],
+            attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery', 'battery': '---'],
+            preferences   : [:]
+    ],
+
     'TS0601_TZE284_VALVE'   : [              // https://de.aliexpress.com/item/1005007836145637.html
             model         : 'TS0601',        // https://github.com/zigpy/zha-device-handlers/blob/a1f6378fba3a727b5f9432d711ef3d5320e45827/zhaquirks/tuya/ts0601_valve.py#L489 
             manufacturers : ['_TZE284_8zizsafo', '_TZE284_eaet5qt5'],
@@ -482,7 +509,15 @@ void parse(String description) {
     state.lastRx['parseTime'] = new Date().getTime()
     setHealthStatusOnline()
     unschedule('deviceCommandTimeout')
-    logDebug "parse: description is $description"
+    // Early duplicate suppression for FC11/501F (ZN series irrigation status floods ~2x/sec)
+    boolean suppress501FLogs = false
+    if (settings?.ignoreDuplicatePackets == true && description.contains('cluster: FC11') && description.contains('attrId: 501F')) {
+        String val501F = description.split('value: ').last()
+        if (val501F == state.states['znLast501FValue']) { return }
+        state.states['znLast501FValue'] = val501F
+        suppress501FLogs = true
+    }
+    if (!suppress501FLogs) { logDebug "parse: description is $description" }
 
     if (isTuyaE00xCluster(description) == true || otherTuyaOddities(description) == true) {
         return null
@@ -522,7 +557,7 @@ void parse(String description) {
             logDebug "exception ${e} caught while parsing description: ${descMap}"
             return
         }
-        if (logEnable == true) { log.debug "${device.displayName } Desc Map: $descMap" }
+        if (logEnable == true && !suppress501FLogs) { log.debug "${device.displayName } Desc Map: $descMap" }
         if (descMap.attrId != null) {
             // attribute report received
             List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value, status: descMap.status]]
@@ -1136,7 +1171,7 @@ void parseZHAcommand(Map descMap) {
 import java.text.SimpleDateFormat
 
 void parseSonoffCluster(Map it, String description) {
-    logDebug "parseSonoffCluster: ${it}"
+    //logDebug "parseSonoffCluster: ${it}"
     // Define a date format
     SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
     Integer intValue = 0
@@ -1145,8 +1180,10 @@ void parseSonoffCluster(Map it, String description) {
         intValue = zigbee.convertHexToInt(it.value)
     }
     catch (e) {
-        logDebug "parseSonoffCluster: it.value ${it.value} is not a number"
+        //logDebug "parseSonoffCluster: it.value ${it.value} is not a number"
     }
+    // Firmware >= 1.0.4 uses Unix epoch (1970); older firmware uses Zigbee epoch (year 2000)
+    long epochOffset = isSonoffFwGte(1004) ? 0L : 946684800L
     switch (it.attrId) {
         case '5006' :   // Real-time irrigation duration (0..86400, seconds)
             logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} value is ${intValue} (raw: ${it.value})"
@@ -1181,38 +1218,48 @@ void parseSonoffCluster(Map it, String description) {
             logInfo "${descText} (${intValue})"
             sendEvent(name: 'valveStatus', value: valveStatus, descriptionText:descText, type: 'physical')
             break
-        case '500D' :   // Irrigation Start Time // uint32  // Local time (since 1970)
+        case '500D' :   // Irrigation Start Time // uint32  // Unix epoch (fw>=1.0.4) or Zigbee epoch/year 2000 (fw<1.0.4)
             logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Irrigation Start Time : value is ${intValue} (raw: ${it.value})"
-            Date startDate = new Date((intValue + 946684800L)  * 1000L)
+            Date startDate = new Date((intValue + epochOffset) * 1000L)
             String startDateString = dateFormat.format(startDate)
             descText = "Irrigation Start Time is ${startDateString}" ; if (settings?.logEnable) { descText += " (raw: ${it.value})" }
             logInfo "${descText}"
             sendEvent(name: 'irrigationStartTime', value: startDateString, descriptionText:descText, type: 'physical')
-            // Set valve/switch to open/on if not already
-            if (device.currentValue('valve') != 'open' || device.currentValue('switch') != 'on') {
-                logInfo 'Irrigation started - setting valve to open and switch to on'
-                sendEvent(name: 'valve', value: 'open', descriptionText: 'Valve opened (irrigation started)', type: 'digital')
-                sendEvent(name: 'switch', value: 'on', descriptionText: 'Switch turned on (irrigation started)', type: 'digital')
+            // Set valve/switch to open/on only for autonomous (unsolicited) reports, not during Refresh polling
+            if (!(state.states['isRefresh'] ?: false)) {
+                if (device.currentValue('valve') != 'open' || device.currentValue('switch') != 'on') {
+                    logInfo 'Irrigation started (autonomous) - setting valve to open and switch to on'
+                    sendEvent(name: 'valve', value: 'open', descriptionText: 'Valve opened (irrigation started)', type: 'digital')
+                    sendEvent(name: 'switch', value: 'on', descriptionText: 'Switch turned on (irrigation started)', type: 'digital')
+                }
+            } else {
+                logDebug 'Irrigation Start Time (500D): valve/switch state inference skipped during Refresh'
             }
             break
-        case '500E' :   // Irrigation End Time //  uint32  // Local time (since 1970)
-            Date endDate = new Date((intValue + 946684800L)  * 1000L)
+        case '500E' :   // Irrigation End Time //  uint32  // Unix epoch (fw>=1.0.4) or Zigbee epoch/year 2000 (fw<1.0.4)
+            Date endDate = new Date((intValue + epochOffset) * 1000L)
             String endDateString = dateFormat.format(endDate)
             descText = "Irrigation End Time is ${endDateString}"  ; if (settings?.logEnable) { descText += " (raw: ${it.value})" }
             logInfo "${descText}"
             sendEvent(name: 'irrigationEndTime', value: endDateString, descriptionText:descText, type: 'physical')
-            // Set valve/switch to closed/off if not already
-            if (device.currentValue('valve') != 'closed' || device.currentValue('switch') != 'off') {
-                logInfo 'Irrigation ended - setting valve to closed and switch to off'
-                sendEvent(name: 'valve', value: 'closed', descriptionText: 'Valve closed (irrigation ended)', type: 'digital')
-                sendEvent(name: 'switch', value: 'off', descriptionText: 'Switch turned off (irrigation ended)', type: 'digital')
+            // Set valve/switch to closed/off only for autonomous (unsolicited) reports, not during Refresh polling
+            if (!(state.states['isRefresh'] ?: false)) {
+                if (device.currentValue('valve') != 'closed' || device.currentValue('switch') != 'off') {
+                    logInfo 'Irrigation ended (autonomous) - setting valve to closed and switch to off'
+                    sendEvent(name: 'valve', value: 'closed', descriptionText: 'Valve closed (irrigation ended)', type: 'digital')
+                    sendEvent(name: 'switch', value: 'off', descriptionText: 'Switch turned off (irrigation ended)', type: 'digital')
+                }
+            } else {
+                logDebug 'Irrigation End Time (500E): valve/switch state inference skipped during Refresh'
             }
             break
         case '500F' :   // Daily Irrigation Volume (Irrigation water volume for the day)    // uint32 (Liter)
-            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Daily Irrigation Volume : value is ${intValue} (raw: ${it.value})"
+            descText = "Daily irrigation volume is ${intValue} L"
+            logInfo "${descText}"
+            sendEvent(name: 'waterConsumed', value: intValue, unit: 'L', descriptionText: descText, type: 'physical')
             break
         case '5010' :   // Valve Work State (Valve working status)  // 0 - 'manual control'; 1 - 'Cycle timing / quantity control''; 2 - 'Schedule control'
-            String workState = SonoffWorkStateOptions[intValue.toString()]
+            String workState = SonoffWorkStateOptions[intValue.toString()] ?: "unknown (${intValue})"
             descText = "Valve Work State is ${workState}" ; if (settings?.logEnable) { descText += " (raw: ${it.value})" }
             logInfo "${descText}"
             sendEvent(name: 'workState', value: workState, descriptionText:descText, type: 'physical')
@@ -1222,6 +1269,83 @@ void parseSonoffCluster(Map it, String description) {
             if (settings?.logEnable) { descText += " (raw: ${it.value})" }
             logInfo "${descText}"
             sendEvent(name: 'sonoffAutoShutOff', value: intValue, descriptionText: descText, type: 'physical')
+            break
+        case '501F' :   // Irrigation Schedule Status (ZN series only) // ZCL Array (encoding 0x48)
+            // Payload: 3-byte ZCL array header (elementType[0] + countLE[1-2]), then bytes[]:
+            //   [3] status: 0=start, 1=end, 2=running, 3=standby
+            //   [4] schedule_index  [5] type: 0=automatic, 1=manual  [6] mode: 0=duration, 1=capacity, 2=duration_with_interval
+            //   [7-10] expectedStartTime BE  [11-14] expectedEndTime BE
+            //   18-byte form (start/standby): [15] volume_unit, [16-17] expectedVolume
+            //   24-byte form (running/end):   [15-18] deviceCurrentTime/actualEndTime BE, [19] volume_unit, [20-21] expectedVolume, [22-23] actualVolume
+            //logDebug "parseSonoffCluster: 501F irrigationScheduleStatus raw: ${it.value}"
+            try {
+                List<Integer> bytes = it.value.toList().collate(2).collect { pair -> Integer.parseInt(pair.join(), 16) }
+                // Skip 3-byte ZCL array header
+                if (bytes.size() < 7) { logWarn "501F payload too short (${bytes.size()} bytes)"; break }
+                int schedStatus = bytes[3]  // after 3-byte header
+                int schedIndex  = bytes[4]
+                int schedType   = bytes[5]
+                int schedMode   = bytes[6]
+                Map statusMap = [0:'start', 1:'end', 2:'running', 3:'standby']
+                Map typeMap   = [0:'automatic', 1:'manual']
+                Map modeMap   = [0:'duration', 1:'capacity', 2:'duration_with_interval']
+                String statusStr = statusMap[schedStatus] ?: "unknown(${schedStatus})"
+                String typeStr   = typeMap[schedType]     ?: "unknown(${schedType})"
+                String modeStr   = modeMap[schedMode]     ?: "unknown(${schedMode})"
+                //logDebug "501F irrigationScheduleStatus: status=${statusStr} type=${typeStr} mode=${modeStr} index=${schedIndex}"
+                // --- Timestamp events (fire on status change only; not gated by isRefresh) ---
+                // Deduplicate by tracking last emitted status: running floods 2x/sec, so only emit once per transition
+                if (bytes.size() >= 15 && schedStatus != (state.states['znLastScheduleStatus'] as Integer)) {
+                    long expStart = (long)(bytes[7]  & 0xFF) << 24 | (long)(bytes[8]  & 0xFF) << 16 | (long)(bytes[9]  & 0xFF) << 8 | (long)(bytes[10] & 0xFF)
+                    long expEnd   = (long)(bytes[11] & 0xFF) << 24 | (long)(bytes[12] & 0xFF) << 16 | (long)(bytes[13] & 0xFF) << 8 | (long)(bytes[14] & 0xFF)
+                    logDebug "501F: expStart=0x${Long.toHexString(expStart)} expEnd=0x${Long.toHexString(expEnd)} (device uptime seconds)"
+                    if (bytes.size() >= 19) {
+                        // 24-byte form (running/end): bytes[15-18] = deviceCurrentTime (running) or actualEndTime (end)
+                        long devNow = (long)(bytes[15] & 0xFF) << 24 | (long)(bytes[16] & 0xFF) << 16 | (long)(bytes[17] & 0xFF) << 8 | (long)(bytes[18] & 0xFF)
+                        long offset = now() / 1000L - devNow   // wall-clock offset: converts device uptime → Unix seconds
+                        state.states['znDeviceEpochOffset'] = offset
+                        if (schedStatus == 2) {   // first running → emit scheduled start/end
+                            String startStr = dateFormat.format(new Date((expStart + offset) * 1000L))
+                            String endStr   = dateFormat.format(new Date((expEnd   + offset) * 1000L))
+                            sendEvent(name: 'irrigationStartTime', value: startStr, descriptionText: "irrigationStartTime is ${startStr}", type: 'physical')
+                            sendEvent(name: 'irrigationEndTime',   value: endStr,   descriptionText: "irrigationEndTime is ${endStr}",     type: 'physical')
+                            logInfo "501F: irrigationStartTime=${startStr} irrigationEndTime=${endStr}"
+                        } else if (schedStatus == 1) {   // end → actual end time + duration
+                            long durationSec = devNow - expStart
+                            String actualEndStr = dateFormat.format(new Date(now()))
+                            String durationStr  = String.format('%02d:%02d:%02d', durationSec.intdiv(3600L), (durationSec % 3600L).intdiv(60L), durationSec % 60L)
+                            sendEvent(name: 'irrigationEndTime',      value: actualEndStr, descriptionText: "irrigationEndTime is ${actualEndStr}",      type: 'physical')
+                            sendEvent(name: 'lastIrrigationDuration', value: durationStr,  descriptionText: "lastIrrigationDuration is ${durationStr}",  type: 'physical')
+                            logInfo "501F: irrigationEndTime=${actualEndStr} lastIrrigationDuration=${durationStr}"
+                        }
+                    } else if (schedStatus == 0) {
+                        // 18-byte form (start): no deviceCurrentTime; use stored offset from previous running/end or approximate
+                        long offset = (state.states['znDeviceEpochOffset'] as Long) ?: (now() / 1000L - expStart)
+                        String startStr = dateFormat.format(new Date((expStart + offset) * 1000L))
+                        String endStr   = dateFormat.format(new Date((expEnd   + offset) * 1000L))
+                        sendEvent(name: 'irrigationStartTime', value: startStr, descriptionText: "irrigationStartTime is ${startStr}", type: 'physical')
+                        sendEvent(name: 'irrigationEndTime',   value: endStr,   descriptionText: "irrigationEndTime is ${endStr}",     type: 'physical')
+                        logInfo "501F: irrigationStartTime=${startStr} irrigationEndTime=${endStr} (start event)"
+                    }
+                    state.states['znLastScheduleStatus'] = schedStatus
+                }
+                // --- Valve/switch update (guarded by isRefresh) ---
+                if (!(state.states['isRefresh'] ?: false)) {
+                    String newValveVal  = (schedStatus == 0 || schedStatus == 2) ? 'open' : 'closed'
+                    String newSwitchVal = (schedStatus == 0 || schedStatus == 2) ? 'on'   : 'off'
+                    if (device.currentValue('valve') != newValveVal) {   // deduplicate: skip if state unchanged (e.g. repeated 'running' reports)
+                        logInfo "Irrigation schedule ${statusStr} (autonomous) - setting valve to ${newValveVal} and switch to ${newSwitchVal} (${typeStr}, ${modeStr} mode, index=${schedIndex})"
+                        sendEvent(name: 'valve',  value: newValveVal,  descriptionText: "Valve ${newValveVal} (irrigation ${statusStr})", type: 'physical')
+                        sendEvent(name: 'switch', value: newSwitchVal, descriptionText: "Switch ${newSwitchVal} (irrigation ${statusStr})", type: 'physical')
+                    } else {
+                        //logDebug "501F irrigationScheduleStatus: valve already ${newValveVal}, skipping sendEvent for status=${statusStr}"
+                    }
+                } else {
+                    logDebug '501F irrigationScheduleStatus: valve/switch state inference skipped during Refresh'
+                }
+            } catch (e) {
+                logWarn "501F irrigationScheduleStatus parse error: ${e}"
+            }
             break
         default :
             logDebug "Sonoff cluster 0x${it.cluster} <b>unknown attribute ${it.attrId}</b> value is ${intValue} (raw: ${it.value})"
@@ -1233,8 +1357,8 @@ void parseFlowMeasurementCluster(Map it) {
     if (it.attrId == '0000') {
         logDebug "parseFlowMeasurementCluster: ${it}"
         int flowRate = zigbee.convertHexToInt(it.value)
-        logInfo "Flow Measurement cluster 0x${it.cluster} attribute ${it.attrId} value is ${flowRate} 0m³/h (raw: ${it.value})"
-        sendEvent(name: 'rate', value: flowRate, unit: '0m³/h', type: 'physical')
+        logInfo "Flow Measurement cluster 0x${it.cluster} attribute ${it.attrId} value is ${flowRate} m³/h (raw: ${it.value})"
+        sendEvent(name: 'rate', value: flowRate, unit: 'm³/h', type: 'physical')
     }
     else {
         logDebug "Flow Measurement cluster 0x${it.cluster} unknown attribute ${it.attrId} value is ${zigbee.convertHexToInt(it.value)} (raw: ${it.value})"
@@ -1381,18 +1505,29 @@ void open() {
         cmds = sendTuyaCommand('65', DP_TYPE_BOOL, '01')
     }
     else if (getModelGroup().contains('SONOFF')) {
-        cmds = zigbee.on(200)
-        int delay = settings?.autoOffTimer == null ? MAX_AUTOOFF_TIMER : settings?.autoOffTimer as int
-        if (delay != 0) {
-            String delayHex = zigbee.convertToHexString(delay as int, 4)
-            String payload = zigbee.swapOctets(delayHex)
-            logDebug "SONOFF delay: ${delay} delayHex: ${delayHex} payload: ${payload}"
-            cmds += zigbee.command(0x0006, 0x42, [:],  delay=300, "00 ${payload} 0000")
+        if (isSonoffZN()) {
+            // ZN series: plain on; duration is set via manualDefaultSettings (FC11 attr 0x501D) in minutes
+            int durationMin = settings?.autoOffTimer == null ? 0 : settings?.autoOffTimer as int
+            if (durationMin > 0) {
+                cmds += buildZNManualDefaultSettingsCmd(durationMin)
+            }
+            cmds += zigbee.on(200)
+            logDebug "SONOFF ZN cmds: ${cmds}"
+        } else {
+            // Classic SWV: use onWithTimedOff (ZCL cmd 0x42) with duration in seconds
+            cmds = zigbee.on(200)
+            int delay = settings?.autoOffTimer == null ? MAX_AUTOOFF_TIMER : settings?.autoOffTimer as int
+            if (delay != 0) {
+                String delayHex = zigbee.convertToHexString(delay as int, 4)
+                String payload = zigbee.swapOctets(delayHex)
+                logDebug "SONOFF delay: ${delay} delayHex: ${delayHex} payload: ${payload}"
+                cmds += zigbee.command(0x0006, 0x42, [:],  delay=300, "00 ${payload} 0000")
+            }
+            else {
+                logDebug "SONOFF - no autoOffTimer!"
+            }
+            logDebug "SONOFF cmds: ${cmds}"
         }
-        else {
-            logDebug "SONOFF - no autoOffTimer!"
-        }
-        logDebug "SONOFF cmds: ${cmds}"
     }
     else {
         cmds =  zigbee.on()
@@ -1492,26 +1627,25 @@ void refresh() {
     else if (isSonoff()) {
         //  cluster=0x0001 (Power Configuration Cluster), attribute=0x0020 (Battery Voltage), value=36
         //  cluster=0x0001 (Power Configuration Cluster), attribute=0x0021 (Battery Percentage Remaining), value=90
-        //  cluster=0x0404 (Flow Measurement Cluster), attribute=0x0000 (Measured Value), value=0000
-        cmds += zigbee.readAttribute(0x0404, 0x0000, [:], delay = 199)
-        // Read Attribute Response, status=SUCCESS, endpoint=0x01, cluster=0x0B05 (Diagnostics Cluster), attribute=0x011B (Average MAC Retry Per APS Message Sent), value=0003
-        // Read Attribute Response, status=SUCCESS, endpoint=0x01, cluster=0x0B05 (Diagnostics Cluster), attribute=0x011C (Last Message LQI), value=FC 
-        // Read Attribute Response, status=SUCCESS, endpoint=0x01, cluster=0x0B05 (Diagnostics Cluster), attribute=0x011D (Last Message RSSI), value=DB
-        cmds += zigbee.readAttribute(0x0B05, [0x011B, 0x011C, 0x011D], [:], delay = 200)
-        // cluster=0xFC11 (Unknown), attribute=0x5006 (Unknown), value=00000009
-        //  cluster=0xFC11 (Unknown), attribute=0x5007 (Unknown), value=00000000
-        //  cluster=0xFC11 (Unknown), attribute=0x5008 (Unknown), value=
-        // cluster=0xFC11 (Unknown), attribute=0x5009 (Unknown), value=
-        // cluster=0xFC11 (Unknown), attribute=0x500C (Unknown), value=01 
-        // cluster=0xFC11 (Unknown), attribute=0x500D (Unknown), value=2E37E249 
-        // cluster=0xFC11 (Unknown), attribute=0x500E (Unknown), value=2E37E24E
-        // cluster=0xFC11 (Unknown), attribute=0x500F (Unknown), value=00000000
-        //  cluster=0xFC11 (Unknown), attribute=0x5010 (Unknown), value=00      Valve Work State 0: Manual control; 1: Cycle timing / quantity control; 2: Schedule control
-        cmds += zigbee.readAttribute(0xFC11, [0x5006, 0x5007,0x500C, 0x500D, 0x500E, 0x500F, 0x5010], [:], delay = 201)
-        cmds += zigbee.readAttribute(0xFC11, 0x5008, [:], delay = 202)
-        cmds += zigbee.readAttribute(0xFC11, 0x5009, [:], delay = 203)
-
-        // reportging
+        if (!isSonoffZN()) {
+            //  cluster=0x0404 (Flow Measurement Cluster), attribute=0x0000 (Measured Value), value=0000
+            cmds += zigbee.readAttribute(0x0404, 0x0000, [:], delay = 199)
+            // Read Attribute Response, status=SUCCESS, endpoint=0x01, cluster=0x0B05 (Diagnostics Cluster), attribute=0x011B (Average MAC Retry Per APS Message Sent), value=0003
+            // Read Attribute Response, status=SUCCESS, endpoint=0x01, cluster=0x0B05 (Diagnostics Cluster), attribute=0x011C (Last Message LQI), value=FC 
+            // Read Attribute Response, status=SUCCESS, endpoint=0x01, cluster=0x0B05 (Diagnostics Cluster), attribute=0x011D (Last Message RSSI), value=DB
+            cmds += zigbee.readAttribute(0x0B05, [0x011B, 0x011C, 0x011D], [:], delay = 200)
+        }
+        // cluster=0xFC11 common attributes (supported by all Sonoff valve models)
+        //  0x5006 realTimeIrrigationDuration, 0x5007 realTimeIrrigationVolume, 0x500C valveAbnormalState, 0x500F dailyIrrigationVolume
+        cmds += zigbee.readAttribute(0xFC11, [0x5006, 0x5007, 0x500C, 0x500F], [:], delay = 201)
+        if (!isSonoffZN()) {
+            // cluster=0xFC11 SWV-only attributes (not supported on SWV-ZN series)
+            //  0x500D irrigationStartTime, 0x500E irrigationEndTime, 0x5010 workState
+            cmds += zigbee.readAttribute(0xFC11, [0x500D, 0x500E, 0x5010], [:], delay = 202)
+            cmds += zigbee.readAttribute(0xFC11, [0x5008, 0x5009], [:], delay = 203)
+            cmds += zigbee.readAttribute(0xFC11, 0x5011) // lackWaterCloseValveTimeout for firmware 1.0.4 or later
+        }
+        // reporting
         // Read Reporting Configuration Response, status=SUCCESS, endpoint=0x01, cluster=0x0001, attribute=0x0021, minPeriod=1, maxPeriod=7200      , data:[00, 00, 21, 00, 20, 01, 00, 20, 1C, 02],
         // Check attribute reporting (endpoint=0x01, cluster=0x0001, attribute=0x0020, manufacturer=)  => Read Reporting Configuration Response, status=NOT_FOUND, data=[8B, 00, 20, 00]
         // Read Reporting Configuration Response, status=SUCCESS, endpoint=0x01, cluster=0x0404, attribute=0x0000, minPeriod=1, maxPeriod=7200  data:[00, 00, 00, 00, 21, 01, 00, 20, 1C, 01, 00]
@@ -1539,8 +1673,10 @@ List<String> tuyaBlackMagic() {
 void configure() {
     if (txtEnable == true) { log.info "${device.displayName} configure().." }
     List<String> cmds = []
-    cmds += tuyaBlackMagic()
-    //
+    if (isTuya()) {
+        cmds += tuyaBlackMagic()
+    }
+
     if (settings?.autoOffTimer != null /*&& settings?.autoSendTimer != false*/) {
         String timerText = settings?.autoOffTimer == 0 ? 'disabled' : (settings?.autoOffTimer).toString()
         sendEvent(name: 'irrigationDuration', value: timerText, type: 'digital')
@@ -1568,51 +1704,51 @@ void configure() {
         logDebug "settings.batteryReporting = ${settings?.batteryReporting}"
     }
 
-    // Sonoff SWV TRV specific configuration
+    // Sonoff SWV specific configuration (common to all Sonoff valve models)
     if (isSonoff()) {
-        logInfo 'Configuring Sonoff SWV TRV...'
+        logInfo "Configuring Sonoff valve (${isSonoffZN() ? 'ZN series' : 'SWV'})..."
         
         // Bind clusters (equivalent to Zigbee2MQTT bindings)
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}" // genPowerCfg
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}" // genOnOff  
-        //cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0404 {${device.zigbeeId}} {}" // msFlowMeasurement
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}" // genOnOff
+        if (!isSonoffZN()) {
+            cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0404 {${device.zigbeeId}} {}" // msFlowMeasurement (SWV only)
+        }
         
         // Configure OnOff reporting (min: 1s, max: 1800s, change: 0)
         cmds += zigbee.configureReporting(0x0006, 0x0000, DataType.BOOLEAN, 1, 1800, 0)
         
-        // Read custom Ewelink cluster attributes
-        cmds += zigbee.readAttribute(0xE001, 0x500C) // Valve Abnormal State    normal state, water shortage or water leakage
+        // Read custom Ewelink cluster attributes (common to all Sonoff valve models)
+        cmds += zigbee.readAttribute(0xFC11, 0x500C) // Valve Abnormal State    normal state, water shortage or water leakage
         
-        String sonoffMinVersion = '1.0.3'
-        if (device.getDataValue('softwareBuild') != null) {
-            logDebug "Sonoff firmware version: ${device.getDataValue('softwareBuild')}"
-            if (device.getDataValue('softwareBuild') >= sonoffMinVersion) {
-                // Configure auto shut off timeout (default 30 minutes)
-                if (settings?.sonoffAutoShutOff != null) {
-                    int shutOffValue = settings?.sonoffAutoShutOff as int
-                    if (shutOffValue == 0) {
-                    // Disable auto shut off
-                    cmds += zigbee.writeAttribute(0xE001, 0x5011, DataType.UINT16, 0, [:], delay = 300)
-                    logInfo "Disabling Sonoff auto shut off"
-                    sendEvent(name: 'sonoffAutoShutOff', value: 0, descriptionText: 'Sonoff auto shut off disabled', type: 'digital')
-                    } else {
-                    // Enable auto shut off with specified timeout in minutes
-                    cmds += zigbee.writeAttribute(0xE001, 0x5011, DataType.UINT16, shutOffValue, [:], delay = 300)
-                    logInfo "Setting Sonoff auto shut off to ${shutOffValue} minutes"
-                    sendEvent(name: 'sonoffAutoShutOff', value: shutOffValue, descriptionText: "Sonoff auto shut off set to ${shutOffValue} minutes", type: 'digital')
+        if (!isSonoffZN()) {
+            logDebug "Sonoff firmware version: ${device.getDataValue('softwareBuild') ?: 'unknown'}"
+            if (isSonoffFwGte(1004)) {
+                    // Configure auto shut off timeout (default 30 minutes)
+                    if (settings?.sonoffAutoShutOff != null) {
+                        int shutOffValue = settings?.sonoffAutoShutOff as int
+                        if (shutOffValue == 0) {
+                        // Disable auto shut off
+                        cmds += zigbee.writeAttribute(0xFC11, 0x5011, DataType.UINT16, 0, [:], delay = 300)
+                        logInfo "Disabling Sonoff auto shut off"
+                        sendEvent(name: 'sonoffAutoShutOff', value: 0, descriptionText: 'Sonoff auto shut off disabled', type: 'digital')
+                        } else {
+                        // Enable auto shut off with specified timeout in minutes
+                        cmds += zigbee.writeAttribute(0xFC11, 0x5011, DataType.UINT16, shutOffValue, [:], delay = 300)
+                        logInfo "Setting Sonoff auto shut off to ${shutOffValue} minutes"
+                        sendEvent(name: 'sonoffAutoShutOff', value: shutOffValue, descriptionText: "Sonoff auto shut off set to ${shutOffValue} minutes", type: 'digital')
+                        }
                     }
-                }
-                cmds += zigbee.readAttribute(0xE001, 0x5011) // Valve Work State  lackWaterCloseValveTimeout: {ID: 0x5011, type: Zcl.DataType.UINT16},
-                // "Automatically shut down the water valve after the water shortage exceeds 30 minutes. Requires firmware version 1.0.4 or later!"
-                //                 valueOff: ["DISABLE", 0],     valueOn: ["ENABLE", 30],
+                    cmds += zigbee.readAttribute(0xFC11, 0x5011) // Valve Work State  lackWaterCloseValveTimeout: {ID: 0x5011, type: Zcl.DataType.UINT16},
+                    // "Automatically shut down the water valve after the water shortage exceeds 30 minutes. Requires firmware version 1.0.4 or later!"
+                    //                 valueOff: ["DISABLE", 0],     valueOn: ["ENABLE", 30],
+            } else {
+                logWarn "Sonoff firmware version ${device.getDataValue('softwareBuild')} is below the minimum required version 1.0.4 for auto shut off configuration"
             }
-            else {
-                logWarn "Sonoff firmware version is below the minimum required version ${sonoffMinVersion} for auto shut off configuration"
-            }
+            cmds += zigbee.configureReporting(0x0404, 0x0000, DataType.UINT16, 30, 3600, 1) // Configure reporting for flow measurement for Sonoff SWV
         }
     }
-    // Optional: Configure reporting for flow measurement if supported
-    cmds += zigbee.configureReporting(0x0404, 0x0000, DataType.UINT16, 30, 3600, 1) // Flow rate
+    
     
     //
     runIn(3, 'refresh')    // ver. 1.2.2
@@ -1633,6 +1769,22 @@ def setDeviceNameAndProfile(String model=null, String manufacturer=null) {
                 state.deviceProfile = currentModelMap
                 deviceName = deviceProfilesV2[currentModelMap].deviceJoinName
                 logDebug "FOUND exact match!  deviceName =${deviceName} profileName=${currentModelMap} for model ${deviceModel} manufacturer ${deviceManufacturer}"
+            }
+        }
+    }
+
+    // Fallback: search fingerprints list (handles models like SWV-ZFE, SWV-ZNU, SWV-ZFU, SWV-ZNE
+    // where profileMap.model holds only the representative model string, not every variant)
+    if (currentModelMap == null) {
+        deviceProfilesV2.each { profileName, profileMap ->
+            if (currentModelMap != null) { return }    // already found
+            profileMap.fingerprints?.each { fp ->
+                if (fp.model == deviceModel && fp.manufacturer == deviceManufacturer) {
+                    currentModelMap = profileName
+                    state.deviceProfile = currentModelMap
+                    deviceName = deviceProfilesV2[currentModelMap].deviceJoinName
+                    logDebug "FOUND fingerprint match! deviceName=${deviceName} profileName=${currentModelMap} for model ${deviceModel} manufacturer ${deviceManufacturer}"
+                }
             }
         }
     }
@@ -1740,6 +1892,9 @@ void initializeVars(boolean fullInit = true) {
     }
     if (fullInit == true || settings?.autoSendTimer == null) { device.updateSetting('autoSendTimer', (isGIEX() ? true : false)) }
     if (fullInit == true || settings?.threeStateEnable == null) { device.updateSetting('threeStateEnable', false) }
+    if (isSonoffZN()) {
+        if (fullInit == true || settings?.ignoreDuplicatePackets == null) { device.updateSetting('ignoreDuplicatePackets', [value: true, type: 'bool']) }
+    }
 
     if (isBatteryPowered()) {
         if (state.states['lastBattery'] == null) { state.states['lastBattery'] = '100' }
@@ -1948,15 +2103,33 @@ void setIrrigationTimer(BigDecimal timer) {
         return
     }
     int timerSec = safeToInt(timer, -1)
-    if (timerSec < 0 || timerSec > MAX_AUTOOFF_TIMER) {
-        logWarn "timer must be withing 0 and ${MAX_AUTOOFF_TIMER} seconds"
+    int maxTimer = isSonoffZN() ? 719 : MAX_AUTOOFF_TIMER
+    String timerUnit = (isTZE284() || isSonoffZN()) ? 'minutes' : 'seconds'
+    if (timerSec < 0 || timerSec > maxTimer) {
+        logWarn "timer must be within 0 and ${maxTimer} ${timerUnit}"
         return
     }
-    logInfo "setting the irrigation timer to ${timerSec} ${isTZE284() ? 'minutes' : 'seconds'}"
+    logInfo "setting the irrigation timer to ${timerSec} ${timerUnit}"
     device.updateSetting('autoOffTimer', [value: timerSec, type: 'number'])
     String timerText = timerSec == 0 ? 'disabled' : timerSec.toString()
     sendEvent(name: 'irrigationDuration', value: timerText, type: 'digital')
     runIn( 1, 'sendIrrigationDuration')
+}
+
+// Build ZCL Write Attributes command for FC11 attr 0x501D (manualDefaultSettings) on SWV-ZN series.
+// Payload: 12-byte ARRAY (UINT8 elements). All duration/interval fields are in minutes (range 0-719).
+List<String> buildZNManualDefaultSettingsCmd(int durationMin) {
+    int hi = (durationMin >> 8) & 0xFF
+    int lo = durationMin & 0xFF
+    // byte[0]=mode(0=duration), bytes[1-2]=totalDuration BE, bytes[3-4]=irrigDuration BE,
+    // bytes[5-6]=interval(0), byte[7]=unit(1=liter), bytes[8-9]=volume(0), bytes[10-11]=failSafe(0)
+    List<Integer> data = [0x00, hi, lo, hi, lo, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]
+    String dataHex = data.collect { String.format('%02X', it) }.join(' ')
+    // ZCL Write Attributes (foundation cmd 0x02): attrId=0x501D LE, type=ARRAY(0x48),
+    // element_type=UINT8(0x20), count=12(0x0C 0x00 LE), then 12 data bytes
+    String zclFrame = "00 00 02 1D 50 48 20 0C 00 ${dataHex}"
+    logDebug "buildZNManualDefaultSettingsCmd: durationMin=${durationMin} frame=${zclFrame}"
+    return ["he raw ${device.deviceNetworkId} 0x01 0x01 0xFC11 {${zclFrame}}"]
 }
 
 void sendIrrigationDuration() {
@@ -1977,9 +2150,14 @@ void sendIrrigationDuration() {
     else if (isTZE284()) {
         cmds = sendTuyaCommand('0D', DP_TYPE_VALUE, dpValHex) + sendTuyaCommand('0E', DP_TYPE_VALUE, dpValHex)      // was 19 / 1A
     }
+    else if (isSonoffZN()) {
+        int durationMin = settings?.autoOffTimer ?: DEFAULT_AUTOOFF_TIMER
+        if (durationMin == 0) { logDebug 'SWV-ZN: no duration configured, skipping manualDefaultSettings write'; return }
+        cmds = buildZNManualDefaultSettingsCmd(durationMin)
+    }
     else if (isSonoff()) {
-        logDebug "Sonoff irrigation timer is ${settings?.autoOffTimer ?: DEFAULT_AUTOOFF_TIMER}"
-        // nothing to send for Sonoff
+        logDebug "Sonoff SWV irrigation timer is ${settings?.autoOffTimer ?: DEFAULT_AUTOOFF_TIMER}"
+        // classic SWV: duration is embedded in onWithTimedOff, nothing to pre-send
         return
     }
     else {
