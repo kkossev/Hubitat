@@ -54,6 +54,9 @@
  *  ver. 1.7.1 2026-04-26 kkossev - added Sonoff SWV-ZN series (SWV-ZNE, SWV-ZFE, SWV-ZNU, SWV-ZFU);
  *                                  fixed setDeviceNameAndProfile() fingerprint fallback matching for multi-model profiles;
  *                                  SWV-ZFE, SWV-ZNU, SWV-ZFU are now auto-detected as SONOFF_SWV_ZN_VALVE without manual forcedProfile override.
+ *                                  fixed SWV flow rate reported 10x too high (ZCL 0x0404 units are 0.1 m³/h, now divided by 10);
+ *                                  fixed SWV workState (0x5010) labels: old SWV firmware uses boolean 0=idle/1=working, not ZN-series multi-state values.
+ *                                  fixed Sonoff SWV on_with_timed_off auto-close timer cancelled by refresh(): skip genOnOff read (cluster 6) when valve is open.
  *
  *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes ''
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
@@ -64,10 +67,10 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 static String version() { '1.7.1' }
-static String timeStamp() { '2026/04/26 9:15 PM' }
+static String timeStamp() { '2026/04/26 10:48 PM' }
 
 @Field static final Boolean _DEBUG = false
-@Field static final Boolean DEFAULT_DEBUG_LOGGING = true                // disable it for the production release !
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = false               // disable it for the production release !
 @Field static final String SIMULATED_PROFILE = 'TS0601_TZE284_VALVE'    // in _DEBUG mode only
 
 metadata {
@@ -102,7 +105,7 @@ metadata {
         attribute 'valveStatus2', 'enum', ['normal', 'shortage', 'leakage', 'shortage and leakage', 'clear', 'manual', 'auto', 'idle']    // isTZE284()
         attribute 'valveOpenThreshold', 'number'        // FrankEver FK_V02 - the set threshold for valve open 
         attribute 'valveOpenPercentage', 'number'       // FrankEver FK_V02 - the current valve open percentage reported by the device
-        attribute 'workState', 'enum', ['manual control', 'Cycle timing / quantity control', 'Schedule control']
+        attribute 'workState', 'enum', ['idle', 'working']
         attribute 'valve2', 'enum', ['open', 'closed']  // isTZE284()
         attribute 'sonoffAutoShutOff', 'number'         // Sonoff SWV - auto shut off timeout in minutes (requires firmware 1.0.4 or later)
 
@@ -202,7 +205,7 @@ boolean isSonoffZN()             { return getModelGroup().contains('SONOFF_SWV_Z
 @Field static final Integer MAX_CAPACITY = 999
 @Field static final Integer DEBOUNCING_TIMER = 300
 @Field static final Integer DIGITAL_TIMER = 3000
-@Field static final Integer REFRESH_TIMER = 3000
+@Field static final Integer REFRESH_TIMER = 5000
 @Field static final Integer COMMAND_TIMEOUT = 6
 @Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
 @Field static String UNKNOWN = 'UNKNOWN'
@@ -263,11 +266,10 @@ boolean isSonoffZN()             { return getModelGroup().contains('SONOFF_SWV_Z
     '2': 'idle'
 ]
 
-// // Valve Work State (Valve working status)  // 0 - 'manual control'; 1 - 'Cycle timing / quantity control''; 2 - 'Schedule control'
+// // Valve Work State (Valve working status) for old SWV (fw 1.0.4): BOOLEAN 0=idle, 1=working (Z2M: valve_work_state)
 @Field static final Map SonoffWorkStateOptions = [
-    '0': 'manual control',
-    '1': 'Cycle timing / quantity control',
-    '2': 'Schedule control'
+    '0': 'idle',
+    '1': 'working'
 ]
 
 // TODO : change 'model' to 'models' list; combine TS0001_VALVE_ONOFF TS0011_VALVE_ONOFF TS011F_VALVE_ONOFF in one profile;
@@ -1356,7 +1358,8 @@ void parseSonoffCluster(Map it, String description) {
 void parseFlowMeasurementCluster(Map it) {
     if (it.attrId == '0000') {
         logDebug "parseFlowMeasurementCluster: ${it}"
-        int flowRate = zigbee.convertHexToInt(it.value)
+        // ZCL msFlowMeasurement measuredValue is in units of 0.1 m³/h (per Z2M fz.flow: value / 10.0)
+        BigDecimal flowRate = (zigbee.convertHexToInt(it.value) / 10.0).setScale(1, java.math.RoundingMode.HALF_UP)
         logInfo "Flow Measurement cluster 0x${it.cluster} attribute ${it.attrId} value is ${flowRate} m³/h (raw: ${it.value})"
         sendEvent(name: 'rate', value: flowRate, unit: 'm³/h', type: 'physical')
     }
@@ -1602,7 +1605,14 @@ void refresh() {
     if (device.getDataValue('model') == 'TS0601') {
         cmds += zigbee.command(0xEF00, 0x03)    // queryAllTuyaDP - added 11/21/2024
     }
-    else  {
+    else if (isSonoff() && !isSonoffZN() && device.currentValue('valve') == 'open') {
+        // Sonoff SWV firmware bug workaround: receiving a Read Attributes command for cluster 6 (genOnOff)
+        // while in on_with_timed_off mode cancels the auto-close timer. Skip the genOnOff read when the
+        // valve is open so the on_with_timed_off countdown is not disturbed. The device will send an
+        // autonomous attribute report (command 0x0A) when the timer fires and the valve closes.
+        logDebug 'refresh() - Sonoff SWV valve is open: skipping genOnOff read to protect on_with_timed_off timer'
+    }
+    else {
         cmds = zigbee.onOffRefresh()
     }
     if (deviceProfilesV2[getModelGroup()]?.capabilities?.battery?.value == true) {
@@ -1643,7 +1653,7 @@ void refresh() {
             //  0x500D irrigationStartTime, 0x500E irrigationEndTime, 0x5010 workState
             cmds += zigbee.readAttribute(0xFC11, [0x500D, 0x500E, 0x5010], [:], delay = 202)
             cmds += zigbee.readAttribute(0xFC11, [0x5008, 0x5009], [:], delay = 203)
-            cmds += zigbee.readAttribute(0xFC11, 0x5011) // lackWaterCloseValveTimeout for firmware 1.0.4 or later
+            cmds += zigbee.readAttribute(0xFC11, 0x5011, [:], delay = 204) // lackWaterCloseValveTimeout for firmware 1.0.4 or later
         }
         // reporting
         // Read Reporting Configuration Response, status=SUCCESS, endpoint=0x01, cluster=0x0001, attribute=0x0021, minPeriod=1, maxPeriod=7200      , data:[00, 00, 21, 00, 20, 01, 00, 20, 1C, 02],
@@ -1651,7 +1661,7 @@ void refresh() {
         // Read Reporting Configuration Response, status=SUCCESS, endpoint=0x01, cluster=0x0404, attribute=0x0000, minPeriod=1, maxPeriod=7200  data:[00, 00, 00, 00, 21, 01, 00, 20, 1C, 01, 00]
         // 5006, 
     }
-    runInMillis(REFRESH_TIMER, isRefreshRequestClear, [overwrite: true])           // 3 seconds
+    runInMillis(REFRESH_TIMER, isRefreshRequestClear, [overwrite: true])           // 5 seconds
     if (cmds != null && cmds != []) {
         sendZigbeeCommands(cmds)
     }
