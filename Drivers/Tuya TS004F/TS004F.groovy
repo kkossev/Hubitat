@@ -62,7 +62,8 @@
  * ver. 2.8.6 2025-11-30 kkossev     - bug fix: wierd TS0041 _TZ3000_rsqqkdxv switch event handling was affecting other devices; debug loggs are automatically disabled after 24 hours; DEFAULT_DEBOUNCE = true
  * ver. 2.9.0 2025-12-01 kkossev     - handleNodeDescRequest()
  * ver. 2.9.1 2025-12-22 kkossev     - added respondToZdoRequests preference; respond to ZDO Node_Desc_request (0x0002) only if the preference is enabled; added TS004F _TZ3000_gwkzibhs @callumgw
- * ver. 2.9.2 2026-03-30 kkossev     - (dev. branch) added model TS0215A manufacturer '_TZ3000_0dumfk2', '_TZ3000_ssp0maqm', '_TZ3000_p3fph1go' as a SOS button @callumgw; added TS0041 _TZ3000_8rppvwda @sales8
+ * ver. 2.9.2 2026-03-30 kkossev     - added model TS0215A manufacturer '_TZ3000_0dumfk2', '_TZ3000_ssp0maqm', '_TZ3000_p3fph1go' as a SOS button @callumgw; added TS0041 _TZ3000_8rppvwda @sales8
+ * ver. 2.9.3 2026-04-27 kkossev     - added Third Reality 3RSB01085Z (Smart Scene Button S3, 3 buttons) and 3RSB22BZ (Smart Button) support
  *
  * 
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
@@ -78,8 +79,8 @@
  *                                   - TODO: add 'auto revert to scene mode' option
  */
 
-static String version() { '2.9.2' }
-static String timeStamp() { '2026/03/30 9:57 PM' }
+static String version() { '2.9.3' }
+static String timeStamp() { '2026/04/27 10:25 AM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -225,6 +226,10 @@ metadata {
 		fingerprint inClusters: "0000,0003,0006,0019", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "SBM300Z5", deviceJoinName: "SiHAS Switch 5"
 		fingerprint inClusters: "0000,0003,0006,0019", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "SBM300Z6", deviceJoinName: "SiHAS Switch 6"
 		fingerprint inClusters: "0000,0003,0006,0019", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "ISM300Z3", deviceJoinName: "SiHAS Switch 3"        
+
+        // Third Reality buttons
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0012,0004", outClusters:"0019,0005", model:"3RSB01085Z", manufacturer:"Third Reality, Inc", controllerType: "ZGB", deviceJoinName: 'Third Reality Smart Scene Button S3'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0012,FF01', outClusters:'0019', model:'3RSB22BZ', manufacturer:'Third Reality, Inc', deviceJoinName: 'Third Reality Smart Button'    // not tested
     }
     preferences {
         input(name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_LOG_ENABLE)
@@ -275,6 +280,7 @@ boolean isUSBpowered() { device.getDataValue('manufacturer') in ['_TZ3000_b3mgfu
 boolean isSiHAS() { device.getDataValue('manufacturer') == 'ShinaSystem' }
 boolean hasBatteryConfigurationBug()  { device.getDataValue('manufacturer') in ['_TZ3000_a4xycprs', '_TZ3000_dziaict4', '_TZ3000_j61x9rxn', '_TZ3000_mh9px7cq', '_TZ3000_5tqxpine', '_TZ3000_u3nv1jwk', '_TZ3000_bgtzm4ny', '_TZ3000_kfu8zapd', '_TZ3000_ee8nrt2l', '_TZ3000_ygvf9xzp' /* for testing, '_TZ3000_vp6clf9d'*/] }
 boolean isWierdTS0041() { device.getDataValue('model') == 'TS0041' && device.getDataValue('manufacturer') in ['_TZ3000_rsqqkdxv'] }
+boolean isThirdReality() { device.getDataValue('manufacturer') == 'Third Reality, Inc' }
 
 
 // Parse incoming device messages to generate events
@@ -562,6 +568,30 @@ void parse(String description) {
             if (logEnable) { log.debug "${device.displayName} skipping Basic cluster ${descMap?.cluster} response" }
             return
         }
+        else if (isThirdReality() && descMap?.cluster == '0012' && descMap?.attrId == '0055') {
+            buttonNumber = descMap.sourceEndpoint != null ? zigbee.convertHexToInt(descMap.sourceEndpoint) : 0
+            if (buttonNumber == 0) {
+                if (logEnable) { log.warn "${device.displayName} Third Reality: could not determine button number from sourceEndpoint ${descMap.sourceEndpoint}" }
+                return
+            }
+            def presentValue = descMap.value != null ? zigbee.convertHexToInt(descMap.value) : -1
+            buttonState = 'unknown'
+            switch (presentValue) {
+                case 1:   buttonState = 'pushed' ; break
+                case 2:   buttonState = 'doubleTapped' ; break
+                case 0:   buttonState = 'held' ; break
+                case 255: buttonState = 'released' ; break
+                case 3:
+                case 4:
+                    if (logEnable) { log.warn "${device.displayName} Third Reality: presentValue ${presentValue} (triple/quadruple) not supported, ignoring" }
+                    return
+                default:
+                    if (logEnable) { log.warn "${device.displayName} Third Reality: unknown presentValue ${presentValue}, ignoring" }
+                    return
+            }
+            if (txtEnable) { log.info "${device.displayName} button ${buttonNumber} ${buttonState}" }
+            result = [name: buttonState, value: buttonNumber, isStateChange: true, type: 'physical', descriptionText: "${device.displayName} button ${buttonNumber} was ${buttonState}"]
+        }
         else {
             if (logEnable) { log.debug "${device.displayName } did not parse descMap: $descMap" }
         }
@@ -732,6 +762,11 @@ void initialize() {
         sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x03 0x01 0x0008 {${device.zigbeeId}} {}", 'delay 50', ])
         sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x03 0x01 0x0300 {${device.zigbeeId}} {}", 'delay 50', ])
     }
+    else if (isThirdReality()) {
+        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0012 {${device.zigbeeId}} {}", 'delay 50'])
+        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x02 0x01 0x0012 {${device.zigbeeId}} {}", 'delay 50'])
+        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x03 0x01 0x0012 {${device.zigbeeId}} {}", 'delay 50'])
+    }
     else {
         if (logEnable) { log.debug "${device.displayName} skipped TuyaMagic() for non-Tuya device ${device.getDataValue('model')} ..." }
     }
@@ -788,7 +823,11 @@ void initialize() {
     }
     else if (device.getDataValue('model') in ['SBM300Z4']) {
         supportedValues = ['pushed']
-    }    
+    }
+    else if (isThirdReality()) {
+        numberOfButtons = device.getDataValue('model') == '3RSB01085Z' ? 3 : 1
+        supportedValues = ['pushed', 'doubleTapped', 'held', 'released']
+    }
     else {
         numberOfButtons = 4    // unknown
         supportedValues = ['pushed', 'double', 'held', 'released']
