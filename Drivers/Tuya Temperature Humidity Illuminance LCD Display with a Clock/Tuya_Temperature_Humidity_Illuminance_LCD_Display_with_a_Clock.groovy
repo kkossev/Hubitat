@@ -76,15 +76,16 @@
  * ver. 2.0.1  2025-12-22 kkossev - fixed temperatureSensitivity preferece being reset to zero bug; added respondToZdoRequests preference (default: false); added TS0222 _TZ3000_hy6ncvmw illuminance only sensor
  * ver. 2.0.2  2026-02-01 kkossev - fixed null preference values causing GroovyCastException in updated() reporting configuration (safe defaults for sleepy devices and Haozee)
  * ver. 2.1.0  2026-03-31 kkossev - added TS0601 _TZE284_hodyryli Tuya Temperature Humidity Sensor with External Probe into a new 'TS0601_ZTH03PRO' group, using child device for the probe @njanda
- * ver. 2.1.1  2026-04-19 kkossev - (dev. branch) added support for four switch child devices for _TZ3218_ya5d6wth @pauljneil2 ; added TS0601 _TZE284_9ern5sfh @rlynch into a new group TS0601_Tuya_3; bug fixes
+ * ver. 2.1.1  2026-04-19 kkossev - added support for four switch child devices for _TZ3218_ya5d6wth @pauljneil2 ; added TS0601 _TZE284_9ern5sfh @rlynch into a new group TS0601_Tuya_3; bug fixes
+ * ver. 2.1.2  2026-04-22 kkossev - added COOLO CS-201Z _TZE200_npj9bug3 _TZE200_wrmhp6b3 into new 'TS0601_Soil_Coolo' group; added soilMoisture attribute
  *
  *                                  TODO: update GitHub documentation  _TZ3218_7fiyo3kv
  *                                  TODO: https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/636?u=kkossev
  *                                  TODO: response to ZDO command: cluster=0002 command=00
 */
 
-@Field static final String VERSION = '2.1.1'
-@Field static final String TIME_STAMP = '2026/04/19 10:50 AM'
+@Field static final String VERSION = '2.1.2'
+@Field static final String TIME_STAMP = '2026/04/22 12:00 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -102,8 +103,6 @@ metadata {
         capability 'TemperatureMeasurement'
         capability 'RelativeHumidityMeasurement'
         capability 'IlluminanceMeasurement'
-        attribute 'soilEC', 'number'
-        attribute 'soilFertility', 'enum', ['normal', 'lower', 'low', 'middle', 'high', 'higher']
         //capability "ContactSensor"   // uncomment for _TZE200_pay2byax contact w/ illuminance sensor
         //capability "MotionSensor"    // uncomment for SiHAS multi sensor
         capability 'Health Check'
@@ -123,6 +122,9 @@ metadata {
         attribute   '_info', 'string'        // when defined as attribute, will be shown on top of the 'Current States' list ...
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute 'rtt', 'number'
+        attribute 'soilEC', 'number'
+        attribute 'soilFertility', 'enum', ['normal', 'lower', 'low', 'middle', 'high', 'higher']
+        attribute 'soilMoisture', 'number'
 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_lve3dvpy', deviceJoinName: 'Tuya Temperature Humidity Illuminance LCD Display with a Clock'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_c7emyjom', deviceJoinName: 'Tuya Temperature Humidity Illuminance LCD Display with a Clock'
@@ -255,6 +257,9 @@ metadata {
     // Probe (temperature only) variants
     fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,EF00,0000', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZE200_iq4ygaai', deviceJoinName: 'Tuya temperature probe sensor'
     fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,EF00,0000', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZE200_01fvxamo', deviceJoinName: 'Tuya temperature probe sensor'
+    // COOLO Soil Moisture Sensor
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_npj9bug3', deviceJoinName: 'COOLO CS-201Z Soil Moisture Sensor'
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_wrmhp6b3', deviceJoinName: 'COOLO CS-201Z Soil Moisture Sensor'
     }
 
     preferences {
@@ -264,7 +269,7 @@ metadata {
         input(name: 'humidityOffset', type: 'decimal', title: '<b>Humidity offset</b>', description: 'Enter a percentage to adjust the humidity.', defaultValue: 0.0, range: '-100..100')
         input(name: 'modelGroupPreference', type: 'enum', title: '<b>Model Group</b>', description:'The recommended setting is <b>Auto detect</b>.', defaultValue: 0, options:
              ['Auto detect':'Auto detect', 'TS0601_Tuya':'TS0601_Tuya', 'TS0601_Tuya_2':'TS0601_Tuya_2', 'TS0601_Tuya_3':'TS0601_Tuya_3', 'TS0601_ZTH03PRO':'TS0601_ZTH03PRO', 'TS0601_Haozee':'TS0601_Haozee', 'TS0601_AUBESS':'TS0601_AUBESS', 'TS0601_AVATTO_Ink':'TS0601_AVATTO_Ink', 'TS0201':'TS0201', 'TS0222':'TS0222', 'TS0201_LCZ030': 'TS0201_LCZ030',
-                'TS0222_2':'TS0222_2', 'TS0222_Soil':'TS0222_Soil', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', 'TS0601_Soil_II':'TS0601_Soil_II', 'TS0601_Soil_NEO':'TS0601_Soil_NEO', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
+                'TS0222_2':'TS0222_2', 'TS0222_Soil':'TS0222_Soil', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', 'TS0601_Soil_II':'TS0601_Soil_II', 'TS0601_Soil_NEO':'TS0601_Soil_NEO', 'TS0601_Soil_Coolo':'TS0601_Soil_Coolo', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
         input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', description: 'May not be supported by all devices!', defaultValue: false)
         if (advancedOptions == true) {
             if (isConfigurableSleepyDevice()) {
@@ -434,6 +439,8 @@ metadata {
     '_TZE284_33bwcga2'  : 'TS0601_Soil_II',     // https://community.hubitat.com/t/driver-for-tuya-soil-tester-sensor/156528?u=kkossev
     '_TZE284_rqcuwlsa'  : 'TS0601_Soil_NEO',    // NEO NAS-STH02B2 Soil moisture, temperature, and EC sensor
     '_TZE284_ap9owrsa'  : 'TS0601_Soil_II',     // Soil monitoring sensor II
+    '_TZE200_npj9bug3'  : 'TS0601_Soil_Coolo',  // COOLO CS-201Z Soil moisture sensor
+    '_TZE200_wrmhp6b3'  : 'TS0601_Soil_Coolo',  // COOLO CS-201Z Soil moisture sensor
     'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D, SNZB-02P
     'SONOFF'            : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D, SNZB-02P
     'ShinaSystem'       : 'Zigbee NON-Tuya',    // USM-300Z
@@ -904,7 +911,11 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             }
             break
         case 0x03 : // humidity or  illuminance or battery state
-            if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II', 'TS0601_Soil_NEO']) {
+            if (getModelGroup() in ['TS0601_Soil_Coolo']) {
+                sendEvent(name: 'soilMoisture', value: fncmd, unit: '%', descriptionText: "Soil moisture is ${fncmd}%")
+                if (settings?.txtEnable) { log.info "${device.displayName} Soil moisture is ${fncmd}%" }
+            }
+            else if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II', 'TS0601_Soil_NEO']) {
                 logDebug "Soil Sensor humidity raw = ${fncmd}"
                 humidityEvent( fncmd )
             }
@@ -940,7 +951,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             if (getModelGroup() in ['TS0601_Soil']) {
                 temperatureEvent( fncmd )
             }
-            else if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II', 'TS0601_Soil_NEO']) {
+            else if (getModelGroup() in ['TS0601_Soil_II', 'TS0601_Soil_NEO', 'TS0601_Soil_Coolo']) {
                 temperatureEvent( fncmd / 10.0 )
             }
             else {
@@ -1009,7 +1020,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             }
             break
         case 0x0F : // (15) humidity Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared    (Haozee only?)
-            if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II']) {
+            if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II', 'TS0601_Soil_Coolo']) {
                 getBatteryPercentageResult(fncmd * 2)
             }
             else {
@@ -1100,8 +1111,11 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             }
             illuminanceEventLux( safeToInt( fncmd ) )  // _TZE200_pay2byax
             break
-        case 0x66 : // (102) humidity alarm for Soil_NEO
-            if (getModelGroup() == 'TS0601_Soil_NEO') {
+        case 0x66 : // (102) humidity alarm for Soil_NEO / soil_calibration for Soil_Coolo
+            if (getModelGroup() in ['TS0601_Soil_Coolo']) {
+                logDebug "TS0601_Soil_Coolo soil_calibration (0x66) = ${fncmd}"
+            }
+            else if (getModelGroup() == 'TS0601_Soil_NEO') {
                 def alarm = ['lower_alarm', 'upper_alarm', 'cancel'][fncmd] ?: 'unknown'
                 if (settings?.txtEnable) { log.info "${device.displayName} Humidity alarm: ${alarm}" }
             }
@@ -1126,24 +1140,33 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             }
             break
-        case 0x68 : // (104) min temperature alarm for Soil_NEO
-            if (getModelGroup() == 'TS0601_Soil_NEO') {
+        case 0x68 : // (104) min temperature alarm for Soil_NEO / temperature_calibration for Soil_Coolo
+            if (getModelGroup() in ['TS0601_Soil_Coolo']) {
+                logDebug "TS0601_Soil_Coolo temperature_calibration (0x68) = ${fncmd}"
+            }
+            else if (getModelGroup() == 'TS0601_Soil_NEO') {
                 if (settings?.logEnable) { log.info "${device.displayName} Min temperature alarm set to ${fncmd / 10.0}°C" }
             }
             else {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             }
             break
-        case 0x69 : // (105) max humidity alarm for Soil_NEO
-            if (getModelGroup() == 'TS0601_Soil_NEO') {
+        case 0x69 : // (105) max humidity alarm for Soil_NEO / humidity_calibration for Soil_Coolo
+            if (getModelGroup() in ['TS0601_Soil_Coolo']) {
+                logDebug "TS0601_Soil_Coolo humidity_calibration (0x69) = ${fncmd}"
+            }
+            else if (getModelGroup() == 'TS0601_Soil_NEO') {
                 if (settings?.logEnable) { log.info "${device.displayName} Max humidity alarm set to ${fncmd}%" }
             }
             else {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             }
             break
-        case 0x6A : // (106) min humidity alarm for Soil_NEO
-            if (getModelGroup() == 'TS0601_Soil_NEO') {
+        case 0x6A : // (106) min humidity alarm for Soil_NEO / dry alarm for Soil_Coolo
+            if (getModelGroup() in ['TS0601_Soil_Coolo']) {
+                logDebug "TS0601_Soil_Coolo dry (0x6A) = ${fncmd}"
+            }
+            else if (getModelGroup() == 'TS0601_Soil_NEO') {
                 if (settings?.logEnable) { log.info "${device.displayName} Min humidity alarm set to ${fncmd}%" }
             }
             else {
@@ -1166,17 +1189,39 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             }
             break
-        case 0x6D : // (109) schedule periodic for Soil_NEO
-            if (getModelGroup() == 'TS0601_Soil_NEO') {
+        case 0x6D : // (109) schedule periodic for Soil_NEO / air humidity for Soil_Coolo
+            if (getModelGroup() in ['TS0601_Soil_Coolo']) {
+                humidityEvent( fncmd )
+            }
+            else if (getModelGroup() == 'TS0601_Soil_NEO') {
                 if (settings?.logEnable) { log.info "${device.displayName} Reporting interval set to ${fncmd} minutes" }
             }
             else {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             }
             break
-        case 0x6E : // (110) temperature Fahrenheit for Soil_NEO
-            if (getModelGroup() == 'TS0601_Soil_NEO') {
+        case 0x6E : // (110) temperature Fahrenheit for Soil_NEO / soil_warning for Soil_Coolo
+            if (getModelGroup() in ['TS0601_Soil_Coolo']) {
+                logDebug "TS0601_Soil_Coolo soil_warning (0x6E) = ${fncmd}"
+            }
+            else if (getModelGroup() == 'TS0601_Soil_NEO') {
                 logDebug "Temperature (F): ${fncmd / 10.0}°F"
+            }
+            else {
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            break
+        case 0x6F : // (111) temperature_sampling - TS0601_Soil_Coolo
+            if (getModelGroup() in ['TS0601_Soil_Coolo']) {
+                logDebug "TS0601_Soil_Coolo temperature_sampling (0x6F) = ${fncmd}"
+            }
+            else {
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            break
+        case 0x70 : // (112) soil_sampling - TS0601_Soil_Coolo
+            if (getModelGroup() in ['TS0601_Soil_Coolo']) {
+                logDebug "TS0601_Soil_Coolo soil_sampling (0x70) = ${fncmd}"
             }
             else {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
