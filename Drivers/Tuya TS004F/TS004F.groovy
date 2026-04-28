@@ -64,13 +64,14 @@
  * ver. 2.9.1 2025-12-22 kkossev     - added respondToZdoRequests preference; respond to ZDO Node_Desc_request (0x0002) only if the preference is enabled; added TS004F _TZ3000_gwkzibhs @callumgw
  * ver. 2.9.2 2026-03-30 kkossev     - added model TS0215A manufacturer '_TZ3000_0dumfk2', '_TZ3000_ssp0maqm', '_TZ3000_p3fph1go' as a SOS button @callumgw; added TS0041 _TZ3000_8rppvwda @sales8
  * ver. 2.9.3 2026-04-27 kkossev     - added Third Reality 3RSB01085Z (Smart Scene Button S3, 3 buttons) and 3RSB22BZ (Smart Button) support
+ * ver. 2.9.4 2026-04-28 kkossev     - Sonoff: added ZDO bind for cluster 0x0001 and ZCL configure-reporting for battery percentage and voltage (min=3600s, max=7200s) to fix false 'offline' status; updated SNZB-01P fingerprint deviceJoinName; added 'lastPushed' timestamp attribute (yyyy-MM-dd HH:mm:ss) @John_Land
  *
  * 
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: unschedule jobs from other drivers: https://community.hubitat.com/t/moes-4-button-zigbee-switch/78119/20?u=kkossev
  *                                   - TODO: configre (override) the numberOfButtons in the AdvancedOptions
  *                                   - TODO: Lightify initialization like in the stock HE driver'; add Aqara button;
- *                                   - TODO: Sonoff button - battery reporting to be enabled by default; Refresh to read battery level/voltage';
+ *                                   - TODO: Sonoff button - Refresh to read battery level/voltage';
  *                                   - TODO: add IAS Zone (0x0500) and IAS ACE (0x0501) support; enroll for TS0215/TS0215A
  *                                   - TODO: Remove battery percentage reporting configuration for TS0041 and TS0046 : https://github.com/Koenkk/zigbee2mqtt/issues/6313#issuecomment-780746430 // https://github.com/Koenkk/zigbee2mqtt/issues/15340
  *                                   - TODO: Try to send default responses after button press for TS004F devices : https://github.com/Koenkk/zigbee2mqtt/issues/8149
@@ -79,8 +80,8 @@
  *                                   - TODO: add 'auto revert to scene mode' option
  */
 
-static String version() { '2.9.3' }
-static String timeStamp() { '2026/04/27 10:25 AM' }
+static String version() { '2.9.4' }
+static String timeStamp() { '2026/04/28 8:00 AM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -105,6 +106,7 @@ metadata {
         attribute 'batteryVoltage', 'number'
         attribute 'healthStatus', 'enum', ['offline', 'online']
         attribute 'powerSource', 'enum', ['battery', 'dc', 'mains', 'unknown']
+        attribute 'lastPushed', 'string'
 
         if (DEBUG == true) {
             command 'switchMode', [[name: 'mode*', type: 'ENUM', constraints: ['dimmer', 'scene'], description: 'Select device mode']]
@@ -187,7 +189,7 @@ metadata {
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0003,0004,0005,0006', outClusters: '0003', model: '3AFE170100510001', manufacturer: 'Konke', deviceJoinName: 'Konke button'
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0003,0001', outClusters: '0006,0003', model: 'WB01', manufacturer: 'eWeLink', deviceJoinName: 'Sonoff SNZB-01 button'
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0003,0001', outClusters: '0006,0003', model: 'WB-01', manufacturer: 'eWeLink', deviceJoinName: 'Sonoff SNZB-01 button'
-        fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0020,0001,0003,FC57', outClusters: '0003,0006,0019', model: 'SNZB-01P', manufacturer: 'eWeLink', deviceJoinName: 'Sonoff SNZB-01 button'
+        fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0020,0001,0003,FC57', outClusters: '0003,0006,0019', model: 'SNZB-01P', manufacturer: 'eWeLink', deviceJoinName: 'Sonoff SNZB-01P button'
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0003,0009,0020,1000', outClusters:'0003,0004,0006,0008,0019,0102,1000', model:'TRADFRI SHORTCUT Button', manufacturer:'IKEA of Sweden', deviceJoinName: 'IKEA Tradfri Shortcut Button E1812'
         // OSRAM Lightify - use HE inbuilt driver to pair first !
         //fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0020,1000,FD00", outClusters:"0003,0004,0005,0006,0008,0019,0300,1000", model:"Lightify Switch Mini", manufacturer:"OSRAM", deviceJoinName: "Lightify Switch Mini"
@@ -369,7 +371,7 @@ void parse(String description) {
             }
         } // command == "FD"
         else if (isSonoff() && (descMap.clusterInt == 0x0006 && (descMap.command in ['00', '01', '02' ]))) {
-            // Sonoff SNZB-01
+            // Sonoff SNZB-01 / SNZB-01P
             buttonNumber = 1
             buttonState = descMap.command == '02' ? 'pushed' : descMap.command == '01' ? 'doubleTapped' : descMap.command == '00' ? 'held' : 'unknown'
         }
@@ -534,6 +536,7 @@ void parse(String description) {
             String descriptionText = "button $buttonNumber was $buttonState"
             event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
             if (txtEnable) { log.info "${device.displayName } $descriptionText" }
+            updateLastPushed(buttonNumber, buttonState)
         }
 
         if (event) {
@@ -591,6 +594,7 @@ void parse(String description) {
             }
             if (txtEnable) { log.info "${device.displayName} button ${buttonNumber} ${buttonState}" }
             result = [name: buttonState, value: buttonNumber, isStateChange: true, type: 'physical', descriptionText: "${device.displayName} button ${buttonNumber} was ${buttonState}"]
+            updateLastPushed(buttonNumber, buttonState)
         }
         else {
             if (logEnable) { log.debug "${device.displayName } did not parse descMap: $descMap" }
@@ -748,8 +752,16 @@ void initialize() {
         tuyaMagic()
     }
     else if (isSonoff()) {
-        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} ${device.endpointId} 0x01 0x0006 {${device.zigbeeId}} {}", 'delay 50', ])
-        sendZigbeeCommands(["he rattr 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0001 0x0021 {}", 'delay 200', ])
+        List<String> cmd = []
+        cmd += ["zdo bind ${device.deviceNetworkId} ${device.endpointId} 0x01 0x0006 {${device.zigbeeId}} {}", 'delay 50']
+        cmd += ["zdo bind ${device.deviceNetworkId} ${device.endpointId} 0x01 0x0001 {${device.zigbeeId}} {}", 'delay 50']
+        // Configure battery reporting with min=3600s max=7200s (matches Z2M): max=7200 acts as a keep-alive heartbeat every 2 hours,
+        // preventing the health-check counter from incrementing and avoiding false 'offline' status for battery-powered buttons.
+        cmd += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 3600, 7200, 0x01, [:], delay = 150)   // Battery Percentage Remaining
+        cmd += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 3600, 7200, 0x01, [:], delay = 150)   // Battery Voltage
+        cmd += ["he rattr 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0001 0x0021 {}", 'delay 200']  // immediate battery read
+        logInfo 'sending Sonoff configuration commands... Make sure the device is awake before clicking Configure!'
+        sendZigbeeCommands(cmd)
     }
     else if (isOsram()) {
         sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", 'delay 50', ])
@@ -878,9 +890,15 @@ void switchToDimmerMode() {
     sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00))
 }
 
+private void updateLastPushed(buttonNumber, final String buttonState) {
+    String ts = new Date().format('yyyy-MM-dd HH:mm:ss')
+    sendEvent(name: 'lastPushed', value: ts, descriptionText: "button $buttonNumber was $buttonState at $ts", isStateChange: true)
+}
+
 void buttonEvent(buttonNumber, final String buttonState, final boolean isDigital=false) {
     Map event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: "button $buttonNumber was $buttonState", isStateChange: true, type: isDigital == true ? 'digital' : 'physical']
     if (txtEnable) { log.info "${device.displayName} $event.descriptionText" }
+    updateLastPushed(buttonNumber, buttonState)
     sendEvent(event)
 }
 
