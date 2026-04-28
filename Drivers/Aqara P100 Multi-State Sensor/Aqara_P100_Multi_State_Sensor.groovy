@@ -17,15 +17,15 @@
  *      Dan Gibson (@absent42) - Zigbee2MQTT P100 external converter (https://github.com/absent42/Aqara-P100-Sensor)
  *
  * ver. 0.1.0 2026-04-18 kkossev  - initial version; dedicated P100 driver based on Aqara P1 Motion Sensor driver template
- * ver. 0.1.1 2026-04-19 kkossev  - corrected fingerprint; bugfixes
+ * ver. 0.1.1 2026-04-19 kkossev  - corrected fingerprint; bugfixes (thanks to @rad1 for testing and feedback); 
+ * ver. 0.1.2 2026-04-28 kkossev  - (dev. branch) bugfixes;
  *
- *                                 TODO: verify aqaraBlackMagic() init sequence with real hardware
- *                                 TODO: test mode switching (object <-> door_window) behavior
+ *                                 TODO: verify whether P100 will initalize properly without aqaraBlackMagic()
  *
  */
 
-static String version() { "0.1.1" }
-static String timeStamp() {"2026/04/19 3:02 PM"}
+static String version() { "0.1.2" }
+static String timeStamp() {"2026/04/28 10:02 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -44,6 +44,8 @@ import java.math.RoundingMode
 @Field static final Integer DEFAULT_POLLING_INTERVAL = 3600
 
 // ===== P100 Attribute IDs on cluster 0xFCC0 =====
+@Field static final int ATTR_BATTERY_VOLTAGE        = 0x0017    // UINT16: battery voltage in mV (Z2M: lumiBattery voltageAttribute)
+@Field static final int ATTR_BATTERY_PCT            = 0x0018    // UINT8:  battery percentage 0-100 (Z2M: lumiBattery percentageAttribute)
 @Field static final int ATTR_DEVICE_MODE           = 0x0116    // UINT8:  door_window=3, object=5
 @Field static final int ATTR_SENSITIVITY            = 0x010C    // UINT8:  1-10
 @Field static final int ATTR_VIBRATION_DETECTION    = 0x0107    // BOOLEAN: 0=OFF, 1=ON
@@ -51,7 +53,7 @@ import java.math.RoundingMode
 @Field static final int ATTR_DOOR_WINDOW_TYPE       = 0x01EB    // UINT8:  casement=1, hopper=2, composite=3, hinged=4
 @Field static final int ATTR_REPORT_INTERVAL        = 0x01EC    // UINT32: 5-300 seconds
 @Field static final int ATTR_MOVEMENT_DETECTION     = 0x01ED    // BOOLEAN: 0=OFF, 1=ON
-@Field static final int ATTR_DEVICE_POSTURE         = 0x01EE    // UINT8:  normal=1, abnormal=2
+@Field static final int ATTR_DEVICE_POSTURE         = 0x01EE    // UINT8:  unknown=0, normal=1, abnormal=2
 @Field static final int ATTR_TRIPLE_TAP_DETECTION   = 0x01EF    // BOOLEAN: 0=OFF, 1=ON
 @Field static final int ATTR_ORIENTATION_DETECTION  = 0x01F0    // BOOLEAN: 0=OFF, 1=ON
 @Field static final int ATTR_ORIENTATION            = 0x01F1    // UINT8:  face_up=1, face_down=2, vertical=3, tilt=4
@@ -80,7 +82,7 @@ import java.math.RoundingMode
 ]
 
 @Field static final Map<Integer, String> devicePostureMap = [
-    1: "normal", 2: "abnormal"
+    0: "unknown", 1: "normal", 2: "abnormal"
 ]
 
 // ===== Virtual parameters (local-only, not sent to device) =====
@@ -96,7 +98,6 @@ metadata {
         capability "PowerSource"
         capability "Health Check"
         capability "Refresh"
-        capability "PushableButton"         // triple-tap as button 1 push
 
         attribute '_status_', 'string'
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
@@ -105,7 +106,7 @@ metadata {
         attribute 'deviceMode', 'enum', ['object', 'door_window']
         attribute 'orientation', 'enum', ['face_up', 'face_down', 'vertical', 'tilt']
         attribute 'lastAction', 'enum', ['triple_tap', 'movement', 'vibration', 'orientation', 'fall']
-        attribute 'devicePosture', 'enum', ['normal', 'abnormal']
+        attribute 'devicePosture', 'enum', ['unknown', 'normal', 'abnormal']
 
         command "configure", [[name: "Initialize the device after switching drivers. Will load device default values!" ]]
         command "ping",      [[name: "Check device online status and measure the Round-Trip Time (ms). May not work for battery-powered devices."]]
@@ -313,7 +314,7 @@ void parse(String description) {
 
 void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
     String valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
-    int value = safeToInt(it.value)
+    int value = (it.value && it.value.length() <= 8) ? Integer.parseInt(it.value, 16) : 0
 
     switch (it.attrId) {
         case "0005":
@@ -329,11 +330,23 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             log.warn "${device.displayName} received LUMI LEAVE report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
 
+        case "0017":    // battery voltage in mV (UINT16) — Z2M lumiBattery voltageAttribute
+            voltageAndBatteryEvents(value / 1000.0)
+            break
+
+        case "0018":    // battery percentage 0-100 (UINT8) — Z2M lumiBattery percentageAttribute
+            sendBatteryEvent(value)
+            break
+
         // ===== P100 Settings =====
 
         case "0116":    // device_mode: door_window=3, object=5
             def modeName = deviceModeReverseMap[value]
             if (modeName) {
+                def previousMode = getStoredParamValue('deviceMode') ?: device.currentValue('deviceMode')
+                if (previousMode != null && previousMode != modeName) {
+                    clearStaleModeAttributes(modeName)
+                }
                 sendEvent(name: "deviceMode", value: modeName, type: "physical", descriptionText: "${device.displayName} device mode is ${modeName}")
                 device.updateSetting("deviceMode", [value: modeName, type: "enum"])
                 storeParamValue('deviceMode', modeName, 'enum', false)
@@ -344,7 +357,6 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             break
 
         case "010C":    // sensitivity (1-10)
-            value = Integer.parseInt(it.value, 16)
             device.updateSetting("motionSensitivity", [value: value.toString(), type: "number"])
             storeParamValue('motionSensitivity', value, 'number', false)
             logDebug "sensitivity: ${value}"
@@ -376,7 +388,6 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             break
 
         case "01EC":    // report_interval (UINT32, seconds)
-            value = Integer.parseInt(it.value, 16)
             device.updateSetting("reportInterval", [value: value.toString(), type: "number"])
             storeParamValue('reportInterval', value, 'number', false)
             logDebug "report interval: ${value} seconds"
@@ -426,9 +437,32 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             }
             break
 
+        case "01F3":    // fires true on every detection but never resets — no signal beyond 'action', not exposed (Z2M)
+            logDebug "FCC0 attr 0x01F3 = 0x${it.value} (ignored)"
+            break
+
         default:
             logDebug "Unprocessed FCC0 attribute report: cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value} status=${it.status} data=${descMap.data}"
             break
+    }
+}
+
+// ==============================================================================================
+// MODE SWITCH: clear stale attributes when switching between object and door_window mode
+// ==============================================================================================
+
+void clearStaleModeAttributes(String newMode) {
+    if (newMode == "door_window") {
+        // leaving object mode — remove object-mode-only attributes
+        device.deleteCurrentState("lastAction")
+        device.deleteCurrentState("orientation")
+        device.deleteCurrentState("acceleration")
+        unschedule("resetAcceleration")
+        logInfo "cleared object-mode attributes (switched to door_window mode)"
+    } else if (newMode == "object") {
+        // leaving door_window mode — remove door_window-mode-only attributes
+        device.deleteCurrentState("contact")
+        logInfo "cleared door_window-mode attributes (switched to object mode)"
     }
 }
 
@@ -470,9 +504,7 @@ void parseActionEvent(int actionValue) {
 
     switch (actionName) {
         case "triple_tap":
-            // Fire PushableButton event (button 1)
-            sendEvent(name: "pushed", value: 1, type: "physical", descriptionText: "${device.displayName} button 1 was pushed (triple-tap)", isStateChange: true)
-            logInfo "button 1 pushed (triple-tap)"
+            logDebug "triple-tap detected (no additional attributes triggered)"
             break
         case "vibration":
             // Set acceleration active, schedule reset
@@ -867,6 +899,7 @@ void updated() {
 
     // Device mode
     if (hasParamChanged('deviceMode', settings?.deviceMode)) {
+        clearStaleModeAttributes(settings.deviceMode)
         def modeValue = deviceModeMap[settings.deviceMode]
         if (modeValue != null) {
             logDebug "setting deviceMode to ${settings.deviceMode} (${modeValue})"
@@ -1008,8 +1041,6 @@ void initializeVars(boolean fullInit = false) {
     if (fullInit == true || settings?.doorWindowType == null) { device.updateSetting("doorWindowType", "hinged_door") }
     if (fullInit == true) {
         powerSourceEvent()
-        // Initialize PushableButton
-        sendEvent(name: "numberOfButtons", value: 1, type: "digital")
     }
     updateAqaraVersion()
 }
@@ -1017,7 +1048,6 @@ void initializeVars(boolean fullInit = false) {
 void installed() {
     log.info "${device.displayName} installed() model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
     sendHealthStatusEvent("unknown")
-    sendEvent(name: "numberOfButtons", value: 1, type: "digital")
     aqaraBlackMagic()
 }
 
