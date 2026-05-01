@@ -18,14 +18,14 @@
  *
  * ver. 0.1.0 2026-04-18 kkossev  - initial version; dedicated P100 driver based on Aqara P1 Motion Sensor driver template
  * ver. 0.1.1 2026-04-19 kkossev  - corrected fingerprint; bugfixes (thanks to @rad1 for testing and feedback); 
- * ver. 0.1.2 2026-04-28 kkossev  - (dev. branch) bugfixes;
- *
- *                                 TODO: verify whether P100 will initalize properly without aqaraBlackMagic()
+ * ver. 0.1.2 2026-04-28 kkossev  - bugfixes;
+ * ver. 0.1.3 2026-04-29 kkossev  - preventDeviceReset implementation;
+ * ver. 0.1.4 2026-05-01 kkossev  - more aqaraBlackMagic(); added Time cluster (0x000A) forced response; added ZDO handlers for End_Device_Timeout_Req (0x0036), Node_Desc_req (0x0002), Mgmt_Rtg_rsp (0x8032); added FCC0 attr 0x00FF handler for device registration-response report;
  *
  */
 
-static String version() { "0.1.2" }
-static String timeStamp() {"2026/04/28 10:02 PM"}
+static String version() { "0.1.4" }
+static String timeStamp() {"2026/05/01 5:37 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -67,14 +67,14 @@ import java.math.RoundingMode
 @Field static final Map<Integer, String> deviceModeReverseMap = [3: "door_window", 5: "object"]
 
 @Field static final Map<String, Integer> doorWindowTypeMap = [
-    "casement_window": 1, "hopper_window": 2, "composite_window": 3, "hinged_door": 4
+    "unknown": 0, "casement_window": 1, "hopper_window": 2, "composite_window": 3, "hinged_door": 4
 ]
 @Field static final Map<Integer, String> doorWindowTypeReverseMap = [
-    1: "casement_window", 2: "hopper_window", 3: "composite_window", 4: "hinged_door"
+    0: "unknown", 1: "casement_window", 2: "hopper_window", 3: "composite_window", 4: "hinged_door"
 ]
 
 @Field static final Map<Integer, String> orientationMap = [
-    1: "face_up", 2: "face_down", 3: "vertical", 4: "tilt"
+    0: "unknown", 1: "face_up", 2: "face_down", 3: "vertical", 4: "tilt"
 ]
 
 @Field static final Map<Integer, String> actionMap = [
@@ -115,6 +115,7 @@ metadata {
         if (_DEBUG) {
             command "test", [[name: "Test", type: "STRING", description: "Debug test command"]]
             command "initialize", [[name: "Manually initialize the device"]]
+            command "sendTimeSync", [[name: "Send Time Sync", description: "Send current UTC time to the device (cluster 0x000A read response)"]]
         }
 
         // Fingerprint from real device pairing data (devId:0x0402, epList:[1,2])
@@ -227,18 +228,6 @@ void parse(String description) {
 
     def descMap = [:]
 
-    // Aqara legacy TLV battery reports (cluster 0x0000)
-    if (description.contains("cluster: 0000")) {
-        if (description.contains("attrId: FF01")) {
-            parseAqaraAttributeFF01(description)
-            return
-        }
-        else if (description.contains("attrId: FF02")) {
-            parseAqaraAttributeFF02(description)
-            return
-        }
-    }
-
     try {
         descMap = zigbee.parseDescriptionAsMap(description)
     }
@@ -283,6 +272,10 @@ void parse(String description) {
             else if (it.cluster == "0000" && it.attrId == "0005") {
                 logDebug "(parse attr 5) device ${it.value} button was pressed"
                 sendInfoEvent("Button was pressed. The device will stay awake for 15 minutes")
+            }
+            // ---- Cluster 0x0000, attr 0xFFF0: Aqara prevent-reset probe ----
+            else if (it.cluster == "0000" && it.attrId == "fff0") {
+                preventDeviceReset(it.value)
             }
             // ---- Cluster FCC0: Aqara manufacturer-specific ----
             else if (descMap.cluster == "FCC0") {
@@ -433,12 +426,21 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 sendEvent(name: "orientation", value: orientName, type: "physical", descriptionText: "${device.displayName} orientation is ${orientName}")
                 logInfo "orientation: ${orientName}"
             } else {
-                logWarn "unknown orientation value: ${value}"
+                logDebug "unknown orientation value: ${value}"
             }
+            break
+
+        case "00ff":    // Aqara registration-response report — device sends this after accepting the FCC0/0x00FF registration write
+            logDebug "FCC0 attr 0x00FF (registration response) = 0x${it.value}"
+            logInfo "P100 registration handshake completed successfully"
             break
 
         case "01F3":    // fires true on every detection but never resets — no signal beyond 'action', not exposed (Z2M)
             logDebug "FCC0 attr 0x01F3 = 0x${it.value} (ignored)"
+            break
+
+        case "00DF":    // periodic diagnostic heartbeat TLV (RSSI, device temp, uptime counters) — undocumented, Z2M ignores it
+            logDebug "FCC0 attr 0x00DF = periodic diagnostic heartbeat (ignored)"
             break
 
         default:
@@ -464,6 +466,29 @@ void clearStaleModeAttributes(String newMode) {
         device.deleteCurrentState("contact")
         logInfo "cleared door_window-mode attributes (switched to object mode)"
     }
+}
+
+// ==============================================================================================
+// PREVENT RESET: respond to device factory-reset probe on genBasic attr 0xFFF0
+// ==============================================================================================
+
+void preventDeviceReset(String rawValue) {
+    // Z2M lumiPreventReset: device sends [0xAA,0x10,0x05,0x41,0x87,...] when held for factory reset.
+    // Hub must respond with [0xAA,0x10,0x05,0x41,0x47,0x01,0x01,0x10,0x01] to abort the reset.
+    if (rawValue == null || rawValue.length() < 10) {
+        logDebug "genBasic attr 0xFFF0 = ${rawValue} (ignored)"
+        return
+    }
+    if (!rawValue.toLowerCase().startsWith("aa10054187")) {
+        logDebug "genBasic attr 0xFFF0 = ${rawValue} (not a reset probe, ignored)"
+        return
+    }
+    logInfo "device factory-reset probe detected — sending prevent-reset response"
+    // Write back the prevent-reset payload: bytes are [AA 10 05 41 47 01 01 10 01]
+    // type 0x41 = OCTET_STR, cluster 0x0000 genBasic, attr 0xFFF0, mfgCode 0x115F
+    List<String> cmds = zigbee.writeAttribute(0x0000, 0xFFF0, DataType.STRING_OCTET,
+        "AA1005414701011001", [mfgCode: "0x115F"])
+    sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
 }
 
 // ==============================================================================================
@@ -785,6 +810,15 @@ def parseZDOcommand(Map descMap) {
         case "8022":    // unbind response
             if (logEnable) log.info "${device.displayName} Received unbind response, Status: ${descMap.data[1]=="00" ? 'Success' : 'Failure'}"
             break
+        case "0002":    // Node_Desc_req — device querying coordinator node descriptor; ZigBee stack sends 0x8002 response automatically
+            if (logEnable) log.debug "${device.displayName} Received Node_Desc_req (device querying coordinator)"
+            break
+        case "0036":    // End_Device_Timeout_Req — device negotiating keep-alive timeout; ZigBee stack sends 0x8036 response automatically
+            if (logEnable) log.info "${device.displayName} Received End_Device_Timeout_Req, timeoutEnum=0x${descMap.data?.size() > 1 ? descMap.data[1] : '??'} (ZigBee stack should handle the response)"
+            break
+        case "8032":    // Mgmt_Rtg_rsp - hub probed the device's routing table; end devices respond NOT_SUPPORTED (0x84), which is expected
+            if (logEnable) log.debug "${device.displayName} Received Mgmt_Rtg_rsp, status=0x${descMap.data?.size() >= 1 ? descMap.data[0] : '??'} (NOT_SUPPORTED is expected for a sleepy end device)"
+            break
         case "8034":    // leave response
             if (logEnable) log.info "${device.displayName} Received leave response"
             break
@@ -816,7 +850,13 @@ def parseZHAcommand(Map descMap) {
             }
             break
         case "04":  // write attribute response
-            logDebug "Received Write Attribute Response for cluster:${descMap.clusterId}, Status: ${descMap.data[0]=="00" ? 'Success' : 'Failure'}"
+            if (descMap.data[0] == "00") {
+                logDebug "Received Write Attributes Response for cluster:${descMap.clusterId}, Status: Success"
+            } else {
+                def failAttrId = (descMap.data?.size() >= 3) ? "0x${descMap.data[2]}${descMap.data[1]}" : "unknown"
+                def statusName = (descMap.data[0] == "87") ? "UNSUPPORTED_ATTRIBUTE" : (descMap.data[0] == "86" ? "UNSUPPORTED_CLUSTER" : "Failure")
+                logWarn "Received Write Attributes Response for cluster:${descMap.clusterId}, attr:${failAttrId}, Status: 0x${descMap.data[0]} (${statusName})"
+            }
             break
         case "07":  // Configure Reporting Response
             logInfo "Received Configure Reporting Response for cluster:${descMap.clusterId}, Status: ${descMap.data[0]=="00" ? 'Success' : 'Failure'}"
@@ -829,6 +869,13 @@ def parseZHAcommand(Map descMap) {
                 logInfo "Reporting Configuration Response: cluster:${descMap.clusterId} min=${min} max=${max}"
             } else {
                 logWarn "Reporting Configuration Response failed: cluster:${descMap.clusterId} status=${status}"
+            }
+            break
+        case "00":  // Read Attributes — device is requesting attribute values from the hub
+            if (descMap.clusterId == "000A") {
+                replyToTimeClusterRead(descMap)
+            } else {
+                logDebug "Unhandled Read Attributes request from device: cluster=${descMap.clusterId} data=${descMap.data}"
             }
             break
         case "0B":  // ZCL Default Response
@@ -875,6 +922,44 @@ def parseSimpleDescriptorResponse(Map descMap) {
 }
 
 // ==============================================================================================
+// TIME CLUSTER: respond to P100 time-sync requests (cluster 0x000A)
+// ==============================================================================================
+
+void replyToTimeClusterRead(Map descMap) {
+    // The P100 sends a ZCL Read Attributes on cluster 0x000A (Time) for attrs 0x0000/0x0002/0x0005
+    // on every rejoin. The Aqara E1 hub responds with current UTC time + timezone + DST offset.
+    // Probably, without this reply the device's internal 24-hour watchdog timer causes it to leave the network?
+    final long ZIGBEE_EPOCH_OFFSET = 946684800L   // seconds between Unix epoch and ZigBee epoch (Jan 1 2000 UTC)
+    long zigbeeTime = (now() / 1000L).toLong() - ZIGBEE_EPOCH_OFFSET
+    int tzOffsetSec = location.timeZone.rawOffset.intdiv(1000)          // e.g. +10800 for UTC+3
+    int dstSec = location.timeZone.inDaylightTime(new Date()) ? location.timeZone.getDSTSavings().intdiv(1000) : 0
+
+    String tHex   = toLEHex32(zigbeeTime)
+    String tzHex  = toLEHex32(tzOffsetSec)
+    String dstHex = toLEHex32(dstSec)
+
+    // ZCL Read Attributes Response header: 0x18 = profile-wide | server-to-client | disable-default-response
+    // seq=00 (device doesn't require exact match), cmd=0x01 (Read Attributes Response)
+    // Attr 0x0000: type 0xE2 (UTCTime/uint32), Attr 0x0002: type 0x2B (INT32), Attr 0x0005: type 0x2B (INT32)
+    String payload = "18 00 01 00 00 00 E2 ${tHex} 02 00 00 2B ${tzHex} 05 00 00 2B ${dstHex}"
+    List<String> cmds = ["he raw 0x${device.deviceNetworkId} 1 1 0x000A {${payload}} {0x0104}"]
+    logInfo "Sending Time cluster reply: UTC=${zigbeeTime} (${new Date()}) TZ=${tzOffsetSec}s DST=${dstSec}s"
+    sendZigbeeCommands(cmds)
+}
+
+void sendTimeSync() {
+    // No-arg wrapper so runIn() can call this. Sends Time cluster data proactively
+    // (Hubitat's coordinator never auto-responds to device-originated cluster 0x000A reads).
+    replyToTimeClusterRead([:])
+}
+
+private String toLEHex32(long value) {
+    // 4-byte little-endian hex string, space-separated; handles signed negatives via 2's complement masking
+    long v = value & 0xFFFFFFFFL
+    return String.format("%02X %02X %02X %02X", (v & 0xFF), ((v >> 8) & 0xFF), ((v >> 16) & 0xFF), ((v >> 24) & 0xFF))
+}
+
+// ==============================================================================================
 // CONFIGURATION: updated / configure / initialize
 // ==============================================================================================
 
@@ -902,7 +987,7 @@ void updated() {
         clearStaleModeAttributes(settings.deviceMode)
         def modeValue = deviceModeMap[settings.deviceMode]
         if (modeValue != null) {
-            logDebug "setting deviceMode to ${settings.deviceMode} (${modeValue})"
+            logInfo "setting deviceMode to ${settings.deviceMode} (${modeValue})"
             cmds += zigbee.writeAttribute(0xFCC0, ATTR_DEVICE_MODE, DataType.UINT8, modeValue, [mfgCode: MFG_AQARA], delay=200)
         }
     }
@@ -911,7 +996,7 @@ void updated() {
     if (hasParamChanged('motionSensitivity', settings?.motionSensitivity)) {
         def val = safeToInt(settings.motionSensitivity)
         if (val >= 1 && val <= 10) {
-            logDebug "setting sensitivity to ${val}"
+            logInfo "setting sensitivity to ${val}"
             cmds += zigbee.writeAttribute(0xFCC0, ATTR_SENSITIVITY, DataType.UINT8, val, [mfgCode: MFG_AQARA], delay=200)
         }
     }
@@ -920,7 +1005,7 @@ void updated() {
     if (hasParamChanged('reportInterval', settings?.reportInterval)) {
         def val = safeToInt(settings.reportInterval)
         if (val >= 5 && val <= 300) {
-            logDebug "setting reportInterval to ${val} seconds"
+            logInfo "setting reportInterval to ${val} seconds"
             cmds += zigbee.writeAttribute(0xFCC0, ATTR_REPORT_INTERVAL, DataType.UINT32, val, [mfgCode: MFG_AQARA], delay=200)
         }
     }
@@ -929,7 +1014,7 @@ void updated() {
     if (settings?.deviceMode == "door_window" && hasParamChanged('doorWindowType', settings?.doorWindowType)) {
         def typeValue = doorWindowTypeMap[settings.doorWindowType]
         if (typeValue != null) {
-            logDebug "setting doorWindowType to ${settings.doorWindowType} (${typeValue})"
+            logInfo "setting doorWindowType to ${settings.doorWindowType} (${typeValue})"
             cmds += zigbee.writeAttribute(0xFCC0, ATTR_DOOR_WINDOW_TYPE, DataType.UINT8, typeValue, [mfgCode: MFG_AQARA], delay=200)
         }
     }
@@ -937,23 +1022,23 @@ void updated() {
     // Object mode detection toggles
     if (settings?.deviceMode == "object") {
         if (hasParamChanged('movementDetection', settings?.movementDetection)) {
-            logDebug "setting movementDetection to ${settings.movementDetection}"
+            logInfo "setting movementDetection to ${settings.movementDetection}"
             cmds += zigbee.writeAttribute(0xFCC0, ATTR_MOVEMENT_DETECTION, DataType.BOOLEAN, settings.movementDetection ? 1 : 0, [mfgCode: MFG_AQARA], delay=200)
         }
         if (hasParamChanged('vibrationDetection', settings?.vibrationDetection)) {
-            logDebug "setting vibrationDetection to ${settings.vibrationDetection}"
+            logInfo "setting vibrationDetection to ${settings.vibrationDetection}"
             cmds += zigbee.writeAttribute(0xFCC0, ATTR_VIBRATION_DETECTION, DataType.BOOLEAN, settings.vibrationDetection ? 1 : 0, [mfgCode: MFG_AQARA], delay=200)
         }
         if (hasParamChanged('orientationDetection', settings?.orientationDetection)) {
-            logDebug "setting orientationDetection to ${settings.orientationDetection}"
+            logInfo "setting orientationDetection to ${settings.orientationDetection}"
             cmds += zigbee.writeAttribute(0xFCC0, ATTR_ORIENTATION_DETECTION, DataType.BOOLEAN, settings.orientationDetection ? 1 : 0, [mfgCode: MFG_AQARA], delay=200)
         }
         if (hasParamChanged('fallDetection', settings?.fallDetection)) {
-            logDebug "setting fallDetection to ${settings.fallDetection}"
+            logInfo "setting fallDetection to ${settings.fallDetection}"
             cmds += zigbee.writeAttribute(0xFCC0, ATTR_FALL_DETECTION, DataType.BOOLEAN, settings.fallDetection ? 1 : 0, [mfgCode: MFG_AQARA], delay=200)
         }
         if (hasParamChanged('tripleTapDetection', settings?.tripleTapDetection)) {
-            logDebug "setting tripleTapDetection to ${settings.tripleTapDetection}"
+            logInfo "setting tripleTapDetection to ${settings.tripleTapDetection}"
             cmds += zigbee.writeAttribute(0xFCC0, ATTR_TRIPLE_TAP_DETECTION, DataType.BOOLEAN, settings.tripleTapDetection ? 1 : 0, [mfgCode: MFG_AQARA], delay=200)
         }
     }
@@ -982,18 +1067,28 @@ void aqaraReadAttributes() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(0xFCC0, [ATTR_DEVICE_MODE, ATTR_SENSITIVITY, ATTR_VIBRATION_DETECTION, ATTR_ORIENTATION, ATTR_DEVICE_POSTURE], [mfgCode: MFG_AQARA], delay=200)
     sendZigbeeCommands(cmds)
+    logWarn "<b>if no more logs, please pair the device again to HE!</b>"
 }
 
 void aqaraBlackMagic() {
     List<String> cmds = []
     // Standard Lumi initialization sequence
     cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
-    // Bind manufacturer-specific cluster
-    cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
-    // Bind genOnOff cluster (for contact events in door_window mode)
-    cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}"
-    // Bind closuresDoorLock cluster (for action events in object mode)
-    cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0101 {${device.zigbeeId}} {}"
+
+    // Step 1: Read device mode first — matches the exact E1 hub sequence (FCC0/0x0116)
+    cmds += zigbee.readAttribute(0xFCC0, ATTR_DEVICE_MODE, [mfgCode: MFG_AQARA], delay=200)
+    // Step 2: Critical "Lumi Protocol" registration write (FCC0/0x00FF, Octet String, 16 bytes).
+    // Payload captured verbatim from Aqara E1 hub Wireshark trace: 52:72:02:43:02:32:15:31:54:50:91:23:51:54:15:41
+    // The P100 responds with Write Attributes Success then should immediately report all attribute state.
+    // It is SUSPECTED, that WITHOUT this write the device will leave the Zigbee network after ~24 hours (NOT confirmed yet!)
+    //
+    // Use he raw (not zigbee.writeAttribute/he wattr) so the ZCL octet-string length byte (0x10=16) is included explicitly. he wattr does NOT auto-prepend the length byte for type 0x41, making the
+    cmds += ["he raw 0x${device.deviceNetworkId} 1 1 0xFCC0 {04 5F 11 00 02 FF 00 41 10 52 72 02 43 02 32 15 31 54 50 91 23 51 54 15 41} {0x0104}", "delay 200",]
+    // Bindings are NOT needed for Aqara P100 — the FCC0/0x00FF registration write above tells the device
+    // to unicast reports back to the hub directly. The Aqara E1 hub sends NO zdo bind in its sequence.
+    //cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
+    //cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}"
+    //cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0101 {${device.zigbeeId}} {}"
     // Read basic attributes
     cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0005], [:], delay=200)
     // Read initial P100 settings
@@ -1007,7 +1102,14 @@ void configure(boolean fullInit = false) {
     unschedule()
     initializeVars(fullInit)
     runIn(DEFAULT_POLLING_INTERVAL, "deviceHealthCheck", [overwrite: true, misfire: "ignore"])
-    logWarn "<b>if no more logs, please pair the device again to HE!</b>"
+    // Proactively push Time cluster data 3 seconds after the FCC0 write.
+    // The P100 always requests Time (cluster 0x000A) after the registration handshake.
+    // Hubitat's ZigBee coordinator does NOT auto-respond to these requests (confirmed in WireShark),
+    // so we push the time blindly rather than waiting for the reactive parse() handler to fire.
+    runIn(3, "sendTimeSync")
+    runIn(6, "sendTimeSync")
+    runIn(9, "sendTimeSync")
+    runIn(12, "sendTimeSync")
     runIn(30, "aqaraReadAttributes", [overwrite: true])
 }
 
