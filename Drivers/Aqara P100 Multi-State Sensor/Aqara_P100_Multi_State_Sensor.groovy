@@ -21,11 +21,12 @@
  * ver. 0.1.2 2026-04-28 kkossev  - bugfixes;
  * ver. 0.1.3 2026-04-29 kkossev  - preventDeviceReset implementation;
  * ver. 0.1.4 2026-05-01 kkossev  - more aqaraBlackMagic(); added Time cluster (0x000A) forced response; added ZDO handlers for End_Device_Timeout_Req (0x0036), Node_Desc_req (0x0002), Mgmt_Rtg_rsp (0x8032); added FCC0 attr 0x00FF handler for device registration-response report;
+ * ver. 0.1.5 2026-05-02 kkossev  - a forced Time cluster reply is sent after every  FCC0 attr 0x00DF diagnostic heartbeat report;
  *
  */
 
-static String version() { "0.1.4" }
-static String timeStamp() {"2026/05/01 5:37 PM"}
+static String version() { "0.1.5" }
+static String timeStamp() {"2026/05/02 9:55 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -441,6 +442,8 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
 
         case "00DF":    // periodic diagnostic heartbeat TLV (RSSI, device temp, uptime counters) — undocumented, Z2M ignores it
             logDebug "FCC0 attr 0x00DF = periodic diagnostic heartbeat (ignored)"
+            runIn(1, "sendTimeSync")
+            runIn(342, "sendTimeSync")
             break
 
         default:
