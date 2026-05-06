@@ -21,12 +21,13 @@
  * ver. 0.1.2 2026-04-28 kkossev  - bugfixes;
  * ver. 0.1.3 2026-04-29 kkossev  - preventDeviceReset implementation;
  * ver. 0.1.4 2026-05-01 kkossev  - more aqaraBlackMagic(); added Time cluster (0x000A) forced response; added ZDO handlers for End_Device_Timeout_Req (0x0036), Node_Desc_req (0x0002), Mgmt_Rtg_rsp (0x8032); added FCC0 attr 0x00FF handler for device registration-response report;
- * ver. 0.1.5 2026-05-02 kkossev  - a forced Time cluster reply is sent after every  FCC0 attr 0x00DF diagnostic heartbeat report;
+ * ver. 0.1.5 2026-05-03 kkossev  - a forced Time cluster reply is sent after every  FCC0 attr 0x00DF diagnostic heartbeat report;
+ * ver. 0.1.6 2026-05-06 kkossev  - bugfixes (tnx @user1974); battery level is derived from voltage only 
  *
  */
 
-static String version() { "0.1.5" }
-static String timeStamp() {"2026/05/02 9:55 PM"}
+static String version() { "0.1.6" }
+static String timeStamp() {"2026/05/06 8:32 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -130,7 +131,7 @@ metadata {
             input (name: "deviceMode", type: "enum", title: "<b>Device Mode</b>", description: "Operating mode: <b>object</b> (movement/vibration/tilt/tap/fall) or <b>door_window</b> (contact open/close)", defaultValue: "object",
                 options: ["object":"Object mode", "door_window":"Door/Window mode"])
             input (name: "motionSensitivity", type: "number", title: "<b>Detection Sensitivity</b>", description: "Detection sensitivity (1 = low, 10 = high)", range: "1..10", defaultValue: 5)
-            input (name: "reportInterval", type: "number", title: "<b>Report Interval</b>", description: "How often the device reports state (5-300 seconds)", range: "5..300", defaultValue: 60)
+            input (name: "reportInterval", type: "number", title: "<b>Report Interval</b>", description: "How often the device reports state (1-300 seconds)", range: "1..300", defaultValue: 60)
             // Door/window mode preference
             if (settings?.deviceMode == "door_window") {
                 input (name: "doorWindowType", type: "enum", title: "<b>Door/Window Type</b>", description: "Type of door or window being monitored", defaultValue: "hinged_door",
@@ -275,7 +276,7 @@ void parse(String description) {
                 sendInfoEvent("Button was pressed. The device will stay awake for 15 minutes")
             }
             // ---- Cluster 0x0000, attr 0xFFF0: Aqara prevent-reset probe ----
-            else if (it.cluster == "0000" && it.attrId == "fff0") {
+            else if (it.cluster == "0000" && it.attrId == "FFF0") {
                 preventDeviceReset(it.value)
             }
             // ---- Cluster FCC0: Aqara manufacturer-specific ----
@@ -307,13 +308,18 @@ void parse(String description) {
 // ==============================================================================================
 
 void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
-    String valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
-    int value = (it.value && it.value.length() <= 8) ? Integer.parseInt(it.value, 16) : 0
+    String valueHex = description.split(",").find { it.split(":")[0].trim() == "value" }?.split(":")[1].trim()
+    Integer value = safeHexToInt(it.value)
+    String attrId = (it.attrId ?: "").toUpperCase()
 
-    switch (it.attrId) {
+    switch (attrId) {
         case "0005":
             logDebug "(parseAqaraClusterFCC0) device ${it.value} button was pressed (driver version ${driverVersionAndTimeStamp()})"
             sendInfoEvent("Button was pressed. The device will stay awake for 15 minutes")
+            break
+
+        case "00E6":
+            logDebug "FCC0 attr 0x00E6 = 0x${it.value} (unknown/observed P100 status)"
             break
 
         case "00F7":    // Aqara TLV structure (battery, etc.)
@@ -431,7 +437,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             }
             break
 
-        case "00ff":    // Aqara registration-response report — device sends this after accepting the FCC0/0x00FF registration write
+        case "00FF":    // Aqara registration-response report — device sends this after accepting the FCC0/0x00FF registration write
             logDebug "FCC0 attr 0x00FF (registration response) = 0x${it.value}"
             logInfo "P100 registration handshake completed successfully"
             break
@@ -442,8 +448,8 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
 
         case "00DF":    // periodic diagnostic heartbeat TLV (RSSI, device temp, uptime counters) — undocumented, Z2M ignores it
             logDebug "FCC0 attr 0x00DF = periodic diagnostic heartbeat (ignored)"
-            runIn(1, "sendTimeSync")
-            runIn(342, "sendTimeSync")
+            runIn(1, "sendTimeSync", [overwrite: true])     // send a forced Time cluster reply shortly after each heartbeat to keep the device's internal clock in sync
+            // runIn(342, "sendTimeSync", [overwrite: false]) // commented out in version 0.1.5 (P100 sleeps at this time...)
             break
 
         default:
@@ -583,8 +589,8 @@ def decodeAqaraStruct(String description) {
                         logDebug "tag 0x03: device temperature is ${rawValue} °C"
                         break
                     case 0x18:      // battery percentage
-                        sendBatteryEvent(rawValue)
-                        logDebug "tag 0x18: battery percentage is ${rawValue}%"
+                        //sendBatteryEvent(rawValue)
+                        logDebug "tag 0x18: reported battery percentage is ${rawValue}% (ignored; using voltage-based calculation)"
                         break
                     case 0x64:      // on/off (presence-related)
                         logDebug "tag 0x64: on/off is ${rawValue}"
@@ -625,8 +631,8 @@ def decodeAqaraStruct(String description) {
                         break
                     case 0x17:      // battery voltage in mV
                         def voltage = rawValue / 1000.0
-                        sendVoltageEvent(voltage)
                         logDebug "tag 0x17: battery voltage is ${voltage}V (${rawValue} mV)"
+                        voltageAndBatteryEvents(voltage)
                         break
                     default:
                         logDebug "unknown tag=0x${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
@@ -1109,11 +1115,11 @@ void configure(boolean fullInit = false) {
     // The P100 always requests Time (cluster 0x000A) after the registration handshake.
     // Hubitat's ZigBee coordinator does NOT auto-respond to these requests (confirmed in WireShark),
     // so we push the time blindly rather than waiting for the reactive parse() handler to fire.
-    runIn(3, "sendTimeSync")
-    runIn(6, "sendTimeSync")
-    runIn(9, "sendTimeSync")
-    runIn(12, "sendTimeSync")
-    runIn(30, "aqaraReadAttributes", [overwrite: true])
+    runIn(3, "sendTimeSync", [overwrite: true])
+    runIn(6, "sendTimeSync", [overwrite: false])
+    runIn(9, "sendTimeSync", [overwrite: false])
+    runIn(12, "sendTimeSync", [overwrite: false])
+    runIn(30, "aqaraReadAttributes", [overwrite: false])
 }
 
 def initialize() {
@@ -1335,6 +1341,14 @@ void sendZigbeeCommands(List<String> cmds) {
 
 String intToHexStr(Integer value, Integer minBytes=1) {
     return HexUtils.integerToHexString(value, minBytes)
+}
+
+Integer safeHexToInt(Object v, Integer defaultValue = 0) {
+    if (v == null) return defaultValue
+    if (v instanceof Number) return v as Integer
+    String s = v.toString()
+    if (s.length() == 0 || s.length() > 8) return defaultValue
+    return Integer.parseInt(s, 16)
 }
 
 // credits @thebearmay
