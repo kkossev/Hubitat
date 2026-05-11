@@ -1,7 +1,7 @@
 /*
  * IKEA BILRESA Matter Dual Button (events-based). Supports both dual button and scroll wheel models.
  *
- * Last edited: 2026/01/04 11:41 AM
+ * Last edited: 2026/05/11 11:42 PM
  *
  * WARNING:
  * This driver runs on pure magic, optimism, and several offerings to the Hubitat gods.
@@ -39,29 +39,20 @@ metadata {
 }
 
 void parse(String description) {
-    Map msg = matter.parseDescriptionAsMap(description)
-    Boolean isEvent = msg.evtId != null || msg.evtInt != null
-    if (isEvent) {
-        logDebug "parse(String) received <b>event</b> description: ${description} -> passing it to parse(Map)"
-        parse(msg)
-    }
-    else {
-        // for everything else, we are using only the new parse(Map) method! :) 
-        logDebug "parse(String) received and <i>ignored</i> description: ${description} -> msg: ${msg}"
-    }
-    return
+    logDebug "parse(String) called - ignored (newParse:true mode only)"
 }
 
-// New parse(Map) method to handle events (and attribute reports) when Device Data.newParse	is set to true
-// example : [callbackType:Report, endpointInt:2, clusterInt:59, attrInt:1, data:[1:UINT:0], value:0] 
-// example : [endpoint:01, cluster:003B, evtId:0006, clusterInt:59, evtInt:6, values:[0:[type:04, isContextSpecific:true, value:01], 1:[type:04, isContextSpecific:true, value:01]]]
+// parse(Map) - newParse:true format only
+// Attribute report  : [callbackType:Report, endpointInt:0, clusterInt:47, attrInt:12, value:200]
+// Switch event      : [callbackType:Event,  endpointInt:1, clusterInt:59, evtId:1,    value:[0:1]]
+// MultiPressComplete: [callbackType:Event,  endpointInt:1, clusterInt:59, evtId:6,    value:[0:1, 1:2]]
 
 void parse(Map msg) {
-    logDebug "<b>newParse(Map)</b> received  Map: ${msg}"
+    logDebug "parse(Map) received: ${msg}"
 
-    boolean isEvent = msg.evtId != null || msg.evtInt != null
+    boolean isEvent = msg.evtId != null
 
-    // 1) Battery reports (EP0)  Example : [callbackType:Report, endpointInt:0, clusterInt:47, attrInt:12, data:[12:UINT:200], value:200]
+    // Battery report (EP0)  Example: [callbackType:Report, endpointInt:0, clusterInt:47, attrInt:12, value:200]
     if (msg.endpointInt == 0x00 && msg.clusterInt == 0x002F && msg.attrInt == 0x000C) {
         Integer raw = safeInt(msg.value)
         if (raw != null) {
@@ -73,17 +64,22 @@ void parse(Map msg) {
         return
     }
 
-    // 3) Switch events
-    // Example :  [endpoint:02, cluster:003B, evtId:0004, clusterInt:59, evtInt:4, values:[0:[type:04, isContextSpecific:true, value:01]]]
+    // SubscriptionResult: signals end of post-subscribe event burst — safe to accept events now
+    // Example: [callbackType:SubscriptionResult, subscriptionId:3743154004]
+    if (msg.callbackType == "SubscriptionResult") {
+        clearInitPending()
+        return
+    }
+
+    // Switch event  Example: [callbackType:Event, endpointInt:2, clusterInt:59, evtId:4, value:[0:1]]
     if (isEvent && msg.clusterInt == 0x003B) {
         handleSwitchEvent(msg)
             return
     }
 
-    // 3) Switch attribute reports - ignore them explicitely! 
-    // Example :  [callbackType:Report, endpointInt:1, clusterInt:59, attrInt:1, data:[1:UINT:1], value:1] 
+    // Switch attribute reports - ignore explicitly
     if (msg.clusterInt == 0x003B && !isEvent) {
-        logDebug "newParse(Map): <i>ignoring</i> switch attribute report ep=${msg.endpointInt} cluster=${msg.clusterInt} attr=${msg.attrInt} value=${msg.value}"
+        logDebug "newParse(Map): ignoring switch attribute report ep=${msg.endpointInt} cluster=${msg.clusterInt} attr=${msg.attrInt} value=${msg.value}"
         return
     }
 
@@ -92,46 +88,19 @@ void parse(Map msg) {
 }
 
 
-private void handleSwitchReport(Integer ep, Integer clus, Integer attrId, def valueObj) {
-    logDebug "handleSwitchReport: ep=${ep} cluster=${clus} attr=${attrId} value=${valueObj}"
-    // Button press state: cluster 0x003B attr 0x0001
-    if (clus == 0x003B && attrId == 0x0001) {
-        Integer v = safeInt(valueObj)
-        if (v != null) {
-            if (v == 0) {       // released
-                sendButtonEventFiltered("released", ep)
-            }
-            else if (v == 1) {  // pressed
-                sendButtonEventFiltered("pushed", ep)
-            }
-            else {
-                logDebug "handleSwitchReport: Unhandled button state value: ${v} for ep=${ep}"
-            }
-        }
+
+// Handle switch events from cluster 0x003B (newParse:true format)
+// Example: [callbackType:Event, endpointInt:1, clusterInt:59, evtId:1, value:[0:1]]
+private void handleSwitchEvent(Map msg) {
+    // Ignore noisy buffered events that arrive in the burst right after subscribing.
+    // state.initPending is cleared when SubscriptionResult arrives (or after 5s fallback).
+    if (state.initPending) {
+        logDebug "Ignored switch event (ep=${msg.endpointInt} evtId=${msg.evtId}) - subscription still pending"
         return
     }
-    logDebug "handleSwitchReport: unhandled switch report ep=${ep} cluster=${clus} attr=${attrId} value=${valueObj}"
-}
-
-
-// Handle switch events from cluster 0x003B
-// Example :  Map: [endpoint:01, cluster:003B, evtId:0001, clusterInt:59, evtInt:1, values:[0:[type:04, isContextSpecific:true, value:01]]]
-private void handleSwitchEvent(Map msg) {
-    // Ignore noisy events that arrive shortly after we (re)subscribed.
-    def lastInit = state.lastInitializeTime
-    if (lastInit != null) {
-        long age = now() - (lastInit as long)
-        long uptime = location.hub.uptime ?: 0L // in seconds
-        long thresholdTime = uptime < 60 ? 30000 : 10000
-        if (age >= 0 && age < thresholdTime) {
-            logDebug "Ignored switch event (ep=${msg.endpoint} evt=${msg.evtInt}) ${age}ms after initialize/subscribe.  hub uptime=${uptime}"
-            return
-        }
-    }
-    Integer buttonNumber = safeInt(msg.endpoint)
-    Integer count        = extractMultiPressCount(msg) ?: 1
-    logDebug "handleSwitchEvent: buttonNumber=${buttonNumber} count=${count}}"
-    switch (msg.evtInt) {
+    Integer buttonNumber = msg.endpointInt as Integer
+    logDebug "handleSwitchEvent: buttonNumber=${buttonNumber} evtId=${msg.evtId}"
+    switch (msg.evtId) {
         case 1:     // evt 1 – InitialPress; usually followed by LongPress or ShortRelease/MultiPress*
             state.lastButtonNumber = buttonNumber
             state.lastAction = "initialPress"
@@ -168,8 +137,13 @@ private void handleSwitchEvent(Map msg) {
             }
             break
 
-        case 6:     // evt 6 – MultiPressComplete; this includes press count
+        case 6:     // evt 6 – MultiPressComplete; value:[0:previousPosition, 1:totalNumberOfPresses]
+            Integer count =  safeInt(msg.value[1])
             logDebug "EVT_MULTI_COMPLETE buttonNumber=${buttonNumber} count=${count}"
+            if (count == null) {
+                logDebug "Invalid MultiPressComplete event value: ${msg.value}"
+                break
+            }
             if (isWheelModel() && isWheelEndpoint(buttonNumber)) {
                 logDebug "Multi complete for wheel ep=${buttonNumber} count=${count}"
                 if (count > 3) {
@@ -191,32 +165,17 @@ private void handleSwitchEvent(Map msg) {
             break
 
         default:
-            logDebug "Unhandled switch event evt=${msg.evtInt} ep=${msg.endpoint} count=${count} msg=${msg}"
+            logDebug "Unhandled switch event evtId=${msg.evtId} ep=${msg.endpointInt} msg=${msg}"
             break
     }
 }
 
-/**
- * For MultiPress* events:
- *   values[0].value -> newPosition (01 == pressed)
- *   values[1].value -> totalNumberOfPresses (01, 02, ...)
- */
-private Integer extractMultiPressCount(Map msg) {
-    def values = msg.values
-    if (values == null) return null
-
-    List<Integer> counts = []
-
-    values.each { k, v ->
-        if (v instanceof Map && v.value != null) {
-            Integer n = safeHexToInt(v.value) ?: safeInt(v.value)
-            if (n != null) counts << n
-        }
+void clearInitPending() {
+    unschedule("clearInitPending")
+    if (state.initPending) {
+        state.initPending = false
+        logInfo "subscription confirmed - accepting button events"
     }
-    if (!counts) return null
-
-    // prefer the highest parsed count (totalNumberOfPresses)
-    return counts.max()
 }
 
 void installed() { initialize() }
@@ -301,11 +260,12 @@ private void subscribeToPaths() {
         paths.add(matter.eventPath(ep, 0x003B, -1))         // We need to subscribe for ALL events from the switch cluster 
     }
 
-    String cmd = matter.cleanSubscribe(1, 0xFFFF, paths)
+    String cmd = matter.cleanSubscribe(1, 600, paths)
     logDebug "subscribeToPaths cmd=${cmd}"
     sendHubCommand(new HubAction(cmd, Protocol.MATTER))
-    // Record the time we sent the subscription so we can ignore noisy events that immediately follow subscription/initialize.
-    state.lastInitializeTime = now()
+    // Block events until SubscriptionResult confirms the burst is done; 120s fallback covers slow reconnects after hub reboot.
+    state.initPending = true
+    runIn(120, "clearInitPending")
     logInfo "subscribed to switch events (EP1..EP${epCount}) + battery (EP0/0x002F/0x000C)"
 }
 
