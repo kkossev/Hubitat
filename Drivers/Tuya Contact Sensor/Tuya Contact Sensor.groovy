@@ -43,7 +43,7 @@
  */
 
 static String version() { '1.3.0' }
-static String timeStamp() { '2026/05/12 7:59 AM' }
+static String timeStamp() { '2026/05/12 12:45 AM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -130,7 +130,7 @@ metadata {
                 input name: 'pressureDelay', type: 'number', title: '<b>Pressure Delay</b>', description: 'Delay before reporting closed (pressure detected), seconds', defaultValue: 10, range: '0..3600'
                 input name: 'pressureReportingInterval', type: 'number', title: '<b>Pressure Reporting Interval</b>', description: 'How often the device reports raw pressure, seconds', defaultValue: 60, range: '0..3600'
                 input name: 'sendRawPressure', type: 'bool', title: '<b>Send Raw Pressure Events</b>', description: 'Enable rawPressure attribute events', defaultValue: true
-                input name: 'pressureThreshold', type: 'number', title: '<b>Raw Pressure Threshold</b>', description: 'Minimum change in raw pressure value to trigger an event', defaultValue: 5, range: '0..9999'
+                input name: 'pressureThreshold', type: 'number', title: '<b>Raw Pressure Threshold</b>', description: 'Minimum change in raw pressure value to trigger an event', defaultValue: 1, range: '0..9999'
             }
         }
         input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', defaultValue: false)
@@ -298,7 +298,7 @@ metadata {
         inClusters    : '0000,0004,0005,EF00',
         outClusters   : '0019,000A',
         capabilities  : ['contactSensor': true, 'battery': true],
-        configuration : ['battery': false],                                    // battery via EF00 DP4 only; cluster 0x0001 returns 0x86 (unsupported)
+        configuration : ['battery': false, 'sleepyDevice': true],              // battery via EF00 DP4 only; cluster 0x0001 returns 0x86 (unsupported)
         attributes    : ['healthStatus'],
         preferences   : ['pressureSensitivity': true, 'noPressureDelay': true, 'pressureDelay': true, 'pressureReportingInterval': true],
         batteries     : 'CR2032'
@@ -313,13 +313,14 @@ metadata {
         batteries     : 'unknown'
     ]
 ]
-String getModelGroup()          { return (state.deviceProfile as String) ?: 'UNKNOWN' }
-//String getModelGroup()          { return 'TS0601_PRESSURE_CONTACT_BATT' }   // for tests
+//String getModelGroup()          { return (state.deviceProfile as String) ?: 'UNKNOWN' }
+String getModelGroup()          { return 'TS0601_PRESSURE_CONTACT_BATT' }   // for tests
 boolean isConfigurable(String model)   { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
 boolean isConfigurable()        { String model = getModelGroup(); return isConfigurable(model) }
 boolean isBatteryConfigurable() { deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true }
 boolean hasIlliminance()        { deviceProfiles[getModelGroup()]?.capabilities?.IlluminanceMeasurement?.value == true }
 boolean hasTamper()             { deviceProfiles[getModelGroup()]?.capabilities?.tamperAlert?.value == true }
+boolean isSleepyDevice()        { deviceProfiles[getModelGroup()]?.configuration?.sleepyDevice == true }
 
 @Field static final Integer MaxRetries = 3
 @Field static final Integer ConfigTimer = 15
@@ -458,7 +459,8 @@ def parse(String description) {
             statsMap['rejoins'] = (statsMap['rejoins'] ?: 0) + 1
             state.stats = mapToJsonString(statsMap)
             if (getModelGroup() == 'TS0601_PRESSURE_CONTACT_BATT') {
-                sendPressureSensorConfig('rejoin')
+                setPendingCmds(sendPressureSensorConfigCmds())
+                sendAndClearPendingCmds('rejoin')
             }
         }
         else if (descMap.isClusterSpecific == false && descMap.command == '01') {
@@ -488,6 +490,13 @@ def parse(String description) {
     //
     if (isPendingConfig()) {
         ConfigurationStateMachine()
+    }
+    if (isSleepyDevice() && hasPendingCmds()) {
+        Map lastTxMap = stringToJsonMap(state.lastTx)
+        long lastSent = (lastTxMap.pendingCmdsSentAt ?: 0L) as long
+        if ((now() - lastSent) > 30000) {    // 30s flood guard: don't re-send while waiting for echo
+            sendAndClearPendingCmds('wake')
+        }
     }
     if (settings?.pollContactStatus == true && descMap?.cluster != null && descMap?.cluster != '0500') {          // added 10/19/2023, modified 08/20/2024 (poll only when the current message is not IAS !)
         Map lastTxMap = stringToJsonMap(state.lastTx)
@@ -672,7 +681,7 @@ def processTuyaCluster(descMap) {
             if (settings?.logEnable) { log.warn "${device.displayName} ATTENTION! manufacturer = ${device.getDataValue('manufacturer')} group = ${getModelGroup()} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!" }
         }
     }
-    else if ((descMap?.clusterInt == CLUSTER_TUYA) && (descMap?.command == '01' || descMap?.command == '02' || descMap?.command == '06')) {
+    else if ((descMap?.clusterInt == CLUSTER_TUYA) && (descMap?.command == '01' || descMap?.command == '02' || descMap?.command == '05' || descMap?.command == '06')) {
         def dataLen = descMap?.data.size()
         def transid = zigbee.convertHexToInt(descMap?.data[1])                 // "transid" is just a "counter", a response will have the same transid as the command
         for (int i = 0; i < (dataLen - 4);) {
@@ -713,7 +722,8 @@ def processTuyaDP(descMap, dp, dp_id, fncmd) {
             humidityEvent(fncmd)
             break
         case 0x09: // sensitivity setting (_TZE200_seq9cm6u / _TZE204_seq9cm6u) - config value echoed back by device
-            logDebug "(dp=$dp) sensitivity setting fncmd = ${fncmd}"
+            String sensitivityStr = ['low', 'middle', 'high'].getAt(fncmd) ?: "unknown(${fncmd})"
+            logDebug "(dp=$dp) sensitivity config echo = ${sensitivityStr} (${fncmd})"
             break
         case 0x0C : // (12) - raw pressure for TS0601_PRESSURE_CONTACT_BATT; illuminance for others
             if (getModelGroup() == 'TS0601_PRESSURE_CONTACT_BATT') {
@@ -973,6 +983,28 @@ void tamperEvent(value) {
     sendEvent(map)
 }
 
+// Generic helpers for sleepy device deferred-command delivery
+void setPendingCmds(List<String> cmds) {
+    state.pendingCmds = groovy.json.JsonOutput.toJson(cmds)
+    int count = cmds.count { it.startsWith('he ') }
+    logDebug "setPendingCmds: stored ${count} pending commands"
+}
+boolean hasPendingCmds() {
+    return state.pendingCmds != null && state.pendingCmds != '[]' && state.pendingCmds != 'null'
+}
+void sendAndClearPendingCmds(String reason = 'wake') {
+    List<String> cmds = new groovy.json.JsonSlurper().parseText(state.pendingCmds ?: '[]') as List<String>
+    if (cmds) {
+        int count = cmds.count { it.startsWith('he ') }
+        logInfo "Sending pending config (${reason}): ${count} commands"
+        sendZigbeeCommands(cmds)
+    }
+    state.pendingCmds = null
+    Map lastTxMap = stringToJsonMap(state.lastTx)
+    lastTxMap.pendingCmdsSentAt = now()
+    state.lastTx = mapToJsonString(lastTxMap)
+}
+
 List<String> sendPressureSensorConfigCmds() {
     List<String> cmds = []
     Map<String, Integer> sensitivityMap = ['low': 0, 'middle': 1, 'high': 2]
@@ -1085,8 +1117,7 @@ void updated() {
         int noPressureDelayValue   = safeToInt(settings?.noPressureDelay, 10)
         int pressureDelayValue     = safeToInt(settings?.pressureDelay, 10)
         int reportingIntervalValue = safeToInt(settings?.pressureReportingInterval, 60)
-        logInfo "Pressure sensor config queued: sensitivity=${settings?.pressureSensitivity}, noPressureDelay=${noPressureDelayValue}s, pressureDelay=${pressureDelayValue}s, reportingInterval=${reportingIntervalValue}s \u2014 wake up the device!"
-        updateInfo('Pressure config pending. Wake up the device!')
+        logInfo "Pressure sensor config: sensitivity=${settings?.pressureSensitivity}, noPressureDelay=${noPressureDelayValue}s, pressureDelay=${pressureDelayValue}s, reportingInterval=${reportingIntervalValue}s"
     }
 
     state.lastTx = mapToJsonString(lastTxMap)
@@ -1103,7 +1134,13 @@ void updated() {
     }
 
     if (cmds != []) {
-        sendZigbeeCommands(cmds)
+        if (isSleepyDevice()) {
+            setPendingCmds(cmds)
+            updateInfo('Config pending \u2014 will be sent on next device wake')
+            logInfo 'Sleepy device: config stored, will be sent on next wake'
+        } else {
+            sendZigbeeCommands(cmds)
+        }
     } else {
         logDebug "nothing to send to the device (${getModelGroup()})"
     }
@@ -1246,12 +1283,14 @@ void resetStats() {
             battCfg : '-1,-1,-1'
     ]
     Map lastTx = [
-            battCfgOK : true,
-            cfgTimer : 0
+            battCfgOK        : true,
+            cfgTimer         : 0,
+            pendingCmdsSentAt: null
     ]
     state.stats = mapToJsonString(stats)
     state.lastRx = mapToJsonString(lastRx)
     state.lastTx = mapToJsonString(lastTx)
+    state.pendingCmds = null
     logInfo 'Statistics were reset. Press F5 to refresh the device page'
 }
 
