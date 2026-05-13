@@ -1,7 +1,7 @@
 /*
- * IKEA BILRESA Matter Dual Button (events-based). Supports both dual button and scroll wheel models.
+ * IKEA BILRESA Matter Dual Button (events-based). Supports both dual button and scroll wheel models. 
  *
- * Last edited: 2026/05/13 8:17 AM
+ * Last edited: 2026/05/13 7:35 PM
  *
  * WARNING:
  * This driver runs on pure magic, optimism, and several offerings to the Hubitat gods.
@@ -14,11 +14,13 @@ import hubitat.device.HubAction
 import hubitat.device.Protocol
 
 metadata {
-    definition(name: "IKEA BILRESA Matter Buttons", namespace: "community", author: "kkossev + ChatGPT") {
+    definition(name: "IKEA BILRESA Matter Buttons w/ healthStatus", namespace: "community", author: "kkossev + ChatGPT + Claude", importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/development/Drivers/Ikea%20Matter/IKEA%20BILRESA%20Matter%20Buttons.groovy") {
 
         capability "Initialize"
         capability "Refresh"
         capability "Battery"
+
+        capability "HealthCheck"
 
         capability "PushableButton"
         capability "HoldableButton"
@@ -27,14 +29,18 @@ metadata {
 
         attribute "supportedButtonValues", "enum", ["pushed", "held", "doubleTapped", "released"]
         attribute "numberOfButtons", "number"
+        attribute "healthStatus", "enum", ["online", "offline"]
+        attribute "rtt", "number"
 
         fingerprint endpointId:"01", inClusters:"0003,001D,003B", outClusters:"", model:"BILRESA dual button", manufacturer:"IKEA of Sweden", controllerType:"MAT"
         fingerprint endpointId:"01", inClusters:"0003,001D,003B", outClusters:"", model:"BILRESA scroll wheel", manufacturer:"IKEA of Sweden", controllerType:"MAT"
     }
 
     preferences {
-        input name: "txtEnable", type: "bool", title: "Enable descriptionText logging", defaultValue: true
-        input name: "logEnable", type: "bool", title: "Enable debug logging",          defaultValue: false
+        input name: "txtEnable",         type: "bool", title: "Enable descriptionText logging",                                    defaultValue: true
+        input name: "logEnable",         type: "bool", title: "Enable debug logging",                                        defaultValue: false
+        input name: "enableHealthCheck", type: "bool", title: "Enable health check (ping every 15 min)",                   defaultValue: true
+        input name: "enableAutoReInit",  type: "bool", title: "Auto re-initialize after 2 consecutive ping failures",      defaultValue: true
     }
 }
 
@@ -49,6 +55,7 @@ void parse(String description) {
 
 void parse(Map msg) {
     logDebug "parse(Map) received: ${msg}"
+    handleLiveness(msg)
 
     boolean isEvent = msg.evtId != null
 
@@ -101,10 +108,22 @@ void parse(Map msg) {
 // Example: [callbackType:Event, endpointInt:1, clusterInt:59, evtId:1, value:[0:1]]
 private void handleSwitchEvent(Map msg) {
     // Ignore noisy buffered events that arrive in the burst right after subscribing.
-    // state.initPending is cleared when SubscriptionResult arrives (or after 5s fallback).
+    // state.initPending is cleared when SubscriptionResult arrives (or after 120s fallback).
     if (state.initPending) {
         logDebug "Ignored switch event (ep=${msg.endpointInt} evtId=${msg.evtId}) - subscription still pending"
         return
+    }
+
+    // Deduplicate by eventSerial: the same buffered events can be re-delivered across
+    // multiple subscription bursts (e.g. after autoReInit). Reject already-seen serials.
+    Long serial = msg.eventSerial as Long
+    if (serial != null) {
+        Long lastSerial = (state.lastEventSerial ?: 0L) as Long
+        if (serial <= lastSerial) {
+            logDebug "Duplicate event rejected (ep=${msg.endpointInt} evtId=${msg.evtId} eventSerial=${serial} lastSerial=${lastSerial})"
+            return
+        }
+        state.lastEventSerial = serial
     }
     Integer buttonNumber = msg.endpointInt as Integer
     logDebug "handleSwitchEvent: buttonNumber=${buttonNumber} evtId=${msg.evtId}"
@@ -182,11 +201,84 @@ void clearInitPending() {
     unschedule("clearInitPending")
     if (state.initPending) {
         state.initPending = false
-        logInfo "subscription confirmed - accepting button events"
+        logInfo "accepting button events now..."
     }
 }
 
-void installed() { initialize() }
+/* ---------- health check ---------- */
+
+private void handleLiveness(Map msg) {
+    // Cancel pending auto-reinit — any Matter message means the device is alive
+    unschedule("autoReInit")
+
+    // If a ping is in flight, handle the response (explicit or implicit)
+    if (state.pingStart != null) {
+        unschedule("pingTimeout")
+        Long rtt = now() - (state.pingStart as Long)
+        if (msg.clusterInt == 0x0028 && msg.attrInt == 0x0000) {
+            sendEvent(name: "rtt", value: rtt, unit: "ms", type: "digital", descriptionText: "Ping round-trip time: ${rtt} ms")
+            logInfo "Ping RTT: ${rtt} ms"
+        } else {
+            logDebug "Implicit ping success (msg arrived while ping in-flight), RTT: ${rtt} ms"
+        }
+        state.pingStart = null
+    }
+
+    // Reset consecutive fail counter on any activity
+    state.pingConsecutiveFails = 0
+
+    // If device was offline, mark it back online
+    if (device.currentValue("healthStatus") == "offline") {
+        sendEvent(name: "healthStatus", value: "online", type: "digital")
+        logInfo "Device is back online"
+    }
+}
+
+void ping() {
+    deviceHealthCheck()
+}
+
+void deviceHealthCheck() {
+    if (enableHealthCheck == false) { return }
+    if (state.initPending) {
+        logDebug "deviceHealthCheck() skipped — subscription still pending"
+        return
+    }
+    logDebug "deviceHealthCheck() - sending DataModelRevision read"
+    state.pingStart = now()
+    List<Map<String,String>> paths = [matter.attributePath(0x00, 0x0028, 0x0000)]
+    sendHubCommand(new HubAction(matter.readAttributes(paths), Protocol.MATTER))
+    runIn(30, "pingTimeout")
+}
+
+void pingTimeout() {
+    state.pingStart = null
+    state.pingConsecutiveFails = (state.pingConsecutiveFails ?: 0) + 1
+    if (state.stats == null) { state.stats = [:] }
+    state.stats.pingFailCounter = (state.stats.pingFailCounter ?: 0) + 1
+    sendEvent(name: "rtt", value: -1, unit: "ms", type: "digital", descriptionText: "Ping timeout (consecutiveFails=${state.pingConsecutiveFails})")
+    logWarn "Ping timeout! consecutiveFails=${state.pingConsecutiveFails} (total pingFails=${state.stats.pingFailCounter})"
+    if (state.pingConsecutiveFails >= 2) {
+        sendEvent(name: "healthStatus", value: "offline", type: "digital")
+        logWarn "Device is OFFLINE after ${state.pingConsecutiveFails} consecutive ping failures"
+        if (enableAutoReInit != false) {
+            logWarn "Auto re-init scheduled in 30 seconds"
+            runIn(30, "autoReInit")
+        }
+    }
+}
+
+void autoReInit() {
+    if (state.stats == null) { state.stats = [:] }
+    state.stats.autoReInitCounter = (state.stats.autoReInitCounter ?: 0) + 1
+    logWarn "Auto re-initializing after failed health checks (autoReInitCounter=${state.stats.autoReInitCounter})"
+    initialize()
+}
+
+void installed() {
+    state.stats = [initializeCounter: 0, pingFailCounter: 0, autoReInitCounter: 0]
+    initialize()
+}
 
 void updated() {
     logInfo "updated..."
@@ -200,12 +292,20 @@ void logsOff() {
 }
 
 void initialize() {
-    logInfo "initialize..."
+    if (state.stats == null) { state.stats = [initializeCounter: 0, pingFailCounter: 0, autoReInitCounter: 0] }
+    state.stats.initializeCounter = (state.stats.initializeCounter ?: 0) + 1
+    unschedule("deviceHealthCheck")
+    unschedule("pingTimeout")
+    unschedule("autoReInit")
+    state.pingStart = null
+    state.pingConsecutiveFails = 0
+    logInfo "initialize... (initializeCounter=${state.stats.initializeCounter})"
     if (getDataValue("newParse") != "true") { device.updateDataValue("newParse", "true") }
     logInfo "model=${device.getDataValue('model') ?: device.model} endpoints=${endpointCount()} newParse=${getDataValue("newParse")} uptime=${location.hub.uptime}"
     configureButtons()
     subscribeToPaths()
     refresh()
+    if (enableHealthCheck != false) { runEvery5Minutes("deviceHealthCheck") }
 }
 
 private void configureButtons() {
@@ -277,7 +377,7 @@ private void subscribeToPaths() {
     // Block events until SubscriptionResult confirms the burst is done; 120s fallback covers slow reconnects after hub reboot.
     state.initPending = true
     runIn(120, "clearInitPending")
-    logInfo "subscribed to switch events (EP1..EP${epCount}) + battery (EP0/0x002F/0x000C)"
+    logInfo "subscribing to switch events (EP1..EP${epCount}) + battery (EP0/0x002F/0x000C)"
 }
 
 private void sendButtonEventFiltered(String type, Integer buttonNumber) {
@@ -346,18 +446,14 @@ private Integer safeInt(def v) {
     }
 }
 
-private Integer safeHexToInt(Object hex) {
-    if (hex == null) return null
-    String s = hex.toString().trim()
-    if (s.startsWith("0x") || s.startsWith("0X")) s = s.substring(2)
-    if (!s) return null
-    try { return Integer.parseUnsignedInt(s, 16) } catch (Exception ignored) { return null }
-}
-
 private void logDebug(String msg) {
     if (logEnable) log.debug "${device.displayName} ${msg}"
 }
 
 private void logInfo(String msg) {
     if (txtEnable) { log.info "${device.displayName} ${msg}" }
+}
+
+private void logWarn(String msg) {
+    log.warn "${device.displayName} ${msg}"
 }
