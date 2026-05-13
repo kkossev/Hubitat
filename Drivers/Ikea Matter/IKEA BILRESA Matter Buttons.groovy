@@ -1,7 +1,7 @@
 /*
  * IKEA BILRESA Matter Dual Button (events-based). Supports both dual button and scroll wheel models.
  *
- * Last edited: 2026/05/11 11:42 PM
+ * Last edited: 2026/05/13 8:17 AM
  *
  * WARNING:
  * This driver runs on pure magic, optimism, and several offerings to the Hubitat gods.
@@ -80,6 +80,14 @@ void parse(Map msg) {
     // Switch attribute reports - ignore explicitly
     if (msg.clusterInt == 0x003B && !isEvent) {
         logDebug "newParse(Map): ignoring switch attribute report ep=${msg.endpointInt} cluster=${msg.clusterInt} attr=${msg.attrInt} value=${msg.value}"
+        return
+    }
+
+    // Software version string (Basic Information cluster 0x0028, attr 0x000A)
+    if (msg.clusterInt == 0x0028 && msg.attrInt == 0x000A) {
+        String ver = msg.value?.toString() ?: ""
+        device.updateDataValue("softwareVersion", ver)
+        logInfo "softwareVersion=${ver}"
         return
     }
 
@@ -234,6 +242,9 @@ void refresh() {
 
     // Battery percent (raw 0..200)
     paths.add(matter.attributePath(0x00, 0x002F, 0x000C))
+
+    // Software version string (Basic Information cluster)
+    paths.add(matter.attributePath(0x00, 0x0028, 0x000A))
 
     String cmd = matter.readAttributes(paths)
     sendHubCommand(new HubAction(cmd, Protocol.MATTER))
