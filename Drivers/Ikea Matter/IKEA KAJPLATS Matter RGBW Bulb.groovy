@@ -18,6 +18,7 @@ metadata {
 
         capability "Switch"
         capability "SwitchLevel"
+        capability "ChangeLevel"
         capability "ColorControl"
         capability "ColorTemperature"
         capability "Refresh"
@@ -38,6 +39,10 @@ metadata {
     preferences {
         input name: "txtEnable",         type: "bool", title: "Enable descriptionText logging",                         defaultValue: true
         input name: "logEnable",         type: "bool", title: "Enable debug logging",                                  defaultValue: false
+        input name: "colorPreStaging",   type: "bool", title: "Enable color pre-staging",                                      defaultValue: true
+        input name: "transitionTime",    type: "enum", title: "Transition time",
+            options: ["ASAP":"ASAP", "500ms":"500ms", "1s":"1s", "1.5s":"1.5s", "2s":"2s", "5s":"5s"],
+            defaultValue: "1s"
         input name: "enableHealthCheck", type: "bool", title: "Enable health check (ping every 5 min)",                defaultValue: true
         input name: "enableAutoReInit",  type: "bool", title: "Auto re-initialize after 2 consecutive ping failures",  defaultValue: true
     }
@@ -115,7 +120,7 @@ void off() {
 void setLevel(BigDecimal level, BigDecimal rate = null) {
     logDebug "setting level to ${level}%${rate != null ? " (rate=${rate}s)" : ""}"
     Integer levelScaled = int100To254(level as Integer)
-    Integer durationTenths = (rate == null) ? 0 : (rate * 10) as Integer
+    Integer durationTenths = (rate == null) ? transitionTimeTenths() : (rate * 10) as Integer
     List<Map<String,String>> cmdFields = [
         matter.cmdField(DataType.UINT8,  0x00, HexUtils.integerToHexString(levelScaled, 1)),
         matter.cmdField(DataType.UINT16, 0x01, zigbee.swapOctets(HexUtils.integerToHexString(durationTenths, 2)))
@@ -124,17 +129,41 @@ void setLevel(BigDecimal level, BigDecimal rate = null) {
     sendHubCommand(new HubAction(matter.invoke(0x01, 0x0008, 0x04, cmdFields), Protocol.MATTER))
 }
 
+void startLevelChange(String direction) {
+    logDebug "startLevelChange direction=${direction}"
+    Integer moveMode = (direction == "down") ? 0x01 : 0x00
+    List<Map<String,String>> cmdFields = [
+        matter.cmdField(DataType.UINT8, 0x00, HexUtils.integerToHexString(moveMode, 1)),
+        matter.cmdField(DataType.UINT8, 0x01, "FF")   // rate = device default
+    ]
+    // MoveWithOnOff (0x05)
+    sendHubCommand(new HubAction(matter.invoke(0x01, 0x0008, 0x05, cmdFields), Protocol.MATTER))
+}
+
+void stopLevelChange() {
+    logDebug "stopLevelChange"
+    // StopWithOnOff (0x07)
+    sendHubCommand(new HubAction(matter.invoke(0x01, 0x0008, 0x07, []), Protocol.MATTER))
+}
+
 void setColorTemperature(BigDecimal colorTemperature, BigDecimal level = null, BigDecimal rate = null) {
     logDebug "setting color temperature to ${colorTemperature}K${level != null ? " level=${level}%" : ""}${rate != null ? " rate=${rate}s" : ""}"
     Integer mireds = ctToMired(colorTemperature as Integer)
-    Integer durationTenths = (rate == null) ? 0 : (rate * 10) as Integer
+    Integer durationTenths = (rate == null) ? transitionTimeTenths() : (rate * 10) as Integer
     List<Map<String,String>> cmdFields = [
         matter.cmdField(DataType.UINT16, 0x00, zigbee.swapOctets(HexUtils.integerToHexString(mireds, 2))),
         matter.cmdField(DataType.UINT16, 0x01, zigbee.swapOctets(HexUtils.integerToHexString(durationTenths, 2)))
     ]
     // MoveToColorTemperature (0x0A)
     sendHubCommand(new HubAction(matter.invoke(0x01, 0x0300, 0x0A, cmdFields), Protocol.MATTER))
-    if (level != null) { setLevel(level, rate) }
+    Boolean isOff = (device.currentValue("switch") == "off")
+    if (colorPreStaging != false && isOff) {
+        logDebug "color pre-staging: bulb is off, skipping on/level command"
+    } else if (level != null) {
+        setLevel(level, rate)
+    } else if (isOff) {
+        on()
+    }
 }
 
 void setColor(Map colormap) {
@@ -144,11 +173,18 @@ void setColor(Map colormap) {
     List<Map<String,String>> cmdFields = [
         matter.cmdField(DataType.UINT8,  0x00, HexUtils.integerToHexString(hueScaled, 1)),
         matter.cmdField(DataType.UINT8,  0x01, HexUtils.integerToHexString(satScaled, 1)),
-        matter.cmdField(DataType.UINT16, 0x02, zigbee.swapOctets(HexUtils.integerToHexString(1, 2)))  // transition 0.1 s
+        matter.cmdField(DataType.UINT16, 0x02, zigbee.swapOctets(HexUtils.integerToHexString(transitionTimeTenths(), 2)))
     ]
     // MoveToHueAndSaturation (0x06)
     sendHubCommand(new HubAction(matter.invoke(0x01, 0x0300, 0x06, cmdFields), Protocol.MATTER))
-    if (colormap.level != null) { setLevel(colormap.level as BigDecimal, null) }
+    Boolean isOff = (device.currentValue("switch") == "off")
+    if (colorPreStaging != false && isOff) {
+        logDebug "color pre-staging: bulb is off, skipping on/level command"
+    } else if (colormap.level != null) {
+        setLevel(colormap.level as BigDecimal, null)
+    } else if (isOff) {
+        on()
+    }
 }
 
 void setHue(BigDecimal hue) {
@@ -157,10 +193,11 @@ void setHue(BigDecimal hue) {
     List<Map<String,String>> cmdFields = [
         matter.cmdField(DataType.UINT8,  0x00, HexUtils.integerToHexString(hueScaled, 1)),
         matter.cmdField(DataType.UINT8,  0x01, "00"),   // direction = Shortest
-        matter.cmdField(DataType.UINT16, 0x02, zigbee.swapOctets(HexUtils.integerToHexString(1, 2)))
+        matter.cmdField(DataType.UINT16, 0x02, zigbee.swapOctets(HexUtils.integerToHexString(transitionTimeTenths(), 2)))
     ]
     // MoveToHue (0x00)
     sendHubCommand(new HubAction(matter.invoke(0x01, 0x0300, 0x00, cmdFields), Protocol.MATTER))
+    if (colorPreStaging == false && device.currentValue("switch") == "off") { on() }
 }
 
 void setSaturation(BigDecimal saturation) {
@@ -168,10 +205,11 @@ void setSaturation(BigDecimal saturation) {
     Integer satScaled = int100To254(saturation as Integer)
     List<Map<String,String>> cmdFields = [
         matter.cmdField(DataType.UINT8,  0x00, HexUtils.integerToHexString(satScaled, 1)),
-        matter.cmdField(DataType.UINT16, 0x01, zigbee.swapOctets(HexUtils.integerToHexString(1, 2)))
+        matter.cmdField(DataType.UINT16, 0x01, zigbee.swapOctets(HexUtils.integerToHexString(transitionTimeTenths(), 2)))
     ]
     // MoveToSaturation (0x03)
     sendHubCommand(new HubAction(matter.invoke(0x01, 0x0300, 0x03, cmdFields), Protocol.MATTER))
+    if (colorPreStaging == false && device.currentValue("switch") == "off") { on() }
 }
 
 /* ---------- parse ---------- */
@@ -240,8 +278,8 @@ void parse(Map msg) {
         Integer raw = safeInt(msg.value)
         if (raw != null) {
             Integer h = int254To100(raw)
-            sendEvent(name: "hue", value: h, descriptionText: "${device.displayName} hue is ${h}", type: "physical")
-            logInfo "Hue is ${h}"
+            sendEvent(name: "hue", value: h, descriptionText: "${device.displayName} hue is ${h}%", type: "physical")
+            logInfo "Hue is ${h}%"
             if ((device.currentValue("colorMode") ?: "") != "CT") { updateColorName() }
         }
         return
@@ -252,8 +290,8 @@ void parse(Map msg) {
         Integer raw = safeInt(msg.value)
         if (raw != null) {
             Integer s = int254To100(raw)
-            sendEvent(name: "saturation", value: s, descriptionText: "${device.displayName} saturation is ${s}", type: "physical")
-            logInfo "Saturation is ${s}"
+            sendEvent(name: "saturation", value: s, descriptionText: "${device.displayName} saturation is ${s}%", type: "physical")
+            logInfo "Saturation is ${s}%"
             if ((device.currentValue("colorMode") ?: "") != "CT") { updateColorName() }
         }
         return
@@ -319,6 +357,17 @@ private Integer int254To100(Integer v) {
     if (v == null || v <= 0) return 0
     Integer pct = (int) Math.round(v / 2.54)
     return Math.max(1, Math.min(pct, 100))   // raw>0 always maps to at least 1%
+}
+
+private Integer transitionTimeTenths() {
+    switch (transitionTime) {
+        case "ASAP":  return 0
+        case "500ms": return 5
+        case "1.5s":  return 15
+        case "2s":    return 20
+        case "5s":    return 50
+        default:      return 10  // 1s
+    }
 }
 
 // Color temperature conversion
