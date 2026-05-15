@@ -390,7 +390,8 @@ private void handleLiveness(Map msg) {
         state.pingStart = null
     }
     state.pingConsecutiveFails = 0
-    if (device.currentValue("healthStatus") == "offline") {
+    // If device is not yet online (null on first boot) or was offline, mark it online
+    if (device.currentValue("healthStatus") != "online") {
         sendEvent(name: "healthStatus", value: "online", descriptionText: "${device.displayName} is online", type: "digital")
         logInfo "Device is back online"
     }

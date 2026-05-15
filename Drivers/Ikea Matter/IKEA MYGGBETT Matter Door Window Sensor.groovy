@@ -187,9 +187,9 @@ private void handleLiveness(Map msg) {
     // Reset consecutive fail counter on any activity
     state.pingConsecutiveFails = 0
 
-    // If device was offline, mark it back online
-    if (device.currentValue("healthStatus") == "offline") {
-        sendEvent(name: "healthStatus", value: "online", type: "digital")
+    // If device is not yet online (null on first boot) or was offline, mark it online
+    if (device.currentValue("healthStatus") != "online") {
+        sendEvent(name: "healthStatus", value: "online", descriptionText: "${device.displayName} is online", type: "digital")
         logInfo "Device is back online"
     }
 }
@@ -215,7 +215,7 @@ void pingTimeout() {
     sendEvent(name: "rtt", value: -1, unit: "ms", type: "digital", descriptionText: "Ping timeout (consecutiveFails=${state.pingConsecutiveFails})")
     logWarn "Ping timeout! consecutiveFails=${state.pingConsecutiveFails} (total pingFails=${state.stats.pingFailCounter})"
     if (state.pingConsecutiveFails >= 2) {
-        sendEvent(name: "healthStatus", value: "offline", type: "digital")
+        sendEvent(name: "healthStatus", value: "offline", descriptionText: "${device.displayName} is offline", type: "digital")
         logWarn "Device is OFFLINE after ${state.pingConsecutiveFails} consecutive ping failures"
         if (enableAutoReInit != false) {
             logWarn "Auto re-init scheduled in 30 seconds"
