@@ -6,7 +6,7 @@
  *   EP1  : On/Off Plug-in Unit — OnOff cluster (0x0006)
  *   EP2  : Electrical Sensor  — Power Measurement (0x0090) + Energy Measurement (0x0091)
  *
- * Last edited: 2026/05/14 12:00 AM
+ * Last edited: 2026/05/15 10:51 AM
  */
 
 import hubitat.device.HubAction
@@ -178,7 +178,7 @@ void parse(Map msg) {
         Long raw = safeLong(msg.value)
         if (raw != null) {
             BigDecimal w = (raw / 1000.0).setScale(1, BigDecimal.ROUND_HALF_UP)
-            sendEvent(name: "power", value: w, unit: "W", descriptionText: txtEnable ? "Power is ${w} W" : null)
+            sendEvent(name: "power", value: w, unit: "W", descriptionText: txtEnable ? "Power is ${w} W" : null, isStateChange: true)
             logInfo "Power is ${w} W"
         }
         return
@@ -189,7 +189,7 @@ void parse(Map msg) {
         Long raw = safeLong(msg.value)
         if (raw != null) {
             BigDecimal v = (raw / 1000.0).setScale(1, BigDecimal.ROUND_HALF_UP)
-            sendEvent(name: "voltage", value: v, unit: "V", descriptionText: txtEnable ? "Voltage is ${v} V" : null)
+            sendEvent(name: "voltage", value: v, unit: "V", descriptionText: txtEnable ? "Voltage is ${v} V" : null, isStateChange: true)
             logInfo "Voltage is ${v} V"
         }
         return
@@ -237,7 +237,7 @@ void parse(Map msg) {
         Long mwh = structData ? safeLong(structData.find { k, v -> k.toString().startsWith('0:') }?.value) : null
         if (mwh != null) {
             BigDecimal kwh = (mwh / 1000000.0).setScale(3, BigDecimal.ROUND_HALF_UP)
-            sendEvent(name: "energy", value: kwh, unit: "kWh", descriptionText: txtEnable ? "Energy is ${kwh} kWh" : null)
+            sendEvent(name: "energy", value: kwh, unit: "kWh", descriptionText: txtEnable ? "Energy is ${kwh} kWh" : null, isStateChange: true)
             logInfo "Energy is ${kwh} kWh"
         } else {
             logWarn "CumulativeEnergyImported: could not parse from data=${msg.data}"
@@ -302,6 +302,30 @@ void deviceHealthCheck() {
     List<Map<String,String>> paths = [matter.attributePath(0x00, 0x0028, 0x0000)]
     sendHubCommand(new HubAction(matter.readAttributes(paths), Protocol.MATTER))
     runIn(30, "pingTimeout")
+    // Voltage staleness check: if no voltage report in the last 1 hour, request a fresh read
+    def lastVoltage = device.currentState("voltage")
+    if (lastVoltage == null || (now() - lastVoltage.date.time) > 1 * 3600 * 1000L) {
+        logWarn "No voltage report in >1h — requesting voltage attribute read"
+        sendHubCommand(new HubAction(matter.readAttributes([matter.attributePath(0x02, 0x0090, 0x000B)]), Protocol.MATTER))
+    } else {
+        logDebug "Voltage report is recent (last: ${lastVoltage.date})"
+    }
+    // Power staleness check: if no power report in the last 1 hour, request a fresh read
+    def lastPower = device.currentState("power")
+    if (lastPower == null || (now() - lastPower.date.time) > 1 * 3600 * 1000L) {
+        logWarn "No power report in >1h — requesting power attribute read"
+        sendHubCommand(new HubAction(matter.readAttributes([matter.attributePath(0x02, 0x0090, 0x0008)]), Protocol.MATTER))
+    } else {
+        logDebug "Power report is recent (last: ${lastPower.date})"
+    }
+    // Energy staleness check: if no energy report in the last 1 hour, request a fresh read
+    def lastEnergy = device.currentState("energy")
+    if (lastEnergy == null || (now() - lastEnergy.date.time) > 1 * 3600 * 1000L) {
+        logWarn "No energy report in >1h — requesting energy attribute read"
+        sendHubCommand(new HubAction(matter.readAttributes([matter.attributePath(0x02, 0x0091, 0x0001)]), Protocol.MATTER))
+    } else {
+        logDebug "Energy report is recent (last: ${lastEnergy.date})"
+    }
 }
 
 void pingTimeout() {

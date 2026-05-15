@@ -655,7 +655,7 @@ private void handlePowerSource(Integer ep, Integer attrId, Map msg) {
         Integer raw = msg.value as Integer
         if (raw != null) {
             Integer pct = Math.max(0, Math.min(100, raw / 2))
-            sendEvent(name: "battery", value: pct, unit: "%")
+            sendEvent(name: "battery", value: pct, unit: "%", descriptionText: "Battery is ${pct}%", isStateChange: true)
             logInfo "Battery: ${pct}%"
         }
     }

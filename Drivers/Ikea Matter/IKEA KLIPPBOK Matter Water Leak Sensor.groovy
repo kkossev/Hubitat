@@ -128,7 +128,7 @@ void parse(Map msg) {
         if (raw != null) {
             Integer pct = Math.round(raw / 2.0f)
             pct = Math.max(0, Math.min(100, pct))
-            sendEvent(name: "battery", value: pct, unit: "%")
+            sendEvent(name: "battery", value: pct, unit: "%", descriptionText: "Battery is ${pct}%", isStateChange: true)
             logInfo "Battery is ${pct}%"
         }
         return
@@ -191,6 +191,14 @@ void deviceHealthCheck() {
     List<Map<String,String>> paths = [matter.attributePath(0x00, 0x0028, 0x0000)]
     sendHubCommand(new HubAction(matter.readAttributes(paths), Protocol.MATTER))
     runIn(30, "pingTimeout")
+    // Battery staleness check: if no battery report in the last 12 hours, request a fresh read
+    def lastBat = device.currentState("battery")
+    if (lastBat == null || (now() - lastBat.date.time) > 12 * 3600 * 1000L) {
+        logWarn "No battery report in >12h — requesting battery attribute read"
+        sendHubCommand(new HubAction(matter.readAttributes([matter.attributePath(0x00, 0x002F, 0x000C)]), Protocol.MATTER))
+    } else {
+        logDebug "Battery report is recent (last: ${lastBat.date})"
+    }
 }
 
 void pingTimeout() {

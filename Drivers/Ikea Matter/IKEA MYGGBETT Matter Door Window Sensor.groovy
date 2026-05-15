@@ -142,7 +142,7 @@ void parse(Map msg) {
             logDebug "Battery report received; current contact state is ${contactVal}"
             if (sfx == "") sfx = " (contact is ${contactVal})"
             // for battery, we can safely mark isStateChange true during init/refresh without causing issues in apps
-            sendEvent(name: "battery", value: pct, unit: "%", descriptionText: txtEnable ? "Battery is ${pct}%${sfx}" : null, isStateChange: (isInit || isRef), type: "physical")
+            sendEvent(name: "battery", value: pct, unit: "%", descriptionText: "Battery is ${pct}%${sfx}", isStateChange: true, type: "physical")
             logInfo "Battery is ${pct}%${sfx}"
         }
         return
@@ -205,6 +205,14 @@ void deviceHealthCheck() {
     List<Map<String,String>> paths = [matter.attributePath(0x00, 0x0028, 0x0000)]
     sendHubCommand(new HubAction(matter.readAttributes(paths), Protocol.MATTER))
     runIn(30, "pingTimeout")
+    // Battery staleness check: if no battery report in the last 12 hours, request a fresh read
+    def lastBat = device.currentState("battery")
+    if (lastBat == null || (now() - lastBat.date.time) > 12 * 3600 * 1000L) {
+        logWarn "No battery report in >12h — requesting battery attribute read"
+        sendHubCommand(new HubAction(matter.readAttributes([matter.attributePath(0x00, 0x002F, 0x000C)]), Protocol.MATTER))
+    } else {
+        logDebug "Battery report is recent (last: ${lastBat.date})"
+    }
 }
 
 void pingTimeout() {
