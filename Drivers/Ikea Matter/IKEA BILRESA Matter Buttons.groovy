@@ -1,7 +1,9 @@
 /*
  * IKEA BILRESA Matter Dual Button (events-based). Supports both dual button and scroll wheel models. 
  *
- * Last edited: 2026/05/16 10:30 PM
+ * https://community.hubitat.com/t/what-do-i-need-at-ikea/158182/83?u=kkossev
+ *
+ * Last edited: 2026/05/16 10:49 PM
  *
  * WARNING:
  * This driver runs on pure magic, optimism, and several offerings to the Hubitat gods.
@@ -578,5 +580,5 @@ private void logInfo(String msg) {
 }
 
 private void logWarn(String msg) {
-    log.warn "${device.displayName} ${msg}"
+    if (logEnable) { log.warn "${device.displayName} ${msg}" }
 }

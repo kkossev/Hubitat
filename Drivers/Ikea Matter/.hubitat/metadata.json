@@ -10,7 +10,7 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA BILRESA Matter Buttons.groovy",
       "id": 4762,
       "codeType": "driver",
-      "version": 166
+      "version": 167
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA KLIPPBOK Matter Water Leak Sensor.groovy",
@@ -22,7 +22,7 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA TIMMERFLOTTE Matter Temp+Hum+Bat.groovy",
       "id": 4759,
       "codeType": "driver",
-      "version": 7
+      "version": 8
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA ALPSTUGA Matter AQ+Temp+Hum+PM2.5+CO2.groovy",

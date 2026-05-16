@@ -1,14 +1,16 @@
 /*
  * IKEA TIMMERFLOTTE Matter Temp + Humidity + Battery
  *
- * Last edited: 2026/05/14 12:00 AM
+ * https://community.hubitat.com/t/what-do-i-need-at-ikea/158182/73?u=kkossev
+ *
+ * Last edited: 2026/05/16 10:59 PM
  */
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 
 metadata {
-    definition(name: "IKEA TIMMERFLOTTE Matter Temp+Hum+Bat w/ healthStatus", namespace: "community", author: "kkossev + ChatGPT + Claude", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Ikea%20Matter/IKEA%20TIMMERFLOTTE%20Matter%20Temp%2BHum%2BBat.groovy") {
+    definition(name: "IKEA TIMMERFLOTTE Matter Temp+Hum+Bat w/ healthStatus", namespace: "community", author: "kkossev + ChatGPT + Claude", singleThreaded: true, importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Ikea%20Matter/IKEA%20TIMMERFLOTTE%20Matter%20Temp%2BHum%2BBat.groovy") {
         capability "Sensor"
         capability "TemperatureMeasurement"
         capability "RelativeHumidityMeasurement"
@@ -77,7 +79,7 @@ private void subscribeToAttributes() {
     paths.add(matter.attributePath(0x02, 0x0405, 0x0000)) // humidity
     paths.add(matter.attributePath(0x00, 0x002F, 0x000C)) // BatteryPercentRemaining
 
-    String cmd = matter.cleanSubscribe(1, 600, paths)
+    String cmd = matter.cleanSubscribe(0, 600, paths)
     sendHubCommand(new HubAction(cmd, Protocol.MATTER))
 
     logInfo "subscribing to temperature (EP1/0x0402) + humidity (EP2/0x0405) + battery (EP0/0x002F/0x000C)"
@@ -93,6 +95,20 @@ void parse(String description) {
 void parse(Map msg) {
     logDebug "parse(Map) received: ${msg}"
     handleLiveness(msg)
+
+    // Ping response (explicit) or implicit ping success (any msg while ping in-flight)
+    if (state.pingStart != null) {
+        unschedule("pingTimeout")
+        Long rtt = now() - (state.pingStart as Long)
+        if (msg.clusterInt == 0x0028 && msg.attrInt == 0x0000) {
+            sendEvent(name: "rtt", value: rtt, unit: "ms", type: "digital", descriptionText: "Ping round-trip time: ${rtt} ms")
+            logInfo "Ping RTT: ${rtt} ms"
+            state.pingStart = null
+            return   // ping response fully handled
+        }
+        logDebug "Implicit ping success (msg arrived while ping in-flight), RTT: ${rtt} ms"
+        state.pingStart = null
+    }
 
     Integer ep     = msg.endpointInt
     Integer clus   = msg.clusterInt
@@ -161,19 +177,6 @@ private Integer safeInt(def v) {
 private void handleLiveness(Map msg) {
     // Cancel pending auto-reinit — any Matter message means the device is alive
     unschedule("autoReInit")
-
-    // If a ping is in flight, handle the response (explicit or implicit)
-    if (state.pingStart != null) {
-        unschedule("pingTimeout")
-        Long rtt = now() - (state.pingStart as Long)
-        if (msg.clusterInt == 0x0028 && msg.attrInt == 0x0000) {
-            sendEvent(name: "rtt", value: rtt, unit: "ms", type: "digital", descriptionText: "Ping round-trip time: ${rtt} ms")
-            logInfo "Ping RTT: ${rtt} ms"
-        } else {
-            logDebug "Implicit ping success (msg arrived while ping in-flight), RTT: ${rtt} ms"
-        }
-        state.pingStart = null
-    }
 
     // Reset consecutive fail counter on any activity
     state.pingConsecutiveFails = 0
