@@ -5,7 +5,7 @@
  *   EP0  : Basic Information (0x0028), General Diagnostics (0x0033)
  *   EP1  : Extended Color Light — OnOff (0x0006), LevelControl (0x0008), ColorControl (0x0300)
  *
- * Last edited: 2026/05/14
+ * Last edited: 2026/05/16 11:26 AM
  */
 
 import hubitat.device.HubAction
@@ -43,6 +43,9 @@ metadata {
         input name: "transitionTime",    type: "enum", title: "Transition time",
             options: ["ASAP":"ASAP", "500ms":"500ms", "1s":"1s", "1.5s":"1.5s", "2s":"2s", "5s":"5s"],
             defaultValue: "1s"
+        input name: "levelChangeRate",    type: "enum", title: "Hold-to-dim rate (startLevelChange)",
+            options: ["slow":"Slow (~10s full sweep)", "medium":"Medium (~5s full sweep)", "fast":"Fast (~2.5s full sweep)", "vfast":"Very fast (~1.5s full sweep)"],
+            defaultValue: "medium"
         input name: "enableHealthCheck", type: "bool", title: "Enable health check (ping every 5 min)",                defaultValue: true
         input name: "enableAutoReInit",  type: "bool", title: "Auto re-initialize after 2 consecutive ping failures",  defaultValue: true
     }
@@ -123,7 +126,9 @@ void setLevel(BigDecimal level, BigDecimal rate = null) {
     Integer durationTenths = (rate == null) ? transitionTimeTenths() : (rate * 10) as Integer
     List<Map<String,String>> cmdFields = [
         matter.cmdField(DataType.UINT8,  0x00, HexUtils.integerToHexString(levelScaled, 1)),
-        matter.cmdField(DataType.UINT16, 0x01, zigbee.swapOctets(HexUtils.integerToHexString(durationTenths, 2)))
+        matter.cmdField(DataType.UINT16, 0x01, zigbee.swapOctets(HexUtils.integerToHexString(durationTenths, 2))),
+        matter.cmdField(DataType.UINT8,  0x02, "00"),   // OptionsMask
+        matter.cmdField(DataType.UINT8,  0x03, "00")    // OptionsOverride
     ]
     // MoveToLevelWithOnOff (0x04) so the bulb turns on when dimmed up
     sendHubCommand(new HubAction(matter.invoke(0x01, 0x0008, 0x04, cmdFields), Protocol.MATTER))
@@ -132,9 +137,12 @@ void setLevel(BigDecimal level, BigDecimal rate = null) {
 void startLevelChange(String direction) {
     logDebug "startLevelChange direction=${direction}"
     Integer moveMode = (direction == "down") ? 0x01 : 0x00
+    Integer rate = levelChangeRateUnitsPerSec()
     List<Map<String,String>> cmdFields = [
         matter.cmdField(DataType.UINT8, 0x00, HexUtils.integerToHexString(moveMode, 1)),
-        matter.cmdField(DataType.UINT8, 0x01, "FF")   // rate = device default
+        matter.cmdField(DataType.UINT8, 0x01, HexUtils.integerToHexString(rate, 1)),   // rate (level units/sec)
+        matter.cmdField(DataType.UINT8, 0x02, "00"),   // OptionsMask
+        matter.cmdField(DataType.UINT8, 0x03, "00")    // OptionsOverride
     ]
     // MoveWithOnOff (0x05)
     sendHubCommand(new HubAction(matter.invoke(0x01, 0x0008, 0x05, cmdFields), Protocol.MATTER))
@@ -142,8 +150,12 @@ void startLevelChange(String direction) {
 
 void stopLevelChange() {
     logDebug "stopLevelChange"
-    // StopWithOnOff (0x07)
-    sendHubCommand(new HubAction(matter.invoke(0x01, 0x0008, 0x07, []), Protocol.MATTER))
+    List<Map<String,String>> cmdFields = [
+        matter.cmdField(DataType.UINT8, 0x00, "00"),   // OptionsMask
+        matter.cmdField(DataType.UINT8, 0x01, "00")    // OptionsOverride
+    ]
+    // Stop (0x03)
+    sendHubCommand(new HubAction(matter.invoke(0x01, 0x0008, 0x03, cmdFields), Protocol.MATTER))
 }
 
 void setColorTemperature(BigDecimal colorTemperature, BigDecimal level = null, BigDecimal rate = null) {
@@ -357,6 +369,15 @@ private Integer int254To100(Integer v) {
     if (v == null || v <= 0) return 0
     Integer pct = (int) Math.round(v / 2.54)
     return Math.max(1, Math.min(pct, 100))   // raw>0 always maps to at least 1%
+}
+
+private Integer levelChangeRateUnitsPerSec() {
+    switch (levelChangeRate) {
+        case "slow":  return 25   // ~10s full sweep
+        case "fast":  return 100  // ~2.5s full sweep
+        case "vfast": return 170  // ~1.5s full sweep
+        default:      return 50   // medium ~5s full sweep
+    }
 }
 
 private Integer transitionTimeTenths() {
