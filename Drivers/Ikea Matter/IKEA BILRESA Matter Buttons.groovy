@@ -1,7 +1,7 @@
 /*
  * IKEA BILRESA Matter Dual Button (events-based). Supports both dual button and scroll wheel models. 
  *
- * Last edited: 2026/05/13 7:35 PM
+ * Last edited: 2026/05/15 10:39 AM
  *
  * WARNING:
  * This driver runs on pure magic, optimism, and several offerings to the Hubitat gods.
@@ -19,18 +19,19 @@ metadata {
         capability "Initialize"
         capability "Refresh"
         capability "Battery"
-
         capability "HealthCheck"
-
         capability "PushableButton"
         capability "HoldableButton"
         capability "DoubleTapableButton"
         capability "ReleasableButton"
 
-        attribute "supportedButtonValues", "enum", ["pushed", "held", "doubleTapped", "released"]
+        attribute "supportedButtonValues", "enum", ["pushed", "held", "doubleTapped", "tripleTapped", "released"]
+        attribute "tripleTapped", "number"
         attribute "numberOfButtons", "number"
         attribute "healthStatus", "enum", ["online", "offline"]
         attribute "rtt", "number"
+
+        command   "tripleTap", [[name: "buttonNumber", type: "NUMBER"]]
 
         fingerprint endpointId:"01", inClusters:"0003,001D,003B", outClusters:"", model:"BILRESA dual button", manufacturer:"IKEA of Sweden", controllerType:"MAT"
         fingerprint endpointId:"01", inClusters:"0003,001D,003B", outClusters:"", model:"BILRESA scroll wheel", manufacturer:"IKEA of Sweden", controllerType:"MAT"
@@ -115,15 +116,18 @@ private void handleSwitchEvent(Map msg) {
     }
 
     // Deduplicate by eventSerial: the same buffered events can be re-delivered across
-    // multiple subscription bursts (e.g. after autoReInit). Reject already-seen serials.
+    // multiple subscription bursts (e.g. after autoReInit). Reject clearly stale serials.
+    // A tolerance window of 20 accommodates out-of-order delivery within a single press
+    // sequence (the hub delivers even/odd serials in separate streams, a few apart).
+    // Genuinely stale re-delivered events are typically 100s of serials behind.
     Long serial = msg.eventSerial as Long
     if (serial != null) {
         Long lastSerial = (state.lastEventSerial ?: 0L) as Long
-        if (serial <= lastSerial) {
-            logDebug "Duplicate event rejected (ep=${msg.endpointInt} evtId=${msg.evtId} eventSerial=${serial} lastSerial=${lastSerial})"
+        if (serial < lastSerial - 20L) {
+            logDebug "Stale event rejected (ep=${msg.endpointInt} evtId=${msg.evtId} eventSerial=${serial} lastSerial=${lastSerial})"
             return
         }
-        state.lastEventSerial = serial
+        if (serial > lastSerial) { state.lastEventSerial = serial }
     }
     Integer buttonNumber = msg.endpointInt as Integer
     logDebug "handleSwitchEvent: buttonNumber=${buttonNumber} evtId=${msg.evtId}"
@@ -134,6 +138,7 @@ private void handleSwitchEvent(Map msg) {
             state.buttonInitialPressTime = now()
             if (logEnable) { log.debug "EVT_INITIAL_PRESS buttonNumber=${buttonNumber} buttonInitialPressTime=${state.buttonInitialPressTime}" }
             if (isWheelModel() && isWheelEndpoint(buttonNumber)) {
+                state.wheelPressCount = (state.wheelPressCount ?: 0) + 1
                 logDebug "Initial press for wheel ep=${buttonNumber} (sending 'pushed' event)"
                 sendButtonEventFiltered("pushed", buttonNumber)
             }
@@ -157,14 +162,22 @@ private void handleSwitchEvent(Map msg) {
             sendButtonEventFiltered("released", buttonNumber)
             break
 
-        case 5:     // evt 5 – MultiPressOngoing; we’ll wait for MultiPressComplete
-            logDebug "EVT_MULTI_ONGOING buttonNumber=${buttonNumber}"
-            if (isWheelModel() && isWheelEndpoint(buttonNumber)) {
-                logDebug "Multi ongoing for wheel ep=${buttonNumber} (logged, continuing)"
+        case 5:     // evt 5 – MultiPressOngoing; value:[0:previousPosition, 1:totalNumberOfPressesSoFar]
+            // The dual button never sends evtId=6 (MultiPressComplete), so we use evtId=5 as the
+            // trigger: store the running count and debounce-fire after 300 ms of silence.
+            // The scroll wheel does send evtId=6, so skip the debounce for that model entirely.
+            Integer ongoingCount = safeInt(msg.value[1])
+            logDebug "EVT_MULTI_ONGOING buttonNumber=${buttonNumber} count=${ongoingCount}"
+            if (ongoingCount != null && !isWheelModel()) {
+                state.multiPressCount = ongoingCount
+                state.multiPressButtonNumber = buttonNumber
+                runInMillis(150, "multiPressComplete")
             }
             break
 
         case 6:     // evt 6 – MultiPressComplete; value:[0:previousPosition, 1:totalNumberOfPresses]
+            // Safety net: if the device does send evtId=6, cancel the evtId=5 debounce and handle here.
+            unschedule("multiPressComplete")
             Integer count =  safeInt(msg.value[1])
             logDebug "EVT_MULTI_COMPLETE buttonNumber=${buttonNumber} count=${count}"
             if (count == null) {
@@ -172,10 +185,13 @@ private void handleSwitchEvent(Map msg) {
                 break
             }
             if (isWheelModel() && isWheelEndpoint(buttonNumber)) {
-                logDebug "Multi complete for wheel ep=${buttonNumber} count=${count}"
-                if (count > 3) {
-                    sendButtonEventFiltered("pushed", buttonNumber)
+                Integer firedCount = (state.wheelPressCount ?: 0) as Integer
+                Integer missed = Math.max(0, count - firedCount) as Integer
+                logDebug "Multi complete for wheel ep=${buttonNumber} count=${count} firedCount=${firedCount} missed=${missed}"
+                if (missed > 0) {
+                    missed.times { sendButtonEventFiltered("pushed", buttonNumber) }
                 }
+                state.wheelPressCount = 0
                 return
             }
 
@@ -185,8 +201,10 @@ private void handleSwitchEvent(Map msg) {
             else if (count == 2) {
                 sendButtonEventFiltered("doubleTapped", buttonNumber)
             }
+            else if (count == 3) {
+                sendButtonEventFiltered("tripleTapped", buttonNumber)
+            }
             else {
-                // triple+ → treat as pushed (or add multiTapped custom attr?)
                 sendButtonEventFiltered("pushed", buttonNumber)
             }
             break
@@ -202,6 +220,20 @@ void clearInitPending() {
     if (state.initPending) {
         state.initPending = false
         logInfo "accepting button events now..."
+    }
+}
+
+// Fired 1 s after the last evtId=5 (MultiPressOngoing) with no further presses.
+// Used because this device never sends evtId=6 (MultiPressComplete).
+void multiPressComplete() {
+    Integer count  = state.multiPressCount as Integer
+    Integer button = state.multiPressButtonNumber as Integer
+    logDebug "multiPressComplete() buttonNumber=${button} count=${count}"
+    if (count == null || button == null) { return }
+    if (count == 2) {   // BILREASA sends only MultiPressOngoing events with count=2, even for triple presses, so treat count=2 as the trigger for double/triple tap detection.
+        sendButtonEventFiltered("tripleTapped", button)
+    } else {
+        logDebug "multiPressComplete: count=${count} is not triple tap, ignoring (button=${button})"
     }
 }
 
@@ -319,7 +351,7 @@ void initialize() {
 private void configureButtons() {
     Integer count = endpointCount()
     sendEvent(name: "numberOfButtons", value: count, isStateChange: true)
-    def vals = ["pushed", "held", "doubleTapped", "released"]
+    def vals = ["pushed", "held", "doubleTapped", "tripleTapped", "released"]
     sendEvent(name: "supportedButtonValues", value: vals.toString(), isStateChange: true)
 }
 
@@ -379,7 +411,7 @@ private void subscribeToPaths() {
         paths.add(matter.eventPath(ep, 0x003B, -1))         // We need to subscribe for ALL events from the switch cluster 
     }
 
-    String cmd = matter.cleanSubscribe(1, 600, paths)
+    String cmd = matter.cleanSubscribe(0, 60, paths)        // 05/2026 update: using 0-60s reporting interval
     logDebug "subscribeToPaths cmd=${cmd}"
     sendHubCommand(new HubAction(cmd, Protocol.MATTER))
     // Block events until SubscriptionResult confirms the burst is done; 120s fallback covers slow reconnects after hub reboot.
@@ -433,6 +465,14 @@ void doubleTap(buttonNumber) {
     String descriptionText = "${device.displayName} button ${btn} was doubleTapped"
     if (txtEnable) log.info descriptionText
     sendEvent(name: "doubleTapped", value: btn, descriptionText: descriptionText, isStateChange: true, type: "digital")
+}
+
+void tripleTap(buttonNumber) {
+    Integer btn = safeInt(buttonNumber)
+    if (btn == null) return
+    String descriptionText = "${device.displayName} button ${btn} was tripleTapped"
+    if (txtEnable) log.info descriptionText
+    sendEvent(name: "tripleTapped", value: btn, descriptionText: descriptionText, isStateChange: true, type: "digital")
 }
 
 void release(buttonNumber) {
