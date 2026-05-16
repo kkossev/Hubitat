@@ -16,7 +16,7 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA KLIPPBOK Matter Water Leak Sensor.groovy",
       "id": 4760,
       "codeType": "driver",
-      "version": 17
+      "version": 18
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA TIMMERFLOTTE Matter Temp+Hum+Bat.groovy",
@@ -34,7 +34,7 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA MYGGSPRAY Matter Motion+Lux+Bat.groovy",
       "id": 4757,
       "codeType": "driver",
-      "version": 30
+      "version": 31
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/Matter Thread Diagnostic.groovy",

@@ -1,6 +1,8 @@
 /*
  * IKEA MYGGSPRAY Matter Motion + Illuminance + Battery
  *
+ * 
+ *
  * Last edited: 2026/05/16 5:11 PM (uses newParse:true messages map format)
  */
 

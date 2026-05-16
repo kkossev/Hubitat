@@ -1,5 +1,7 @@
 /*
  * IKEA KLIPPBOK Matter Water Leak Sensor
+ * 
+ * https://community.hubitat.com/t/what-do-i-need-at-ikea/158182/75?u=kkossev
  *
  * Last edited: 2026/05/14 5:35 PM
  */
@@ -8,7 +10,7 @@ import hubitat.device.HubAction
 import hubitat.device.Protocol
 
 metadata {
-    definition(name: "IKEA KLIPPBOK Matter Water Leak Sensor w/ healthStatus", namespace: "community", author: "kkossev + ChatGPT + Claude", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Ikea%20Matter/IKEA%20KLIPPBOK%20Matter%20Water%20Leak%20Sensor.groovy") {
+    definition(name: "IKEA KLIPPBOK Matter Water Leak Sensor w/ healthStatus", namespace: "community", author: "kkossev + ChatGPT + Claude", singleThreaded: true, importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Ikea%20Matter/IKEA%20KLIPPBOK%20Matter%20Water%20Leak%20Sensor.groovy") {
 
         capability "Sensor"
         capability "WaterSensor"
@@ -88,7 +90,7 @@ private void subscribeToAttributes() {
     paths.add(matter.attributePath(0x01, 0x0045, 0x0000))
     paths.add(matter.attributePath(0x00, 0x002F, 0x000C))
 
-    String cmd = matter.cleanSubscribe(1, 600, paths)
+    String cmd = matter.cleanSubscribe(0, 600, paths)
     sendHubCommand(new HubAction(cmd, Protocol.MATTER))
 
     logInfo "subscribing to water state (EP1/0x0045) + battery (EP0/0x002F/0x000C)"
@@ -104,6 +106,20 @@ void parse(String description) {
 void parse(Map msg) {
     logDebug "parse(Map) received: ${msg}"
     handleLiveness(msg)
+
+    // Ping response (explicit) or implicit ping success (any msg while ping in-flight)
+    if (state.pingStart != null) {
+        unschedule("pingTimeout")
+        Long rtt = now() - (state.pingStart as Long)
+        if (msg.clusterInt == 0x0028 && msg.attrInt == 0x0000) {
+            sendEvent(name: "rtt", value: rtt, unit: "ms", type: "digital", descriptionText: "Ping round-trip time: ${rtt} ms")
+            logInfo "Ping RTT: ${rtt} ms"
+            state.pingStart = null
+            return   // ping response fully handled
+        }
+        logDebug "Implicit ping success (msg arrived while ping in-flight), RTT: ${rtt} ms"
+        state.pingStart = null
+    }
 
     Integer ep     = msg.endpointInt
     Integer clus   = msg.clusterInt
@@ -156,19 +172,6 @@ private Integer safeInt(def v) {
 private void handleLiveness(Map msg) {
     // Cancel pending auto-reinit — any Matter message means the device is alive
     unschedule("autoReInit")
-
-    // If a ping is in flight, handle the response (explicit or implicit)
-    if (state.pingStart != null) {
-        unschedule("pingTimeout")
-        Long rtt = now() - (state.pingStart as Long)
-        if (msg.clusterInt == 0x0028 && msg.attrInt == 0x0000) {
-            sendEvent(name: "rtt", value: rtt, unit: "ms", type: "digital", descriptionText: "Ping round-trip time: ${rtt} ms")
-            logInfo "Ping RTT: ${rtt} ms"
-        } else {
-            logDebug "Implicit ping success (msg arrived while ping in-flight), RTT: ${rtt} ms"
-        }
-        state.pingStart = null
-    }
 
     // Reset consecutive fail counter on any activity
     state.pingConsecutiveFails = 0
