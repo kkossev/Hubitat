@@ -1,7 +1,9 @@
 /*
  * IKEA ALPSTUGA Matter Air Quality Monitor
+ *
+ * https://community.hubitat.com/t/what-do-i-need-at-ikea/158182/72?u=kkossev
  * 
- * Last edited: 2026/05/14 5:24 PM
+ * Last edited: 2026/05/17 10:32 AM
  *
  */
 
@@ -9,7 +11,7 @@ import hubitat.device.HubAction
 import hubitat.device.Protocol
 
 metadata {
-    definition(name: "IKEA ALPSTUGA Matter w/ healthStatus", namespace: "community", author: "kkossev + ChatGPT + Claude", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Ikea%20Matter/IKEA%20ALPSTUGA%20Matter%20AQ%2BTemp%2BHum%2BPM2.5%2BCO2.groovy") {
+    definition(name: "IKEA ALPSTUGA Matter w/ healthStatus", namespace: "community", author: "kkossev + ChatGPT + Claude", singleThreaded: true, importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Ikea%20Matter/IKEA%20ALPSTUGA%20Matter%20AQ%2BTemp%2BHum%2BPM2.5%2BCO2.groovy") {
         capability "Sensor"
         capability "Switch"
         capability "TemperatureMeasurement"
@@ -21,6 +23,7 @@ metadata {
         capability "HealthCheck"
 
         attribute "airQuality", "string"
+        attribute "airQualityIndex", "number"
         attribute "pm25", "number"
         attribute "healthStatus", "enum", ["online", "offline"]
         attribute "rtt", "number"
@@ -89,7 +92,7 @@ private void subscribeToAttributes() {
     paths.add(matter.attributePath(0x01, 0x042A, 0x0000))
     paths.add(matter.attributePath(0x01, 0x040D, 0x0000))
 
-    String cmd = matter.cleanSubscribe(1, 600, paths)
+    String cmd = matter.cleanSubscribe(30, 600, paths)
     sendHubCommand(new HubAction(cmd, Protocol.MATTER))
 
     logInfo "subscribing to on/off + air quality + temp + humidity + PM2.5 + CO2 (EP1)"
@@ -105,6 +108,20 @@ void parse(String description) {
 void parse(Map msg) {
     logDebug "parse(Map) received: ${msg}"
     handleLiveness(msg)
+
+    // Ping response (explicit) or implicit ping success (any msg while ping in-flight)
+    if (state.pingStart != null) {
+        unschedule("pingTimeout")
+        Long rtt = now() - (state.pingStart as Long)
+        if (msg.clusterInt == 0x0028 && msg.attrInt == 0x0000) {
+            sendEvent(name: "rtt", value: rtt, unit: "ms", type: "digital", descriptionText: "Ping round-trip time: ${rtt} ms")
+            logInfo "Ping RTT: ${rtt} ms"
+            state.pingStart = null
+            return   // ping response fully handled
+        }
+        logDebug "Implicit ping success (msg arrived while ping in-flight), RTT: ${rtt} ms"
+        state.pingStart = null
+    }
 
     Integer ep     = msg.endpointInt
     Integer clus   = msg.clusterInt
@@ -243,19 +260,6 @@ private static String airQualityToText(Integer v) {
 private void handleLiveness(Map msg) {
     // Cancel pending auto-reinit — any Matter message means the device is alive
     unschedule("autoReInit")
-
-    // If a ping is in flight, handle the response (explicit or implicit)
-    if (state.pingStart != null) {
-        unschedule("pingTimeout")
-        Long rtt = now() - (state.pingStart as Long)
-        if (msg.clusterInt == 0x0028 && msg.attrInt == 0x0000) {
-            sendEvent(name: "rtt", value: rtt, unit: "ms", type: "digital", descriptionText: "Ping round-trip time: ${rtt} ms")
-            logInfo "Ping RTT: ${rtt} ms"
-        } else {
-            logDebug "Implicit ping success (msg arrived while ping in-flight), RTT: ${rtt} ms"
-        }
-        state.pingStart = null
-    }
 
     // Reset consecutive fail counter on any activity
     state.pingConsecutiveFails = 0

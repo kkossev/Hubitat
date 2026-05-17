@@ -22,13 +22,13 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA TIMMERFLOTTE Matter Temp+Hum+Bat.groovy",
       "id": 4759,
       "codeType": "driver",
-      "version": 8
+      "version": 9
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA ALPSTUGA Matter AQ+Temp+Hum+PM2.5+CO2.groovy",
       "id": 4758,
       "codeType": "driver",
-      "version": 23
+      "version": 28
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA MYGGSPRAY Matter Motion+Lux+Bat.groovy",
@@ -46,13 +46,13 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA GRILLPLATS Matter Plug.groovy",
       "codeType": "driver",
       "id": 5190,
-      "version": 11
+      "version": 12
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA KAJPLATS Matter RGBW Bulb.groovy",
       "codeType": "driver",
       "id": 5191,
-      "version": 17
+      "version": 18
     }
   ]
 }

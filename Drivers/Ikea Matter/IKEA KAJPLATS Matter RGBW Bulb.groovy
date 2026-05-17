@@ -14,7 +14,7 @@ import hubitat.helper.HexUtils
 import hubitat.matter.DataType
 
 metadata {
-    definition(name: "IKEA KAJPLATS Matter RGBW Bulb w/ healthStatus", namespace: "community", author: "kkossev + ChatGPT + Claude", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Ikea%20Matter/IKEA%20KAJPLATS%20Matter%20RGBW%20Bulb.groovy") {
+    definition(name: "IKEA KAJPLATS Matter RGBW Bulb w/ healthStatus", namespace: "community", author: "kkossev + ChatGPT + Claude", singleThreaded: true, importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Ikea%20Matter/IKEA%20KAJPLATS%20Matter%20RGBW%20Bulb.groovy") {
 
         capability "Switch"
         capability "SwitchLevel"
@@ -104,7 +104,7 @@ private void subscribeToAttributes() {
     paths.add(matter.attributePath(0x01, 0x0300, 0x0001)) // CurrentSaturation
     paths.add(matter.attributePath(0x01, 0x0300, 0x0007)) // ColorTemperatureMireds
     paths.add(matter.attributePath(0x01, 0x0300, 0x0008)) // ColorMode
-    sendHubCommand(new HubAction(matter.cleanSubscribe(1, 600, paths), Protocol.MATTER))
+    sendHubCommand(new HubAction(matter.cleanSubscribe(0, 600, paths), Protocol.MATTER))
     logInfo "subscribing to switch/level/hue/saturation/colorTemp/colorMode (EP1)"
 }
 
@@ -240,6 +240,20 @@ void parse(String description) {
 void parse(Map msg) {
     logDebug "parse(Map) received: ${msg}"
     handleLiveness(msg)
+
+    // Ping response (explicit) or implicit ping success (any msg while ping in-flight)
+    if (state.pingStart != null) {
+        unschedule("pingTimeout")
+        Long rtt = now() - (state.pingStart as Long)
+        if (msg.clusterInt == 0x0028 && msg.attrInt == 0x0000) {
+            sendEvent(name: "rtt", value: rtt, unit: "ms", type: "digital", descriptionText: "Ping round-trip time: ${rtt} ms")
+            logInfo "Ping RTT: ${rtt} ms"
+            state.pingStart = null
+            return   // ping response fully handled
+        }
+        logDebug "Implicit ping success (msg arrived while ping in-flight), RTT: ${rtt} ms"
+        state.pingStart = null
+    }
 
     Integer ep     = msg.endpointInt
     Integer clus   = msg.clusterInt
@@ -399,17 +413,6 @@ private Integer miredToKelvin(Integer mireds) { return (int) Math.round(1000000.
 
 private void handleLiveness(Map msg) {
     unschedule("autoReInit")
-    if (state.pingStart != null) {
-        unschedule("pingTimeout")
-        Long rtt = now() - (state.pingStart as Long)
-        if (msg.clusterInt == 0x0028 && msg.attrInt == 0x0000) {
-            sendEvent(name: "rtt", value: rtt, unit: "ms", type: "digital", descriptionText: "Ping round-trip time: ${rtt} ms")
-            logInfo "Ping RTT: ${rtt} ms"
-        } else {
-            logDebug "Implicit ping success (msg arrived while ping in-flight), RTT: ${rtt} ms"
-        }
-        state.pingStart = null
-    }
     state.pingConsecutiveFails = 0
     // If device is not yet online (null on first boot) or was offline, mark it online
     if (device.currentValue("healthStatus") != "online") {
