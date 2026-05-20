@@ -4,37 +4,37 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA MYGGBETT Matter Door Window Sensor.groovy",
       "id": 4761,
       "codeType": "driver",
-      "version": 25
+      "version": 26
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA BILRESA Matter Buttons.groovy",
       "id": 4762,
       "codeType": "driver",
-      "version": 167
+      "version": 182
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA KLIPPBOK Matter Water Leak Sensor.groovy",
       "id": 4760,
       "codeType": "driver",
-      "version": 18
+      "version": 19
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA TIMMERFLOTTE Matter Temp+Hum+Bat.groovy",
       "id": 4759,
       "codeType": "driver",
-      "version": 9
+      "version": 10
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA ALPSTUGA Matter AQ+Temp+Hum+PM2.5+CO2.groovy",
       "id": 4758,
       "codeType": "driver",
-      "version": 28
+      "version": 29
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA MYGGSPRAY Matter Motion+Lux+Bat.groovy",
       "id": 4757,
       "codeType": "driver",
-      "version": 31
+      "version": 32
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/Matter Thread Diagnostic.groovy",
@@ -46,13 +46,13 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA GRILLPLATS Matter Plug.groovy",
       "codeType": "driver",
       "id": 5190,
-      "version": 12
+      "version": 13
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Ikea Matter/IKEA KAJPLATS Matter RGBW Bulb.groovy",
       "codeType": "driver",
       "id": 5191,
-      "version": 18
+      "version": 19
     }
   ]
 }

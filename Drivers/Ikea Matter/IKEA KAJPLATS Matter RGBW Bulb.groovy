@@ -28,6 +28,8 @@ metadata {
         attribute "healthStatus", "enum", ["online", "offline"]
         attribute "rtt",          "number"
 
+        command "clearStatistics"
+
         fingerprint endpointId: "01",
                 inClusters: "0003,0004,0006,0008,001D,0300",
                 outClusters: "",
@@ -49,6 +51,12 @@ metadata {
         input name: "enableHealthCheck", type: "bool", title: "Enable health check (ping every 5 min)",                defaultValue: true
         input name: "enableAutoReInit",  type: "bool", title: "Auto re-initialize after 2 consecutive ping failures",  defaultValue: true
     }
+}
+
+void clearStatistics() {
+    logInfo "Clearing statistics: ${state.stats}"
+    state.stats = [initializeCounter: 0, pingFailCounter: 0, autoReInitCounter: 0]
+    logInfo "Statistics cleared"
 }
 
 void installed() {
