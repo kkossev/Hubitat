@@ -3,7 +3,7 @@
  *
  * https://community.hubitat.com/t/what-do-i-need-at-ikea/158182/83?u=kkossev
  *
- * Last edited: 2026/05/20 3:38 PM
+ * Last edited: 2026/05/22 11:34 AM
  *
  * WARNING:
  * This driver runs on pure magic, optimism, and several offerings to the Hubitat gods.
@@ -35,6 +35,7 @@ metadata {
 
         command   "tripleTap", [[name: "buttonNumber", type: "NUMBER"]]
         command   "clearStatistics"
+        command   "readOperationalCredentialsFabrics"
 
         fingerprint endpointId:"01", inClusters:"0003,001D,003B", outClusters:"", model:"BILRESA dual button", manufacturer:"IKEA of Sweden", controllerType:"MAT"
         fingerprint endpointId:"01", inClusters:"0003,001D,003B", outClusters:"", model:"BILRESA scroll wheel", manufacturer:"IKEA of Sweden", controllerType:"MAT"
@@ -144,6 +145,12 @@ void parse(Map msg) {
         logInfo "softwareVersion=${ver}"
         return
     }
+
+    // 
+    if (msg.clusterInt == 0x003E && msg.attrInt == 0x0001) {
+        logWarn "OperationalCredentials/Fabrics report: ${msg}"
+        return
+    }    
 
     // ignore everything else
     logDebug "newParse(Map): unhandled msg: ${msg}"
@@ -403,7 +410,7 @@ void pingTimeout() {
     logWarn "Ping timeout! consecutiveFails=${state.pingConsecutiveFails} (total pingFails=${state.stats.pingFailCounter})"
     if (state.pingConsecutiveFails >= 2) {
         sendEvent(name: "healthStatus", value: "offline", descriptionText: "${device.displayName} is offline", type: "digital")
-        logWarn "Device is OFFLINE after ${state.pingConsecutiveFails} consecutive ping failures"
+        logInfo "Device is OFFLINE after ${state.pingConsecutiveFails} consecutive ping failures"
         if (enableAutoReInit != false) {
             logWarn "Auto re-init scheduled in 30 seconds"
             runIn(30, "autoReInit")
@@ -431,8 +438,8 @@ void installed() {
 
 void updated() {
     logInfo "updated..."
-    if (logEnable) runIn(7200, "logsOff")
-    initialize()
+    if (logEnable) runIn(86400, "logsOff")  // auto-disable debug logging after 24 hours
+    //initialize()  // do not re-initialize on every update: only on install and when auto-reinit triggers after ping failures.
 }
 
 void logsOff() {
@@ -448,6 +455,7 @@ void initialize() {
     unschedule("autoReInit")
     unschedule("checkExpectedSubscriptionReport")
     unschedule("checkMatterJsonAfterSubscribe")
+    unschedule("captureFirstLiveness")
     unschedule("checkSubscriptionJsonAfterPing")
     state.pingStart                = null
     state.pingConsecutiveFails     = 0
@@ -522,7 +530,7 @@ private void subscribeToPaths() {
     // Subscribing to this attribute seems to 'unlock' or keep events flowing.
     // Probably, other Matter switches also require any attribute subscription to activate event streams?
     for (int ep = 1; ep <= epCount; ep++) {
-        paths.add(matter.attributePath(ep, 0x003B, -1))      // Switch cluster attribute 0x0001 (current position) seems to be enough
+        paths.add(matter.attributePath(ep, 0x003B, 1))      // Switch cluster attribute 0x0001 (current position) seems to be enough
     }
     
     // matter events are always enabled    
@@ -533,8 +541,8 @@ private void subscribeToPaths() {
     // General Diagnostics cluster: UpTime attribute
     // EP0 / Cluster 0x0033 / Attr 0x0002 = UpTime
     // This is optional in Matter, but useful to test whether the device reports periodic changes.
-    paths.add(matter.attributePath(0x00, 0x0033, 0x0002))
-    paths.add(matter.attributePath(0x00, 0x0035, 0x0005))  // RSSI, if implemented
+    //paths.add(matter.attributePath(0x00, 0x0033, 0x0002))
+    //paths.add(matter.attributePath(0x00, 0x0035, 0x0005))  // RSSI, if implemented
 
     String cmd = matter.cleanSubscribe(0, 900, paths)         // 900s max: fits both BILRESA dual button (~908s liveness) and scroll wheel (~613s liveness)
     logDebug "subscribeToPaths cmd=${cmd}"
@@ -621,6 +629,7 @@ void postPingDiagnostics() {
         httpGet([uri: url, timeout: 5]) { resp ->
             Integer status = resp?.status as Integer
             String text    = stripAnsi(resp?.data?.text?.toString())
+            logMatterLogTimestampRange("postPingDiagnostics", text)
 
             Integer charCount = text?.length() ?: 0
             Integer byteCount = text ? text.getBytes("UTF-8").length : 0
@@ -670,7 +679,89 @@ private String stripAnsi(String s) {
     return s?.replaceAll(/\u001B\[[0-9;]*m/, "")
 }
 
-// Called ~3 s, ~10 s, and ~30 s after SubscriptionResult to capture peer and LivenessCheckTime
+private Map extractMatterLogTimestampRange(String text) {
+    Map result = [firstTimestamp: null, lastTimestamp: null]
+    if (!text) { return result }
+
+    def matcher = (text =~ /(?m)^\[(\d+\.\d+)\]\s+\[\d+:\d+\]\s+\[[A-Z]+\]/)
+    while (matcher.find()) {
+        String ts = matcher.group(1)
+        if (result.firstTimestamp == null) { result.firstTimestamp = ts }
+        result.lastTimestamp = ts
+    }
+    return result
+}
+
+private String formatMatterLogTimestamp(String ts) {
+    Long millis = parseMatterLogTimestampMillis(ts)
+    return millis != null ? formatMatterLogTimestampMs(millis) : (ts ?: "n/a")
+}
+
+private Long parseMatterLogTimestampMillis(String ts) {
+    if (!ts) { return null }
+    try {
+        BigDecimal epochSeconds = new BigDecimal(ts)
+        return epochSeconds.multiply(new BigDecimal("1000")).longValue()
+    } catch (Exception ignored) {
+        return null
+    }
+}
+
+private String formatMatterLogTimestampMs(Long millis) {
+    if (millis == null) { return "n/a" }
+    try {
+        TimeZone tz = location?.timeZone ?: TimeZone.getTimeZone("UTC")
+        return new Date(millis).format("yyyy-MM-dd HH:mm:ss.SSS", tz)
+    } catch (Exception ignored) {
+        return millis.toString()
+    }
+}
+
+private String extractMatterLogTimestampTokenBeforeIndex(String text, Integer idx) {
+    if (!text || idx == null || idx < 0) { return null }
+    Integer prefixFrom = Math.max(0, idx - 120)
+    String linePrefix = text.substring(prefixFrom, idx)
+    Map lineTs = extractMatterLogTimestampRange(linePrefix)
+    return lineTs.lastTimestamp
+}
+
+private String extractMatterLogTimestampBeforeIndex(String text, Integer idx) {
+    String ts = extractMatterLogTimestampTokenBeforeIndex(text, idx)
+    return ts ? formatMatterLogTimestamp(ts) : null
+}
+
+private Long extractMatterLogTimestampMillisBeforeIndex(String text, Integer idx) {
+    String ts = extractMatterLogTimestampTokenBeforeIndex(text, idx)
+    return parseMatterLogTimestampMillis(ts)
+}
+
+private Integer findNearestIndex(String text, String needle, Integer anchorIdx) {
+    if (!text || !needle || anchorIdx == null || anchorIdx < 0) { return -1 }
+
+    Integer nearestIdx = -1
+    Integer nearestDistance = null
+    Integer idx = text.indexOf(needle)
+    while (idx >= 0) {
+        Integer distance = Math.abs(idx - anchorIdx)
+        if (nearestDistance == null || distance < nearestDistance) {
+            nearestDistance = distance
+            nearestIdx = idx
+        }
+        idx = text.indexOf(needle, idx + needle.length())
+    }
+    return nearestIdx
+}
+
+private void logMatterLogTimestampRange(String caller, String text) {
+    Map tsRange = extractMatterLogTimestampRange(text)
+    if (!tsRange.firstTimestamp && !tsRange.lastTimestamp) {
+        logDebug "${caller}(): matter log timestamps not found"
+        return
+    }
+    logDebug "${caller}(): matter log window first=${tsRange.firstTimestamp} (${formatMatterLogTimestamp(tsRange.firstTimestamp)}), last=${tsRange.lastTimestamp} (${formatMatterLogTimestamp(tsRange.lastTimestamp)})"
+}
+
+// Called ~10 s after SubscriptionResult to capture peer and MaxInterval
 // while the subscribe-response lines are still in the short rolling JSON buffer.
 void checkMatterJsonAfterSubscribe() {
     if (enableSubscriptionRecovery != true) { return }
@@ -679,8 +770,9 @@ void checkMatterJsonAfterSubscribe() {
     try {
         httpGet([uri: "http://127.0.0.1:8080/hub/matterLogs/json", timeout: 5]) { resp ->
             String text   = stripAnsi(resp?.data?.text?.toString())
+            logMatterLogTimestampRange("checkMatterJsonAfterSubscribe", text)
             Map    result = analyzeMatterJsonForCurrentSubscription(text)
-            logDebug "checkMatterJsonAfterSubscribe(): subscriptionSeen=${result.subscriptionSeen}, livenessSeen=${result.livenessSeen}, peer=${result.peer}, livenessMs=${result.livenessMs} — ${result.reason}"
+            logDebug "checkMatterJsonAfterSubscribe(): subscriptionSeen=${result.subscriptionSeen}, livenessSeen=${result.livenessSeen}, peer=${result.peer}, livenessMs=${result.livenessMs} — ${result.reason}${result.subscriptionLogTime ? ' [sub logged ' + result.subscriptionLogTime + ']' : ''}${result.reportLogTime ? ' [report logged ' + result.reportLogTime + ']' : ''}"
             if (result.subscriptionSeen) {
                 if (result.peer && !state.matterPeer) {
                     state.matterPeer = result.peer
@@ -696,15 +788,57 @@ void checkMatterJsonAfterSubscribe() {
                         state.effectiveMaxIntervalSec = maxSec
                         logDebug "checkMatterJsonAfterSubscribe(): livenessMs=${result.livenessMs}ms -> effectiveMaxIntervalSec=${maxSec}s"
                     }
+                } else {
+                    // MaxInterval not yet known (no liveness in buffer at +10s — typical for faster
+                    // devices like the scroll wheel whose first liveness fires at ~613s, not ~10s).
+                    // Schedule a backup check at +625s to capture the first liveness entry while
+                    // it is still fresh in the rolling buffer (~300s depth).
+                    logDebug "checkMatterJsonAfterSubscribe(): MaxInterval unknown — scheduling captureFirstLiveness at +625s"
+                    runIn(625, "captureFirstLiveness", [overwrite: false])
                 }
-                markSubscriptionAlive("earlyJsonCheck")
-                scheduleNextExpectedLivenessCheck()
+                markSubscriptionAlive("earlyJsonCheck", result.activityTimestampMs as Long, result.activitySource as String)
+                scheduleNextExpectedLivenessCheckFromActivity(result.activityTimestampMs as Long, result.activitySource as String)
                 logInfo "Subscription report found in early JSON check — subscription is alive"
             }
             // Not found in early check: inconclusive — report may not be in the buffer yet.
         }
     } catch (Exception e) {
         logDebug "checkMatterJsonAfterSubscribe(): failed: ${e.class.simpleName}: ${e.message}"
+    }
+}
+
+// Scheduled at +625s after SubscriptionResult when the early JSON check could not determine
+// MaxInterval (i.e. no liveness entry was in the buffer yet at +10s). Reads the JSON log
+// and, if the first liveness entry is now present, derives effectiveMaxIntervalSec from it
+// and re-arms the liveness check at the correct interval. Does nothing if liveness not yet
+// visible or if effectiveMaxIntervalSec was already set to a non-default value.
+void captureFirstLiveness() {
+    if (enableSubscriptionRecovery != true) { return }
+    if (!state.subscriptionIdHex)           { return }
+    logDebug "captureFirstLiveness(): checking for first liveness entry for ${state.subscriptionIdHex}"
+    try {
+        httpGet([uri: "http://127.0.0.1:8080/hub/matterLogs/json", timeout: 5]) { resp ->
+            String text   = stripAnsi(resp?.data?.text?.toString())
+            logMatterLogTimestampRange("captureFirstLiveness", text)
+            Map    result = analyzeMatterJsonForCurrentSubscription(text)
+            logDebug "captureFirstLiveness(): subscriptionSeen=${result.subscriptionSeen}, livenessSeen=${result.livenessSeen}, livenessMs=${result.livenessMs}${result.subscriptionLogTime ? ' [sub logged ' + result.subscriptionLogTime + ']' : ''}${result.reportLogTime ? ' [report logged ' + result.reportLogTime + ']' : ''}${result.livenessLogTime ? ' [liveness logged ' + result.livenessLogTime + ']' : ''}"
+            if (result.livenessSeen && result.livenessMs) {
+                Integer maxSec  = inferEffectiveMaxIntervalSec(result.livenessMs as Long)
+                Integer prevMax = (state.effectiveMaxIntervalSec ?: 900) as Integer
+                if (maxSec && maxSec != prevMax) {
+                    state.effectiveMaxIntervalSec = maxSec
+                    logInfo "captureFirstLiveness(): livenessMs=${result.livenessMs}ms -> effectiveMaxIntervalSec=${maxSec}s (was ${prevMax}s)"
+                    markSubscriptionAlive("captureFirstLiveness", result.activityTimestampMs as Long, result.activitySource as String)
+                    scheduleNextExpectedLivenessCheckFromActivity(result.activityTimestampMs as Long, result.activitySource as String)   // re-arms at correct interval
+                } else {
+                    logDebug "captureFirstLiveness(): maxSec=${maxSec} matches current ${prevMax}s — no change"
+                }
+            }
+            // No liveness at +625s: device has a longer cycle (e.g. dual button ~938s).
+            // The normal liveness check scheduled at effectiveMaxIntervalSec+grace handles it.
+        }
+    } catch (Exception e) {
+        logDebug "captureFirstLiveness(): failed: ${e.class.simpleName}: ${e.message}"
     }
 }
 
@@ -722,27 +856,31 @@ void checkExpectedSubscriptionReport() {
     try {
         httpGet([uri: "http://127.0.0.1:8080/hub/matterLogs/json", timeout: 5]) { resp ->
             String text   = stripAnsi(resp?.data?.text?.toString())
+            logMatterLogTimestampRange("checkExpectedSubscriptionReport", text)
             Map    result = analyzeMatterJsonForCurrentSubscription(text)
-            logTrace "checkExpectedSubscriptionReport(): subscriptionSeen=${result.subscriptionSeen}, livenessSeen=${result.livenessSeen}, normalReport=${result.normalReportSeen} — ${result.reason}"
+            logTrace "checkExpectedSubscriptionReport(): subscriptionSeen=${result.subscriptionSeen}, livenessSeen=${result.livenessSeen}, normalReport=${result.normalReportSeen} — ${result.reason}${result.subscriptionLogTime ? ' [sub logged ' + result.subscriptionLogTime + ']' : ''}${result.reportLogTime ? ' [report logged ' + result.reportLogTime + ']' : ''}${result.livenessLogTime ? ' [liveness logged ' + result.livenessLogTime + ']' : ''}"
             if (result.subscriptionSeen && (result.livenessSeen || result.normalReportSeen || result.emptyReportSeen)) {
                 if (result.peer && !state.matterPeer) { state.matterPeer = result.peer }
                 if (result.livenessMs) {
                     Integer maxSec = inferEffectiveMaxIntervalSec(result.livenessMs as Long)
                     if (maxSec) { state.effectiveMaxIntervalSec = maxSec }
                 }
-                markSubscriptionAlive("expectedLivenessCheck")
-                scheduleNextExpectedLivenessCheck()
-                logInfo "Subscription report found in JSON — subscription is alive"
+                markSubscriptionAlive("expectedLivenessCheck", result.activityTimestampMs as Long, result.activitySource as String)
+                scheduleNextExpectedLivenessCheckFromActivity(result.activityTimestampMs as Long, result.activitySource as String)
+                logInfo "Subscription ${state.subscriptionIdHex} is alive"
             } else {
                 // Subscription not found — ping device to confirm it is actually online before
                 // declaring a miss. A dead/unreachable device is a network/session issue, not a lost subscription.
-                logDebug "checkExpectedSubscriptionReport(): ${state.subscriptionIdHex} not found — pinging device to confirm online"
+                logInfo  "Subscription ${state.subscriptionIdHex} not found — pinging device to confirm online"
                 state.subscriptionCheckPending = true
                 if (!state.pingStart) {
                     state.pingStart = now()
                     List<Map<String,String>> paths = [matter.attributePath(0x00, 0x0028, 0x0000)]
                     sendHubCommand(new HubAction(matter.readAttributes(paths), Protocol.MATTER))
                     runIn(30, "pingTimeout")
+                }
+                else {
+                    logDebug "checkExpectedSubscriptionReport(): ping already in-flight since ${state.pingStart} — awaiting result before declaring miss"
                 }
             }
         }
@@ -760,15 +898,16 @@ void checkSubscriptionJsonAfterPing() {
     try {
         httpGet([uri: "http://127.0.0.1:8080/hub/matterLogs/json", timeout: 5]) { resp ->
             String text   = stripAnsi(resp?.data?.text?.toString())
+            logMatterLogTimestampRange("checkSubscriptionJsonAfterPing", text)
             Map    result = analyzeMatterJsonForCurrentSubscription(text)
-            logDebug "checkSubscriptionJsonAfterPing(): subscriptionSeen=${result.subscriptionSeen}, livenessSeen=${result.livenessSeen}, normalReport=${result.normalReportSeen} — ${result.reason}"
+            logDebug "checkSubscriptionJsonAfterPing(): subscriptionSeen=${result.subscriptionSeen}, livenessSeen=${result.livenessSeen}, normalReport=${result.normalReportSeen} — ${result.reason}${result.subscriptionLogTime ? ' [sub logged ' + result.subscriptionLogTime + ']' : ''}${result.reportLogTime ? ' [report logged ' + result.reportLogTime + ']' : ''}${result.livenessLogTime ? ' [liveness logged ' + result.livenessLogTime + ']' : ''}"
             if (result.subscriptionSeen && (result.livenessSeen || result.normalReportSeen || result.emptyReportSeen)) {
                 if (result.livenessMs) {
                     Integer maxSec = inferEffectiveMaxIntervalSec(result.livenessMs as Long)
                     if (maxSec) { state.effectiveMaxIntervalSec = maxSec }
                 }
-                markSubscriptionAlive("postPingJsonCheck")
-                scheduleNextExpectedLivenessCheck()
+                markSubscriptionAlive("postPingJsonCheck", result.activityTimestampMs as Long, result.activitySource as String)
+                scheduleNextExpectedLivenessCheckFromActivity(result.activityTimestampMs as Long, result.activitySource as String)
             } else {
                 // Device is online (ping just succeeded) but liveness absent from JSON.
                 markSubscriptionMissed("expectedLivenessWindowMissed")
@@ -785,7 +924,10 @@ void checkSubscriptionJsonAfterPing() {
 private Map analyzeMatterJsonForCurrentSubscription(String text) {
     Map result = [
         subscriptionSeen: false, peer: null, peerMatches: false,
-        livenessSeen: false, livenessMs: null, maxIntervalSec: null,
+        subscriptionLogTime: null, subscriptionTimestampMs: null,
+        reportLogTime: null, reportTimestampMs: null,
+        livenessSeen: false, livenessMs: null, livenessLogTime: null, livenessTimestampMs: null, maxIntervalSec: null,
+        activityTimestampMs: null, activitySource: null,
         emptyReportSeen: false, normalReportSeen: false,
         reason: "no match found"
     ]
@@ -803,10 +945,14 @@ private Map analyzeMatterJsonForCurrentSubscription(String text) {
         return result
     }
     result.subscriptionSeen = true
+    result.subscriptionTimestampMs = extractMatterLogTimestampMillisBeforeIndex(text, subIdx)
+    result.subscriptionLogTime = result.subscriptionTimestampMs != null ? formatMatterLogTimestampMs(result.subscriptionTimestampMs as Long) : null
 
     Integer fromIdx = Math.max(0, subIdx - 3000)
     Integer toIdx   = Math.min(text.length(), subIdx + 3000)
     String  window  = text.substring(fromIdx, toIdx)
+    String  lowerWindow = lowerText.substring(fromIdx, toIdx)
+    Integer localSubIdx = subIdx - fromIdx
 
     // Extract peer node id
     def peerMatch = (window =~ /Peer = 01:([0-9A-Fa-f]{16})/)
@@ -827,11 +973,13 @@ private Map analyzeMatterJsonForCurrentSubscription(String text) {
         result.livenessSeen = true
         result.livenessMs   = livenessMatch.group(1).toLong()
         result.reason       = "subscription liveness refreshed (${result.livenessMs}ms)"
+        result.livenessTimestampMs = extractMatterLogTimestampMillisBeforeIndex(window, livenessMatch.start())
+        result.livenessLogTime = result.livenessTimestampMs != null ? formatMatterLogTimestampMs(result.livenessTimestampMs as Long) : null
     }
 
-    // Extract MaxInterval only from the SubscribeResponse for this specific subscription.
-    // Use a narrow ±200-char window around the subscriptionId occurrence to avoid picking up
-    // MaxInterval values from neighbouring devices' subscribe responses in the same log buffer.
+    // Extract MaxInterval from the SubscribeResponse for this specific subscription.
+    // First try a narrow ±200-char window around subIdx (works when subIdx lands on the
+    // liveness entry which has MaxInterval nearby, e.g. dual button at +3s).
     Integer narrowFrom   = Math.max(0, subIdx - 200)
     Integer narrowTo     = Math.min(text.length(), subIdx + 200)
     String  narrowWindow = text.substring(narrowFrom, narrowTo)
@@ -839,12 +987,33 @@ private Map analyzeMatterJsonForCurrentSubscription(String text) {
     if (maxIntMatch.find()) {
         result.maxIntervalSec = Integer.parseInt(maxIntMatch.group(1), 16)
     }
+    // Fallback: subIdx may have landed on a ReportData entry (not the SubscribeResponse),
+    // so MaxInterval is absent from the narrow window. Scan the full log text for a
+    // SubscribeResponse line containing both this SubscriptionId and MaxInterval together
+    // on the same line (they always appear together in the SubscribeResponse, ~100 chars apart).
+    // Anchoring to the exact subHexVal prevents cross-device contamination.
+    if (!result.maxIntervalSec) {
+        def srFwd = (lowerText =~ /subscriptionid\s*=\s*0x${subHexVal}[^\n]{0,150}maxinterval\s*=\s*0x([0-9a-f]+)/)
+        if (srFwd.find()) {
+            result.maxIntervalSec = Integer.parseInt(srFwd.group(1), 16)
+        } else {
+            def srRev = (lowerText =~ /maxinterval\s*=\s*0x([0-9a-f]+)[^\n]{0,150}subscriptionid\s*=\s*0x${subHexVal}/)
+            if (srRev.find()) {
+                result.maxIntervalSec = Integer.parseInt(srRev.group(1), 16)
+            }
+        }
+    }
 
     // Classify report type
     boolean hasAttrReports  = window.contains("AttributeReportIBs")
     boolean hasEventReports = window.contains("EventReportIBs")
     boolean hasReportData   = window.toLowerCase().contains("reportdatamessage")
     if (hasReportData) {
+        Integer reportIdx = findNearestIndex(lowerWindow, "reportdatamessage", localSubIdx)
+        if (reportIdx >= 0) {
+            result.reportTimestampMs = extractMatterLogTimestampMillisBeforeIndex(window, reportIdx)
+            result.reportLogTime = result.reportTimestampMs != null ? formatMatterLogTimestampMs(result.reportTimestampMs as Long) : null
+        }
         if (!hasAttrReports && !hasEventReports) {
             result.emptyReportSeen = true
             if (!result.livenessSeen) { result.reason = "empty subscription keep-alive report" }
@@ -852,6 +1021,16 @@ private Map analyzeMatterJsonForCurrentSubscription(String text) {
             result.normalReportSeen = true
             if (!result.livenessSeen) { result.reason = "normal subscription report with attribute/event data" }
         }
+    }
+    if (result.livenessTimestampMs != null) {
+        result.activityTimestampMs = result.livenessTimestampMs
+        result.activitySource = "liveness"
+    } else if (result.reportTimestampMs != null) {
+        result.activityTimestampMs = result.reportTimestampMs
+        result.activitySource = result.emptyReportSeen ? "emptyReport" : "report"
+    } else if (result.subscriptionTimestampMs != null) {
+        result.activityTimestampMs = result.subscriptionTimestampMs
+        result.activitySource = "subscription"
     }
     return result
 }
@@ -884,11 +1063,30 @@ private void scheduleNextExpectedLivenessCheck() {
     runIn(delaySec, "checkExpectedSubscriptionReport", [overwrite: true])
 }
 
-private void markSubscriptionAlive(String source) {
-    state.lastSubscriptionActivity = now()
+private void scheduleNextExpectedLivenessCheckFromActivity(Long activityTimestampMs, String activitySource = null) {
+    if (enableSubscriptionRecovery != true) { return }
+    if (activityTimestampMs == null) {
+        scheduleNextExpectedLivenessCheck()
+        return
+    }
+    Integer maxSec   = (state.effectiveMaxIntervalSec ?: 900) as Integer
+    Integer graceSec = calculateCheckGrace(maxSec)
+    Long dueAtMs     = activityTimestampMs + ((maxSec + graceSec) as Long) * 1000L
+    Long nowMs       = now()
+    Long remainingMs = dueAtMs - nowMs
+    Integer delaySec = Math.max(1, (int)Math.ceil(remainingMs / 1000.0d))
+    Long anchorAgeMs = Math.max(0L, nowMs - activityTimestampMs)
+    String anchor    = activitySource ?: "activity"
+    logDebug "scheduleNextExpectedLivenessCheckFromActivity(): next liveness check in ${delaySec}s (anchor=${anchor} at ${formatMatterLogTimestampMs(activityTimestampMs)}, anchorAgeMs=${anchorAgeMs}, maxInterval=${maxSec}s + grace=${graceSec}s)"
+    runIn(delaySec, "checkExpectedSubscriptionReport", [overwrite: true])
+}
+
+private void markSubscriptionAlive(String source, Long activityTimestampMs = null, String activitySource = null) {
+    Long activityMs = activityTimestampMs ?: now()
+    state.lastSubscriptionActivity = activityMs
     state.lastSubscriptionJsonSeen = now()
     state.subscriptionMissCount    = 0
-    logDebug "markSubscriptionAlive(): ALIVE [${source}] id=${state.subscriptionIdHex} peer=${state.matterPeer}"
+    logDebug "markSubscriptionAlive(): ALIVE [${source}] id=${state.subscriptionIdHex} peer=${state.matterPeer} activity=${formatMatterLogTimestampMs(activityMs)} source=${activitySource ?: (activityTimestampMs != null ? 'log' : 'checkTime')}"
 }
 
 private void markSubscriptionMissed(String source) {
@@ -943,6 +1141,16 @@ private Boolean shouldThrottleResubscribe() {
     if (!state.lastResubscribeAt) { return false }
     Long elapsed = now() - (state.lastResubscribeAt as Long)
     return elapsed < (10L * 60L * 1000L)   // 10-minute cooldown between re-subscribes
+}
+
+void readOperationalCredentialsFabrics() {
+    logWarn "Reading Operational Credentials / Fabrics attribute"
+    sendHubCommand(new HubAction(
+        matter.readAttributes([
+            matter.attributePath(0x00, 0x003E, 0x0001)
+        ]),
+        Protocol.MATTER
+    ))
 }
 
 /* ---------- helpers ---------- */
