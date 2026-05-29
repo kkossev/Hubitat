@@ -93,6 +93,7 @@ metadata {
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences', 'printFingerprints':'printFingerprints', 'printPreferences':'printPreferences'],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0001,0500,EF00", outClusters:"0003,0004,0006,1000,000A,0019", model:"TS0207", manufacturer:"_TZ3210_tgvtvdoc", controllerType: "ZGB", deviceJoinName: 'Tuya Zigbee Rain Sensor'],
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,EF00,0001,0400", outClusters:"", model:"TS0601", manufacturer:"_TZE200_u6x1zyv2", controllerType: "ZGB", deviceJoinName: 'Tuya Zigbee Rain Sensor'],
             ],
             tuyaDPs:        [
                 [dp:1,   name:'dropletDetectionState',       type:'enum',    rw: 'ro', defVal:'0', map:[0:'off', 1:'on'], description:'Droplet Detection State'],
