@@ -64,6 +64,7 @@
  *                                  added FP300 LED disabled at night and LED night time schedule parameters with full read/write support
  * ver. 2.1.1 2025-12-30 kkossev  - fixed rounding issue for temperature attribute
  * ver. 2.1.2 2026-03-30 kkossev  - commented out the Aqara FP300 fingerprint to prevent interference with the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver.
+ * ver. 2.1.3 2026-05-29 kkossev  - (dev. branch) Aqara FP300 version 0.0.0_6542 fix attempt
  * 
  *
  *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event
@@ -73,8 +74,8 @@
  *
  */
 
-static String version() { "2.1.2" }
-static String timeStamp() {"2026/03/30 8:30 PM"}
+static String version() { "2.1.3" }
+static String timeStamp() {"2026/05/29 8:43 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -186,7 +187,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.agl01", manufacturer:"LUMI",   deviceJoinName:  aqaraModels['GZCGQ11LM'].deviceJoinName                       // tests only : "Aqara T1 light intensity sensor GZCGQ11LM"    
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0", outClusters:"0003,0019", model:"lumi.sensor_occupy.agl1", manufacturer:"aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP1E Human Presence Detector RTCZCGQ13LM"        // RTCZCGQ13LM ( FP1E )
         // for Aqara PS-S04D (FP300), use the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver : https://community.hubitat.com/t/release-dedicated-aqara-fp300-presence-multi-sensor-zigbee-driver/162353 
-        //fingerprint profileId:"0104", endpointId:"01", inClusters:"0012,0400,0405,0402,0001,0003,0000,FCC0", outClusters:"000A,0019", model:"lumi.sensor_occupy.agl8", manufacturer:"Aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D"  // PS-S04D ( FP300 ) Hubitat fingerprint
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0012,0400,0405,0402,0001,0003,0000,FCC0", outClusters:"000A,0019", model:"lumi.sensor_occupy.agl8", manufacturer:"Aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D"  // PS-S04D ( FP300 ) Hubitat fingerprint
     }
 
     preferences {
@@ -1081,7 +1082,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case '0705' :   // 0705_Unknown (115F): 0 [UNSIGNED_8_BIT_INTEGER]
         case 'FFF2' :   // FFF2_Unknown (115F): 0006_AqaraCommand [FCC0_ManufacturerSpecific: mc=115F, null -> null, TID=--, Input, const1=62207, length1=134, const2=null, seq=null, integrity=null, action=null, const3=null, length2=null, raw=null] [AQARA_FFF2]
         case 'FFFD' :   // FFFD_Unknown (115F): 1 [UNSIGNED_16_BIT_INTEGER]
-            logDebug "<b>received FP1E RTCZCGQ13LM unknown report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            logDebug "received FP1E RTCZCGQ13LM unknown report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         default :
             logDebug "Unprocessed <b>FCC0</b> attribute report: cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value} status=${it.status} data=${descMap.data}"
@@ -1461,7 +1462,85 @@ def sendBatteryEvent( roundedPct, isDigital=false ) {
 }
 
 def parseZDOcommand( Map descMap ) {
+    List<String> cmds = []
     switch (descMap.clusterId) {
+        case '0000' : // Network Address Request (NWK_addr_req)
+            if (logEnable) {
+                log.debug "${device.displayName} ZDO Network Address request, data=${descMap.data} (Sequence Number:${descMap.data[0]})"
+            }
+            List data = descMap.data as List
+            if (data == null || data.size() < 11) {
+                if (logEnable) { log.debug "${device.displayName} invalid NWK_addr_req payload: ${data}" }
+                break
+            }
+            Integer tsn = (data[0] instanceof String) ? Integer.parseInt(data[0], 16) : (data[0] as Integer)
+            String seqNum = zigbee.convertToHexString(tsn & 0xFF, 2)
+            // Requested IEEE address is already in little-endian order in the ZDO payload.
+            String requestedIeeeLe = data[1..8].collect {
+                it instanceof String ? it.padLeft(2, '0').toUpperCase() : zigbee.convertToHexString((it as int) & 0xFF, 2)
+            }.join(' ')
+            String requestedIeeeKey = requestedIeeeLe.replace(' ', '').toUpperCase()
+            // Hubitat exposes hub Zigbee EUI as big-endian string, e.g. 000D6F0016C1E513.
+            String hubIeeeBe = "${location.hub.zigbeeEui ?: location.hub.zigbeeId ?: ''}".replaceAll('[^0-9A-Fa-f]', '').toUpperCase()
+            String hubIeeeLeKey = ''
+            if (hubIeeeBe.length() == 16) {
+                hubIeeeLeKey = hubIeeeBe.replaceAll('(..)', '$1 ').trim().split(' ').reverse().join('').toUpperCase()
+            }
+            // Device IEEE from device data is usually big-endian.
+            String deviceIeeeBe = "${device.getDataValue('ieee') ?: device.getDataValue('mac') ?: ''}".replaceAll('[^0-9A-Fa-f]', '').toUpperCase()
+            String deviceIeeeLeKey = ''
+            if (deviceIeeeBe.length() == 16) {
+                deviceIeeeLeKey = deviceIeeeBe.replaceAll('(..)', '$1 ').trim().split(' ').reverse().join('').toUpperCase()
+            }
+            String nwkAddr = null
+            if (requestedIeeeKey == hubIeeeLeKey) {
+                // Coordinator is always NWK 0x0000; encoded little-endian.
+                nwkAddr = '00 00'
+                if (logEnable) { log.debug "${device.displayName} NWK_addr_req is for coordinator IEEE ${requestedIeeeLe}; responding NWK 0000" }
+            }
+            else if (requestedIeeeKey == deviceIeeeLeKey) {
+                // This device's current DNI; encode little-endian.
+                String dni = "${device.deviceNetworkId}".padLeft(4, '0').toUpperCase()
+                nwkAddr = "${dni[2..3]} ${dni[0..1]}"
+                if (logEnable) { log.debug "${device.displayName} NWK_addr_req is for this device IEEE ${requestedIeeeLe}; responding NWK ${dni}" }
+            }
+            else {
+                if (logEnable) {
+                    log.debug "${device.displayName} NWK_addr_req for unknown IEEE ${requestedIeeeLe}; ignored (hub=${hubIeeeBe}, device=${deviceIeeeBe})"
+                }
+                break
+            }
+            // Response format:
+            // TSN + status(00=success) + IEEE address (8 bytes LE) + NWK address (2 bytes LE)
+            // + number of associated devices (00) + start index (00)
+            cmds = ["he raw ${device.deviceNetworkId} 0 0 0x8000 {${seqNum} 00 ${requestedIeeeLe} ${nwkAddr} 00 00} {0x0000}"]
+            sendZigbeeCommands(cmds)
+            break
+
+        case '0002' : // Node Descriptor Request (Node_Desc_req)
+            if (logEnable) { 
+                log.debug "${device.displayName} ZDO Node Descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]})" 
+            }
+            // Rate limiting: only respond if more than 10 seconds have passed since last response (trottling logic is currently skipped)
+            def now = new Date().getTime()
+            def lastZdo0002 = state.lastRx?.zdo0002 ?: 0
+            if ((lastZdo0002 != 0) && (now - lastZdo0002 < 10000)) {
+                if (logEnable) { log.debug "${device.displayName} ZDO Node Descriptor response -  (${(now - lastZdo0002)/1000}s since last)" }
+                //break
+            }
+            // Send Node Descriptor Response (0x8002)
+            // Request format: TSN + NwkAddrOfInterest (2 bytes little-endian)
+            int tsn = (descMap.data[0] instanceof String) ? Integer.parseInt(descMap.data[0], 16) : (descMap.data[0] as int)
+            String seqNum = zigbee.convertToHexString(tsn & 0xFF, 2)
+            // Extract the requested network address from data[1..2] and echo it back
+            List data = descMap.data as List
+            String nwkAddrRequested = data[1..2].collect { it instanceof String ? it.padLeft(2, '0') : zigbee.convertToHexString((it as int) & 0xFF, 2) }.join(' ')
+            def nodeDesc = "00 40 8E 8E 11 52 52 00 00 00 52 00 00"
+            // Response format: seqNum + status(00=success) + NwkAddrOfInterest + NodeDescriptor
+            cmds = ["he raw ${device.deviceNetworkId} 0 0 0x8002 {${seqNum} 00 ${nwkAddrRequested} ${nodeDesc}} {0x0000}"]
+            state.lastRx.zdo0002 = now
+            sendZigbeeCommands(cmds)
+            break
         case "0006" :
             if (logEnable) log.info "${device.displayName} Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7]+descMap.data[6]})"
             break
@@ -1469,6 +1548,13 @@ def parseZDOcommand( Map descMap ) {
             if (logEnable) log.info "${device.displayName} Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
             aqaraBlackMagic()
             //aqaraReadAttributes()
+            break
+        case '0036' : // End Device Timeout Request
+            Integer tsn = (descMap.data[0] instanceof String) ? Integer.parseInt(descMap.data[0], 16) : (descMap.data[0] as int)
+            String seqNum = zigbee.convertToHexString(tsn & 0xFF, 2)
+            // Response: TSN, status=00 success, parentInfo=01
+            cmds = ["he raw ${device.deviceNetworkId} 0 0 0x8036 {${seqNum} 00 01} {0x0000}"]
+            sendZigbeeCommands(cmds)
             break
         case "8004" : // simple descriptor response
             if (logEnable) log.info "${device.displayName} Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
@@ -1658,9 +1744,6 @@ private void sendDelayedIllumEvent(Map eventMap) {
     sendEvent(eventMap)
 }
 
-
-
-
 def temperatureEvent( temperature ) {
     // FP300 has a dedicated external temperature sensor - route to child device
     if (isFP300()) {
@@ -1742,7 +1825,6 @@ def presenceTypeEvent( String presenceTypeEvent, isDigital=false ) {
         }        
     }
 }
-
 
 def targetDistanceEvent( Integer distance ) {
     if (distance != null) {
@@ -2008,6 +2090,7 @@ void refresh() {
         cmds += zigbee.readAttribute(0xFCC0, 0x015B, [mfgCode: 0x115F], delay=200)  // detection range
     }
     else if (isFP300()) {
+        cmds += zigbee.readAttribute(0xFCC0, 0x00EE, [mfgCode: 0x115F], delay=200)
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x014D, 0x014F, 0x0197, 0x0199, 0x015D, 0x015E], [mfgCode: 0x115F], delay=200)  // FP300 attributes
         cmds += zigbee.readAttribute(0xFCC0, [0x0162, 0x0170, 0x0192, 0x0193], [mfgCode: 0x115F], delay=200)  // FP300 sampling configuration
         cmds += zigbee.readAttribute(0xFCC0, [0x0163, 0x0164, 0x0165], [mfgCode: 0x115F], delay=200)  // FP300 temperature reporting config
@@ -2899,7 +2982,6 @@ void aqaraReadAttributes() {
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x0144, 0x0146], [mfgCode: 0x115F], delay=200)
     }
     else if (isFP300()) {  // Aqara FP300 presence detector 
-        //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // Standard battery voltage
         cmds += zigbee.readAttribute(0xFCC0, [0x014D, 0x014F, 0x015D, 0x015E, 0x0197, 0x0199], [mfgCode: 0x115F], delay=200)  // Removed 0x0018 (unsupported)
     }
     else if (isLightSensorAqara()) {
@@ -2950,26 +3032,14 @@ void aqaraBlackMagic() {
         logDebug "aqaraBlackMagic() for FP1E"
     }
     else if (isFP300()) {
-        // Bind battery cluster
-        //cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 50",]
-        //cmds += zigbee.configureReporting(0x0001, 0x0020, 0x20, 3600, 7200, null, [:], delay=100)
-        
-        // Bind and configure temperature cluster (0x0402)
-        cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}", "delay 50",]
-        cmds += zigbee.configureReporting(0x0402, 0x0000, 0x29, 30, 600, 10, [:], delay=100)  // min 30s, max 600s, delta 0.1°C
-        
-        // Bind and configure humidity cluster (0x0405)
-        cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0405 {${device.zigbeeId}} {}", "delay 50",]
-        cmds += zigbee.configureReporting(0x0405, 0x0000, 0x21, 30, 600, 100, [:], delay=100)  // min 30s, max 600s, delta 1%
-        
-        // Bind and configure illuminance cluster (0x0400)
-        cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}", "delay 50",]
-        cmds += zigbee.configureReporting(0x0400, 0x0000, 0x21, 30, 600, 50, [:], delay=100)  // min 30s, max 600s, delta 50 lux
-        
-        // Bind manufacturer cluster and read initial values
+        cmds += zigbee.readAttribute(0xFCC0, 0x00EE, [mfgCode: 0x115F], delay=200)   // Read OTA data; makes the device expose more attributes related to OTA
+        cmds += zigbee.readAttribute(0xFCC0, 0x010C, [mfgCode: 0x115F], delay=200)   // Read motion sensitivity
+        cmds += zigbee.readAttribute(0xFCC0, 0x0142, [mfgCode: 0x115F], delay=200)   // Read current presence
+        cmds += zigbee.readAttribute(0xFCC0, 0x014F, [mfgCode: 0x115F], delay=200)   // Read current PIR interval
+        cmds += zigbee.readAttribute(0xFCC0, 0x0197, [mfgCode: 0x115F], delay=200)   // Read current absence delay timer value
+        cmds += zigbee.readAttribute(0xFCC0, 0x019A, [mfgCode: 0x115F], delay=200)   // Read detection range
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
-        //cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
-        
         logDebug "aqaraBlackMagic() for FP300"
     }
     else if (isLightSensorXiaomi() || isLightSensorAqara()) {
