@@ -64,7 +64,7 @@
  *                                  added FP300 LED disabled at night and LED night time schedule parameters with full read/write support
  * ver. 2.1.1 2025-12-30 kkossev  - fixed rounding issue for temperature attribute
  * ver. 2.1.2 2026-03-30 kkossev  - commented out the Aqara FP300 fingerprint to prevent interference with the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver.
- * ver. 2.1.3 2026-05-29 kkossev  - (dev. branch) Aqara FP300 version 0.0.0_6542 fix attempt
+ * ver. 2.1.3 2026-05-31 kkossev  - (dev. branch) Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync
  * 
  *
  *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event
@@ -75,7 +75,7 @@
  */
 
 static String version() { "2.1.3" }
-static String timeStamp() {"2026/05/29 8:43 PM"}
+static String timeStamp() {"2026/05/31 9:37 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -615,6 +615,13 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                 logWarn "Received unknown device report: cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value} status=${it.status} data=${descMap.data}"
             }
             break
+
+        case "00DF":    // periodic diagnostic heartbeat TLV (RSSI, device temp, uptime counters) — undocumented, Z2M ignores it
+            logDebug "FCC0 attr 0x00DF = periodic diagnostic heartbeat (ignored). Sending now time sync to keep device clock in sync."
+            runIn(1, "sendTimeSync", [overwrite: true])     // send a forced Time cluster reply shortly after each heartbeat to keep the device's internal clock in sync
+            break
+
+
         case "00E6" : // FP300 unknown report
             logDebug "<b>Received FP300 unknown report</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
@@ -1518,27 +1525,49 @@ def parseZDOcommand( Map descMap ) {
             break
 
         case '0002' : // Node Descriptor Request (Node_Desc_req)
-            if (logEnable) { 
-                log.debug "${device.displayName} ZDO Node Descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]})" 
+            if (logEnable) {
+                log.debug "${device.displayName} ZDO Node Descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]})"
             }
-            // Rate limiting: only respond if more than 10 seconds have passed since last response (trottling logic is currently skipped)
-            def now = new Date().getTime()
-            def lastZdo0002 = state.lastRx?.zdo0002 ?: 0
-            if ((lastZdo0002 != 0) && (now - lastZdo0002 < 10000)) {
-                if (logEnable) { log.debug "${device.displayName} ZDO Node Descriptor response -  (${(now - lastZdo0002)/1000}s since last)" }
-                //break
-            }
-            // Send Node Descriptor Response (0x8002)
-            // Request format: TSN + NwkAddrOfInterest (2 bytes little-endian)
-            int tsn = (descMap.data[0] instanceof String) ? Integer.parseInt(descMap.data[0], 16) : (descMap.data[0] as int)
-            String seqNum = zigbee.convertToHexString(tsn & 0xFF, 2)
-            // Extract the requested network address from data[1..2] and echo it back
             List data = descMap.data as List
-            String nwkAddrRequested = data[1..2].collect { it instanceof String ? it.padLeft(2, '0') : zigbee.convertToHexString((it as int) & 0xFF, 2) }.join(' ')
-            def nodeDesc = "00 40 8E 8E 11 52 52 00 00 00 52 00 00"
-            // Response format: seqNum + status(00=success) + NwkAddrOfInterest + NodeDescriptor
-            cmds = ["he raw ${device.deviceNetworkId} 0 0 0x8002 {${seqNum} 00 ${nwkAddrRequested} ${nodeDesc}} {0x0000}"]
-            state.lastRx.zdo0002 = now
+            if (data == null || data.size() < 3) {
+                if (logEnable) { log.debug "${device.displayName} invalid Node_Desc_req payload: ${data}" }
+                break
+            }
+            // Request format: TSN + NwkAddrOfInterest (2 bytes little-endian)
+            Integer tsn = (data[0] instanceof String) ? Integer.parseInt(data[0], 16) : (data[0] as Integer)
+            String seqNum = zigbee.convertToHexString(tsn & 0xFF, 2)
+            String nwkAddrRequested = data[1..2].collect {
+                it instanceof String ? it.padLeft(2, '0').toUpperCase() : zigbee.convertToHexString((it as int) & 0xFF, 2)
+            }.join(' ')
+            // Only answer Node Descriptor requests for the coordinator (0x0000).
+            // Do not fabricate descriptors for other nodes.
+            if (nwkAddrRequested != '00 00') {
+                if (logEnable) {
+                    log.debug "${device.displayName} Node_Desc_req for NWK ${nwkAddrRequested}; ignored"
+                }
+                break
+            }
+            /*
+            * Node Descriptor for a coordinator-like Aqara/Lumi hub:
+            *
+            * 00 40  = Node descriptor bitfield:
+            *          logical type = coordinator, frequency band = 2.4 GHz
+            * 8F     = MAC capability flags:
+            *          FFD, mains powered, receiver on when idle, alternate PAN coordinator
+            * 5F 11  = Manufacturer code 0x115F (Lumi/Aqara), little-endian
+            * 52     = Max buffer size = 82
+            * 52 00  = Max incoming transfer size = 82
+            * 41 2C  = Server mask = 0x2C41
+            * 52 00  = Max outgoing transfer size = 82
+            * 00     = Descriptor capability field
+            */
+            String nodeDesc = '00 40 8F 5F 11 52 52 00 41 2C 52 00 00'
+            // Response format:
+            // TSN + status(00=success) + NwkAddrOfInterest + NodeDescriptor
+            cmds = [
+                "he raw ${device.deviceNetworkId} 0 0 0x8002 {${seqNum} 00 ${nwkAddrRequested} ${nodeDesc}} {0x0000}"
+            ]
+            state.lastRx.zdo0002 = new Date().getTime()
             sendZigbeeCommands(cmds)
             break
         case "0006" :
@@ -2557,12 +2586,15 @@ void configure(boolean fullInit = false) {
     initializeVars(fullInit)
     runIn( DEFAULT_POLLING_INTERVAL, "deviceHealthCheck", [overwrite: true, misfire: "ignore"])
     logWarn "<b>if no more logs, please pair the device again to HE!</b>"
-    runIn( 30, "aqaraReadAttributes", [overwrite: true])
     
     // Ensure child device exists for FP300
     if (isFP300()) {
+        runIn(1, "sendTimeSync", [overwrite: true])
         runIn(3, 'createChildDevices')
     }
+
+    runIn( 15, "aqaraReadAttributes", [overwrite: true])
+
 }
 
 def initialize() {
@@ -3068,6 +3100,42 @@ List<String> activeEndpoints() {
     String endpointIdTemp = endpointId == null ? "01" : endpointId
     cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0004 {00 ${zigbee.swapOctets(device.deviceNetworkId)} $endpointIdTemp} {0x0000}"]
     return cmds    
+}
+
+// ==============================================================================================
+// TIME CLUSTER: respond to time-sync requests (cluster 0x000A)
+// ==============================================================================================
+
+void replyToTimeClusterRead(Map descMap) {
+    // Probably, without this reply the device's internal 24-hour watchdog timer causes it to leave the network?
+    final long ZIGBEE_EPOCH_OFFSET = 946684800L   // seconds between Unix epoch and ZigBee epoch (Jan 1 2000 UTC)
+    long zigbeeTime = (now() / 1000L).toLong() - ZIGBEE_EPOCH_OFFSET
+    int tzOffsetSec = location.timeZone.rawOffset.intdiv(1000)          // e.g. +10800 for UTC+3
+    int dstSec = location.timeZone.inDaylightTime(new Date()) ? location.timeZone.getDSTSavings().intdiv(1000) : 0
+
+    String tHex   = toLEHex32(zigbeeTime)
+    String tzHex  = toLEHex32(tzOffsetSec)
+    String dstHex = toLEHex32(dstSec)
+
+    // ZCL Read Attributes Response header: 0x18 = profile-wide | server-to-client | disable-default-response
+    // seq=00 (device doesn't require exact match), cmd=0x01 (Read Attributes Response)
+    // Attr 0x0000: type 0xE2 (UTCTime/uint32), Attr 0x0002: type 0x2B (INT32), Attr 0x0005: type 0x2B (INT32)
+    String payload = "18 00 01 00 00 00 E2 ${tHex} 02 00 00 2B ${tzHex} 05 00 00 2B ${dstHex}"
+    List<String> cmds = ["he raw 0x${device.deviceNetworkId} 1 1 0x000A {${payload}} {0x0104}"]
+    logInfo "Sending Time cluster reply: UTC=${zigbeeTime} (${new Date()}) TZ=${tzOffsetSec}s DST=${dstSec}s"
+    sendZigbeeCommands(cmds)
+}
+
+void sendTimeSync() {
+    // No-arg wrapper so runIn() can call this. Sends Time cluster data proactively
+    // (Hubitat's coordinator never auto-responds to device-originated cluster 0x000A reads).
+    replyToTimeClusterRead([:])
+}
+
+private String toLEHex32(long value) {
+    // 4-byte little-endian hex string, space-separated; handles signed negatives via 2's complement masking
+    long v = value & 0xFFFFFFFFL
+    return String.format("%02X %02X %02X %02X", (v & 0xFF), ((v >> 8) & 0xFF), ((v >> 16) & 0xFF), ((v >> 24) & 0xFF))
 }
 
 // credits @thebearmay
