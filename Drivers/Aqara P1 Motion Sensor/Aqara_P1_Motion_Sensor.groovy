@@ -64,7 +64,7 @@
  *                                  added FP300 LED disabled at night and LED night time schedule parameters with full read/write support
  * ver. 2.1.1 2025-12-30 kkossev  - fixed rounding issue for temperature attribute
  * ver. 2.1.2 2026-03-30 kkossev  - commented out the Aqara FP300 fingerprint to prevent interference with the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver.
- * ver. 2.1.3 2026-05-31 kkossev  - (dev. branch) Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync
+ * ver. 2.1.3 2026-06-01 kkossev  - (dev. branch) Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync on ZDO NodeDescriptor response;
  * 
  *
  *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event
@@ -75,7 +75,7 @@
  */
 
 static String version() { "2.1.3" }
-static String timeStamp() {"2026/05/31 9:37 AM"}
+static String timeStamp() {"2026/06/01 8:47 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -666,10 +666,26 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "0143" : // (323) FP1 RTCZCGQ11LM presence_event {0: 'enter', 1: 'leave', 2: 'left_enter', 3: 'right_leave', 4: 'right_enter', 5: 'left_leave', 6: 'approach', 7: 'away'}[value];  // FP1E: 0143_SensorPresenseEvent (115F): [UNSIGNED_8_BIT_INTEGER]
             presenceTypeEvent( fp1RoomActivityEventTypeOptions[value.toString()] )
             break
+        case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
+            device.updateSetting( "monitoringMode",  [value:value.toString(), type:"enum"] )    // monitoring_mode = {0: 'undirected', 1: 'left_right'}[value]
+            logDebug "<b>received monitoring_mode report: ${monitoringModeOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "0146" : // (326) FP1 RTCZCGQ11LM approach_distance 
+            device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
+            logDebug "(0x0146) <b>received approach_distance report: ${approachDistanceOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
         case "014D" : // FP300 PIR detection state
             if (isFP300()) {
                 sendEvent(name: "pirDetection", value: value ? "active" : "inactive", type: "physical")
                 logDebug "PIR detection: ${value ? 'active' : 'inactive'}"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "014E" : // FP300 unknown
+            if (isFP300()) {
+                logDebug "<b>Received FP300 unknown report</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             }
             else {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
@@ -686,14 +702,6 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             else {
                 logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
             }
-            break
-        case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
-            device.updateSetting( "monitoringMode",  [value:value.toString(), type:"enum"] )    // monitoring_mode = {0: 'undirected', 1: 'left_right'}[value]
-            logDebug "<b>received monitoring_mode report: ${monitoringModeOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
-            break
-        case "0146" : // (326) FP1 RTCZCGQ11LM approach_distance 
-            device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
-            logDebug "(0x0146) <b>received approach_distance report: ${approachDistanceOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0150" : // (336) FP1 set region event
             logDebug "(0x0150) <b>received set region report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
@@ -1561,7 +1569,8 @@ def parseZDOcommand( Map descMap ) {
             * 52 00  = Max outgoing transfer size = 82
             * 00     = Descriptor capability field
             */
-            String nodeDesc = '00 40 8F 5F 11 52 52 00 41 2C 52 00 00'
+            //String nodeDesc = '00 40 8F 5F 11 52 52 00 41 2C 52 00 00'      // Aqara
+            String nodeDesc = '00 40 8F CD AB 52 80 00 41 2C 80 00 00'        // Hubitat C-8 Pro
             // Response format:
             // TSN + status(00=success) + NwkAddrOfInterest + NodeDescriptor
             cmds = [
@@ -1569,6 +1578,8 @@ def parseZDOcommand( Map descMap ) {
             ]
             state.lastRx.zdo0002 = new Date().getTime()
             sendZigbeeCommands(cmds)
+            // sync the time - just in case..
+            runIn(1, syncTime)  
             break
         case "0006" :
             if (logEnable) log.info "${device.displayName} Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7]+descMap.data[6]})"
@@ -1597,6 +1608,18 @@ def parseZDOcommand( Map descMap ) {
             break
         case "8022" : //unbind request
             if (logEnable) log.info "${device.displayName} Received unbind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+            break
+        case '8032' : // Mgmt_Rtg_rsp
+            List data = descMap.data as List
+            if (data == null || data.size() < 2) {
+                if (logEnable) { log.debug "${device.displayName} invalid Mgmt_Rtg_rsp payload: ${data}" }
+                break
+            }
+            Integer tsn = hexStrToUnsignedInt(data[0])
+            Integer status = hexStrToUnsignedInt(data[1])
+            if (logEnable) {
+                log.debug "${device.displayName} ZDO Mgmt_Rtg_rsp: seq=${zigbee.convertToHexString(tsn, 2)}, status=${zigbee.convertToHexString(status, 2)}${status == 0x84 ? ' (NOT_SUPPORTED)' : ''}, data=${data} (harmless and expected)"
+            }
             break
         case "8034" : //leave response
             if (logEnable) log.info "${device.displayName} Received leave response, data=${descMap.data}"
