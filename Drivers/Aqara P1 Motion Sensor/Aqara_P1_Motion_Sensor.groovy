@@ -75,7 +75,7 @@
  */
 
 static String version() { "2.1.3" }
-static String timeStamp() {"2026/06/01 8:47 PM"}
+static String timeStamp() {"2026/06/01 9:16 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -1579,7 +1579,7 @@ def parseZDOcommand( Map descMap ) {
             state.lastRx.zdo0002 = new Date().getTime()
             sendZigbeeCommands(cmds)
             // sync the time - just in case..
-            runIn(1, syncTime)  
+            runIn(1, "sendTimeSync")  
             break
         case "0006" :
             if (logEnable) log.info "${device.displayName} Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7]+descMap.data[6]})"
