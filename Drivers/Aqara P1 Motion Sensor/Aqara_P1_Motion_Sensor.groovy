@@ -64,7 +64,7 @@
  *                                  added FP300 LED disabled at night and LED night time schedule parameters with full read/write support
  * ver. 2.1.1 2025-12-30 kkossev  - fixed rounding issue for temperature attribute
  * ver. 2.1.2 2026-03-30 kkossev  - commented out the Aqara FP300 fingerprint to prevent interference with the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver.
- * ver. 2.1.3 2026-06-01 kkossev  - (dev. branch) Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync on ZDO NodeDescriptor response;
+ * ver. 2.1.3 2026-06-01 kkossev  - (dev. branch) Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync on ZDO NodeDescriptor response; preferences updates fixes;
  * 
  *
  *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event
@@ -75,7 +75,7 @@
  */
 
 static String version() { "2.1.3" }
-static String timeStamp() {"2026/06/01 9:16 PM"}
+static String timeStamp() {"2026/06/01 11:34 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -232,18 +232,18 @@ metadata {
                     input (name: "tempHumiditySamplingFrequency", type: "enum", title: "<b>Temperature & Humidity Sampling Frequency</b>", description: "Sampling frequency preset (use 'Custom' to enable period setting)", options: ["0":"Off", "1":"Low", "2":"Medium", "3":"High", "4":"Custom"])
                     input (name: "temperatureReportingMode", type: "enum", title: "<b>Temperature Reporting Mode</b>", description: "How temperature changes trigger reports", options: ["1":"Threshold only", "2":"Interval only", "3":"Threshold and Interval"], defaultValue: "3")
                     input (name: "tempHumiditySamplingPeriod", type: "number", title: "<b>Temperature & Humidity Sampling Period</b>", description: "How often to sample temp/humidity (1-3600 seconds). Use with 'Custom' frequency.", range: "1..3600")
-                    input (name: "temperatureReportingThreshold", type: "decimal", title: "<b>Temperature Reporting Threshold</b>", description: "Minimum temperature change to trigger a report (0.1-10.0°C)", range: "0..10", defaultValue: 1.0)
-                    input (name: "temperatureReportingInterval", type: "number", title: "<b>Temperature Reporting Interval</b>", description: "Reporting interval for temperature (10-3600 seconds)", range: "10..3600", defaultValue: 600)
+                    input (name: "temperatureReportingThreshold", type: "decimal", title: "<b>Temperature Reporting Threshold</b>", description: "Minimum temperature change to trigger a report (0.2-3.0°C)", range: "0..3", defaultValue: 0.2)
+                    input (name: "temperatureReportingInterval", type: "number", title: "<b>Temperature Reporting Interval</b>", description: "Reporting interval for temperature (60-3600 seconds)", range: "60..3600", defaultValue: 600)
                     input (name: "tempOffset", type: "decimal", title: "<b>Temperature Offset</b>", description: "Adjust the FP300 temperature reading.", range: "-100..100", defaultValue: 0)
                     input (name: "humidityReportingMode", type: "enum", title: "<b>Humidity Reporting Mode</b>", description: "How humidity changes trigger reports", options: ["1":"Threshold only", "2":"Interval only", "3":"Threshold and Interval"], defaultValue: "3")
-                    input (name: "humidityReportingInterval", type: "number", title: "<b>Humidity Reporting Interval</b>", description: "Reporting interval for humidity (10-3600 seconds)", range: "10..3600", defaultValue: 600)
-                    input (name: "humidityReportingThreshold", type: "decimal", title: "<b>Humidity Reporting Threshold</b>", description: "Minimum humidity change to trigger a report (%)", range: "1..50", defaultValue: 5.0)
+                    input (name: "humidityReportingInterval", type: "number", title: "<b>Humidity Reporting Interval</b>", description: "Reporting interval for humidity (60-3600 seconds)", range: "60..3600", defaultValue: 600)
+                    input (name: "humidityReportingThreshold", type: "decimal", title: "<b>Humidity Reporting Threshold</b>", description: "Minimum humidity change to trigger a report (%)", range: "2..20", defaultValue: 3.0)
                     input (name: "humidityOffset", type: "decimal", title: "<b>Humidity Offset</b>", description: "Adjust the FP300 humidity reading.", range: "-100..100", defaultValue: 0)
                     input (name: "lightSamplingFrequency", type: "enum", title: "<b>Light Sampling Frequency</b>", description: "Sampling frequency preset (use 'Custom' to enable period setting)", options: ["0":"Off", "1":"Low", "2":"Medium", "3":"High", "4":"Custom"])
                     input (name: "lightReportingMode", type: "enum", title: "<b>Light Reporting Mode</b>", description: "How light changes trigger reports", options: ["0":"No reporting", "1":"Threshold only", "2":"Interval only", "3":"Threshold and Interval"], defaultValue: "3")
                     input (name: "lightSamplingPeriod", type: "number", title: "<b>Light Sampling Period</b>", description: "How often to sample light (1-3600 seconds). Use with 'Custom' frequency.", range: "1..3600")
-                    input (name: "lightReportingInterval", type: "number", title: "<b>Light Reporting Interval</b>", description: "Minimum interval between light reports (1-600 seconds)", range: "1..600", defaultValue: 3600)
-                    input (name: "lightReportingThreshold", type: "decimal", title: "<b>Light Reporting Threshold</b>", description: "Minimum light change to trigger a report (%)", range: "1..50", defaultValue: 15.0)
+                    input (name: "lightReportingInterval", type: "number", title: "<b>Light Reporting Interval</b>", description: "Minimum interval between light reports (20-3600 seconds)", range: "20..3600", defaultValue: 3600)
+                    input (name: "lightReportingThreshold", type: "decimal", title: "<b>Light Reporting Threshold</b>", description: "Minimum light change to trigger a report (%)", range: "3..20", defaultValue: 10.0)
                     input (name: "ledDisabledNight", type: "bool", title: "<b>LED Disabled at Night</b>", description: "Disable LED indicator during nighttime hours", defaultValue: false)
                     input (name: "ledNightTimeSchedule", type: "string", title: "<b>LED Night Time Schedule</b>", description: "LED disable schedule in 24-hour format (e.g., '21:00-09:00')<br>" +
                            "Leave empty to use default (21:00-09:00). Only active when 'LED Disabled at Night' is enabled.")
@@ -629,7 +629,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             logWarn "<b>Received FP300 restart response</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "00F7" :   // Aqara FP1E : 00F7_States (115F): {16=1, 18=0, 3=19, 5=1, 101=0, 8=278, 10=56426, 12=20} [STRUCT2]
-            decodeAqaraStruct(description)
+            decodeAqaraStruct(it.value) // bug fixed in version 2.1.3 2026-06-01
             break
         case "00FC" :   // Aqara FP1E : 00FC_Unknown (115F): false [BOOLEAN]
             log.warn "received LUMI LEAVE report:  (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
@@ -804,6 +804,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 def seconds = value / 1000
+                device.updateSetting("tempHumiditySamplingPeriod", [value: (seconds as Integer).toString(), type: "number"])
                 storeParamValue('tempHumiditySamplingPeriod', seconds as Integer, 'number', false)
                 logDebug "FP300 temp/humidity sampling period: ${seconds} seconds"
             }
@@ -815,6 +816,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 def intervalSeconds = (value / 1000) as int
+                device.updateSetting("temperatureReportingInterval", [value: intervalSeconds.toString(), type: "number"])
                 storeParamValue('temperatureReportingInterval', intervalSeconds, 'number', false)
                 logDebug "FP300 temperature reporting interval: ${intervalSeconds} seconds"
             }
@@ -826,6 +828,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 def thresholdDegrees = value / 100.0
+                device.updateSetting("temperatureReportingThreshold", [value: thresholdDegrees, type: "decimal"])
                 storeParamValue('temperatureReportingThreshold', thresholdDegrees, 'decimal', false)
                 logDebug "FP300 temperature reporting threshold: ${String.format('%.1f', thresholdDegrees)}°C"
             }
@@ -836,6 +839,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "0165" : // (357) FP300 Temperature reporting mode
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
+                device.updateSetting("temperatureReportingMode", [value: value.toString(), type: "enum"])
                 storeParamValue('temperatureReportingMode', value.toString(), 'enum', false)
                 def modes = ["unknown", "threshold", "reporting interval", "threshold and interval"]
                 logDebug "FP300 temperature reporting mode: ${modes[value] ?: 'unknown'} (${value})"
@@ -848,6 +852,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 def intervalSeconds = (value / 1000) as int
+                device.updateSetting("humidityReportingInterval", [value: intervalSeconds.toString(), type: "number"])
                 storeParamValue('humidityReportingInterval', intervalSeconds, 'number', false)
                 logDebug "FP300 humidity reporting interval: ${intervalSeconds} seconds"
             }
@@ -859,6 +864,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 def thresholdPercent = value / 100.0
+                device.updateSetting("humidityReportingThreshold", [value: thresholdPercent, type: "decimal"])
                 storeParamValue('humidityReportingThreshold', thresholdPercent, 'decimal', false)
                 logDebug "FP300 humidity reporting threshold: ${String.format('%.1f', thresholdPercent)}%"
             }
@@ -869,6 +875,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "016C" : // (364) FP300 Humidity reporting mode
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
+                device.updateSetting("humidityReportingMode", [value: value.toString(), type: "enum"])
                 storeParamValue('humidityReportingMode', value.toString(), 'enum', false)
                 def modes = ["unknown", "threshold", "reporting interval", "threshold and interval"]
                 logDebug "FP300 humidity reporting mode: ${modes[value] ?: 'unknown'} (${value})"
@@ -881,6 +888,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 def frequencies = ["off", "low", "medium", "high", "custom"]
+                device.updateSetting("tempHumiditySamplingFrequency", [value: value.toString(), type: "enum"])
                 storeParamValue('tempHumiditySamplingFrequency', value.toString(), 'enum', false)
                 logDebug "FP300 temp/humidity sampling frequency: ${frequencies[value] ?: 'unknown'} (${value})"
             }
@@ -892,6 +900,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 def frequencies = ["off", "low", "medium", "high", "custom"]
+                device.updateSetting("lightSamplingFrequency", [value: value.toString(), type: "enum"])
                 storeParamValue('lightSamplingFrequency', value.toString(), 'enum', false)
                 logDebug "FP300 light sampling frequency: ${frequencies[value] ?: 'unknown'} (${value})"
             }
@@ -903,6 +912,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 def seconds = value / 1000
+                device.updateSetting("lightSamplingPeriod", [value: (seconds as Integer).toString(), type: "number"])
                 storeParamValue('lightSamplingPeriod', seconds as Integer, 'number', false)
                 logDebug "FP300 light sampling period: ${seconds} seconds"
             }
@@ -914,6 +924,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 def intervalSeconds = (value / 1000) as int
+                device.updateSetting("lightReportingInterval", [value: intervalSeconds.toString(), type: "number"])
                 storeParamValue('lightReportingInterval', intervalSeconds, 'number', false)
                 logDebug "FP300 light reporting interval: ${intervalSeconds} seconds"
             }
@@ -925,6 +936,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
                 def thresholdPercent = value / 100.0
+                device.updateSetting("lightReportingThreshold", [value: thresholdPercent, type: "decimal"])
                 storeParamValue('lightReportingThreshold', thresholdPercent, 'decimal', false)
                 logDebug "FP300 light reporting threshold: ${String.format('%.1f', thresholdPercent)}%"
             }
@@ -935,6 +947,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
         case "0196" : // (406) FP300 Light reporting mode
             if (isFP300()) {
                 value = Integer.parseInt(it.value, 16)
+                device.updateSetting("lightReportingMode", [value: value.toString(), type: "enum"])
                 storeParamValue('lightReportingMode', value.toString(), 'enum', false)
                 def modes = ["No reporting", "Threshold only", "Interval only", "Threshold and Interval"]
                 logDebug "FP300 light reporting mode: ${modes[value] ?: 'unknown'} (${value})"
@@ -1039,6 +1052,7 @@ void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
                     def rangeStr = consolidateZoneRanges(zones)
                     sendEvent(name: "detectionRangeZones", value: rangeStr, type: "physical", 
                              descriptionText: "Detection zones: ${rangeStr}")
+                    device.updateSetting("detectionRangeZones", [value: rangeStr, type: "string"])
                     
                     logDebug "FP300 detection range zones enabled: ${zones.join(', ')}"
                     logDebug "FP300 detection range consolidated: ${rangeStr}"
@@ -1128,16 +1142,15 @@ def sendRegionEvent( regionId, value) {
 }
 
 // "00F7" Xiaomi/Aqara TLV structure 
-def decodeAqaraStruct( description )
+def decodeAqaraStruct( String valueHex )
 {
-    def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
-	def MsgLength = valueHex.size()
+    if (!valueHex) return
+    int msgLength = valueHex.size()
     
-    if (logEnable) log.debug "decodeAqaraStruct 00F7 : len = ${MsgLength} valueHex = ${valueHex}"
-   	for (int i = 2; i < (MsgLength-3); ) {
-        def dataType = Integer.parseInt(valueHex[(i+2)..(i+3)], 16)
-        def tag = Integer.parseInt(valueHex[(i+0)..(i+1)], 16)
-        def rawValue = 0
+    if (logEnable) log.debug "decodeAqaraStruct 00F7 : len = ${msgLength} valueHex = ${valueHex}"
+    for (int i = 0; i < msgLength - 3; ) {
+        int tag = Integer.parseInt(valueHex[(i+0)..(i+1)], 16)
+        int dataType = Integer.parseInt(valueHex[(i+2)..(i+3)], 16)
         //
         switch (dataType) {
             case 0x08 : // 8 bit data
@@ -2149,10 +2162,11 @@ void refresh() {
         cmds += zigbee.readAttribute(0xFCC0, [0x016A, 0x016B, 0x016C], [mfgCode: 0x115F], delay=200)  // FP300 humidity reporting config
         cmds += zigbee.readAttribute(0xFCC0, [0x0194, 0x0195, 0x0196], [mfgCode: 0x115F], delay=200)  // FP300 light reporting config
         cmds += zigbee.readAttribute(0xFCC0, 0x019A, [mfgCode: 0x115F], delay=200)  // FP300 detection range (separate read)
-        cmds += zigbee.readAttribute(0xFCC0, [0x0203, 0x023E], [mfgCode: 0x115F], delay=200)  // FP300 LED disabled night (0x0203) & schedule (0x023E)
+        cmds += zigbee.readAttribute(0xFCC0, [0x0203, 0x023E, 0x00F7], [mfgCode: 0x115F], delay=200)  // FP300 LED disabled night (0x0203) & schedule (0x023E) + Aqara struct 
         cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)  // Temperature
         cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)  // Humidity
         cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=200)  // Illuminance
+        cmds += zigbee.readAttribute(0x0001, [0x0004, 0x0005, 0x0006], [:], delay=200)
     }
     else {
         logDebug 'no refresh required'
@@ -2457,7 +2471,8 @@ void updated() {
         }
         
         // LED disabled at night (attribute 0x0203, BOOLEAN)
-        if (hasParamChanged('ledDisabledNight', settings?.ledDisabledNight)) {
+        def ledChanged = hasParamChanged('ledDisabledNight', settings?.ledDisabledNight)
+        if (ledChanged) {
             if (settings?.logEnable) log.debug "${device.displayName} setting ledDisabledNight to ${settings.ledDisabledNight}"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0203, 0x10, settings.ledDisabledNight ? 1 : 0, [mfgCode: 0x115F], delay=200)
             // Will be stored after parse() confirmation
@@ -2466,7 +2481,7 @@ void updated() {
         // LED night time schedule (attribute 0x023E, UINT32) - send when schedule changes OR when LED disabled night is enabled for first time
         def scheduleValue = settings?.ledNightTimeSchedule ?: "21:00-09:00"
         if (hasParamChanged('ledNightTimeSchedule', scheduleValue) || 
-            (settings?.ledDisabledNight == true && hasParamChanged('ledDisabledNight', settings?.ledDisabledNight))) {
+            (settings?.ledDisabledNight == true && ledChanged)) {
             def schedulePayload = ledNightTimeToPayload(scheduleValue)
             if (schedulePayload != null) {
                 if (settings?.logEnable) log.debug "${device.displayName} setting ledNightTimeSchedule to ${scheduleValue} (payload: 0x${String.format('%08X', schedulePayload)})"
