@@ -64,7 +64,7 @@
  *                                  added FP300 LED disabled at night and LED night time schedule parameters with full read/write support
  * ver. 2.1.1 2025-12-30 kkossev  - fixed rounding issue for temperature attribute
  * ver. 2.1.2 2026-03-30 kkossev  - commented out the Aqara FP300 fingerprint to prevent interference with the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver.
- * ver. 2.1.3 2026-06-01 kkossev  - (dev. branch) Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync on ZDO NodeDescriptor response; preferences updates fixes;
+ * ver. 2.1.3 2026-06-02 kkossev  - (dev. branch) Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync on ZDO NodeDescriptor response; preferences updates fixes;
  * 
  *
  *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event
@@ -75,7 +75,7 @@
  */
 
 static String version() { "2.1.3" }
-static String timeStamp() {"2026/06/01 11:34 PM"}
+static String timeStamp() {"2026/06/02 8:55 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -2467,7 +2467,7 @@ void updated() {
             cmds += zigbee.writeAttribute(0xFCC0, 0x019A, 0x41, payload, [mfgCode: 0x115F], delay=200)
             // Will be stored after parse() confirmation
         } else if (parseResult.errors && !parseResult.success) {
-            logError "Failed to configure detection range: ${parseResult.errors.join('; ')}"
+            logWarn "Failed to configure detection range: ${parseResult.errors.join('; ')}"
         }
         
         // LED disabled at night (attribute 0x0203, BOOLEAN)
@@ -2828,8 +2828,8 @@ Map parseDetectionRangeZones(String input) {
         }
         
         try {
-            def startM = parts[0].trim() as BigDecimal
-            def endM = parts[1].trim() as BigDecimal
+            def startM = parts[0].trim().replaceAll(/(?i)m$/, '') as BigDecimal
+            def endM   = parts[1].trim().replaceAll(/(?i)m$/, '') as BigDecimal
             
             // Validation: Range limits
             if (startM < 0 || startM > 6.0) {
