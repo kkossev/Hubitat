@@ -64,7 +64,7 @@
  *                                  added FP300 LED disabled at night and LED night time schedule parameters with full read/write support
  * ver. 2.1.1 2025-12-30 kkossev  - fixed rounding issue for temperature attribute
  * ver. 2.1.2 2026-03-30 kkossev  - commented out the Aqara FP300 fingerprint to prevent interference with the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver.
- * ver. 2.1.3 2026-06-02 kkossev  - (dev. branch) Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync on ZDO NodeDescriptor response; preferences updates fixes;
+ * ver. 2.1.3 2026-06-03 kkossev  - (dev. branch) Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync on ZDO NodeDescriptor response; preferences updates fixes; explicit FP300 PIR and mmWave presence reporting configuration;
  * 
  *
  *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event
@@ -75,7 +75,7 @@
  */
 
 static String version() { "2.1.3" }
-static String timeStamp() {"2026/06/02 8:55 AM"}
+static String timeStamp() {"2026/06/03 7:49 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -173,6 +173,7 @@ metadata {
             command "initialize", [[name: "Manually initialize the device after switching drivers. ***** Will load device default values! *****" ]]
             command "aqaraReadAttributes"
             command "activeEndpoints"
+            command "aqaraBlackMagic"
         }
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02",  manufacturer:"LUMI",  deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"                     // Aqara P1 presence sensor RTCGQ14LM {manufacturerCode: 0x115f}
@@ -3105,11 +3106,14 @@ void aqaraBlackMagic() {
         cmds += zigbee.readAttribute(0xFCC0, 0x00EE, [mfgCode: 0x115F], delay=200)   // Read OTA data; makes the device expose more attributes related to OTA
         cmds += zigbee.readAttribute(0xFCC0, 0x010C, [mfgCode: 0x115F], delay=200)   // Read motion sensitivity
         cmds += zigbee.readAttribute(0xFCC0, 0x0142, [mfgCode: 0x115F], delay=200)   // Read current presence
+        cmds += zigbee.readAttribute(0xFCC0, 0x014D, [mfgCode: 0x115F], delay=200)   // Read current PIR detection
         cmds += zigbee.readAttribute(0xFCC0, 0x014F, [mfgCode: 0x115F], delay=200)   // Read current PIR interval
         cmds += zigbee.readAttribute(0xFCC0, 0x0197, [mfgCode: 0x115F], delay=200)   // Read current absence delay timer value
         cmds += zigbee.readAttribute(0xFCC0, 0x019A, [mfgCode: 0x115F], delay=200)   // Read detection range
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
+        cmds += zigbee.configureReporting(0xFCC0, 0x0142, 0x20, 0, 300, 1, [mfgCode: 0x115F], delay=200)   // Configure presence (0x0142) reporting: min=0s, max=300s, change=1
+        cmds += zigbee.configureReporting(0xFCC0, 0x014D, 0x20, 0, 300, 1, [mfgCode: 0x115F], delay=200)   // Configure PIR detection (0x014D) reporting: min=0s, max=300s, change=1
         logDebug "aqaraBlackMagic() for FP300"
     }
     else if (isLightSensorXiaomi() || isLightSensorAqara()) {
