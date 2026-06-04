@@ -1,7 +1,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/deviceProfileLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-deviceProfileLib',
-    version: '3.5.5'
+    version: '3.5.6'
 )
 /*
  *  Device Profile Library (V3)
@@ -41,6 +41,7 @@ library(
  * ver. 3.5.3  2025-12-06 kkossev  - added digital/physical type to events in customProcessDeviceProfileEvent()
  * ver. 3.5.4  2026-02-04 kkossev  - changed inputIt min param rounding to floor instead of ceil
  * ver. 3.5.5  2026-03-05 kkossev  - added deviceProfilesV3defaults?.defaultCommands
+ * ver. 3.5.6  2026-06-04 kkossev  - fixed setPar() invalid virtual enum parameter false error when preference key is passed instead of label
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
@@ -52,8 +53,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.5.5' }
-static String deviceProfileLibStamp() { '2026/03/05 5:15 PM' }
+static String deviceProfileLibVersion()   { '3.5.6' }
+static String deviceProfileLibStamp() { '2026/06/04 5:36 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -501,6 +502,10 @@ public boolean setPar(final String parPar=null, final String val=null ) {
         if (dpMap.type == 'enum') {
             // find the key for the value
             String key = dpMap.map.find { it.value == val }?.key
+            if (key == null) {
+                // val may be the numeric key itself (e.g. when called from updated())
+                key = dpMap.map.containsKey(safeToInt(val)) ? val : null
+            }
             logTrace "setPar: enum parameter <b>${val}</b>. key=${key}"
             if (key == null) {
                 logInfo "setPar: invalid virtual enum parameter <b>${val}</b>. value must be one of <b>${dpMap.map}</b>"
