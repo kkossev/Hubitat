@@ -33,16 +33,17 @@
  * ver. 3.5.3  2025-09-15 kkossev  - alligned with commonLib 4.0.0
  * ver. 3.5.4  2025-10-03 kkossev  - added model:'ZG-204ZL' (note the 'ZL' sufix!), manufacturer:'HOBEIAN' 2-in-1 sensor into TS0601_2IN1' device profile group
  * ver. 3.5.5  2025-10-20 kkossev  - added IMOU Motion Sensor ZP1 model:'ZP2-EN', manufacturer:'MultIR'
+ * ver. 3.5.6  2026-06-04 kkossev  - added TS0601 _TZE284_gnpflcoq 4-in-1 mmWave Radar Sensor profile 'TS0601_TZE284_4IN1'
  *
  *                                   TODO: show Temperature Offset and Humidity Offset only when the device profile supports TemperatureMeasurement and RelativeHumidityMeasurement capabilities
  *                                   TODO: check why no preferences : updateAllPreferences: no preferences defined for device profile SIHAS_USM-300Z_4_IN_1
  *                                   TODO: update documentation : https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1 
  */
 
-static String version() { "3.5.5" }
-static String timeStamp() {"2025/10/20 10:45 PM"}
+static String version() { "3.5.6" }
+static String timeStamp() {"2026/06/04 4:16 PM"}
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = false    // disable it for the production release !
 
@@ -520,6 +521,30 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             attributes:       [
                 [at:'0x0500:0x0013', name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
                 [at:'0x0500:0xF001', name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:2,    defVal:'0',  unit:'seconds',    map:[0:'30 seconds', 1:'60 seconds', 2:'120 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)'],
+            ],
+            configuration : ['battery': false]
+    ],
+
+    'TS0601_TZE284_4IN1'   : [    // https://github.com/Koenkk/zigbee-herdsman-converters - _TZE284_gnpflcoq 4-in-1 mmWave Radar Sensor
+            description   : 'Tuya 4-in-1 mmWave Radar Sensor (_TZE284_gnpflcoq)',
+            models        : ['TS0601'],
+            device        : [type: 'radar', isIAS:false, powerSource: 'battery', isSleepy:true],
+            capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'IlluminanceMeasurement': true, 'Battery': true],
+            preferences   : ['radarSensitivity':'2', 'pirSensitivity':'9', 'pirDelay':'12', 'detectionRange':'13'],
+            commands      : ['resetStats':'resetStats', 'resetPreferencesToDefaults':'resetPreferencesToDefaults'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_gnpflcoq', deviceJoinName: 'Tuya TS0601 4-in-1 mmWave Radar Sensor']
+            ],
+            tuyaDPs:        [
+                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', min:0,   max:1,    defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'],              unit:'',        title:'<b>Presence</b>',             description:'Presence detection (mmWave radar)'],
+                [dp:2,   name:'radarSensitivity',   type:'number',  rw: 'rw', min:0,   max:10,   defVal:5,    scale:1,  unit:'',                                     dt:'02', tuyaCmd:04, title:'<b>Radar Sensitivity</b>',   description:'Radar sensitivity (0=lowest, 10=highest)'],
+                [dp:4,   name:'battery',             type:'number',  rw: 'ro', min:0,   max:100,  defVal:100,  scale:1,  unit:'%',                                    title:'<b>Battery level</b>',          description:'Battery level'],
+                [dp:7,   name:'temperature',         type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0, scale:10, unit:'deg.',                               title:'<b>Temperature</b>',            description:'Temperature'],
+                [dp:8,   name:'humidity',            type:'number',  rw: 'ro', min:0,   max:100,  defVal:50,   scale:1,  unit:'%RH',                                  title:'<b>Humidity</b>',               description:'Relative humidity'],
+                [dp:9,   name:'pirSensitivity',      type:'enum',    rw: 'rw', min:0,   max:2,    defVal:'1',  scale:1,  map:[0:'low', 1:'middle', 2:'high'],          unit:'',   dt:'01', tuyaCmd:04, title:'<b>PIR Sensitivity</b>',       description:'PIR sensitivity level'],
+                [dp:11,  name:'illuminance',         type:'number',  rw: 'ro', min:0,   max:100000, defVal:0,  scale:1,  unit:'lx',                                   title:'<b>Illuminance</b>',            description:'Illuminance'],
+                [dp:12,  name:'pirDelay',            type:'number',  rw: 'rw', min:10,  max:180,  defVal:30,   scale:1,  unit:'seconds',                              dt:'02', tuyaCmd:04, title:'<b>PIR Delay</b>',           description:'Time before presence resets after last motion (seconds)'],
+                [dp:13,  name:'detectionRange',      type:'number',  rw: 'rw', min:1,   max:10,   defVal:5,    scale:1,  unit:'m',                                    dt:'02', tuyaCmd:04, title:'<b>Detection Range</b>',     description:'Radar detection range (meters)'],
             ],
             configuration : ['battery': false]
     ],
@@ -1083,6 +1108,10 @@ void customParseFC11Cluster(final Map descMap) {
     if (result == false) {
         logWarn "customParseFC11Cluster: received unknown 0xFC11 attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
+}
+
+void customParseED00Cluster(final Map descMap) {
+    logDebug "customParseED00Cluster: Ignored cluster 0xED00 message (${descMap})"
 }
 
 // ------------------------- formatAttrib() methods for the 4-in-1 driver -------------------------

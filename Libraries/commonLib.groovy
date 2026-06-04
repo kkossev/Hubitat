@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/commonLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-commonLib',
-    version: '4.0.3'
+    version: '4.0.4'
 )
 /*
   *  Common ZCL Library
@@ -27,6 +27,7 @@ library(
   * ver. 4.0.1  2025-10-14 kkossev  - added clusters 0xFC80 and 0xFC81
   * ver. 4.0.2  2025-10-18 kkossev  - added tuyaDelay in sendTuyaCommand()
   * ver. 4.0.3  2025-10-18 kkossev  - added ignoreDuplicatedZigbeeMessages setting; DIGITAL_TIMER increased to 5000 ms
+  * ver. 4.0.4  2026-06-04 kkossev  - added ED00 cluster;
   *
   *                                   TODO: change the offline threshold to 2 
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
@@ -43,8 +44,8 @@ library(
   *
 */
 
-String commonLibVersion() { '4.0.3' }
-String commonLibStamp() { '2025/12/06 10:51 PM' }
+String commonLibVersion() { '4.0.4' }
+String commonLibStamp() { '2026/06/04 4:15 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -214,7 +215,7 @@ public void parse(final String description) {
     0x000C: 'AnalogInput',       0x0012: 'MultistateInput',  0x0020: 'PollControl',      0x0102: 'WindowCovering',   0x0201: 'Thermostat',  0x0204: 'ThermostatConfig',/*0x0300: 'ColorControl',*/
     0x0400: 'Illuminance',       0x0402: 'Temperature',      0x0405: 'Humidity',         0x0406: 'Occupancy',        0x042A: 'Pm25',         0x0500: 'IAS',             0x0702: 'Metering',
     0x0B04: 'ElectricalMeasure', 0xE001: 'E0001',            0xE002: 'E002',             0xEC03: 'EC03',             0xEF00: 'Tuya',         0xFC03: 'FC03',            0xFC11: 'FC11',            0xFC7E: 'AirQualityIndex', // Sensirion VOC index
-    0xFC80: 'FC80',              0xFC81: 'FC81',             0xFCC0: 'XiaomiFCC0'
+    0xFC80: 'FC80',              0xFC81: 'FC81',             0xFCC0: 'XiaomiFCC0',       0xED00: 'ED00'
 ]
 
 // first try calling the custom parser, if not found, call the standard parser
@@ -566,11 +567,11 @@ private void standardParseBasicCluster(final Map descMap) {
             break
         case FIRMWARE_VERSION_ID:    // 0x4000
             final String version = descMap.value ?: 'unknown'
-            log.info "device firmware version is ${version}"
+            logInfo "device firmware version is ${version}"
             updateDataValue('softwareBuild', version)
             break
         default:
-            logWarn "zigbee received unknown Basic cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
+            logDebug "zigbee received unknown Basic cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
             break
     }
 }
