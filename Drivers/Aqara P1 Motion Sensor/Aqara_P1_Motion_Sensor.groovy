@@ -64,7 +64,7 @@
  *                                  added FP300 LED disabled at night and LED night time schedule parameters with full read/write support
  * ver. 2.1.1 2025-12-30 kkossev  - fixed rounding issue for temperature attribute
  * ver. 2.1.2 2026-03-30 kkossev  - commented out the Aqara FP300 fingerprint to prevent interference with the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver.
- * ver. 2.1.3 2026-06-03 kkossev  - (dev. branch) Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync on ZDO NodeDescriptor response; preferences updates fixes; explicit FP300 PIR and mmWave presence reporting configuration;
+ * ver. 2.1.3 2026-06-03 kkossev  - (dev. branch) Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync on ZDO NodeDescriptor response; preferences updates fixes; explicit FP300 PIR and mmWave presence reporting configuration; calling aqaraBlackMagic() on ZDO Node Descriptor requests;
  * 
  *
  *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event
@@ -75,7 +75,7 @@
  */
 
 static String version() { "2.1.3" }
-static String timeStamp() {"2026/06/03 7:49 AM"}
+static String timeStamp() {"2026/06/04 7:51 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -1594,6 +1594,7 @@ def parseZDOcommand( Map descMap ) {
             sendZigbeeCommands(cmds)
             // sync the time - just in case..
             runIn(1, "sendTimeSync")  
+            runIn(2, "aqaraBlackMagic") // 06/04/2026
             break
         case "0006" :
             if (logEnable) log.info "${device.displayName} Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7]+descMap.data[6]})"
