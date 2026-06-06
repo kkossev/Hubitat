@@ -64,7 +64,8 @@
  *                                  added FP300 LED disabled at night and LED night time schedule parameters with full read/write support
  * ver. 2.1.1 2025-12-30 kkossev  - fixed rounding issue for temperature attribute
  * ver. 2.1.2 2026-03-30 kkossev  - commented out the Aqara FP300 fingerprint to prevent interference with the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver.
- * ver. 2.1.3 2026-06-03 kkossev  - (dev. branch) Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync on ZDO NodeDescriptor response; preferences updates fixes; explicit FP300 PIR and mmWave presence reporting configuration; calling aqaraBlackMagic() on ZDO Node Descriptor requests;
+ * ver. 2.1.3 2026-06-03 kkossev  - Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync on ZDO NodeDescriptor response; preferences updates fixes; explicit FP300 PIR and mmWave presence reporting configuration; calling aqaraBlackMagic() on ZDO Node Descriptor requests;
+ * ver. 2.1.4 2026-06-06 kkossev  - Aqara FP300 version 0.0.0_6542 release (fingeprint is commented out again to prevent interference with the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver);
  * 
  *
  *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event
@@ -74,8 +75,8 @@
  *
  */
 
-static String version() { "2.1.3" }
-static String timeStamp() {"2026/06/04 7:51 AM"}
+static String version() { "2.1.4" }
+static String timeStamp() {"2026/06/06 7:54 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -188,7 +189,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.agl01", manufacturer:"LUMI",   deviceJoinName:  aqaraModels['GZCGQ11LM'].deviceJoinName                       // tests only : "Aqara T1 light intensity sensor GZCGQ11LM"    
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0", outClusters:"0003,0019", model:"lumi.sensor_occupy.agl1", manufacturer:"aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP1E Human Presence Detector RTCZCGQ13LM"        // RTCZCGQ13LM ( FP1E )
         // for Aqara PS-S04D (FP300), use the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver : https://community.hubitat.com/t/release-dedicated-aqara-fp300-presence-multi-sensor-zigbee-driver/162353 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0012,0400,0405,0402,0001,0003,0000,FCC0", outClusters:"000A,0019", model:"lumi.sensor_occupy.agl8", manufacturer:"Aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D"  // PS-S04D ( FP300 ) Hubitat fingerprint
+        //fingerprint profileId:"0104", endpointId:"01", inClusters:"0012,0400,0405,0402,0001,0003,0000,FCC0", outClusters:"000A,0019", model:"lumi.sensor_occupy.agl8", manufacturer:"Aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D"  // PS-S04D ( FP300 ) Hubitat fingerprint
     }
 
     preferences {
