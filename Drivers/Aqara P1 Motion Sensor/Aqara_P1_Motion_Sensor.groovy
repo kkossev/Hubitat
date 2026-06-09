@@ -77,7 +77,7 @@
  */
 
 static String version() { "2.1.5" }
-static String timeStamp() {"2026/06/09 9:39 PM"}
+static String timeStamp() {"2026/06/09 10:28 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -1646,6 +1646,7 @@ def parseZDOcommand( Map descMap ) {
             if (logEnable) {
                 log.debug "${device.displayName} ZDO Mgmt_Rtg_rsp: seq=${zigbee.convertToHexString(tsn, 2)}, status=${zigbee.convertToHexString(status, 2)}${status == 0x84 ? ' (NOT_SUPPORTED)' : ''}, data=${data} (harmless and expected)"
             }
+            ensureZigbeeLogSocketConnectedFromZdo('zdo 8032 mgmt_rtg_rsp')
             break
         case "8034" : //leave response
             if (logEnable) log.info "${device.displayName} Received leave response, data=${descMap.data}"
@@ -2635,10 +2636,15 @@ void installed() {
     if (isFP300()) {
         runIn(2, 'createChildDevices')
         runIn(5, 'connectZigbeeLogSocket', [overwrite: true])
+    } else {
+        disconnectZigbeeLogSocket()
     }
 }
 
 void uninstalled() {
+    try {
+        unschedule('connectZigbeeLogSocket')
+    } catch (Exception ignored) { /* safe if not scheduled */ }
     logInfo "uninstalled: disconnecting zigbeeLogsocket WebSocket"
     disconnectZigbeeLogSocket()
 }
@@ -2655,6 +2661,8 @@ void configure(boolean fullInit = false) {
         //runIn(1, "sendTimeSync", [overwrite: true])
         runIn(3, 'createChildDevices')
         runIn(5, 'connectZigbeeLogSocket', [overwrite: true])
+    } else {
+        disconnectZigbeeLogSocket()
     }
 
     runIn( 15, "aqaraReadAttributes", [overwrite: true])
@@ -2663,6 +2671,11 @@ void configure(boolean fullInit = false) {
 
 def initialize() {
     log.info "${device.displayName} Initialize... (driver version ${driverVersionAndTimeStamp()})"
+    state.wsConnected = false
+    state.wsIntentionalClose = false
+    if (!isFP300()) {
+        disconnectZigbeeLogSocket()
+    }
     configure(fullInit = true)
 }
 
@@ -3276,38 +3289,84 @@ private String toLEHex32(long value) {
  */
 void connectZigbeeLogSocket() {
     if (!isFP300()) {
-        logDebug "connectZigbeeLogSocket: not FP300 – skipping"
+        logDebug "connectZigbeeLogSocket: not FP300 - closing any existing socket"
+        disconnectZigbeeLogSocket()
         return
     }
-    // If already connected, skip — do not tear down a healthy connection.
-    if (state.wsConnected == true) {
-        logDebug "connectZigbeeLogSocket: already connected, skipping"
-        return
-    }
-    logDebug "connectZigbeeLogSocket: connecting to ws://127.0.0.1:8080/zigbeeLogsocket"
-    // Mark an intentional close so webSocketStatus ignores the resulting 'status: closing'.
-    state.wsIntentionalClose = true
+
     try {
-        interfaces.webSocket.close()
-    } catch (Exception ignored) { /* safe to ignore close-before-open errors */ }
+        unschedule('connectZigbeeLogSocket')
+    } catch (Exception ignored) { /* safe if not scheduled */ }
+
+    state.wsReconnectPending = false
     state.wsIntentionalClose = false
+    state.wsConnected = false
+
+    logDebug "connectZigbeeLogSocket: connecting to ws://127.0.0.1:8080/zigbeeLogsocket"
+
     try {
         interfaces.webSocket.connect("ws://127.0.0.1:8080/zigbeeLogsocket")
         logInfo "zigbeeLogsocket WebSocket connection initiated"
     } catch (Exception e) {
-        logWarn "connectZigbeeLogSocket: connection failed (${e.message}) – will retry in 10 s"
-        runIn(10, "connectZigbeeLogSocket", [overwrite: true])
+        state.wsConnected = false
+        logWarn "connectZigbeeLogSocket: connection attempt failed: ${e.message}"
+        scheduleZigbeeLogSocketReconnect()
     }
 }
 
 /** Close the zigbeeLogsocket WebSocket gracefully. */
 void disconnectZigbeeLogSocket() {
-    logDebug "disconnectZigbeeLogSocket: closing WebSocket"
+    try {
+        unschedule('connectZigbeeLogSocket')
+    } catch (Exception ignored) { /* safe if not scheduled */ }
+
+    state.wsReconnectPending = false
+    state.wsIntentionalClose = true
+    state.wsConnected = false
+
     try {
         interfaces.webSocket.close()
+        logDebug "disconnectZigbeeLogSocket: close requested"
     } catch (Exception e) {
         logDebug "disconnectZigbeeLogSocket: close exception (ignored): ${e.message}"
     }
+}
+
+private void scheduleZigbeeLogSocketReconnect() {
+    if (!isFP300()) {
+        return
+    }
+    if (state.wsIntentionalClose == true) {
+        return
+    }
+    if (state.wsReconnectPending == true) {
+        return
+    }
+    state.wsReconnectPending = true
+    logWarn "zigbeeLogsocket reconnect scheduled in 10 seconds"
+    runIn(10, 'connectZigbeeLogSocket', [overwrite: true])
+}
+
+private void ensureZigbeeLogSocketConnectedFromZdo(String reason = 'zdo activity') {
+    if (!isFP300()) {
+        return
+    }
+    if (state.wsIntentionalClose == true) {
+        return
+    }
+    if (state.wsReconnectPending == true) {
+        return
+    }
+    Long nowMs = now()
+    Long lastAttemptMs = (state.wsRecoveryLastAttemptMs ?: 0L) as Long
+    if ((nowMs - lastAttemptMs) < 30000L) {
+        return
+    }
+    state.wsRecoveryLastAttemptMs = nowMs
+    state.wsReconnectPending = true
+    state.wsConnected = false
+    logWarn "zigbeeLogsocket recovery trigger (${reason}) - reconnect in 2 seconds"
+    runIn(2, 'connectZigbeeLogSocket', [overwrite: true])
 }
 
 /**
@@ -3316,28 +3375,46 @@ void disconnectZigbeeLogSocket() {
  * Does NOT reconnect on a normal application-initiated close (e.g. uninstalled).
  */
 void webSocketStatus(String status) {
+    String normalized = status?.trim()?.toLowerCase()
     logDebug "webSocketStatus: ${status}"
-    if (status == "open" || status == "status: open") {
+
+    if (normalized in ['open', 'status: open']) {
         logInfo "zigbeeLogsocket WebSocket connected"
         state.wsConnected = true
+        state.wsReconnectPending = false
         state.wsIntentionalClose = false
-    } else if (status == "status: closing") {
-        // 'status: closing' is a transient state fired by our own close() call inside
-        // connectZigbeeLogSocket(). It is always followed by 'status: open' from the new
-        // connect() a few ms later. Scheduling a reconnect here causes a 10-second storm.
-        // Suppress it — only act on the terminal 'closed' or 'failure' statuses.
-        logDebug "webSocketStatus: closing (transient, ignored)"
-    } else if (status?.startsWith("failure") || status == "closed" || status == "status: closed") {
-        // Only reconnect on terminal failures, not on self-inflicted close transitions.
+        try {
+            unschedule('connectZigbeeLogSocket')
+        } catch (Exception ignored) { /* safe if not scheduled */ }
+        return
+    }
+
+    if (normalized in ['closing', 'status: closing']) {
+        return
+    }
+
+    boolean isClosed = normalized in ['closed', 'status: closed']
+    boolean isFailure = normalized?.startsWith('failure')
+
+    if (isClosed || isFailure) {
+        state.wsConnected = false
+
         if (state.wsIntentionalClose == true) {
-            logDebug "webSocketStatus: ${status} from intentional close – no reconnect"
-        } else {
-            logWarn "zigbeeLogsocket WebSocket ${status} – scheduling reconnect in 10 s"
-            state.wsConnected = false
-            if (isFP300()) {
-                runIn(10, "connectZigbeeLogSocket", [overwrite: true])
-            }
+            logDebug "zigbeeLogsocket closed intentionally"
+            return
         }
+
+        if (!isFP300()) {
+            logDebug "zigbeeLogsocket closed; device is not FP300, no reconnect"
+            return
+        }
+
+        if (isFailure) {
+            logWarn "zigbeeLogsocket failure: ${status}"
+        } else {
+            logWarn "zigbeeLogsocket closed unexpectedly"
+        }
+        scheduleZigbeeLogSocketReconnect()
     } else {
         logDebug "webSocketStatus: unhandled status '${status}'"
     }
@@ -3360,7 +3437,7 @@ private void parseZigbeeLogWebSocketMessage(String jsonText) {
     if (!isFP300()) { return }
     if (entry?.deviceId?.toString() != device.id?.toString()) { return }    // match by deviceId, NOT entry.id
 
-    log.trace "parseZigbeeLogWebSocketMessage: received entry ${entry}"
+    logDebug "parseZigbeeLogWebSocketMessage: received entry ${entry}"
 
     if (!entry?.profileId?.toString()?.equalsIgnoreCase('0104')) { return }
     if (!entry?.clusterId?.toString()?.equalsIgnoreCase('000A')) { return }
