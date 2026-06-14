@@ -67,7 +67,7 @@
  * ver. 2.1.3 2026-06-03 kkossev  - Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync on ZDO NodeDescriptor response; preferences updates fixes; explicit FP300 PIR and mmWave presence reporting configuration; calling aqaraBlackMagic() on ZDO Node Descriptor requests;
  * ver. 2.1.4 2026-06-06 kkossev  - Aqara FP300 version 0.0.0_6542 release (fingeprint is commented out again to prevent interference with the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver);
  * ver. 2.1.5 2026-06-11 kkossev  - Added FP300 Time-cluster Read Attributes handling through the Hubitat zigbeeLogsocket WebSocket; replies now echo the exact request ZCL transaction sequence number.
- * ver. 2.1.6 2026-06-12 kkossev  - HE platform 2.5.0.157 - Complete hub attribute responses for Zigbee Time Cluster (0x000A) read attribute requests.
+ * ver. 2.1.6 2026-06-13 kkossev  - HE platform 2.5.0.157 - Complete hub attribute responses for Zigbee Time Cluster (0x000A) read attribute requests; code cleanup
  * 
  *
  *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event
@@ -78,7 +78,7 @@
  */
 
 static String version() { "2.1.6" }
-static String timeStamp() {"2026/06/12 7:34 AM"}
+static String timeStamp() {"2026/06/13 1:50 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -445,7 +445,7 @@ private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled
 def getSensitivityOptions() { aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.motionSensitivity?.options ?: sensitivityOptions }
 
 void parse(String description) {
-    
+    /*
     // Intercept WebSocket JSON frames BEFORE normal Zigbee parsing.
     // WebSocket messages must not increment rxCounter, set health status, or enter parseDescriptionAsMap.
     String trimmed = description?.trim()
@@ -453,7 +453,7 @@ void parse(String description) {
         //parseZigbeeLogWebSocketMessage(trimmed)
         return
     }
-    
+    */
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1 ; else state.rxCounter = 1
     setHealthStatusOnline()
@@ -1506,6 +1506,7 @@ def parseZDOcommand( Map descMap ) {
     List<String> cmds = []
     switch (descMap.clusterId) {
         case '0000' : // Network Address Request (NWK_addr_req)
+            /*
             if (logEnable) {
                 log.debug "${device.displayName} ZDO Network Address request, data=${descMap.data} (Sequence Number:${descMap.data[0]})"
             }
@@ -1551,6 +1552,7 @@ def parseZDOcommand( Map descMap ) {
                 }
                 break
             }
+            */
             // Response format:
             // TSN + status(00=success) + IEEE address (8 bytes LE) + NWK address (2 bytes LE)
             // + number of associated devices (00) + start index (00)
@@ -1567,7 +1569,7 @@ def parseZDOcommand( Map descMap ) {
             }
             log.warn "ZDO Node Descriptor request data: temporarily ignored!"
             break
-
+            /*
 
             List data = descMap.data as List
             if (data == null || data.size() < 3) {
@@ -1588,6 +1590,7 @@ def parseZDOcommand( Map descMap ) {
                 }
                 break
             }
+            */
             /*
             * Node Descriptor for a coordinator-like Aqara/Lumi hub:
             *
@@ -2649,20 +2652,10 @@ void installed() {
     // Create child devices for FP300 (delayed to ensure parent is fully initialized)
     if (isFP300()) {
         runIn(2, 'createChildDevices')
-        //runIn(5, 'connectZigbeeLogSocket', [overwrite: true])
-    } else {
-        //disconnectZigbeeLogSocket()
     }
 }
 
 void uninstalled() {
-    /*
-    try {
-        unschedule('connectZigbeeLogSocket')
-    } catch (Exception ignored) { }
-    logInfo "uninstalled: disconnecting zigbeeLogsocket WebSocket"
-    disconnectZigbeeLogSocket()
-    */
     log.info "${device.displayName} uninstalled() model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
 }
 
@@ -2675,26 +2668,13 @@ void configure(boolean fullInit = false) {
     
     // Ensure child device exists for FP300
     if (isFP300()) {
-        //runIn(1, "sendTimeSync", [overwrite: true])
         runIn(3, 'createChildDevices')
-        //runIn(5, 'connectZigbeeLogSocket', [overwrite: true])
-    } else {
-        //disconnectZigbeeLogSocket()
     }
-
     runIn( 10, "aqaraReadAttributes", [overwrite: true])
-
 }
 
 def initialize() {
     log.info "${device.displayName} Initialize... (driver version ${driverVersionAndTimeStamp()})"
-    /*
-    state.wsConnected = false
-    state.wsIntentionalClose = false
-    if (!isFP300()) {
-        disconnectZigbeeLogSocket()
-    }
-    */
     configure(fullInit = true)
 }
 
@@ -3211,345 +3191,7 @@ List<String> activeEndpoints() {
     return cmds    
 }
 
-// ==============================================================================================
-// TIME CLUSTER: respond to time-sync requests (cluster 0x000A)
-// ==============================================================================================
-
-void replyToTimeClusterRead(Map descMap) {
-    // Legacy Map-based entry point kept for any potential existing external callers.
-    // Delegates to the full implementation with default sequence 0x00 and all three standard attributes.
-    sendTimeClusterResponse('00', [0x0000, 0x0002, 0x0005], 1, 1)
-}
-
-/**
- * Build and send a ZCL Read Attributes Response for cluster 0x000A (Time).
- *
- * @param zclSequence              Exact ZCL transaction sequence byte (uppercase hex, e.g. '0B').
- *                                 Pass '00' for proactive/best-effort sends (sendTimeSync).
- * @param requestedAttributes      Ordered list of Integer attribute IDs to include in the response.
- * @param requestSourceEndpoint    Source endpoint of the original request (default 1).
- * @param requestDestinationEndpoint Destination endpoint of the original request (default 1).
- *
- * NOTE: This method is the TRUE response builder when called from processFp300TimeReadRequest().
- *       It echoes the exact ZCL sequence from the device request.
- *       When called from sendTimeSync() it uses sequence '00' as a proactive/best-effort transmission.
- */
-
- /*
-private void sendTimeClusterResponse(String zclSequence, List requestedAttributes,
-                                      Integer requestSourceEndpoint = 1,
-                                      Integer requestDestinationEndpoint = 1) {
-    // Zigbee Time epoch: Jan 1 2000 UTC = Unix epoch + 946684800 seconds
-    final long ZIGBEE_EPOCH_OFFSET = 946684800L
-    long zigbeeTime = (now() / 1000L).toLong() - ZIGBEE_EPOCH_OFFSET
-    // rawOffset is the standard (non-DST) UTC offset in milliseconds
-    int tzOffsetSec = location.timeZone.rawOffset.intdiv(1000)      // e.g. 7200 for UTC+2 (Bulgaria standard)
-    // DST shift is reported separately in attribute 0x0005
-    int dstSec = location.timeZone.inDaylightTime(new Date()) ? location.timeZone.getDSTSavings().intdiv(1000) : 0
-
-    String tHex   = toLEHex32(zigbeeTime)
-    String tzHex  = toLEHex32(tzOffsetSec)
-    String dstHex = toLEHex32(dstSec)
-
-    // Response direction reverses the original request endpoints
-    int responseSourceEp = requestDestinationEndpoint
-    int responseDestEp   = requestSourceEndpoint
-
-    // ZCL frame control 0x18: global command, server-to-client, disable default response
-    // zclSequence: echoes the exact byte from the request payload[1]
-    // Command 0x01 = Read Attributes Response
-    StringBuilder payloadSb = new StringBuilder("18 ${zclSequence} 01")
-
-    requestedAttributes.each { Integer attrId ->
-        switch (attrId) {
-            case 0x0000:  // Time — UTCTime, data type 0xE2
-                payloadSb.append(" 00 00 00 E2 ${tHex}")
-                break
-            case 0x0002:  // TimeZone — standard UTC offset, signed INT32, data type 0x2B
-                payloadSb.append(" 02 00 00 2B ${tzHex}")
-                break
-            case 0x0005:  // DstShift — current DST offset, signed INT32, data type 0x2B
-                payloadSb.append(" 05 00 00 2B ${dstHex}")
-                break
-            default:      // Unsupported attribute: status 0x86 (UNSUP_ATTRIBUTE), no type or value
-                String attrLE = String.format("%02X %02X", attrId & 0xFF, (attrId >> 8) & 0xFF)
-                payloadSb.append(" ${attrLE} 86")
-                break
-        }
-    }
-
-    String responsePayload = payloadSb.toString()
-    List<String> cmds = ["he raw 0x${device.deviceNetworkId} ${responseSourceEp} ${responseDestEp} 0x000A {${responsePayload}} {0x0104}"]
-    logInfo "Sending FP300 Time Read Attributes Response: seq=0x${zclSequence}, UTC=${zigbeeTime}, TimeZone=${tzOffsetSec}s, DstShift=${dstSec}s"
-    if (logEnable) { logDebug "Time cluster response payload: ${responsePayload}" }
-    sendZigbeeCommands(cmds)
-}
-
-void sendTimeSync() {
-    // No-arg wrapper so runIn() can call it with no arguments — do not add parameters here.
-    // This is a PROACTIVE/BEST-EFFORT Time cluster transmission. Sequence is 0x00 because
-    // there is no specific device request to echo. Contrast with processFp300TimeReadRequest()
-    // which is the TRUE response and echoes the exact ZCL transaction sequence from the request.
-    sendTimeClusterResponse('00', [0x0000, 0x0002, 0x0005], 1, 1)
-}
-
-private String toLEHex32(long value) {
-    // 4-byte little-endian hex string, space-separated; handles signed negatives via 2's complement masking
-    long v = value & 0xFFFFFFFFL
-    return String.format("%02X %02X %02X %02X", (v & 0xFF), ((v >> 8) & 0xFF), ((v >> 16) & 0xFF), ((v >> 24) & 0xFF))
-}
-
-*/
-
-// ==============================================================================================
-// ZIGBEE LOG WEBSOCKET: FP300 Time-cluster Read Attributes request detection
-// ==============================================================================================
-
-/**
- * Open the Hubitat zigbeeLogsocket WebSocket. Called only for FP300 devices.
- * The WebSocket broadcasts every raw Zigbee frame seen by the hub; we filter by deviceId
- * inside the message handler so that messages for other devices are silently discarded.
- */
- /*
-void connectZigbeeLogSocket() {
-    if (!isFP300()) {
-        logDebug "connectZigbeeLogSocket: not FP300 - closing any existing socket"
-        disconnectZigbeeLogSocket()
-        return
-    }
-
-    try {
-        unschedule('connectZigbeeLogSocket')
-    } catch (Exception ignored) { }
-
-    state.wsReconnectPending = false
-    state.wsIntentionalClose = false
-    state.wsConnected = false
-
-    logDebug "connectZigbeeLogSocket: connecting to ws://127.0.0.1:8080/zigbeeLogsocket"
-
-    try {
-        interfaces.webSocket.connect("ws://127.0.0.1:8080/zigbeeLogsocket")
-        logInfo "zigbeeLogsocket WebSocket connection initiated"
-    } catch (Exception e) {
-        state.wsConnected = false
-        logWarn "connectZigbeeLogSocket: connection attempt failed: ${e.message}"
-        scheduleZigbeeLogSocketReconnect()
-    }
-}
-*/
-
-/** Close the zigbeeLogsocket WebSocket gracefully. */
-/*
-void disconnectZigbeeLogSocket() {
-    try {
-        unschedule('connectZigbeeLogSocket')
-    } catch (Exception ignored) { }
-
-    state.wsReconnectPending = false
-    state.wsIntentionalClose = true
-    state.wsConnected = false
-
-    try {
-        interfaces.webSocket.close()
-        logDebug "disconnectZigbeeLogSocket: close requested"
-    } catch (Exception e) {
-        logDebug "disconnectZigbeeLogSocket: close exception (ignored): ${e.message}"
-    }
-}
-*/
-
-/*
-private void scheduleZigbeeLogSocketReconnect() {
-    if (!isFP300()) {
-        return
-    }
-    if (state.wsIntentionalClose == true) {
-        return
-    }
-    if (state.wsReconnectPending == true) {
-        return
-    }
-    state.wsReconnectPending = true
-    logWarn "zigbeeLogsocket reconnect scheduled in 10 seconds"
-    runIn(10, 'connectZigbeeLogSocket', [overwrite: true])
-}
-*/
-
-
-/*
-private void ensureZigbeeLogSocketConnectedFromZdo(String reason = 'zdo activity') {
-    if (!isFP300()) {
-        return
-    }
-    if (state.wsIntentionalClose == true) {
-        return
-    }
-    if (state.wsReconnectPending == true) {
-        return
-    }
-    Long nowMs = now()
-    Long lastAttemptMs = (state.wsRecoveryLastAttemptMs ?: 0L) as Long
-    if ((nowMs - lastAttemptMs) < 30000L) {
-        return
-    }
-    state.wsRecoveryLastAttemptMs = nowMs
-    state.wsReconnectPending = true
-    state.wsConnected = false
-    logWarn "zigbeeLogsocket recovery trigger (${reason}) - reconnect in 2 seconds"
-    runIn(2, 'connectZigbeeLogSocket', [overwrite: true])
-}
-*/
-
-/**
- * Hubitat WebSocket status callback.
- * Schedules a single reconnect attempt on failure or unexpected close.
- * Does NOT reconnect on a normal application-initiated close (e.g. uninstalled).
- */
- /*
-void webSocketStatus(String status) {
-    String normalized = status?.trim()?.toLowerCase()
-    logDebug "webSocketStatus: ${status}"
-
-    if (normalized in ['open', 'status: open']) {
-        logInfo "zigbeeLogsocket WebSocket connected"
-        state.wsConnected = true
-        state.wsReconnectPending = false
-        state.wsIntentionalClose = false
-        try {
-            unschedule('connectZigbeeLogSocket')
-        } catch (Exception ignored) { }
-        return
-    }
-
-    if (normalized in ['closing', 'status: closing']) {
-        return
-    }
-
-    boolean isClosed = normalized in ['closed', 'status: closed']
-    boolean isFailure = normalized?.startsWith('failure')
-
-    if (isClosed || isFailure) {
-        state.wsConnected = false
-
-        if (state.wsIntentionalClose == true) {
-            logDebug "zigbeeLogsocket closed intentionally"
-            return
-        }
-
-        if (!isFP300()) {
-            logDebug "zigbeeLogsocket closed; device is not FP300, no reconnect"
-            return
-        }
-
-        if (isFailure) {
-            logWarn "zigbeeLogsocket failure: ${status}"
-        } else {
-            logWarn "zigbeeLogsocket closed unexpectedly"
-        }
-        scheduleZigbeeLogSocketReconnect()
-    } else {
-        logDebug "webSocketStatus: unhandled status '${status}'"
-    }
-}
-*/
-
-/**
- * Entry point for WebSocket JSON frames delivered through parse(String).
- * Filters aggressively so that messages for other devices are silently dropped.
- * Only messages that pass all filters reach processFp300TimeReadRequest().
- */
- /*
-private void parseZigbeeLogWebSocketMessage(String jsonText) {
-    Map entry
-    try {
-        entry = parseJson(jsonText)
-    } catch (Exception e) {
-        logDebug "parseZigbeeLogWebSocketMessage: JSON parse error: ${e.message}"
-        return
-    }
-    // Fast-exit conditions (evaluated roughly cheapest-first)
-    if (!isFP300()) { return }
-    if (entry?.deviceId?.toString() != device.id?.toString()) { return }    // match by deviceId, NOT entry.id
-
-    logDebug "parseZigbeeLogWebSocketMessage: received entry ${entry}"
-
-    if (!entry?.profileId?.toString()?.equalsIgnoreCase('0104')) { return }
-    if (!entry?.clusterId?.toString()?.equalsIgnoreCase('000A')) { return }
-    if (entry?.type?.toString() != 'zigbeeRx') { return }
-    if (!(entry?.payload instanceof List)) { return }
-    if ((entry.payload as List).size() < 3) { return }
-    logDebug "parseZigbeeLogWebSocketMessage: matched potential Time cluster request: ${entry}"
-    //processFp300TimeReadRequest(entry)
-}
-*/
-
-/**
- * Validate and respond to a ZCL Read Attributes request on cluster 0x000A (Time).
- *
- * Expected ZCL payload layout:
- *   [0] = frame control  (must be 0x10: global, client-to-server, non-mfr-specific, disable-default-response)
- *   [1] = ZCL transaction sequence number  <- echoed verbatim in the response header
- *   [2] = command  (must be 0x00: Read Attributes)
- *   [3..N] = attribute IDs as little-endian 16-bit pairs
- *
- * The JSON 'sequence' field is NOT used; only payload[1] carries the ZCL sequence.
- */
-
- /*
-private void processFp300TimeReadRequest(Map entry) {
-    List<String> rawPayload = (entry.payload as List).collect {
-        it.toString().trim().toUpperCase().padLeft(2, '0')
-    }
-
-    // Validate frame control and command
-    if (rawPayload[0] != '10') {
-        logDebug "processFp300TimeReadRequest: unexpected frame control 0x${rawPayload[0]} (expected 0x10) – ignoring"
-        return
-    }
-    if (rawPayload[2] != '00') {
-        logDebug "processFp300TimeReadRequest: unexpected ZCL command 0x${rawPayload[2]} (expected 0x00 Read Attributes) – ignoring"
-        return
-    }
-
-    // ZCL transaction sequence comes from payload byte 1, NOT from entry.sequence
-    String zclSequence = rawPayload[1]
-
-    // Lightweight duplicate guard: suppress identical requests within 2 seconds
-    String sig = "${entry.deviceId}|${entry.clusterId}|${zclSequence}|${rawPayload.join(',')}"
-    long nowMs = now()
-    if (state.lastTimeRequest &&
-            state.lastTimeRequest?.sig == sig &&
-            (nowMs - ((state.lastTimeRequest?.ts ?: 0L) as long)) < 2000L) {
-        logDebug "processFp300TimeReadRequest: suppressed duplicate (seq=0x${zclSequence})"
-        return
-    }
-    state.lastTimeRequest = [sig: sig, ts: nowMs]
-
-    // Parse attribute IDs: bytes [3..N] as little-endian 16-bit pairs
-    List<String> attrBytes = rawPayload.drop(3)
-    if (attrBytes.size() % 2 != 0) {
-        logDebug "processFp300TimeReadRequest: odd attribute byte count (${attrBytes.size()}) in payload ${rawPayload} – ignoring"
-        return
-    }
-    List<Integer> requestedAttributes = []
-    for (int i = 0; i < attrBytes.size(); i += 2) {
-        int attrId = Integer.parseInt(attrBytes[i + 1] + attrBytes[i], 16)
-        requestedAttributes.add(attrId)
-    }
-
-    // Parse endpoint numbers (hex strings like "01")
-    Integer srcEp = Integer.parseInt(entry.sourceEndpoint?.toString() ?: '01', 16)
-    Integer dstEp = Integer.parseInt(entry.destinationEndpoint?.toString() ?: '01', 16)
-
-    def attrHexList = requestedAttributes.collect { String.format('0x%04X', it) }
-    logInfo "<b>FP300 Time Read Attributes request</b>: seq=0x${zclSequence}, attrs=${attrHexList}, endpoints ${entry.sourceEndpoint}->${entry.destinationEndpoint}, raw=${rawPayload}"
-
-    // Respond immediately with the exact ZCL sequence from the request
-    sendTimeClusterResponse(zclSequence, requestedAttributes, srcEp, dstEp)
-}
-
-*/
+// TIME CLUSTER: respond to time-sync requests (cluster 0x000A) is now handled on Hubitat platform level!
 
 // credits @thebearmay
 String getModel(){
