@@ -68,6 +68,7 @@
  * ver. 2.1.4 2026-06-06 kkossev  - Aqara FP300 version 0.0.0_6542 release (fingeprint is commented out again to prevent interference with the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver);
  * ver. 2.1.5 2026-06-11 kkossev  - Added FP300 Time-cluster Read Attributes handling through the Hubitat zigbeeLogsocket WebSocket; replies now echo the exact request ZCL transaction sequence number.
  * ver. 2.1.6 2026-06-13 kkossev  - HE platform 2.5.0.157 - Complete hub attribute responses for Zigbee Time Cluster (0x000A) read attribute requests; code cleanup
+ * ver. 2.1.7 2026-06-14 kkossev  - Aqara's like initialization of FP300 (0.0.0_6542) 
  * 
  *
  *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event
@@ -77,8 +78,8 @@
  *
  */
 
-static String version() { "2.1.6" }
-static String timeStamp() {"2026/06/13 1:50 PM"}
+static String version() { "2.1.7" }
+static String timeStamp() {"2026/06/14 7:59 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -191,7 +192,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.agl01", manufacturer:"LUMI",   deviceJoinName:  aqaraModels['GZCGQ11LM'].deviceJoinName                       // tests only : "Aqara T1 light intensity sensor GZCGQ11LM"    
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0", outClusters:"0003,0019", model:"lumi.sensor_occupy.agl1", manufacturer:"aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP1E Human Presence Detector RTCZCGQ13LM"        // RTCZCGQ13LM ( FP1E )
         // for Aqara PS-S04D (FP300), use the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver : https://community.hubitat.com/t/release-dedicated-aqara-fp300-presence-multi-sensor-zigbee-driver/162353 
-        //fingerprint profileId:"0104", endpointId:"01", inClusters:"0012,0400,0405,0402,0001,0003,0000,FCC0", outClusters:"000A,0019", model:"lumi.sensor_occupy.agl8", manufacturer:"Aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D"  // PS-S04D ( FP300 ) Hubitat fingerprint
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0012,0400,0405,0402,0001,0003,0000,FCC0", outClusters:"000A,0019", model:"lumi.sensor_occupy.agl8", manufacturer:"Aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D"  // PS-S04D ( FP300 ) Hubitat fingerprint
     }
 
     preferences {
@@ -303,7 +304,7 @@ metadata {
         // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/lumi.ts
         // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/lumi.ts#L1960-L2034 
         model: "lumi.sensor_occupy.agl8", manufacturer: "aqara", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D",
-        capabilities: ["motionSensor":true, "temperatureMeasurement":true, "illuminanceMeasurement":true, "relativeHumidityMeasurement":true, "battery":true, "powerSource":true],
+        capabilities: ["motionSensor":true, "temperatureMeasurement":true, "illuminanceMeasurement":false, "relativeHumidityMeasurement":true, "battery":true, "powerSource":true],
         attributes: ["roomState", "roomActivity", "targetDistance", "detectionRange", "presenceDetectionMode", "pirDetection", "absenceDelayTimer", "pirDetectionInterval", "aiInterferenceIdentification", "aiSensitivityAdaptive"],
         preferences: [
             "motionSensitivity": [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ],
@@ -1567,9 +1568,9 @@ def parseZDOcommand( Map descMap ) {
             if (logEnable) {
                 log.debug "${device.displayName} ZDO Node Descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]})"
             }
-            log.warn "ZDO Node Descriptor request data: temporarily ignored!"
-            break
-            /*
+           // log.warn "ZDO Node Descriptor request data: temporarily ignored!"
+           // break
+            
 
             List data = descMap.data as List
             if (data == null || data.size() < 3) {
@@ -1590,7 +1591,7 @@ def parseZDOcommand( Map descMap ) {
                 }
                 break
             }
-            */
+            
             /*
             * Node Descriptor for a coordinator-like Aqara/Lumi hub:
             *
@@ -1605,8 +1606,8 @@ def parseZDOcommand( Map descMap ) {
             * 52 00  = Max outgoing transfer size = 82
             * 00     = Descriptor capability field
             */
-            //String nodeDesc = '00 40 8F 5F 11 52 52 00 41 2C 52 00 00'      // Aqara
-            String nodeDesc = '00 40 8F CD AB 52 80 00 41 2C 80 00 00'        // Hubitat C-8 Pro
+            String nodeDesc = '00 40 8F 5F 11 52 52 00 41 2C 52 00 00'      // Aqara
+            //String nodeDesc = '00 40 8F CD AB 52 80 00 41 2C 80 00 00'        // Hubitat C-8 Pro
             // Response format:
             // TSN + status(00=success) + NwkAddrOfInterest + NodeDescriptor
             cmds = [
@@ -1614,8 +1615,9 @@ def parseZDOcommand( Map descMap ) {
             ]
             if (state.lastRx == null) { state.lastRx = [:] }
             state.lastRx.zdo0002 = new Date().getTime()
-            /*
+
             sendZigbeeCommands(cmds)
+                        /*         
             // sync the time - just in case..
             //runIn(1, "sendTimeSync")  
             runIn(2, "aqaraBlackMagic") // 06/04/2026
@@ -1661,7 +1663,6 @@ def parseZDOcommand( Map descMap ) {
             if (logEnable) {
                 log.debug "${device.displayName} ZDO Mgmt_Rtg_rsp: seq=${zigbee.convertToHexString(tsn, 2)}, status=${zigbee.convertToHexString(status, 2)}${status == 0x84 ? ' (NOT_SUPPORTED)' : ''}, data=${data} (harmless and expected)"
             }
-            //ensureZigbeeLogSocketConnectedFromZdo('zdo 8032 mgmt_rtg_rsp')
             break
         case "8034" : //leave response
             if (logEnable) log.info "${device.displayName} Received leave response, data=${descMap.data}"
@@ -2184,6 +2185,7 @@ void refresh() {
         cmds += zigbee.readAttribute(0xFCC0, 0x015B, [mfgCode: 0x115F], delay=200)  // detection range
     }
     else if (isFP300()) {
+        /*
         cmds += zigbee.readAttribute(0xFCC0, 0x00EE, [mfgCode: 0x115F], delay=200)
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x014D, 0x014F, 0x0197, 0x0199, 0x015D, 0x015E], [mfgCode: 0x115F], delay=200)  // FP300 attributes
         cmds += zigbee.readAttribute(0xFCC0, [0x0162, 0x0170, 0x0192, 0x0193], [mfgCode: 0x115F], delay=200)  // FP300 sampling configuration
@@ -2196,6 +2198,8 @@ void refresh() {
         cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)  // Humidity
         cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=200)  // Illuminance
         cmds += zigbee.readAttribute(0x0001, [0x0004, 0x0005, 0x0006], [:], delay=200)
+        */
+        log.trace "refresh() for FP300 - skipped!"
     }
     else {
         logDebug 'no refresh required'
@@ -3090,7 +3094,8 @@ void aqaraReadAttributes() {
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x0144, 0x0146], [mfgCode: 0x115F], delay=200)
     }
     else if (isFP300()) {  // Aqara FP300 presence detector 
-        cmds += zigbee.readAttribute(0xFCC0, [0x014D, 0x014F, 0x015D, 0x015E, 0x0197, 0x0199], [mfgCode: 0x115F], delay=200)  // Removed 0x0018 (unsupported)
+        //cmds += zigbee.readAttribute(0xFCC0, [0x014D, 0x014F, 0x015D, 0x015E, 0x0197, 0x0199], [mfgCode: 0x115F], delay=200)  // Removed 0x0018 (unsupported)
+        log.trace "aqaraReadAttributes() for FP300 - SKIPPED!"
     }
     else if (isLightSensorAqara()) {
         cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x115F], delay=200)
@@ -3140,6 +3145,7 @@ void aqaraBlackMagic() {
         logDebug "aqaraBlackMagic() for FP1E"
     }
     else if (isFP300()) {
+        /*
         cmds += zigbee.readAttribute(0xFCC0, 0x00EE, [mfgCode: 0x115F], delay=200)   // Read OTA data; makes the device expose more attributes related to OTA
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
@@ -3159,6 +3165,40 @@ void aqaraBlackMagic() {
         cmds += zigbee.readAttribute(0xFCC0, 0x014F, [mfgCode: 0x115F], delay=200)   // Read current PIR interval
         cmds += zigbee.readAttribute(0xFCC0, 0x0197, [mfgCode: 0x115F], delay=200)   // Read current absence delay timer value
         cmds += zigbee.readAttribute(0xFCC0, 0x019A, [mfgCode: 0x115F], delay=200)   // Read detection range
+        */
+
+        cmds += zigbee.readAttribute(0xFCC0, 0x00EE, [mfgCode: 0x115F], delay=200)   // Read OTA data; makes the device expose more attributes related to OTA
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
+
+
+        // Replicating Aqara E1-style init
+        cmds += zigbee.readAttribute(0xFCC0, 0x0142, [mfgCode: 0x115F], delay = 200)        // seq 80
+        //cmds += ["he raw 0x${device.deviceNetworkId} 1 1 0xFCC0 {04 5F 11 53 02 FF 00 41 10 09 16 81 10 89 42 59 66 26 46 36 19 55 92 51 24} {0x0104}", "delay 200"]    // seq 81
+        cmds += aqaraFp300Write00ffRandomTokenCmd(200)
+        cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x115F], delay = 100)        // seq 82
+        cmds += zigbee.readAttribute(0x0402, 0x0000, [mfgCode: 0x115F], delay = 100)        // seq 83
+        cmds += zigbee.readAttribute(0x0405, 0x0000, [mfgCode: 0x115F], delay = 100)        // seq 84
+        cmds += zigbee.readAttribute(0x0001, 0x0021, [mfgCode: 0x115F], delay = 100)        // seq 85
+
+
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
+        cmds += zigbee.configureReporting(0xFCC0, 0x0142, 0x20, 0, 300, 1, [mfgCode: 0x115F], delay=200)   // Configure presence (0x0142) reporting: min=0s, max=300s, change=1
+        cmds += zigbee.configureReporting(0xFCC0, 0x014D, 0x20, 0, 300, 1, [mfgCode: 0x115F], delay=200)   // Configure PIR detection (0x014D) reporting: min=0s, max=300s, change=1
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}"    // bind Basic cluster for button press (attr 0x0005)
+        cmds += zigbee.configureReporting(0x0000, 0x0005, 0x42, 0, 7200, null, [:], delay=200)    // configure reporting: Basic attr 0x0005 (CharacterString), button press indicator
+
+
+
+
+        cmds += zigbee.readAttribute(0xFCC0, 0x010C, [mfgCode: 0x115F], delay=200)   // Read motion sensitivity
+        cmds += zigbee.readAttribute(0xFCC0, 0x0142, [mfgCode: 0x115F], delay=200)   // Read current presence
+        cmds += zigbee.readAttribute(0xFCC0, 0x014D, [mfgCode: 0x115F], delay=200)   // Read current PIR detection
+        cmds += zigbee.readAttribute(0xFCC0, 0x014F, [mfgCode: 0x115F], delay=200)   // Read current PIR interval
+        cmds += zigbee.readAttribute(0xFCC0, 0x0197, [mfgCode: 0x115F], delay=200)   // Read current absence delay timer value
+        cmds += zigbee.readAttribute(0xFCC0, 0x019A, [mfgCode: 0x115F], delay=200)   // Read detection range
+
+
+
         logDebug "aqaraBlackMagic() for FP300"
     }
     else if (isLightSensorXiaomi() || isLightSensorAqara()) {
@@ -3182,6 +3222,32 @@ void aqaraBlackMagic() {
     //cmds += activeEndpoints()
     sendZigbeeCommands( cmds )
 }
+
+
+private List<String> aqaraFp300Write00ffRandomTokenCmd(final Integer delayMs = 200) {
+    // Generate 16 Aqara-style BCD-like bytes: every nibble is 0..9
+    // Example: 62 03 01 70 53 46 71 50 74 78 65 63 46 33 58 42
+
+    def token = (1..16).collect {
+        String.format(
+            '%X%X',
+            ((Math.random() * 10) as int),
+            ((Math.random() * 10) as int)
+        )
+    }.join(' ')
+
+    if (logEnable) {
+        log.debug "${device.displayName} Aqara FP300 0x00FF random token: ${token}"
+    }
+
+    return [
+        "he raw 0x${device.deviceNetworkId} 1 1 0xFCC0 {04 5F 11 53 02 FF 00 41 10 ${token}} {0x0104}",
+        "delay ${delayMs}"
+    ]
+}
+
+
+
 
 List<String> activeEndpoints() {
     List<String> cmds = []
