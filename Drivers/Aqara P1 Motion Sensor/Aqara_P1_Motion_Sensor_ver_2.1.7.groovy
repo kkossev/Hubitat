@@ -1,0 +1,3332 @@
+/**
+ *  Aqara Motion and Presence sensor driver for Hubitat
+ *
+ *  https://community.hubitat.com/t/aqara-p1-motion-sensor/92987/46?u=kkossev
+ *
+ *	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ *	in compliance with the License. You may obtain a copy of the License at:
+ *
+ *		http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *	Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+ *	for the specific language governing permissions and limitations under the License.
+ *
+ *  Credits:
+ *      Hubitat, SmartThings, ZHA, Zigbee2MQTT, deCONZ and all other home automation communities for all the shared information.
+ * 
+ * ver. 1.0.0 2022-06-24 kkossev  - first test version
+ * ver. 1.1.0 2022-06-30 kkossev  - decodeAqaraStruct; added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
+ * ver. 1.1.1 2022-07-01 kkossev  - no any commands are sent immediately after pairing!
+ * ver. 1.1.2 2022-07-04 kkossev  - PowerSource presence polling; FP1 pars
+ * ver. 1.1.3 2022-07-04 kkossev  - FP1 approachDistance and monitoringMode parameters update
+ * ver. 1.1.4 2022-07-08 kkossev  - aqaraReadAttributes()
+ * ver. 1.1.5 2022-07-09 kkossev  - when going offline the battery level is set to 0 (zero); when back online, the last known battery level is restored; when switching offline, motion is reset to 'inactive'; added digital and physical events type
+ * ver. 1.1.6 2022-07-12 kkossev  - aqaraBlackMagic; 
+ * ver. 1.1.7 2022-07-23 kkossev  - added MCCGQ14LM for tests
+ * ver. 1.2.0 2022-07-29 kkossev  - FP1 first successful initializaiton :
+ *            attr. 0142 presence bug fix; debug logs improvements; monitoring_mode bug fix; LED is null bug fix ;motionRetriggerInterval bugfix for FP1; motion sensitivity bug fix for FP1; temperature exception bug; 
+ *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
+ * ver. 1.2.1 2022-08-10 kkossev  - code / traces cleanup; change device name on initialize(); 
+ * ver. 1.2.2 2022-08-21 kkossev  - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
+ * ver. 1.2.3 2022-12-26 kkossev  - added internalTemperature option (disabled by default); added homeKitCompatibility option to enable/disable battery 100% workaround for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
+ *             RTCGQ13LM battery fix; added RTCGQ15LM and RTCGQ01LM; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; refactored setDeviceName(); min. Motion Retrigger Interval limited to 2 seconds.
+ * ver. 1.2.4 2023-01-26 kkossev  - renamed homeKitCompatibility option to sendBatteryEventsForDCdevices; aqaraModel bug fix
+ * ver. 1.2.5 2023-01-30 kkossev  - bug fixes for 'lumi.sen_ill.mgl01' light sensor'; setting device name bug fix;
+ * ver. 1.3.0 2023-03-06 kkossev  - regions reports decoding; on SetMotion(inactive) a Reset presence command is sent to FP1; FP1 fingerprint is temporary commented out for tests; added aqaraVersion'; Hub model (C-7 C-8) decoding
+ * ver. 1.3.1 2023-03-15 kkossev  - added RTCGQ01LM lumi.sensor_motion battery % and voltage; removed sendBatteryEventsForDCdevices option; removed lastBattery;
+ * ver. 1.4.0 2023-03-17 kkossev  - *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added 'Works with ...'; added ping() and RTT
+ * ver. 1.4.1 2023-04-21 kkossev  - exception prevented when application string is enormously long; italic font bug fix; lumi.sen_ill.agl01 initialization and bug fixes; light sensor delta = 5 lux; removed MCCGQ14LM
+ * ver. 1.4.2 2023-05-21 kkossev  - lumi.sen_ill.agl01 initialization fixes; removed the E1 contact sensor driver code; trace logs cleanup; added reporting time configuration for the Lux sensors; Lux sensors preferences are NOT reset to defaults when paired again; removed powerSource manipulation; periodic job renamed to deviceHealthCheck()
+ * ver. 1.5.0 2024-02-29 kkossev  - Groovy Lint
+ * ver. 1.6.0 2024-06-29 kkossev  - added state.health 'parentNWK' and 'nwkCtr'; added attribute parentNWK;
+ * ver. 1.6.1 2024-07-22 kkossev  - bugfix: illuminanceThreshold and illuminanceMinReportingTime not working for lumi.sen_ill.mgl01 (GZCGQ01LM)
+ * ver. 1.7.0 2024-08-15 kkossev  - added lumi.sensor_occupy.agl1 - Aqara FP1E; capability 'Refresh'; added spammy reports filtering for FP1E
+ * ver. 1.7.1 2024-11-19 kkossev  - added motionSensitivity for FP1E; added targetDistance for FP1E; added detectionRange for FP1E
+ * ver. 1.7.2 2024-11-28 kkossev  - HE platfrom 2.4.0.x compatibility fixes;
+ * ver. 1.7.3 2025-01-16 kkossev  - first ping() throwing exception bug fix tnx@user2428 
+ * ver. 1.7.4 2025-05-24 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
+ * ver. 1.7.5 2025-09-15 bbholthome  - light sensor GZCGQ01LM maximum illuminance capped to 65500 lux
+ * ver. 1.8.0 2025-09-28 kkossev  - added Aqara FP1 Spatial Learning Mode; added resetPresence() command for FP1/FP1E
+ * ver. 1.9.0 2025-11-02 kkossev  - added Aqara FP300 Presence Sensor support (experimental, not tested); credits: Dan Gibson (@absent42) and Kamil Pustelnik (@kpustelnik)
+ * ver. 1.9.1 2025-11-12 kkossev  - Bug fix: decoding Aqara RTCGQ11LM (lumi.sensor_motion.aq2) battery voltage 
+ * ver. 1.9.2 2025-11-13 kkossev  - FP300 temperature and humidity parsing; decoding most of the FP300 reports; added restartDevice() command for FP1E/FP300
+ * ver. 1.9.3 2025-11-14 kkossev  - fix FP300 illuminance handling and the calculation formula; enabled motionSensitivity for FP300; FP300 fingerprint update; bugfix : no response on ping() command was switching FP300 healthStatus to offline 
+ *                                  added battery voltage and percentage events for FP300; enabled advanced options for FP300 illuminance sensor
+ * ver. 2.0.0 2025-11-15 kkossev  - Added child device support for FP300 temperature & humidity; removed TemperatureMeasurement and RelativeHumidityMeasurement capabilities from parent driver;
+ *                                  FP300 T/H readings now appear in a separate child device using Generic Component Temperature Humidity Sensor; added deviceTemperature attribute for non-FP300 devices internal temperature;
+ *                                  added advancedOptions preference toggle; renamed tempOffset to internalTempOffset for non-FP300 devices; added separate tempOffset and humidityOffset for FP300; added experimental trackTargetDistance() command for FP300
+ *                                  MAJOR CHANGE: INTELLIGENT PARAMETER CHANGE DETECTION - Implemented for FP300 and illuminance reporting - Stores parameters in state.params [n:name, t:type, v:value, l:local] and only sends changed values to prevent device instability
+ * ver. 2.0.1 2025-11-20 kkossev  - forced sending temperature updates to the child device; improved trackTargetDistance() and startSpatialLearning() commands description; added _info_ messages for better user experience; pirDetection changed to active/inactive
+ *                                  roomActivity attribute filtered for FP1/FP1E only; updates battery attribute for the FP300 child device
+ * ver. 2.1.0 2025-11-23 kkossev  - added FP300 advanced sampling configuration parameters (temp/humidity and light sampling frequency/period) with intelligent change detection; added sampling parameters to refresh() command;
+ *                                  added FP300 detection range zones configuration (0.25m resolution bitmap, attribute 0x019A) with validation and attribute event;
+ *                                  added FP300 LED disabled at night and LED night time schedule parameters with full read/write support
+ * ver. 2.1.1 2025-12-30 kkossev  - fixed rounding issue for temperature attribute
+ * ver. 2.1.2 2026-03-30 kkossev  - commented out the Aqara FP300 fingerprint to prevent interference with the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver.
+ * ver. 2.1.3 2026-06-03 kkossev  - Aqara FP300 version 0.0.0_6542 fix attempts +TimeSync on ZDO NodeDescriptor response; preferences updates fixes; explicit FP300 PIR and mmWave presence reporting configuration; calling aqaraBlackMagic() on ZDO Node Descriptor requests;
+ * ver. 2.1.4 2026-06-06 kkossev  - Aqara FP300 version 0.0.0_6542 release (fingeprint is commented out again to prevent interference with the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver);
+ * ver. 2.1.5 2026-06-11 kkossev  - Added FP300 Time-cluster Read Attributes handling through the Hubitat zigbeeLogsocket WebSocket; replies now echo the exact request ZCL transaction sequence number.
+ * ver. 2.1.6 2026-06-13 kkossev  - HE platform 2.5.0.157 - Complete hub attribute responses for Zigbee Time Cluster (0x000A) read attribute requests; code cleanup
+ * ver. 2.1.7 2026-06-14 kkossev  - Aqara's like initialization of FP300 (0.0.0_6542) 
+ * 
+ *
+ *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event
+ *                                 TODO: resetPresence() : _info_messages and timeout check 
+ *                                 TODO: scheduleCommandTimeoutCheck() - implementation for FP300 commands
+ *                                 TODO: update the true aqaraVersion from Xiaomi struct tag:0x0D 
+ *
+ */
+
+static String version() { "2.1.7" }
+static String timeStamp() {"2026/06/14 7:59 AM"}
+
+import hubitat.device.HubAction
+import hubitat.device.Protocol
+import groovy.transform.Field
+import hubitat.zigbee.zcl.DataType
+import hubitat.helper.HexUtils
+import java.util.concurrent.ConcurrentHashMap
+import java.math.RoundingMode
+import com.hubitat.app.DeviceWrapper
+
+@Field static final Boolean _DEBUG = false
+@Field static final Boolean deviceSimulation = false
+@Field static final Boolean _REGIONS = false
+@Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, FP1E, FP300, Aqara/Xiaomi/Mija motion and illuminance sensors'
+@Field static final Integer INFO_AUTO_CLEAR_PERIOD = 60      // automatically clear the Info attribute after 60 seconds
+
+
+// FP1E Spatial Learning (minimal constants)
+@Field static final int CLUSTER_AQARA_FCC0 = 0xFCC0
+@Field static final int MFG_AQARA_FP1E = 0x115F
+@Field static final int ATTR_SPATIAL_LEARNING = 0x0157   // FP1E: trigger AI Spatial Learning
+
+@Field static final Map<Integer, Map> DynamicSettingsMap = new ConcurrentHashMap<>().withDefault {
+    new ConcurrentHashMap<String, String>()
+}
+
+metadata {
+    definition (name: "Aqara P1 Motion Sensor ver.2.1.7", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20P1%20Motion%20Sensor/Aqara_P1_Motion_Sensor.groovy", singleThreaded: true ) {
+        capability "Sensor"
+		capability "Motion Sensor"
+		capability "Illuminance Measurement"
+		capability "Battery"
+        capability "PowerSource"
+        capability "Health Check"
+        capability "Refresh"
+        // Note: TemperatureMeasurement and RelativeHumidityMeasurement removed from parent - FP300 uses child device
+        //capability "SignalStrength"    //lqi - NUMBER; rssi - NUMBER (not supported yet)
+        
+        attribute '_status_', 'string'
+        attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
+        attribute "batteryVoltage", "string"
+        attribute "rtt", "number"
+        attribute "roomState", "enum", [
+            "unoccupied",
+            "occupied"
+        ]
+        attribute "roomActivity", "enum", [
+            "enter",
+            "leave",
+            "enter (right)",
+            "leave (left)",
+            "enter (left)",
+            "leave (right)",
+            "towards",
+            "away",
+            "idle", // FP1E
+            "large movement", // FP1E
+            "small movement" // FP1E
+        ]
+        attribute "targetDistance", "number"    // FP1E
+        attribute "detectionRange", "decimal"   // FP1E
+        attribute "motionSensitivity", "enum", ["low", "medium", "high"]   // FP1E
+        attribute "spatialLearning", "enum", ["idle","started"]
+        attribute "deviceTemperature", "number"  // Internal temperature for non-FP300 devices
+        
+        // FP300-specific attributes
+        attribute "presenceDetectionMode", "enum", ["both", "mmwave", "pir"] // FP300
+        attribute "pirDetection", "enum", ["active", "inactive"]             // FP300 (probably pirDetected is a better name?)
+        attribute "absenceDelayTimer", "number"                              // 10-300 seconds FP300
+        attribute "pirDetectionInterval", "number"                           // 2-300 seconds FP300
+        attribute "aiInterferenceIdentification", "enum", ["on", "off"]      // FP300
+        attribute "aiSensitivityAdaptive", "enum", ["on", "off"]             // FP300
+        attribute "detectionRangeZones", "string"                             // FP300 enabled detection zones
+        attribute "ledDisabledNight", "enum", ["on", "off"]                  // FP300 LED disabled at night
+        attribute "ledNightTimeSchedule", "string"                            // FP300 LED night time schedule
+        
+        if (_REGIONS) {
+            attribute "region_last_enter", "number"
+            attribute "region_last_leave", "number"
+            attribute "region_last_occupied", "number"
+            attribute "region_last_unoccupied", "number"
+        }
+        
+        command "configure", [[name: "Initialize the device after switching drivers. Will load device default values!" ]]
+        command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["active", "inactive"], description: "Use for tests", defaultValue: "inactive"]]
+        command "ping",      [[name: "Check device online status and measure the Round-Trip Time (ms). May not work for battery-powered devices."]]
+        command "resetPresence", [[name: "Reset Presence (FP1/FP1E/FP300)" ]]
+        command "restartDevice", [[name: "Restart Device (FP1E/FP300)" ]]
+        command "startSpatialLearning", [[name: "Wake the device with one button press.<br> Ensure the room is empty, then click Run to start a 30-second calibration (FP1E/FP300)." ]]
+        command "trackTargetDistance", [[name: "Press the FP300 pairing button once to wake the device, then click Run. <br> The sensor will report the distance to the detected target for about 3 minutes (FP300)."]]
+        command "refresh", [[name: "Refreshes all parameters and states from the device.<br>Make sure to wake up the device to receive all updates.<br>Do not use frequently on battery-powered devices."]]
+
+        if (_DEBUG) {
+            command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "FCC0"]]
+            command "initialize", [[name: "Manually initialize the device after switching drivers. ***** Will load device default values! *****" ]]
+            command "aqaraReadAttributes"
+            command "activeEndpoints"
+            command "aqaraBlackMagic"
+        }
+        
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02",  manufacturer:"LUMI",  deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"                     // Aqara P1 presence sensor RTCGQ14LM {manufacturerCode: 0x115f}
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl04", manufacturer:"LUMI",  deviceJoinName: "Aqara High Precision Motion Sensor RTCGQ13LM"         // Aqara precision motion sensor
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0",      outClusters:"0003,0019",      model:"lumi.motion.ac01",  manufacturer:"aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM"        // RTCZCGQ11LM ( FP1 )
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl02", manufacturer:"LUMI",  deviceJoinName: "Aqara T1 Motion Sensor RTCGQ12LM"                     // https://zigbee.blakadder.com/Aqara_RTCGQ12LM.html RTCGQ12LM T1 motion sensor 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019",     model:"lumi.motion.acn001", manufacturer:"LUMI",  deviceJoinName: "Aqara E1 Motion Sensor RTCGQ15LM"                     // https://zigbee.blakadder.com/Aqara_RTCGQ12LM.html RTCGQ12LM T1 motion sensor 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "Aqara Motion Sensor RTCGQ11LM"          // https://zigbee.blakadder.com/Aqara_RTCGQ11LM.html
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FFFF,0019", outClusters:"0000,0004,0003,0006,0008,0005,0019", model:"lumi.sensor_motion", manufacturer:"LUMI", deviceJoinName: "Xiaomi/Mijia Motion Sensor RTCGQ01LM"   // https://zigbee.blakadder.com/Xiaomi_RTCGQ01LM.html
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer:"LUMI",   deviceJoinName: aqaraModels['GZCGQ01LM'].deviceJoinName                        // Mi Light Detection Sensor GZCGQ01LM
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer: "XIAOMI", deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.agl01", manufacturer:"LUMI",   deviceJoinName:  aqaraModels['GZCGQ11LM'].deviceJoinName                       // tests only : "Aqara T1 light intensity sensor GZCGQ11LM"    
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0", outClusters:"0003,0019", model:"lumi.sensor_occupy.agl1", manufacturer:"aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP1E Human Presence Detector RTCZCGQ13LM"        // RTCZCGQ13LM ( FP1E )
+        // for Aqara PS-S04D (FP300), use the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver : https://community.hubitat.com/t/release-dedicated-aqara-fp300-presence-multi-sensor-zigbee-driver/162353 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0012,0400,0405,0402,0001,0003,0000,FCC0", outClusters:"000A,0019", model:"lumi.sensor_occupy.agl8", manufacturer:"Aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D"  // PS-S04D ( FP300 ) Hubitat fingerprint
+    }
+
+    preferences {
+        input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "Show motion activity in HE log page. Recommended value is <b>enabled</b>", defaultValue: true)
+        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "Debug information, useful for troubleshooting. Recommended value is <b>disabled</b>", defaultValue: true)
+        input (name: 'helpInfo',  type: 'hidden', title: "Information on Pairing and Configuration", description: "Pair the P1 and FP1/FP1E devices two times (without deleting), very close to the HE hub. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences")
+        if (device) {
+            if (!(isFP1() || isFP1E() || isFP300()) && !isLightSensor()) {
+                input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ${motionResetTimer} second(s) until resetting to inactive state. Default = 30 seconds", range: "0..7200", defaultValue: 30)
+            }    
+            if (isRTCGQ13LM() || isP1() || isT1()) {
+                input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (2..200)", range: "2..202", defaultValue: 30)
+            }
+            if (isRTCGQ13LM() || isP1() || isFP1() || isFP1E() || isFP300()) {
+                input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: getSensitivityOptions())
+            }
+            if (isP1()) {
+                input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: ["0":"Disabled", "1":"Enabled" ])
+            }
+            if (isFP1()) {
+                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "Approach distance", defaultValue: "1", options: approachDistanceOptions)
+                input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "monitoring mode", defaultValue: 0, options: monitoringModeOptions)
+            }
+            if (isFP1E()) {
+                input (name: "filterSpam", type: "bool", title: "<b>Filter FP1E Distance Reports</b>", description: "Filter the FP1E distance reports, if not really used in automations. Recommended value is <b>true</b>", defaultValue: true)
+                input (name: 'detectionRange', type: 'decimal', title: '<b>Detection Range</b>', description: 'Maximum detection distance, range (0.10..6.00)', range: '0..6', defaultValue: 6.00)
+            }
+            if (isFP300()) {
+                input (name: "presenceDetectionMode", type: "enum", title: "<b>Presence Detection Mode</b>", description: "Detection sensor type", defaultValue: "both", options: ["both":"Both mmWave+PIR", "mmwave":"mmWave only", "pir":"PIR only"])
+                input (name: "absenceDelayTimer", type: "number", title: "<b>Absence Delay Timer</b>", description: "Delay before reporting absence (10-300 seconds)", range: "10..300", defaultValue: 30)
+                input (name: "pirDetectionInterval", type: "number", title: "<b>PIR Detection Interval</b>", description: "PIR detection frequency (2-300 seconds)", range: "2..300", defaultValue: 30)
+                input (name: "aiInterferenceIdentification", type: "bool", title: "<b>AI Interference Identification</b>", description: "Enable AI to identify interference sources", defaultValue: false)
+                input (name: "aiSensitivityAdaptive", type: "bool", title: "<b>AI Adaptive Sensitivity</b>", description: "Enable AI adaptive sensitivity", defaultValue: false)
+                input (name: "detectionRangeZones", type: "string", title: "<b>Detection Range Zones</b>", description: "Enable detection in specific distance ranges (0.25m resolution).<br>" +
+                        "Format: '0.5-2.0' or '0.25-1.5,3.0-5.0' (comma-separated ranges).<br>" +
+                        "Min: 0.25m, Max: 6.0m. Leave empty to enable all zones (0-6m).")
+            }
+            // Advanced options
+            input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "Show advanced configuration options (refresh page to see options)", defaultValue: false, submitOnChange: true)
+            if (advancedOptions == true) {
+                if (isFP300()) {
+                    input (name: "tempHumiditySamplingFrequency", type: "enum", title: "<b>Temperature & Humidity Sampling Frequency</b>", description: "Sampling frequency preset (use 'Custom' to enable period setting)", options: ["0":"Off", "1":"Low", "2":"Medium", "3":"High", "4":"Custom"])
+                    input (name: "temperatureReportingMode", type: "enum", title: "<b>Temperature Reporting Mode</b>", description: "How temperature changes trigger reports", options: ["1":"Threshold only", "2":"Interval only", "3":"Threshold and Interval"], defaultValue: "3")
+                    input (name: "tempHumiditySamplingPeriod", type: "number", title: "<b>Temperature & Humidity Sampling Period</b>", description: "How often to sample temp/humidity (1-3600 seconds). Use with 'Custom' frequency.", range: "1..3600")
+                    input (name: "temperatureReportingThreshold", type: "decimal", title: "<b>Temperature Reporting Threshold</b>", description: "Minimum temperature change to trigger a report (0.2-3.0°C)", range: "0..3", defaultValue: 0.2)
+                    input (name: "temperatureReportingInterval", type: "number", title: "<b>Temperature Reporting Interval</b>", description: "Reporting interval for temperature (60-3600 seconds)", range: "60..3600", defaultValue: 600)
+                    input (name: "tempOffset", type: "decimal", title: "<b>Temperature Offset</b>", description: "Adjust the FP300 temperature reading.", range: "-100..100", defaultValue: 0)
+                    input (name: "humidityReportingMode", type: "enum", title: "<b>Humidity Reporting Mode</b>", description: "How humidity changes trigger reports", options: ["1":"Threshold only", "2":"Interval only", "3":"Threshold and Interval"], defaultValue: "3")
+                    input (name: "humidityReportingInterval", type: "number", title: "<b>Humidity Reporting Interval</b>", description: "Reporting interval for humidity (60-3600 seconds)", range: "60..3600", defaultValue: 600)
+                    input (name: "humidityReportingThreshold", type: "decimal", title: "<b>Humidity Reporting Threshold</b>", description: "Minimum humidity change to trigger a report (%)", range: "2..20", defaultValue: 3.0)
+                    input (name: "humidityOffset", type: "decimal", title: "<b>Humidity Offset</b>", description: "Adjust the FP300 humidity reading.", range: "-100..100", defaultValue: 0)
+                    input (name: "lightSamplingFrequency", type: "enum", title: "<b>Light Sampling Frequency</b>", description: "Sampling frequency preset (use 'Custom' to enable period setting)", options: ["0":"Off", "1":"Low", "2":"Medium", "3":"High", "4":"Custom"])
+                    input (name: "lightReportingMode", type: "enum", title: "<b>Light Reporting Mode</b>", description: "How light changes trigger reports", options: ["0":"No reporting", "1":"Threshold only", "2":"Interval only", "3":"Threshold and Interval"], defaultValue: "3")
+                    input (name: "lightSamplingPeriod", type: "number", title: "<b>Light Sampling Period</b>", description: "How often to sample light (1-3600 seconds). Use with 'Custom' frequency.", range: "1..3600")
+                    input (name: "lightReportingInterval", type: "number", title: "<b>Light Reporting Interval</b>", description: "Minimum interval between light reports (20-3600 seconds)", range: "20..3600", defaultValue: 3600)
+                    input (name: "lightReportingThreshold", type: "decimal", title: "<b>Light Reporting Threshold</b>", description: "Minimum light change to trigger a report (%)", range: "3..20", defaultValue: 10.0)
+                    input (name: "ledDisabledNight", type: "bool", title: "<b>LED Disabled at Night</b>", description: "Disable LED indicator during nighttime hours", defaultValue: false)
+                    input (name: "ledNightTimeSchedule", type: "string", title: "<b>LED Night Time Schedule</b>", description: "LED disable schedule in 24-hour format (e.g., '21:00-09:00')<br>" +
+                           "Leave empty to use default (21:00-09:00). Only active when 'LED Disabled at Night' is enabled.")
+                }
+                if (isLightSensor() && !isFP300()) {
+                    input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "illuminance minimum reporting interval, seconds (4..300)", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
+                    input (name: "illuminanceMaxReportingTime", type: "number", title: "<b>Maximum time between Illuminance Reports</b>", description: "illuminance maximum reporting interval, seconds (120..10000)", range: "120..10000", defaultValue: DEFAULT_ILLUMINANCE_MAX_TIME)
+                    input (name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "illuminance reporting threshold, value (1..255)<br>Bigger values will result in less frequent reporting", range: "1..255", defaultValue: 1)
+                }
+                if (isLightSensor()) {
+                    input (name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: 'Illuminance correction coefficient, range (0.1..10.0)', range: '0..10', defaultValue: 1.00)
+                }
+                input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b>", defaultValue: false)
+                if (internalTemperature == true) {
+                    input (name: "internalTempOffset", type: "decimal", title: "<b>Internal Temperature Offset</b>", description: "Select how many degrees to adjust the internal temperature.", range: "-100..100", defaultValue: 0)
+                }
+            }            
+        }
+    }
+}
+
+@Field static final int COMMAND_TIMEOUT = 10                // Command timeout before setting healthState to offline
+@Field static final Integer PRESENCE_COUNT_THRESHOLD = 3
+@Field static final Integer DEFAULT_POLLING_INTERVAL = 3600
+@Field static final Integer DEFAULT_ILLUMINANCE_MIN_TIME = 5
+@Field static final Integer DEFAULT_ILLUMINANCE_MAX_TIME = 300
+@Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 1
+
+@Field static final Map aqaraModels = [
+    'RTCZCGQ11LM': [
+        model: "lumi.motion.ac01", manufacturer: "aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM",
+        capabilities: ["motionSensor":true, "temperatureMeasurement":true, "battery":true, "powerSource":true, "signalStrength":true],
+        attributes: ["roomState", "roomActivity"],
+        preferences: [
+            "motionSensitivity": [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ],
+            "approachDistance":true, "monitoringMode":true
+        ],
+        motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],    // TODO - check!
+    ],
+    'RTCZCGQ13LM': [    // FP1E https://github.com/niceboygithub/AqaraGateway/blob/dedad6e56d02b6f5d1dac364d9d9a20ec12c5ff8/custom_components/aqara_gateway/core/utils.py#L491
+        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/5fbee666c8edbf198aa91a37f8008f51b4f1b467/src/devices/lumi.ts#L1895
+        model: "lumi.sensor_occupy.agl1", manufacturer: "aqara", deviceJoinName: "Aqara FP1E Human Presence Detector RTCZCGQ13LM",
+        capabilities: ["motionSensor":true, "temperatureMeasurement":true, "battery":true, "powerSource":true, "signalStrength":true],
+        attributes: ["roomState", "roomActivity"],
+        preferences: [
+            "motionSensitivity": [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ],
+            "approachDistance":true, "monitoringMode":true
+        ],
+        motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],    // TODO - check!
+    ],    
+    'PS-S04D': [    // FP300 https://github.com/absent42/fp300/blob/main/fp300.mjs
+        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/lumi.ts#L5020
+        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/lumi.ts
+        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/lumi.ts#L1960-L2034 
+        model: "lumi.sensor_occupy.agl8", manufacturer: "aqara", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D",
+        capabilities: ["motionSensor":true, "temperatureMeasurement":true, "illuminanceMeasurement":false, "relativeHumidityMeasurement":true, "battery":true, "powerSource":true],
+        attributes: ["roomState", "roomActivity", "targetDistance", "detectionRange", "presenceDetectionMode", "pirDetection", "absenceDelayTimer", "pirDetectionInterval", "aiInterferenceIdentification", "aiSensitivityAdaptive"],
+        preferences: [
+            "motionSensitivity": [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ],
+            "presenceDetectionMode": true,
+            "absenceDelayTimer": true,
+            "pirDetectionInterval": true,
+            "aiInterferenceIdentification": true,
+            "aiSensitivityAdaptive": true
+        ]
+    ],    
+    'RTCGQ14LM': [
+        model: "lumi.motion.ac02", manufacturer: "LUMI", deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM",
+        motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],
+        motionSensitivity: [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ]
+    ],
+    'RTCGQ13LM': [
+        model: "lumi.motion.agl04", manufacturer: "LUMI", deviceJoinName: "Aqara High Precision Motion Sensor RTCGQ13LM",
+        motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],
+        motionSensitivity: [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ]
+    ],
+    'RTCGQ12LM': [
+        model: "lumi.motion.agl02", manufacturer: "LUMI", deviceJoinName: "Aqara T1 Motion Sensor RTCGQ12LM"
+    ],
+    'RTCGQ15LM': [
+        model: "lumi.motion.acn001", manufacturer: "LUMI", deviceJoinName: "Aqara E1 Motion Sensor RTCGQ15LM"
+    ],
+    'RTCGQ11LM': [
+        model: "lumi.sensor_motion.aq2", manufacturer: "LUMI", deviceJoinName: "Xiaomi Motion Sensor RTCGQ11LM"
+    ],
+    'RTCGQ01LM': [
+        model: "lumi.sensor_motion", manufacturer: "LUMI", deviceJoinName: "Xiaomi Motion Sensor RTCGQ01LM"
+    ],
+    'GZCGQ01LM': [
+        model: "lumi.sen_ill.mgl01", manufacturer: "LUMI", deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM"    // aka vendor: 'Xiaomi', model: 'YTC4043GL'
+        // also model: "lumi.sen_ill.mgl01", manufacturer: "XIAOMI", deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM" 
+    ],
+    // experimental
+    'GZCGQ11LM': [
+        model: "lumi.sen_ill.agl01", manufacturer: "LUMI", deviceJoinName: "Aqara T1 light intensity sensor GZCGQ11LM"
+    ]
+]
+
+def isRTCGQ13LM() { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl04']) }     // Aqara Precision motion sensor
+def isP1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac02'] ) }     // Aqara P1 motion sensor (LED control)
+def isFP1()       { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac01'] ) }     // Aqara FP1 Presence sensor (microwave radar)
+def isFP1E()      { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.sensor_occupy.agl1'] ) }     // Aqara FP1E Presence sensor
+def isFP300()     { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.sensor_occupy.agl8'] ) }     // Aqara FP300 Presence sensor
+def isT1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl02'] ) }    // Aqara T1 motion sensor
+def isLightSensorXiaomi() { return (device.getDataValue('model') in ['lumi.sen_ill.mgl01'] ) } // Mi Light Detection Sensor
+def isLightSensorAqara()  { return (device.getDataValue('model') in ['lumi.sen_ill.agl01'] ) } // T1 light intensity sensor
+def isLightSensor() { return (isLightSensorXiaomi() || isLightSensorAqara() || isFP300()) }
+
+// ~~~~~ Child Device Management for FP300 Temperature & Humidity ~~~~~
+
+def createChildDevices() {
+    if (!isFP300()) {
+        logDebug "createChildDevices: Not FP300, skipping child device creation"
+        return
+    }
+    
+    String childDni = "${device.id}-TempHumidity"
+    def childDevice = getChildDevice(childDni)
+    
+    if (!childDevice) {
+        logInfo "Creating child device for Temperature & Humidity"
+        try {
+            childDevice = addChildDevice(
+                "hubitat",
+                "Generic Component Temperature Humidity Sensor",
+                childDni,
+                [
+                    name: "FP300 Temperature & Humidity",
+                    label: "${device.label ?: device.name} - Temperature & Humidity",
+                    isComponent: true
+                ]
+            )
+            logInfo "Child device created: ${childDevice.displayName}"
+        } catch (Exception e) {
+            logWarn "Failed to create child device: ${e.message}"
+        }
+    } else {
+        logDebug "Child device already exists: ${childDevice.displayName}"
+    }
+}
+
+def deleteChildDevices() {
+    def children = getChildDevices()
+    children.each { child ->
+        try {
+            logInfo "Deleting child device: ${child.displayName}"
+            deleteChildDevice(child.deviceNetworkId)
+        } catch (Exception e) {
+            logWarn "Failed to delete child device: ${e.message}"
+        }
+    }
+}
+
+def getChildTempHumidityDevice() {
+    if (!isFP300()) return null
+    String childDni = "${device.id}-TempHumidity"
+    return getChildDevice(childDni)
+}
+
+// Component methods - required for child device interaction
+void componentRefresh(DeviceWrapper childDevice) {
+    logDebug "componentRefresh: ${childDevice.displayName}"
+    // Trigger a refresh of the parent device which will update child
+    refresh()
+    
+    // Also update child device with current battery level
+    if (isFP300()) {
+        def currentBattery = device.currentValue('battery')
+        if (currentBattery != null) {
+            childDevice.sendEvent(name: "battery", value: currentBattery, unit: "%", type: "digital", descriptionText: "${childDevice.displayName} battery is ${currentBattery}%", isStateChange: false)
+            logDebug "componentRefresh: updated child battery to ${currentBattery}%"
+        }
+    }
+}
+
+void componentOn(DeviceWrapper childDevice) {
+    logDebug "componentOn called from ${childDevice.displayName} - not implemented"
+}
+
+void componentOff(DeviceWrapper childDevice) {
+    logDebug "componentOff called from ${childDevice.displayName} - not implemented"
+}
+
+// ~~~~~ End Child Device Management ~~~~~
+
+private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1 : null }
+private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
+@Field static final Map sensitivityOptions =          [ "0":"-- do not change --", "1":"low", "2":"medium", "3":"high" ]
+@Field static final Map fp1RoomStateEventOptions =        [ "0":"unoccupied", "1":"occupied" ]
+@Field static final Map fp1RoomActivityEventTypeOptions = [ "0":"enter", "1":"leave" , "2":"enter (right)" , "3":"leave (left)" , "4":"enter (left)" , "5":"leave (right)" , "6":"towards", "7":"away" ]
+@Field static final Map fp1ERoomActivityEventTypeOptions = [ "0":"0 - unknown", "1":"1 - unknown" , "2":"idle" , "3":"large movement" , "4":"small movement" , "5":"5 - unknown" ]
+@Field static final Map approachDistanceOptions =         [ "0":"far", "1":"medium", "2":"near" ]
+@Field static final Map monitoringModeOptions =           [ "0":"undirected", "1":"left_right" ]
+
+def getSensitivityOptions() { aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.motionSensitivity?.options ?: sensitivityOptions }
+
+void parse(String description) {
+    /*
+    // Intercept WebSocket JSON frames BEFORE normal Zigbee parsing.
+    // WebSocket messages must not increment rxCounter, set health status, or enter parseDescriptionAsMap.
+    String trimmed = description?.trim()
+    if (trimmed?.startsWith('{')) {
+        //parseZigbeeLogWebSocketMessage(trimmed)
+        return
+    }
+    */
+    checkDriverVersion()
+    if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1 ; else state.rxCounter = 1
+    setHealthStatusOnline()
+
+    def descMap = [:]
+    
+    if (description.contains("cluster: 0000")) {
+        if (description.contains("attrId: FF01")) {
+            parseAqaraAttributeFF01(description)
+            return
+        }
+        else if (description.contains("attrId: FF02")) {
+            parseAqaraAttributeFF02(description)
+            return
+        }
+    }
+
+    try {
+        descMap = zigbee.parseDescriptionAsMap(description)
+    }
+    catch ( e ) {
+        logWarn "parse: exception ${e} caught while parsing description: ${description} (descMap:  ${descMap})"
+        return 
+    }
+    if (isSpammyReport(descMap)) { return }
+    if (logEnable) {log.debug "${device.displayName} parse: descMap: {$descMap} parse: description is ${description}"}
+    if (descMap.attrId != null ) {
+        // attribute report received
+        List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value, status: descMap.status]]
+        descMap.additionalAttrs.each {
+            attrData << [cluster: descMap.cluster, attrId: it.attrId, value: it.value, status: it.status]
+        }
+        attrData.each {
+            if (it.status == "86") {
+                logWarn "unsupported cluster ${it.cluster} attribute ${it.attrId}"
+            }
+		    else if (it.cluster == "0400" && it.attrId == "0000") {    // lumi.sensor_motion.aq2
+                def rawLux = Integer.parseInt(it.value,16)
+                if (isLightSensorAqara() || isLightSensorXiaomi() || isFP300()) {
+                    illuminanceEvent( rawLux )
+                }
+                else {
+                    illuminanceEventLux( rawLux )
+                }
+		    }
+            else if (it.cluster == "0402" && it.attrId == "0000") {    // Temperature Measurement cluster
+                if (isFP300()) {
+                    def rawTemp = Integer.parseInt(it.value,16)
+                    logDebug "FP300 raw temperature value: ${rawTemp}"
+                    // Temperature is reported in centidegrees Celsius (1/100th of a degree)
+                    temperatureEvent(rawTemp / 100.0)
+                }
+                else {
+                    logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+                }
+            }
+            else if (it.cluster == "0405" && it.attrId == "0000") {    // Relative Humidity Measurement cluster
+                if (isFP300()) {
+                    def rawHumidity = Integer.parseInt(it.value,16)
+                    // Humidity is reported in percentage * 100
+                    humidityEvent(rawHumidity / 100)
+                }
+                else {
+                    logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+                }
+            }
+            else if (it.cluster == "0406" && it.attrId == "0000") {    // lumi.sensor_motion.aq2
+                map = handleMotion( Integer.parseInt(it.value,16) as Boolean )
+            }
+            else if (it.cluster == "0000" && it.attrId == "0001") {
+                if (true) {    // TODO: check if this is a ping() response
+                    sendRttEvent()
+                }
+                else {
+                    logDebug "Applicaiton version is ${it.value}"
+                }
+            }
+            else if (it.cluster == "0000" && it.attrId == "0004") {    // device model
+                if (txtEnable) log.info "${device.displayName} (parse) device model is ${it.value}"
+            }
+            else if (it.cluster == "0000" && it.attrId == "0005") {    // lumi.sensor_motion.aq2 button is pressed
+                logDebug "${device.displayName} (parse attr 5) device ${it.value} button was pressed "
+                sendInfoEvent( "Button was pressed. The device will stay awake for 15 minutes" )
+            }
+            else if (it.cluster == "0001" && it.attrId == "0020") {    // contact sensor
+                if (it.value != "00") {
+                    voltageAndBatteryEvents( Integer.parseInt(it.value,16) / 10.0)
+                }
+                else {
+                    logWarn "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+                }
+            }
+            else if (descMap.cluster == "FCC0") {    // Aqara P1
+                parseAqaraClusterFCC0( description, descMap, it )
+            }
+            else if (descMap.cluster == "0000" && it.attrId == "FF01") {
+                parseAqaraAttributeFF01( description )
+            }
+            else {
+                if (logEnable) log.debug "${device.displayName} Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+            }
+        } // for each attribute
+    } // if attribute report
+    else if (descMap.profileId == "0000") { //zdo
+        parseZDOcommand(descMap)
+    } 
+    else if (descMap.clusterId != null && descMap.profileId == "0104") { // ZHA global command
+        parseZHAcommand(descMap)
+    } 
+    else {
+        logWarn "Unprocesed unknown command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+    }
+}
+
+// Aqara FP1E spammy distance reports filter
+boolean isSpammyReport(Map descMap) {
+    if (settings?.filterSpam != true) { return false }
+    if (descMap.cluster == "FCC0" && descMap.attrId in ['015F']) {
+        return true
+    }
+    return false
+}
+
+void parseAqaraAttributeFF01(String description) {
+    logDebug "(parseAqaraAttributeFF01) description: ${description}"
+    def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
+    parseBatteryFF01( valueHex )    
+}
+
+void parseAqaraAttributeFF02(String description) {
+    logDebug "(parseAqaraAttributeFF02) description: ${description}"
+    def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
+    parseBatteryFF02( valueHex )    
+}
+
+void parseAqaraClusterFCC0(String description, Map descMap, Map it) {
+    String valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
+    int value = safeToInt(it.value)
+    switch (it.attrId) {
+        case "0005" :
+            logDebug "(parseAqaraClusterFCC0) device ${it.value} button was pressed (driver version ${driverVersionAndTimeStamp()})"
+            break
+        case "0064" :
+            logWarn "<b>received unknown report: ${P1_LED_MODE_NAME(value)}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "0065" :
+            if (isFP1() || isFP1E() || isFP300()) { // FP1    'unoccupied':'occupied'
+                logDebug "(attr 0x065) roomState (mmWave 'presence') is  ${fp1RoomStateEventOptions[value.toString()]} (${value})"
+                roomStateEvent( fp1RoomStateEventOptions[value.toString()] )
+            }
+            else {     // illuminance only? for RTCGQ12LM RTCGQ14LM
+                illuminanceEventLux( value )
+                logDebug "<b>received illuminance only report: ${P1_LED_MODE_NAME(value)}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            }
+            break
+        case "0069" : // (105) PIR sensitivity RTCGQ13LM; distance for RTCZCGQ11LM; detection (retrigger) interval for RTCGQ14LM
+            if (isRTCGQ13LM()) { 
+                // sensitivity
+                device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
+                logDebug "<b>received PIR sensitivity report: ${sensitivityOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            }
+            else if (isP1()) {
+                // retrigger interval
+                device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
+                logDebug "<b>received motion retrigger interval report: ${value} s</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            }
+            else if (isFP1() || isFP1E()) { // FP1
+                logDebug "(0x69) <b>received approach_distance report: ${value} s</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+                device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
+            }
+            else {
+                logWarn "Received unknown device report: cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value} status=${it.status} data=${descMap.data}"
+            }
+            break
+
+        case "00DF":    // periodic diagnostic heartbeat TLV (RSSI, device temp, uptime counters) — undocumented, Z2M ignores it
+            logDebug "FCC0 attr 0x00DF = periodic diagnostic heartbeat (ignored)."
+            //runIn(1, "sendTimeSync", [overwrite: true])     // send a forced Time cluster reply shortly after each heartbeat to keep the device's internal clock in sync
+            break
+
+
+        case "00E6" : // FP300 unknown report
+            logDebug "<b>Received FP300 unknown report</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "00E8" : // FP300 restart response
+            logWarn "<b>Received FP300 restart response</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "00F7" :   // Aqara FP1E : 00F7_States (115F): {16=1, 18=0, 3=19, 5=1, 101=0, 8=278, 10=56426, 12=20} [STRUCT2]
+            decodeAqaraStruct(it.value) // bug fixed in version 2.1.3 2026-06-01
+            break
+        case "00FC" :   // Aqara FP1E : 00FC_Unknown (115F): false [BOOLEAN]
+            log.warn "received LUMI LEAVE report:  (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            logDebug 'experiment with calling lumiPreventLeave() method here!'
+            break
+        case "0102" : // Retrigger interval (duration)
+            value = Integer.parseInt(it.value, 16)
+            device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
+            logDebug "<b>received motion retrigger interval report: ${value} s</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "0106" : // PIR sensitivity RTCGQ13LM RTCGQ14LM RTCZCGQ11LM
+        case "010C" : // (268) PIR sensitivity RTCGQ13LM RTCGQ14LM (P1) RTCZCGQ11LM & FP300; TODO: check if applicable for FP1 ? // FP1E 010C_SensorSensitivity (115F): 3 [UNSIGNED_8_BIT_INTEGER]
+            device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
+            sendEvent(name: "motionSensitivity", value: sensitivityOptions[value.toString()], type: "physical")
+            storeParamValue('motionSensitivity', value.toString(), 'enum', false)  // Store confirmed value (shared by multiple devices)
+            logDebug "(0x010C) >received motion sensitivity report: ${sensitivityOptions[value.toString()]} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "0112" : // Aqara P1 PIR motion Illuminance
+            if (!isRTCGQ13LM()) { // filter for High Preceision sensor - no illuminance sensor!
+                def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(0)..(1)]),16)
+                logDebug "(0x0112) <b>received illuminance report: ${rawValue} lx</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+                illuminanceEventLux( rawValue )
+                logDebug 'handleMotion(true) called for Aqara motion illuminance report ?! '
+                handleMotion(true)    // TODO !!
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0142" : // (322) FP1 RTCZCGQ11LM FP300 presence (roomState) // FP1E: 0142_SensorPresense (115F): 1 [UNSIGNED_8_BIT_INTEGER]
+            logDebug "(attr. 0x0142) roomState (mmWave 'presence') is  ${fp1RoomStateEventOptions[value.toString()]} (${value})"
+            roomStateEvent( fp1RoomStateEventOptions[value.toString()] )
+            break
+        case "0143" : // (323) FP1 RTCZCGQ11LM presence_event {0: 'enter', 1: 'leave', 2: 'left_enter', 3: 'right_leave', 4: 'right_enter', 5: 'left_leave', 6: 'approach', 7: 'away'}[value];  // FP1E: 0143_SensorPresenseEvent (115F): [UNSIGNED_8_BIT_INTEGER]
+            presenceTypeEvent( fp1RoomActivityEventTypeOptions[value.toString()] )
+            break
+        case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
+            device.updateSetting( "monitoringMode",  [value:value.toString(), type:"enum"] )    // monitoring_mode = {0: 'undirected', 1: 'left_right'}[value]
+            logDebug "<b>received monitoring_mode report: ${monitoringModeOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "0146" : // (326) FP1 RTCZCGQ11LM approach_distance 
+            device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
+            logDebug "(0x0146) <b>received approach_distance report: ${approachDistanceOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "014D" : // FP300 PIR detection state
+            if (isFP300()) {
+                sendEvent(name: "pirDetection", value: value ? "active" : "inactive", type: "physical")
+                logDebug "PIR detection: ${value ? 'active' : 'inactive'}"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "014E" : // FP300 unknown
+            if (isFP300()) {
+                logDebug "<b>Received FP300 unknown report</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "014F" : // FP300 PIR detection interval
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                sendEvent(name: "pirDetectionInterval", value: value, unit: "sec", type: "physical")
+                device.updateSetting("pirDetectionInterval", [value: value.toString(), type: "number"])
+                storeParamValue('pirDetectionInterval', value, 'number', false)  // Store confirmed value
+                logDebug "PIR detection interval: ${value} seconds"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0150" : // (336) FP1 set region event
+            logDebug "(0x0150) <b>received set region report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "0151" : // (337) FP1 region event
+            Integer regionId = HexUtils.hexStringToInt(descMap.value[0..1])
+            value = HexUtils.hexStringToInt(descMap.value[2..3])        
+            logDebug "(0x0151) <b>received region report:  regionId=${regionId} value=${value} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            sendRegionEvent( regionId, value)
+            break
+        case "0152" : // (338) LED configuration
+            device.updateSetting( "motionLED",  [value:value.toString(), type:"enum"] )
+            logDebug "${device.displayName} <b>received LED configuration report: ${P1_LED_MODE_NAME(value)}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"    //P1_LED_MODE_VALUE
+            break
+        case "0153" : // (339) FP1 set exit region event
+            logDebug "(0x0153) <b>received set exit region report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "0154" : // (340) FP1 set interference region event
+            logDebug "(0x0154) <b>received set interference region report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case '0155' : // (341) FP1E 0155_SensorReportPosition (115F): 0 [UNSIGNED_8_BIT_INTEGER]
+            logDebug "(0x0155) <b>received FP1E SensorReportPosition report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "0156" : // (342) FP1 set edge region event
+            logDebug "(0x0156) <b>received set edge region report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "0157" : // (343) FP1 reset presence event // FP1E 0157_SensorResetMotion (115F): [UNSIGNED_8_BIT_INTEGER]
+            logWarn "(0x0157) <b>received reset presence/motion report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "015B" :   // 015B_Custom: 600 [UNSIGNED_32_BIT_INTEGER] detection range
+            value = Integer.parseInt(it.value, 16)
+            logDebug "(0x015B) received detection range report: ${value} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            detectionRangeEvent( value )
+            break
+        case "015D" : // FP300 AI adaptive sensitivity
+            if (isFP300()) {
+                sendEvent(name: "aiSensitivityAdaptive", value: value ? "on" : "off", type: "physical")
+                device.updateSetting("aiSensitivityAdaptive", [value: value ? true : false, type: "bool"])
+                storeParamValue('aiSensitivityAdaptive', value ? true : false, 'bool', false)  // Store confirmed value
+                logDebug "AI adaptive sensitivity: ${value ? 'on' : 'off'}"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "015E" : // FP300 AI interference identification 
+            if (isFP300()) {
+                sendEvent(name: "aiInterferenceIdentification", value: value ? "on" : "off", type: "physical")
+                device.updateSetting("aiInterferenceIdentification", [value: value ? true : false, type: "bool"])
+                storeParamValue('aiInterferenceIdentification', value ? true : false, 'bool', false)  // Store confirmed value
+                logDebug "AI interference identification: ${value ? 'on' : 'off'}"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "015F" :   // 015F_Custom: 15 [UNSIGNED_32_BIT_INTEGER] FP1E/FP300 'target_distance' - distance to detected target in cm
+            value = Integer.parseInt(it.value, 16)
+            logDebug "(0x015F) received FP1E/FP300 target_distance report: ${value} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            targetDistanceEvent( value )
+            break
+        case '0160' :   // FP1E frequently sent report ?? presence_event [ "0":"0 - unknown", "1":"1 - unknown" , "2":"idle" , "3":"large movement" , "4":"small movement" , "5":"5 - unknown" ]
+            logDebug "(0x0160) received report: ${fp1ERoomActivityEventTypeOptions[value.toString()]} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            presenceTypeEvent( fp1ERoomActivityEventTypeOptions[value.toString()] )
+            break
+        case "0198" :   // 0198_Custom: FP300 track_target_distance enable/disable status (0=disabled, 1=enabled)
+            value = Integer.parseInt(it.value, 16)
+            def status = (value == 1) ? "enabled" : "disabled"
+            logDebug "(0x0198) received FP300 track_target_distance status: ${status} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            if (value == 1) {
+                sendInfoEvent("target distance tracking enabled for 5 minutes")
+            }
+            if (value == 0 && device.currentValue('targetDistance') != null) {
+                device.deleteCurrentState('targetDistance')
+                logInfo "target distance tracking disabled - attribute removed"
+            }
+            break
+        case "0017" : // (23) FP300 Battery voltage in mV
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def voltage = value / 1000.0
+                sendVoltageEvent(voltage)
+                logDebug "FP300 battery voltage: ${voltage}V (${value} mV)"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0018" : // (24) FP300 Battery percentage (direct from device, if reported)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                sendBatteryEvent(value)
+                logDebug "FP300 battery percentage: ${value}%"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0162" : // (354) FP300 Temperature & Humidity sampling period (milliseconds)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def seconds = value / 1000
+                device.updateSetting("tempHumiditySamplingPeriod", [value: (seconds as Integer).toString(), type: "number"])
+                storeParamValue('tempHumiditySamplingPeriod', seconds as Integer, 'number', false)
+                logDebug "FP300 temp/humidity sampling period: ${seconds} seconds"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0163" : // (355) FP300 Temperature reporting interval (milliseconds)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def intervalSeconds = (value / 1000) as int
+                device.updateSetting("temperatureReportingInterval", [value: intervalSeconds.toString(), type: "number"])
+                storeParamValue('temperatureReportingInterval', intervalSeconds, 'number', false)
+                logDebug "FP300 temperature reporting interval: ${intervalSeconds} seconds"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0164" : // (356) FP300 Temperature reporting threshold (centidegrees)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def thresholdDegrees = value / 100.0
+                device.updateSetting("temperatureReportingThreshold", [value: thresholdDegrees, type: "decimal"])
+                storeParamValue('temperatureReportingThreshold', thresholdDegrees, 'decimal', false)
+                logDebug "FP300 temperature reporting threshold: ${String.format('%.1f', thresholdDegrees)}°C"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0165" : // (357) FP300 Temperature reporting mode
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                device.updateSetting("temperatureReportingMode", [value: value.toString(), type: "enum"])
+                storeParamValue('temperatureReportingMode', value.toString(), 'enum', false)
+                def modes = ["unknown", "threshold", "reporting interval", "threshold and interval"]
+                logDebug "FP300 temperature reporting mode: ${modes[value] ?: 'unknown'} (${value})"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "016A" : // (362) FP300 Humidity reporting interval (milliseconds)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def intervalSeconds = (value / 1000) as int
+                device.updateSetting("humidityReportingInterval", [value: intervalSeconds.toString(), type: "number"])
+                storeParamValue('humidityReportingInterval', intervalSeconds, 'number', false)
+                logDebug "FP300 humidity reporting interval: ${intervalSeconds} seconds"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "016B" : // (363) FP300 Humidity reporting threshold (percentage * 100)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def thresholdPercent = value / 100.0
+                device.updateSetting("humidityReportingThreshold", [value: thresholdPercent, type: "decimal"])
+                storeParamValue('humidityReportingThreshold', thresholdPercent, 'decimal', false)
+                logDebug "FP300 humidity reporting threshold: ${String.format('%.1f', thresholdPercent)}%"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "016C" : // (364) FP300 Humidity reporting mode
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                device.updateSetting("humidityReportingMode", [value: value.toString(), type: "enum"])
+                storeParamValue('humidityReportingMode', value.toString(), 'enum', false)
+                def modes = ["unknown", "threshold", "reporting interval", "threshold and interval"]
+                logDebug "FP300 humidity reporting mode: ${modes[value] ?: 'unknown'} (${value})"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0170" : // (368) FP300 Temperature & Humidity sampling frequency
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def frequencies = ["off", "low", "medium", "high", "custom"]
+                device.updateSetting("tempHumiditySamplingFrequency", [value: value.toString(), type: "enum"])
+                storeParamValue('tempHumiditySamplingFrequency', value.toString(), 'enum', false)
+                logDebug "FP300 temp/humidity sampling frequency: ${frequencies[value] ?: 'unknown'} (${value})"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0192" : // (402) FP300 Light sampling frequency
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def frequencies = ["off", "low", "medium", "high", "custom"]
+                device.updateSetting("lightSamplingFrequency", [value: value.toString(), type: "enum"])
+                storeParamValue('lightSamplingFrequency', value.toString(), 'enum', false)
+                logDebug "FP300 light sampling frequency: ${frequencies[value] ?: 'unknown'} (${value})"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0193" : // (403) FP300 Light sampling period (milliseconds)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def seconds = value / 1000
+                device.updateSetting("lightSamplingPeriod", [value: (seconds as Integer).toString(), type: "number"])
+                storeParamValue('lightSamplingPeriod', seconds as Integer, 'number', false)
+                logDebug "FP300 light sampling period: ${seconds} seconds"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0194" : // (404) FP300 Light reporting interval (milliseconds)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def intervalSeconds = (value / 1000) as int
+                device.updateSetting("lightReportingInterval", [value: intervalSeconds.toString(), type: "number"])
+                storeParamValue('lightReportingInterval', intervalSeconds, 'number', false)
+                logDebug "FP300 light reporting interval: ${intervalSeconds} seconds"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0195" : // (405) FP300 Light reporting threshold (percentage * 100)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                def thresholdPercent = value / 100.0
+                device.updateSetting("lightReportingThreshold", [value: thresholdPercent, type: "decimal"])
+                storeParamValue('lightReportingThreshold', thresholdPercent, 'decimal', false)
+                logDebug "FP300 light reporting threshold: ${String.format('%.1f', thresholdPercent)}%"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0196" : // (406) FP300 Light reporting mode
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                device.updateSetting("lightReportingMode", [value: value.toString(), type: "enum"])
+                storeParamValue('lightReportingMode', value.toString(), 'enum', false)
+                def modes = ["No reporting", "Threshold only", "Interval only", "Threshold and Interval"]
+                logDebug "FP300 light reporting mode: ${modes[value] ?: 'unknown'} (${value})"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0197" : // (407) FP300 Absence delay timer
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                sendEvent(name: "absenceDelayTimer", value: value, unit: "sec", type: "physical")
+                device.updateSetting("absenceDelayTimer", [value: value.toString(), type: "number"])
+                storeParamValue('absenceDelayTimer', value, 'number', false)  // Store confirmed value
+                logDebug "FP300 absence delay timer: ${value} seconds"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0198" : // (408) FP300 Track target distance (command trigger)
+            if (isFP300()) {
+                value = Integer.parseInt(it.value, 16)
+                logDebug "FP300 track target distance triggered: ${value}"
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0199" : // (409) FP300 Presence detection options
+            if (isFP300()) {
+                def modes = ["both", "mmwave", "pir"]
+                sendEvent(name: "presenceDetectionMode", value: modes[value] ?: "both", type: "physical")
+                device.updateSetting("presenceDetectionMode", [value: modes[value] ?: "both", type: "enum"])
+                storeParamValue('presenceDetectionMode', modes[value] ?: "both", 'enum', false)  // Store confirmed value
+                logDebug "FP300 presence detection mode: ${modes[value] ?: 'both'}"
+            }   
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "019A" : // (410) FP300 Detection range (24-bit bitmap for 0.25m zones)
+            if (isFP300()) {
+                def detectionRangeHex = it.value
+                
+                if (!detectionRangeHex || detectionRangeHex.isEmpty() || detectionRangeHex == "00") {
+                    logDebug "FP300 detection range: not configured (empty octet string)"
+                    sendEvent(name: "detectionRangeZones", value: "not configured", type: "physical")
+                }
+                else if (detectionRangeHex.length() >= 4) {
+                    logDebug "FP300 detection range raw data: ${detectionRangeHex} (length: ${detectionRangeHex.length()})"
+                    // Parse bitmap in little-endian format
+                    // Raw packet: "0300F10F" means prefix "03 00" + bitmap bytes "F1 0F"
+                    // Hubitat value: "00F10F" (includes last byte of prefix + bitmap bytes)
+                    // We need to extract just the bitmap bytes and parse as little-endian
+                    
+                    def rangeValue = 0
+                    def bitmapHex = detectionRangeHex
+                    
+                    // Check if it starts with "0300" prefix pattern
+                    if (detectionRangeHex.startsWith("0300")) {
+                        // Full format with prefix, skip it
+                        bitmapHex = detectionRangeHex.substring(4)
+                    } else if (detectionRangeHex.startsWith("00")) {
+                        // Partial prefix (last byte), skip first 2 chars
+                        bitmapHex = detectionRangeHex.substring(2)
+                    }
+                    
+                    // Now parse bitmap as little-endian bytes
+                    // "F10F" or "F10F00" -> bytes [0xF1, 0x0F, 0x00] -> 0x000FF1
+                    if (bitmapHex.length() >= 6) {
+                        // 3 bytes
+                        def byte0 = Integer.parseInt(bitmapHex[0..1], 16)
+                        def byte1 = Integer.parseInt(bitmapHex[2..3], 16)
+                        def byte2 = Integer.parseInt(bitmapHex[4..5], 16)
+                        rangeValue = byte0 | (byte1 << 8) | (byte2 << 16)
+                    } else if (bitmapHex.length() >= 4) {
+                        // 2 bytes
+                        def byte0 = Integer.parseInt(bitmapHex[0..1], 16)
+                        def byte1 = Integer.parseInt(bitmapHex[2..3], 16)
+                        rangeValue = byte0 | (byte1 << 8)
+                    } else if (bitmapHex.length() >= 2) {
+                        // 1 byte
+                        rangeValue = Integer.parseInt(bitmapHex[0..1], 16)
+                    }
+                    
+                    logDebug "FP300 detection range bitmap extracted: ${bitmapHex} -> 0x${String.format('%06X', rangeValue)}"
+                    
+                    // Store the bitmap value as hex string
+                    storeParamValue('detectionRangeZones', String.format('%06X', rangeValue), 'string', false)
+                    
+                    def zones = []
+                    for (int i = 0; i < 24; i++) {
+                        if ((rangeValue & (1 << i)) != 0) {
+                            def startM = i * 0.25
+                            def endM = (i + 1) * 0.25
+                            zones.add("${String.format('%.2f', startM)}-${String.format('%.2f', endM)}m")
+                        }
+                    }
+                    
+                    // Create human-readable consolidated ranges for display
+                    def rangeStr = consolidateZoneRanges(zones)
+                    sendEvent(name: "detectionRangeZones", value: rangeStr, type: "physical", 
+                             descriptionText: "Detection zones: ${rangeStr}")
+                    device.updateSetting("detectionRangeZones", [value: rangeStr, type: "string"])
+                    
+                    logDebug "FP300 detection range zones enabled: ${zones.join(', ')}"
+                    logDebug "FP300 detection range consolidated: ${rangeStr}"
+                }
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "0203":  // (515) LED disabled at night (boolean) - CORRECTED from 0x0143
+            if (isFP300()) {
+                def ledState = value ? "on" : "off"
+                logDebug "FP300 LED disabled at night: ${ledState} (value=${value})"
+                sendEvent(name: "ledDisabledNight", value: ledState, type: "physical")
+                device.updateSetting("ledDisabledNight", [value: value ? true : false, type: "bool"])
+                storeParamValue('ledDisabledNight', value ? true : false, 'bool', false)
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+        case "023E":  // (574) LED night time schedule (UINT32) - CORRECTED from 0x0159
+            if (isFP300()) {
+                // Parse UINT32 format: 0xMMHHmmhh (little-endian: endMin|endHour|startMin|startHour)
+                long scheduleValue = Long.parseLong(it.value, 16)
+                def startHour = scheduleValue & 0xFF
+                def startMin = (scheduleValue >> 8) & 0xFF
+                def endHour = (scheduleValue >> 16) & 0xFF
+                def endMin = (scheduleValue >> 24) & 0xFF
+                
+                def scheduleStr = String.format("%02d:%02d-%02d:%02d", startHour, startMin, endHour, endMin)
+                logDebug "FP300 LED night time schedule: ${scheduleStr} (raw: 0x${it.value})"
+                sendEvent(name: "ledNightTimeSchedule", value: scheduleStr, type: "physical")
+                device.updateSetting("ledNightTimeSchedule", [value: scheduleStr, type: "string"])
+                storeParamValue('ledNightTimeSchedule', scheduleStr, 'string', false)
+            }
+            else {
+                logDebug "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+            }
+            break
+
+        case '0006' :   // 0006_Unknown (115F): ByteArray [value=D3 45 B9 CD AC 60 DB 02 FB C5 C0 E9 41 14 B0 CC] [OCTET_STRING]
+        case '0007' :   // 0007_Unknown (115F): ByteArray [value=00 00 00 00 2A FD 50 0F] [OCTET_STRING]
+        case '00DF' :   // 00DF_Unknown (115F): {228=null} [STRUCT2]
+        case '00E4' :   // 00E4_Unknown (115F): [UNSIGNED_32_BIT_INTEGER]
+        case '00FA' :   // 00FA_Unknown (115F): false [BOOLEAN]
+        case '00FE' :   // 00FE_SerialNumber (115F): 777S00072190 [CHARACTER_STRING]
+        case '00FF' :   // 00FF_Unknown (115F): ByteArray [value=] [OCTET_STRING]
+        case '0133' :   // 0133_Unknown (115F): 1 [UNSIGNED_8_BIT_INTEGER]
+        case '0134' :   // 0134_Unknown (115F): [OCTET_STRING]
+        case '0159' :   // 0159_Unknown (115F): 1 [UNSIGNED_8_BIT_INTEGER]
+        case "015A" :   // FP1E RTCZCGQ13LM unknown   015A_Custom: 600 [UNSIGNED_32_BIT_INTEGER]
+        case "015C" :   // 015C_Custom: 1 [UNSIGNED_8_BIT_INTEGER]
+        case "015D" :   // 015D_Custom: 1 [UNSIGNED_8_BIT_INTEGER]
+        case "015E" :   // 015E_Custom: 1 [UNSIGNED_8_BIT_INTEGER]
+        case '0705' :   // 0705_Unknown (115F): 0 [UNSIGNED_8_BIT_INTEGER]
+        case 'FFF2' :   // FFF2_Unknown (115F): 0006_AqaraCommand [FCC0_ManufacturerSpecific: mc=115F, null -> null, TID=--, Input, const1=62207, length1=134, const2=null, seq=null, integrity=null, action=null, const3=null, length2=null, raw=null] [AQARA_FFF2]
+        case 'FFFD' :   // FFFD_Unknown (115F): 1 [UNSIGNED_16_BIT_INTEGER]
+            logDebug "received FP1E RTCZCGQ13LM unknown report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        default :
+            logDebug "Unprocessed <b>FCC0</b> attribute report: cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value} status=${it.status} data=${descMap.data}"
+        break
+    }
+}
+
+// Set of Region Actions
+@Field static final Map<Integer, String> REGION_ACTIONS = [
+    1: 'enter',
+    2: 'leave',
+    4: 'occupied',
+    8: 'unoccupied'
+]
+
+def sendRegionEvent( regionId, value) {
+    String regionEventName = "region_last_" + REGION_ACTIONS.get(value)
+    def event = [
+        name: regionEventName,
+        value: regionId.toString(),
+        //data: [buttonNumber: regionId], 
+        descriptionText: "region $regionId state is ${REGION_ACTIONS.get(value)}",
+        type:'physical'
+    ]
+    logInfo "${event.descriptionText}"
+    sendEvent(event)
+
+}
+
+// "00F7" Xiaomi/Aqara TLV structure 
+def decodeAqaraStruct( String valueHex )
+{
+    if (!valueHex) return
+    int msgLength = valueHex.size()
+    
+    if (logEnable) log.debug "decodeAqaraStruct 00F7 : len = ${msgLength} valueHex = ${valueHex}"
+    for (int i = 0; i < msgLength - 3; ) {
+        int tag = Integer.parseInt(valueHex[(i+0)..(i+1)], 16)
+        int dataType = Integer.parseInt(valueHex[(i+2)..(i+3)], 16)
+        //
+        switch (dataType) {
+            case 0x08 : // 8 bit data
+            case 0x10 : // 1 byte boolean
+            case 0x18 : // 8-bit bitmap
+            case 0x20 : // 1 byte unsigned int
+            case 0x28 : // 1 byte 8 bit signed int
+            case 0x30 : // 8-bit enumeration
+                rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
+                switch (tag) {
+                    case 0x03 :    // device temperature
+                    logDebug "tag 0x03: device temperature is ${rawValue} °C"
+                        temperatureEvent( rawValue )
+                        break
+                    case 0x18 :   // FP300 battery percentage
+                        if (isFP300()) {
+                            sendBatteryEvent( rawValue  )
+                            logDebug "tag 0x18: FP300 battery percentage is ${rawValue} %"
+                        }
+                        else {
+                            logDebug "tag 0x18: unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        }
+                        break
+                    case 0x64 :    // on/off
+                        if (isFP300()) {
+                            logDebug "tag 0x64: FP300 presence  is ${rawValue}"     // TODO: check why is forced to 1 in Z2M ?
+                        }
+                        else {
+                            logDebug "tag 0x64: on/off is ${rawValue}"
+                        }
+                        break
+                    case 0x9b :    // consumer connected
+                        logDebug "tag 0x9b: consumer connected is ${rawValue}"
+                        break
+                    case 0x65 :    // (101) FP1 roomState (presence)
+                        if (isFP1()) { // FP1 'unoccupied':'occupied'
+                            logDebug "tag 0x65: roomState (mmWave 'presence') is  ${fp1RoomStateEventOptions[rawValue.toString()]} (${rawValue})"
+                            roomStateEvent( fp1RoomStateEventOptions[rawValue.toString()] )  
+                        }
+                        else if (isFP1E() || isFP300()) { 
+                            logDebug "FP1E/FP300 tag #65 (roomState>) is ${rawValue}"
+                        }
+                        else {
+                            logDebug "tag 0x65: on/off EP 2 or battery percentage is ${rawValue}"
+                        }
+                        break
+                    case 0x66 :    // (102)    FP1 
+                        if (isFP1()) {
+                            if (/* FP1 firmware version  < 50) */ false ) {
+                                logWarn "RTCZCGQ11LM tag 0x66 (${rawValue} )"
+                                presenceTypeEvent( fp1RoomActivityEventTypeOptions[rawValue.toString()] )
+                            }
+                            else {
+                                device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
+                                logDebug "tag 0x66: sensitivity is <b>${sensitivityOptions[rawValue.toString()]}</b> (${rawValue})"
+                            }
+                        }
+                        else {
+                            logDebug "tag 0x66: unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        }
+                        break
+                    case 0x67 : // (103) FP1 monitoring_mode
+                        if (isFP1() || isFP1E()) {
+                            logDebug "tag 0x67: monitoring_mode is <b> ${monitoringModeOptions[rawValue.toString()]}</b> (${rawValue})"
+                            device.updateSetting( "monitoringMode",  [value:rawValue.toString(), type:"enum"] )
+                        }
+                        else if (isFP300()) {
+                            logDebug "tag 0x67: FP300 pir_direction, value: ${rawValue}"        // TODO:  check why is forced to 1 in Z2M ?
+                        }
+                        else {
+                            logDebug "tag 0x67 value is ${rawValue}"    // sent by T1 sensor
+                        }
+                        break
+                    case 0x69 : // (105) 
+                        if (isFP1() || isFP1E()) { // FP1
+                            device.updateSetting( "approachDistance",  [value:rawValue.toString(), type:"enum"] )    // {0: 'far', 1: 'medium', 2: 'near'}
+                            logDebug "tag 0x69: approach_distance is <b>${approachDistanceOptions[rawValue.toString()]}</b> (${rawValue})"
+                        }
+                        else if (isRTCGQ13LM()) {
+                            // payload.motion_sensitivity = {1: 'low', 2: 'medium', 3: 'high'}[value];
+                            device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
+                            logDebug "tag 0x69: sensitivity is <b>${sensitivityOptions[rawValue.toString()]}</b> (${rawValue})"
+                        }
+                        else if (isP1()) {
+                            device.updateSetting( "motionRetriggerInterval",  [value:rawValue.toString(), type:"number"] )
+                            logDebug "tag 0x69: motion retrigger interval is ${rawValue} s."
+                        }
+                        else {
+                            logWarn "tag 0x69: unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        }
+                        break
+                    case 0x6A :    // sensitivity
+                        if (isFP1() || isFP1E()) {
+                            logDebug "tag 0x6A: FP1 unknown parameter, value: ${rawValue}"
+                        }
+                        else {
+                            device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
+                            logDebug "tag 0x6A: sensitivity is <b>${sensitivityOptions[rawValue.toString()]}</b> (${rawValue})"
+                        }
+                        break
+                    case 0x6B :    // LED
+                        if (isFP1() || isFP1E()) {
+                            logDebug "tag 0x6B: FP1 unknown parameter, value: ${rawValue}"
+                        }
+                        else {
+                            device.updateSetting( "motionLED",  [value:rawValue.toString(), type:"enum"] )
+                            logInfo "${device.displayName} LED is ${P1_LED_MODE_NAME(rawValue)} (${rawValue})"
+                        }
+                        break
+                    default :
+                        logDebug "unknown tag=0x${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        break
+                }
+                i = i + (1 + 1 + 1) * 2
+                break;
+            case 0x21 : // 2 bytes 16bitUINT
+                rawValue = Integer.parseInt((valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]),16)
+                switch (tag) {
+                    case 0x01 : // battery level
+                        logDebug "tag 0x01: battery level is ${rawValue}"
+                        voltageAndBatteryEvents( rawValue/1000 )
+                        break
+                    case 0x05 : // RSSI
+                        logDebug "tag 0x05: RSSI is ${rawValue} ? db"
+                        break
+                    case 0x0A : // Parent NWK
+                        logDebug "tag 0x0A: Parent NWK is ${valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]}"
+                        String nwk = intToHexStr(rawValue as Integer, 2)
+                        if (state.health == null) { state.health = [:] }
+                        String oldNWK = state.health['parentNWK'] ?: 'n/a'
+                        if (oldNWK != nwk) {
+                            String descriptionText = "parentNWK changed from ${oldNWK} to ${nwk}"
+                            state.health['parentNWK']  = nwk
+                            state.health['nwkCtr'] = (state.health['nwkCtr'] ?: 0) + 1
+                            logWarn "${descriptionText}"
+                        }
+                        break
+                    case 0x0B : // lightlevel 
+                        logDebug "tag 0x0B: lightlevel is ${rawValue}"
+                        break
+                    case 0x17 : // FP300 battery voltage in mV
+                        if (isFP300()) {
+                            def voltage = rawValue / 1000.0
+                            sendVoltageEvent(voltage)
+                            logDebug "tag 0x17: FP300 battery voltage is ${voltage}V (${rawValue} mV)"
+                        }
+                        else {
+                            logDebug "tag 0x17: unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        }
+                        break
+                    case 0x65 : // illuminance or humidity
+                        logDebug "tag 0x65: illuminance or humidity is ${rawValue}"
+                        if (!isRTCGQ13LM()) {    // filter for high precision sensor - no illuminance!
+                            illuminanceEventLux( rawValue )
+                        }
+                        else {
+                            logDebug "tag 0x65: unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        }
+                        break
+                    default :
+                        logDebug "unknown tag=0x${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        break
+                }
+                i = i + (1 + 1 + 2) * 2
+                break
+            case 0x0B : // 32-bit data
+            case 0x1B : // 32-bit bitmap
+            case 0x23 : // Unsigned 32-bit integer
+            case 0x2B : // Signed 32-bit integer
+                // TODO: Zcl32BitUint tag == 0x0d  -> firmware version ?
+                switch (tag) {
+                    case 0x0D :    // firmware version ?
+                        rawValue = Integer.parseInt((valueHex[(i+10)..(i+11)] + valueHex[(i+8)..(i+9)] + valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]),16)
+                        def major = (rawValue >> 24) & 0xFF
+                        def minor = (rawValue >> 16) & 0xFF
+                        def patch = rawValue & 0xFFFF
+                        String firmwareVersion = "${major}.${minor}.${patch}"
+                        logDebug "tag 0x0D: firmware version is ${firmwareVersion} (raw=${rawValue})"
+                        /*
+                        if (device.getDataValue("firmwareVersion") != firmwareVersion) {
+                            device.updateDataValue("firmwareVersion", firmwareVersion)
+                            logInfo "firmwareVersion updated to ${firmwareVersion}"
+                        }
+                        */
+                        break
+                    default :
+                        rawValue = Integer.parseInt((valueHex[(i+10)..(i+11)] + valueHex[(i+8)..(i+9)] + valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]),16)
+                        logDebug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        break
+                }
+                //logDebug "unknown 32 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                i = i + (1 + 1 + 4) * 2    // TODO: check!
+                break
+            case 0x24 : // 5 bytes 40 bits Zcl40BitUint tag == 0x06 -> LQI (?)
+                switch (tag) {
+                    case 0x06 :    // LQI ?
+                        logDebug "tag 0x06: device LQI is ${valueHex[(i+4)..(i+14)]}"
+                        break
+                    default :
+                        logDebug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} TODO rawValue"
+                        break
+                }
+                i = i + (1 + 1 + 5) * 2
+                break;
+            case 0x0C : // 40-bit data
+            case 0x1C : // 40-bit bitmap
+            case 0x24 : // Unsigned 40-bit integer
+            case 0x2C : // Signed 40-bit integer
+                logDebug "unknown 40 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                i = i + (1 + 1 + 5) * 2
+                break
+            case 0x0D : // 48-bit data
+            case 0x1D : // 48-bit bitmap
+            case 0x25 : // Unsigned 48-bit integer
+            case 0x2D : // Signed 48-bit integer
+                // TODO: Zcl48BitUint tag == 0x9a ?
+                // TODO: Zcl64BitUint tag == 0x07 ?
+                logDebug "unknown 48 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                i = i + (1 + 1 + 6) * 2
+                break
+            // TODO: Zcl16BitInt tag == 0x64 -> temperature
+            // TODO: ZclSingleFloat tag == 0x95 (consumption) tag == 0x96 (voltage) tag == 0x97 (current) tag == 0x98 (power)
+            // https://github.com/SwoopX/deconz-rest-plugin/blob/1c09f60eb2001fef790450e70a142180e9494aa4/general.xml
+            default : 
+                logWarn "unknown dataType 0x${valueHex[(i+2)..(i+3)]} at index ${i}"
+                i = i + 1*2
+                break
+        } // switch dataType
+	} // for all tags in valueHex 
+}
+
+// TEMP FIX: decode battery from FF02 TLV (key 0x01, type 0x21)
+// accepts either a hex string or Hubitat's octet-string bytes
+private parseBatteryFF02(String valueHex) {
+    if (!valueHex) return
+
+    // If not hex, convert Hubitat octet-string to hex
+    if (!(valueHex ==~ /(?i)^[0-9a-f]+$/)) {
+        StringBuilder sb = new StringBuilder(valueHex.length() * 2)
+        for (char ch : valueHex.toCharArray()) {
+            sb.append(String.format("%02X", ((int) ch) & 0xFF))
+        }
+        valueHex = sb.toString()
+    }
+
+    Integer rawmV = null
+    int L = valueHex.length()
+    // TLV scan: [key][type][value...]; battery = key 0x01, type 0x21 (uint16 LE)
+    for (int i = 0; i <= L - 8; i += 2) {
+        String key  = valueHex.substring(i,   i+2)
+        String type = valueHex.substring(i+2, i+4)
+        if (key.equalsIgnoreCase("01") && type.equalsIgnoreCase("21")) {
+            String lo = valueHex.substring(i+4, i+6)
+            String hi = valueHex.substring(i+6, i+8)
+            rawmV = Integer.parseInt(hi + lo, 16)  // LE -> BE
+            break
+        }
+    }
+
+    if (rawmV == null || rawmV <= 0) return
+
+    BigDecimal volts = rawmV / 1000.0G  // mV -> V
+    voltageAndBatteryEvents(volts)
+}
+
+
+// called by parseAqaraAttributeFF01 (cluster "0000")
+// TEMP FIX: robustly decode battery from FF01 TLV (key 0x01, type 0x21)
+// - accepts either a hex string OR Hubitat's raw octet-string bytes
+private parseBatteryFF01(String valueHex) {
+    if (!valueHex) return
+
+    // If not hex, convert the octet-string bytes to hex (Hubitat encoding: 0x42)
+    if (!(valueHex ==~ /(?i)^[0-9a-f]+$/)) {
+        StringBuilder sb = new StringBuilder(valueHex.length() * 2)
+        for (char ch : valueHex.toCharArray()) {
+            sb.append(String.format("%02X", ((int) ch) & 0xFF))
+        }
+        valueHex = sb.toString()
+    }
+
+    Integer rawmV = null
+    int L = valueHex.length()
+    // Scan TLV: [key][type][value...]; battery is key=0x01, type=0x21 (uint16 LE)
+    for (int i = 0; i <= L - 8; i += 2) {
+        String key  = valueHex.substring(i,   i+2)
+        String type = valueHex.substring(i+2, i+4)
+        if (key.equalsIgnoreCase("01") && type.equalsIgnoreCase("21")) {
+            String lo = valueHex.substring(i+4, i+6)
+            String hi = valueHex.substring(i+6, i+8)
+            rawmV = Integer.parseInt(hi + lo, 16) // LE -> BE
+            break
+        }
+    }
+
+    if (rawmV == null || rawmV <= 0) return
+
+    BigDecimal volts = rawmV / 1000.0G   // mV -> V
+    voltageAndBatteryEvents(volts)
+}
+
+def voltageAndBatteryEvents( rawVolts, isDigital=false  )
+{
+    // FP300 uses CR2450 lithium coin cell batteries (2.85V-3.0V per Z2M reference)
+    // Other devices use standard range (2.5V-3.0V)
+	def minVolts = isFP300() ? 2.85 : 2.5
+	def maxVolts = 3.0
+	def pct = (rawVolts - minVolts) / (maxVolts - minVolts)
+	def roundedPct = Math.min(100, Math.max(0, Math.round(pct * 100)))
+	def descText  = "Battery level is ${roundedPct}%"
+	def descText2 = "Battery voltage is ${rawVolts}V"
+    if (txtEnable) log.info "${device.displayName} ${descText}"
+    sendEvent(name: 'batteryVoltage', value: rawVolts, unit: "V", type: "physical", descriptionText: descText2, isStateChange: true )
+    sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", descriptionText: descText, isStateChange: true )    
+}
+
+def sendVoltageEvent( rawVolts ) {
+    def descText = "Battery voltage is ${rawVolts}V"
+    if (txtEnable) log.info "${device.displayName} ${descText}"
+    sendEvent(name: 'batteryVoltage', value: rawVolts, unit: "V", type: "physical", descriptionText: descText, isStateChange: true )
+}
+
+def sendBatteryEvent( roundedPct, isDigital=false ) {
+    def descText = "Battery level is ${roundedPct}%"
+    descText += isDigital ? safeToInt(roundedPct)==0 ?"forced to ${roundedPct}%" : "restored to ${roundedPct}%" : " "     // TODO !!!
+    if (txtEnable) log.info "${device.displayName} ${descText}"
+    sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", descriptionText: descText, isStateChange: true )
+    
+    // Update FP300 child device battery as well (same physical battery)
+    if (isFP300()) {
+        def child = getChildTempHumidityDevice()
+        if (child) {
+            child.parse([[name: "battery", value: roundedPct, unit: "%", type: isDigital == true ? "digital" : "physical", descriptionText: "${child.displayName} battery is ${roundedPct}%", isStateChange: true]])
+            if (logEnable) log.debug "${device.displayName} updated child device battery to ${roundedPct}%"
+        }
+    }
+}
+
+def parseZDOcommand( Map descMap ) {
+    List<String> cmds = []
+    switch (descMap.clusterId) {
+        case '0000' : // Network Address Request (NWK_addr_req)
+            /*
+            if (logEnable) {
+                log.debug "${device.displayName} ZDO Network Address request, data=${descMap.data} (Sequence Number:${descMap.data[0]})"
+            }
+            List data = descMap.data as List
+            if (data == null || data.size() < 11) {
+                if (logEnable) { log.debug "${device.displayName} invalid NWK_addr_req payload: ${data}" }
+                break
+            }
+            Integer tsn = (data[0] instanceof String) ? Integer.parseInt(data[0], 16) : (data[0] as Integer)
+            String seqNum = zigbee.convertToHexString(tsn & 0xFF, 2)
+            // Requested IEEE address is already in little-endian order in the ZDO payload.
+            String requestedIeeeLe = data[1..8].collect {
+                it instanceof String ? it.padLeft(2, '0').toUpperCase() : zigbee.convertToHexString((it as int) & 0xFF, 2)
+            }.join(' ')
+            String requestedIeeeKey = requestedIeeeLe.replace(' ', '').toUpperCase()
+            // Hubitat exposes hub Zigbee EUI as big-endian string, e.g. 000D6F0016C1E513.
+            String hubIeeeBe = "${location.hub.zigbeeEui ?: location.hub.zigbeeId ?: ''}".replaceAll('[^0-9A-Fa-f]', '').toUpperCase()
+            String hubIeeeLeKey = ''
+            if (hubIeeeBe.length() == 16) {
+                hubIeeeLeKey = hubIeeeBe.replaceAll('(..)', '$1 ').trim().split(' ').reverse().join('').toUpperCase()
+            }
+            // Device IEEE from device data is usually big-endian.
+            String deviceIeeeBe = "${device.getDataValue('ieee') ?: device.getDataValue('mac') ?: ''}".replaceAll('[^0-9A-Fa-f]', '').toUpperCase()
+            String deviceIeeeLeKey = ''
+            if (deviceIeeeBe.length() == 16) {
+                deviceIeeeLeKey = deviceIeeeBe.replaceAll('(..)', '$1 ').trim().split(' ').reverse().join('').toUpperCase()
+            }
+            String nwkAddr = null
+            if (requestedIeeeKey == hubIeeeLeKey) {
+                // Coordinator is always NWK 0x0000; encoded little-endian.
+                nwkAddr = '00 00'
+                if (logEnable) { log.debug "${device.displayName} NWK_addr_req is for coordinator IEEE ${requestedIeeeLe}; responding NWK 0000" }
+            }
+            else if (requestedIeeeKey == deviceIeeeLeKey) {
+                // This device's current DNI; encode little-endian.
+                String dni = "${device.deviceNetworkId}".padLeft(4, '0').toUpperCase()
+                nwkAddr = "${dni[2..3]} ${dni[0..1]}"
+                if (logEnable) { log.debug "${device.displayName} NWK_addr_req is for this device IEEE ${requestedIeeeLe}; responding NWK ${dni}" }
+            }
+            else {
+                if (logEnable) {
+                    log.debug "${device.displayName} NWK_addr_req for unknown IEEE ${requestedIeeeLe}; ignored (hub=${hubIeeeBe}, device=${deviceIeeeBe})"
+                }
+                break
+            }
+            */
+            // Response format:
+            // TSN + status(00=success) + IEEE address (8 bytes LE) + NWK address (2 bytes LE)
+            // + number of associated devices (00) + start index (00)
+            /*
+            cmds = ["he raw ${device.deviceNetworkId} 0 0 0x8000 {${seqNum} 00 ${requestedIeeeLe} ${nwkAddr} 00 00} {0x0000}"]
+            sendZigbeeCommands(cmds)
+            */
+            log.warn "ZDO Network Address Request received for IEEE ${requestedIeeeLe}; response is currently disabled (expecting HE platform to handle it)."
+            break
+
+        case '0002' : // Node Descriptor Request (Node_Desc_req)
+            if (logEnable) {
+                log.debug "${device.displayName} ZDO Node Descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]})"
+            }
+           // log.warn "ZDO Node Descriptor request data: temporarily ignored!"
+           // break
+            
+
+            List data = descMap.data as List
+            if (data == null || data.size() < 3) {
+                if (logEnable) { log.debug "${device.displayName} invalid Node_Desc_req payload: ${data}" }
+                break
+            }
+            // Request format: TSN + NwkAddrOfInterest (2 bytes little-endian)
+            Integer tsn = (data[0] instanceof String) ? Integer.parseInt(data[0], 16) : (data[0] as Integer)
+            String seqNum = zigbee.convertToHexString(tsn & 0xFF, 2)
+            String nwkAddrRequested = data[1..2].collect {
+                it instanceof String ? it.padLeft(2, '0').toUpperCase() : zigbee.convertToHexString((it as int) & 0xFF, 2)
+            }.join(' ')
+            // Only answer Node Descriptor requests for the coordinator (0x0000).
+            // Do not fabricate descriptors for other nodes.
+            if (nwkAddrRequested != '00 00') {
+                if (logEnable) {
+                    log.debug "${device.displayName} Node_Desc_req for NWK ${nwkAddrRequested}; ignored"
+                }
+                break
+            }
+            
+            /*
+            * Node Descriptor for a coordinator-like Aqara/Lumi hub:
+            *
+            * 00 40  = Node descriptor bitfield:
+            *          logical type = coordinator, frequency band = 2.4 GHz
+            * 8F     = MAC capability flags:
+            *          FFD, mains powered, receiver on when idle, alternate PAN coordinator
+            * 5F 11  = Manufacturer code 0x115F (Lumi/Aqara), little-endian
+            * 52     = Max buffer size = 82
+            * 52 00  = Max incoming transfer size = 82
+            * 41 2C  = Server mask = 0x2C41
+            * 52 00  = Max outgoing transfer size = 82
+            * 00     = Descriptor capability field
+            */
+            String nodeDesc = '00 40 8F 5F 11 52 52 00 41 2C 52 00 00'      // Aqara
+            //String nodeDesc = '00 40 8F CD AB 52 80 00 41 2C 80 00 00'        // Hubitat C-8 Pro
+            // Response format:
+            // TSN + status(00=success) + NwkAddrOfInterest + NodeDescriptor
+            cmds = [
+                "he raw ${device.deviceNetworkId} 0 0 0x8002 {${seqNum} 00 ${nwkAddrRequested} ${nodeDesc}} {0x0000}"
+            ]
+            if (state.lastRx == null) { state.lastRx = [:] }
+            state.lastRx.zdo0002 = new Date().getTime()
+
+            sendZigbeeCommands(cmds)
+                        /*         
+            // sync the time - just in case..
+            //runIn(1, "sendTimeSync")  
+            runIn(2, "aqaraBlackMagic") // 06/04/2026
+            */
+            log.warn "ZDO Node Descriptor Request received for NWK ${nwkAddrRequested}; response is currently disabled (expecting HE platform to handle it)."
+            break
+        case "0006" :
+            if (logEnable) log.info "${device.displayName} Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7]+descMap.data[6]})"
+            break
+        case "0013" : // device announcement
+            if (logEnable) log.info "${device.displayName} Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
+            aqaraBlackMagic()
+            //aqaraReadAttributes()
+            break
+        case '0036' : // End Device Timeout Request
+            Integer tsn = (descMap.data[0] instanceof String) ? Integer.parseInt(descMap.data[0], 16) : (descMap.data[0] as int)
+            String seqNum = zigbee.convertToHexString(tsn & 0xFF, 2)
+            // Response: TSN, status=00 success, parentInfo=01
+            cmds = ["he raw ${device.deviceNetworkId} 0 0 0x8036 {${seqNum} 00 01} {0x0000}"]
+            sendZigbeeCommands(cmds)
+            break
+        case "8004" : // simple descriptor response
+            if (logEnable) log.info "${device.displayName} Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
+            parseSimpleDescriptorResponse( descMap )
+            break
+        case "8005" : // endpoint response
+            if (logEnable) log.info "${device.displayName} Received endpoint response: cluster: ${descMap.clusterId} (endpoint response) endpointCount = ${ descMap.data[4]}  endpointList = ${descMap.data[5]}"
+            break
+        case "8021" : // bind response
+            if (logEnable) log.info "${device.displayName} Received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+            break
+        case "8022" : //unbind request
+            if (logEnable) log.info "${device.displayName} Received unbind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+            break
+        case '8032' : // Mgmt_Rtg_rsp
+            List data = descMap.data as List
+            if (data == null || data.size() < 2) {
+                if (logEnable) { log.debug "${device.displayName} invalid Mgmt_Rtg_rsp payload: ${data}" }
+                break
+            }
+            Integer tsn = hexStrToUnsignedInt(data[0])
+            Integer status = hexStrToUnsignedInt(data[1])
+            if (logEnable) {
+                log.debug "${device.displayName} ZDO Mgmt_Rtg_rsp: seq=${zigbee.convertToHexString(tsn, 2)}, status=${zigbee.convertToHexString(status, 2)}${status == 0x84 ? ' (NOT_SUPPORTED)' : ''}, data=${data} (harmless and expected)"
+            }
+            break
+        case "8034" : //leave response
+            if (logEnable) log.info "${device.displayName} Received leave response, data=${descMap.data}"
+            break
+        case "8038" : // Management Network Update Notify
+            if (logEnable) log.info "${device.displayName} Received Management Network Update Notify, data=${descMap.data}"
+            break
+        default :
+            if (logEnable) log.debug "${device.displayName} Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+    }
+}
+
+def parseZHAcommand( Map descMap) {
+    switch (descMap.command) {
+        case "01" : //read attribute response. If there was no error, the successful attribute reading would be processed in the main parse() method.
+            if (descMap?.data?.size() <3) {    // Mi Light Detection Sensor GZCGQ01LM : raw:catchall: 0104 0003 01 FF 0040 00 0508 01 00 0000 01 00 , profileId:0104, clusterId:0003, clusterInt:3, sourceEndpoint:01, destinationEndpoint:FF, options:0040, messageType:00, dni:0508, isClusterSpecific:true, isManufacturerSpecific:false, manufacturerId:0000, command:01, direction:00, data:[]]
+                logDebug "received Read attribute response: cluster ${descMap.clusterId} Attributte ${attrId}, data size ${descMap?.data?.size()}"
+                return
+            }
+        
+            def status = descMap.data[2]
+            def attrId = descMap.data[1] + descMap.data[0] 
+            if (status == "86") {
+                logWarn "<b>UNSUPPORTED/b> Read attribute response: cluster ${descMap.clusterId} Attributte ${attrId} status code ${status}"
+            }
+            else {
+                switch (descMap.clusterId) {
+                    // "lumi.sensor_motion.aq2" inClusters: "0000,FFFF,0406,0400,0500,0001,0003"
+                    case "0000" :
+                    case "0001" :
+                    case "0003" :
+                    case "0400" :
+                    case "0500" :
+                    case "FFFF" :
+                        logWarn "<b>NOT PROCESSED</b> Read attribute response: cluster ${descMap.clusterId} Attributte ${attrId} status code ${status}"
+                        break                    
+                    default :
+                        logWarn "<b>UNHANDLED</b> Read attribute response: cluster ${descMap.clusterId} Attributte ${attrId} status code ${status}"
+                        break
+                }
+            }
+            break
+        case "04" : //write attribute response
+            logDebug "Received Write Attribute Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+            break
+        case "07" : // Configure Reporting Response
+            logInfo "Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+            // Status: Unreportable Attribute (0x8c)
+            break
+        case "09" : // Command: Read Reporting Configuration Response (0x09)
+            def status = zigbee.convertHexToInt(descMap.data[0])    // Status: Success (0x00)
+            def attr = zigbee.convertHexToInt(descMap.data[3])*256 + zigbee.convertHexToInt(descMap.data[2])    // Attribute: OnOff (0x0000)
+            if (status == 0) {
+                def dataType = zigbee.convertHexToInt(descMap.data[4])    // Data Type: Boolean (0x10)
+                def min = zigbee.convertHexToInt(descMap.data[6])*256 + zigbee.convertHexToInt(descMap.data[5])
+                def max = zigbee.convertHexToInt(descMap.data[8])*256 + zigbee.convertHexToInt(descMap.data[7])
+                def delta = 0
+                if (descMap.data.size() >= 9 ) {
+                    delta = zigbee.convertHexToInt(descMap.data[9])
+                }
+                logInfo "Received Read Reporting Configuration Response (0x09) for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'}) min=${min} max=${max} delta=${delta}"
+            }
+            else {
+                logWarn "<b>Not Found (0x8b)</b> Read Reporting Configuration Response for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+            }
+            break
+        case "0B" : // ZCL Default Response
+            def status = descMap.data[1]
+            if (status != "00") {
+                switch (descMap.clusterId) {
+                    /// "lumi.sensor_motion.aq2" inClusters: "0000,FFFF,0406,0400,0500,0001,0003"
+                    case "0000" :
+                    case "0001" :
+                    case "0003" :
+                    case "0400" :
+                    case "0500" :
+                    case "FFFF" :
+                    default :
+                        logDebug "Received ZCL Default Response to Command ${descMap.data[0]} for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+                        break
+                }
+            }
+            break
+        default :
+            logDebug "Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            break
+    }
+}
+
+
+def parseSimpleDescriptorResponse(Map descMap) {
+    log.info "Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
+    log.info "Endpoint: ${descMap.data[5]} Application Device:${descMap.data[9]}${descMap.data[8]}, Application Version:${descMap.data[10]}"
+    def inputClusterCount = hubitat.helper.HexUtils.hexStringToInt(descMap.data[11])
+    def inputClusterList = ""
+    for (int i in 1..inputClusterCount) {
+        inputClusterList += descMap.data[13+(i-1)*2] + descMap.data[12+(i-1)*2] + ","
+    }
+    inputClusterList = inputClusterList.substring(0, inputClusterList.length() - 1)
+    log.info "Input Cluster Count: ${inputClusterCount} Input Cluster List : ${inputClusterList}"
+    if (getDataValue("inClusters") != inputClusterList)  {
+        logWarn "inClusters=${getDataValue('inClusters')} differs from inputClusterList:${inputClusterList} - will be updated!"
+        updateDataValue("inClusters", inputClusterList)
+    }
+    
+    def outputClusterCount = hubitat.helper.HexUtils.hexStringToInt(descMap.data[12+inputClusterCount*2])
+    def outputClusterList = ""
+    for (int i in 1..outputClusterCount) {
+        outputClusterList += descMap.data[14+inputClusterCount*2+(i-1)*2] + descMap.data[13+inputClusterCount*2+(i-1)*2] + ","
+    }
+    outputClusterList = outputClusterList.substring(0, outputClusterList.length() - 1)
+    log.info "Output Cluster Count: ${outputClusterCount} Output Cluster List : ${outputClusterList}"
+    if (getDataValue("outClusters") != outputClusterList)  {
+        logWarn "outClusters=${getDataValue('outClusters')} differs from outputClusterList:${outputClusterList} -  will be updated!"
+        updateDataValue("outClusters", outputClusterList)
+    }
+}
+
+void illuminanceEvent( rawLux ) {
+    if (rawLux == 0xFFFF) {
+        logWarn "ignored rawLux reading ${rawLux}"
+        return
+    }
+	def lux = rawLux > 0 ? Math.round(Math.pow(10,((rawLux-1)/10000))) : 0
+    illuminanceEventLux( lux as Integer )
+}
+
+void illuminanceEventLux( Integer lux ) {
+    if (lux == 0xFFFF) {
+        logWarn "ignored lux reading ${lux}"
+        return
+    }
+    if ( lux > 0xFFDC ) lux = 0xFFDC    // maximum value is 0xFFDC !
+    handleIlluminanceEvent(lux)
+}
+
+void handleIlluminanceEvent(int illuminance, boolean isDigital=false) {
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (state.stats == null) { state.stats = [:] }
+    state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 
+    Map eventMap = [:]
+    eventMap.name = 'illuminance'
+    Integer illumCorrected = Math.round((illuminance * ((settings?.illuminanceCoeff ?: 1.00) as float)))
+    eventMap.value  = illumCorrected
+    eventMap.type = isDigital ? 'digital' : 'physical'
+    eventMap.unit = 'lx'
+    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
+    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now())) / 1000)
+    Integer minTime = settings?.illuminanceMinReportingTime ?: DEFAULT_ILLUMINANCE_MIN_TIME  // defined in commonLib
+    Integer timeRamaining = (minTime - timeElapsed) as Integer
+    Integer lastIllum = device.currentValue('illuminance') ?: 0
+    Integer delta = Math.abs(lastIllum - illumCorrected)
+    if (delta < ((settings?.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD) as int)) {
+        logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${settings?.illuminanceThreshold} (lastIllum=${lastIllum})"
+        return
+    }
+    if (timeElapsed >= minTime) {
+        logInfo "${eventMap.descriptionText}"
+        unschedule('sendDelayedIllumEvent')        //get rid of stale queued reports
+        state.lastRx['illumTime'] = now()
+        sendEvent(eventMap)
+    }
+    else {         // queue the event
+        eventMap.type = 'delayed'
+        logDebug "${device.displayName} <b>delaying ${timeRamaining} seconds</b> event : ${eventMap}"
+        runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap])
+    }
+}
+
+/* groovylint-disable-next-line UnusedPrivateMethod */
+private void sendDelayedIllumEvent(Map eventMap) {
+    logInfo "${eventMap.descriptionText} (${eventMap.type})"
+    state.lastRx['illumTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
+    sendEvent(eventMap)
+}
+
+def temperatureEvent( temperature ) {
+    // FP300 has a dedicated external temperature sensor - route to child device
+    if (isFP300()) {
+        def child = getChildTempHumidityDevice()
+        if (child) {
+            def map = [:] 
+            map.name = "temperature"
+            map.unit = "\u00B0"+"C"
+            def tempOffset = settings?.tempOffset ?: 0
+            
+            if ( location.temperatureScale == "F") {
+                temperature = (temperature * 1.8) + 32
+                map.unit = "\u00B0"+"F"
+            }
+            
+            def tempConverted = temperature + tempOffset
+            map.value = new BigDecimal(tempConverted).setScale(1, BigDecimal.ROUND_HALF_UP)  // Round to 1 decimal place
+            map.type = "physical"
+            map.isStateChange = true
+            
+            if (settings?.txtEnable) {log.info "${device.displayName} temperature is ${map.value} ${map.unit} (via child device)"}
+            child.parse([[name: map.name, value: map.value, unit: map.unit, type: map.type, descriptionText: "${child.displayName} temperature is ${map.value} ${map.unit}", isStateChange: map.isStateChange]])
+        } else {
+            log.warn "${device.displayName} FP300 child device not found for temperature event"
+        }
+        return
+    }
+    
+    // Other devices: internal temperature sensor - use deviceTemperature attribute
+    if (settings?.internalTemperature == false) {
+        return
+    }
+    def map = [:] 
+    map.name = "deviceTemperature"
+    map.unit = "\u00B0"+"C"
+    def tempOffset = settings?.internalTempOffset ?: 0
+    
+    if ( location.temperatureScale == "F") {
+        temperature = (temperature * 1.8) + 32
+        map.unit = "\u00B0"+"F"
+    }
+    
+    def tempConverted = temperature + tempOffset
+    map.value = Math.round(tempConverted * 10) / 10.0  // Round to 1 decimal place
+    map.type = "physical"
+    
+    if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+    sendEvent(map)
+}
+
+def roomStateEvent( String status, isDigital=false ) {
+    if (status != null) {
+        def type = isDigital == true ? "digital" : "physical"
+        sendEvent("name": "roomState", "value": status, "type": type)                    // isStateChange" true removed ver 1.2.0
+        if (settings?.txtEnable) log.info "${device.displayName} roomState (mmWave 'presence') is ${status}"
+        if (status == "occupied") {
+            handleMotion(true, isDigital=true)
+        }
+        else {
+            handleMotion(false, isDigital=true)
+        }
+    }
+}
+                                              
+def presenceTypeEvent( String presenceTypeEvent, isDigital=false ) {
+    if (!(isFP1() || isFP1E())) {
+        logWarn "presenceTypeEvent received for unsupported device ${device.getDataValue('model')}"
+        return
+    }
+    if (presenceTypeEvent != null) {
+        def type = isDigital == true ? "digital" : "physical"
+        sendEvent("name": "roomActivity", "value": presenceTypeEvent, "type": type)       // isStateChange" true removed ver 1.2.0
+        if (settings?.txtEnable) log.info "${device.displayName} presence type is <b>${presenceTypeEvent}</b>"
+        if (presenceTypeEvent in ["enter", "left_enter", "right_enter"] ) {
+            handleMotion(true, isDigital=true)
+        }
+        else if (presenceTypeEvent in ["leave", "left_leave", "right_leave" ]) {
+            handleMotion(false, isDigital=true)
+        }        
+    }
+}
+
+def targetDistanceEvent( Integer distance ) {
+    if (distance != null) {
+        BigDecimal distanceConverted = distance / 100 as BigDecimal 
+        distanceConverted = distanceConverted.setScale(2, RoundingMode.HALF_UP)
+        sendEvent("name": "targetDistance", "value": distanceConverted, "type": "physical")
+        if (settings?.txtEnable) log.info "${device.displayName} target distance is ${distanceConverted} m"
+    }
+}
+
+def detectionRangeEvent( Integer range ) {
+    if (range != null) {
+        BigDecimal rangeConverted = range / 100 as BigDecimal
+        rangeConverted = rangeConverted.setScale(2, RoundingMode.HALF_UP)
+        sendEvent("name": "detectionRange", "value": rangeConverted, "type": "physical")
+        if (settings?.txtEnable) log.info "${device.displayName} detection range is ${rangeConverted} m"
+    }
+}
+
+def humidityEvent( humidity ) {
+    if (humidity != null && (isFP300())) {
+        def child = getChildTempHumidityDevice()
+        if (child) {
+            // Apply humidity offset
+            def humidityOffset = settings?.humidityOffset ?: 0
+            def humidityAdjusted = humidity + humidityOffset
+            
+            // Ensure humidity is within valid range (0-100%)
+            def humidityValue = Math.round(humidityAdjusted as Double)
+            if (humidityValue < 0) humidityValue = 0
+            if (humidityValue > 100) humidityValue = 100
+            def isStateChange = true
+            if (settings?.txtEnable) log.info "${device.displayName} humidity is ${humidityValue}% (via child device)"
+            child.parse([[name: "humidity", value: humidityValue, unit: "%", type: "physical", descriptionText: "${child.displayName} humidity is ${humidityValue}%", isStateChange: isStateChange]])
+        } else {
+            log.warn "${device.displayName} FP300 child device not found for humidity event"
+        }
+    }
+}
+
+private handleMotion( Boolean motionActive, isDigital=false ) {    
+    if (motionActive) {
+        def timeout = settings?.motionResetTimer == null ? 30 : motionResetTimer
+        // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in the code
+        if (timeout != 0) {
+            runIn(timeout, "resetToMotionInactive", [overwrite: true])
+        }
+        if (device.currentState('motion')?.value != "active") {
+            state.motionStarted = now()
+        }
+    }
+    else {
+        if (device.currentState('motion')?.value == "inactive") {
+            if (logEnable) log.debug "${device.displayName} ignored motion inactive event after ${getSecondsInactive()} s."
+            return [:]   // do not process a second motion inactive event!
+        }
+    }
+	return getMotionResult(motionActive, isDigital)
+}
+
+def getMotionResult( Boolean motionActive, isDigital=false ) {
+	def descriptionText = "Detected motion"
+    if (!motionActive) {
+		descriptionText = "Motion reset to inactive after ${getSecondsInactive()} s."
+    }
+    else {
+        descriptionText = device.currentValue("motion") == "active" ? "Motion is active ${getSecondsInactive()}s" : "Detected motion"
+    }
+    if (txtEnable) log.info "${device.displayName} ${descriptionText}"
+	sendEvent (
+			name			: 'motion',
+			value			: motionActive ? 'active' : 'inactive',
+            type            : isDigital == true ? "digital" : "physical",
+			descriptionText : descriptionText
+	)
+}
+
+def resetToMotionInactive() {
+	if (device.currentState('motion')?.value == "active") {
+		def descText = "Motion reset to inactive after ${getSecondsInactive()} s."
+		sendEvent(
+			name : "motion",
+			value : "inactive",
+			isStateChange : true,
+            type:  "digital",
+			descriptionText : descText
+		)
+        if (txtEnable) log.info "${device.displayName} ${descText}"
+	}
+    else {
+        if (txtEnable) log.debug "${device.displayName} ignored resetToMotionInactive (software timeout) after ${getSecondsInactive()} s."
+    }
+}
+
+def getSecondsInactive() {
+    if (state.motionStarted) {
+        return Math.round((now() - state.motionStarted)/1000)
+    } else {
+        return motionResetTimer ?: 30
+    }
+}
+
+def powerSourceEvent() {
+    def value = (isFP1() || isFP1E()) ? "dc" : "battery"
+    def descriptionText = (isFP1() || isFP1E()) ? "powerSource is dc/mains" : "powerSource is battery"
+    sendEvent(name : "powerSource",	value : value, descriptionText: descriptionText, type: "digital")
+    logInfo "${descriptionText}"
+}
+
+// called when any event was received from the Zigbee device in parse() method..
+def setHealthStatusOnline() {
+    if ((state.rxCounter != null) && state.rxCounter <= 2) {
+        return                    // do not count the first device announcement or binding ack packet as an online presence!
+    }
+    sendHealthStatusEvent("online")
+    state.notPresentCounter = 0
+    unschedule('deviceCommandTimeout')
+}
+
+def pollPresence() { deviceHealthCheck() }
+
+// check for device offline every 60 minutes
+def deviceHealthCheck() {
+    if (logEnable) log.debug "${device.displayName} deviceHealthCheck()"
+    
+    if (state.notPresentCounter != null) {
+        state.notPresentCounter = state.notPresentCounter + 1
+        if (state.notPresentCounter >= PRESENCE_COUNT_THRESHOLD) {
+            sendHealthStatusEvent("offline")
+            if (!(device.currentValue('motion', true) in ['inactive', '?'])) {
+                if (!isLightSensor()) {
+                    handleMotion(false, isDigital=true)
+                    logWarn "forced motion to <b>inactive</b>"
+                }
+            }
+        }
+    }
+    else {
+        state.notPresentCounter = 0  
+    }
+    
+    runIn( DEFAULT_POLLING_INTERVAL, "deviceHealthCheck", [overwrite: true, misfire: "ignore"])
+}
+
+void ping() {
+    logInfo 'ping...'
+    scheduleCommandTimeoutCheck()
+    state.pingTime = new Date().getTime()
+    sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
+}
+
+void sendRttEvent() {
+    def now = new Date().getTime()
+    def timeRunning = now.toInteger() - state.pingTime?.toInteger() ?: now.toInteger()
+    logInfo "Round Trip Time is ${timeRunning} (ms)"    
+    sendEvent(name: "rtt", value: timeRunning, unit: "ms", type: "digital", descriptionText: "Round Trip Time is ${timeRunning} ms")    
+}
+
+public void clearInfoEvent()      { sendInfoEvent('clear') }
+
+public void sendInfoEvent(String info=null) {
+    if (info == null || info == 'clear') {
+        logDebug 'clearing the Status event'
+        sendEvent(name: '_status_', value: 'clear', type: 'digital')
+    }
+    else {
+        logInfo "${info}"
+        sendEvent(name: '_status_', value: info, type: 'digital')
+        runIn(INFO_AUTO_CLEAR_PERIOD, 'clearInfoEvent')            // automatically clear the Info attribute after 1 minute
+    }
+}
+
+
+private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
+    runIn(delay, 'deviceCommandTimeout')
+}
+
+private void scheduleDeviceHealthCheck(int intervalMins) {
+    Random rnd = new Random()
+    schedule("${rnd.nextInt(59)} ${rnd.nextInt(9)}/${intervalMins} * ? * * *", 'ping')
+}
+
+void deviceCommandTimeout() {
+    if (isFP1() || isFP1E()) {
+        logWarn 'no response received (device offline?)'
+        sendHealthStatusEvent("offline")
+    }
+    else {
+        logInfo 'no ping response received (sleepy device)'
+    }
+}
+
+void sendHealthStatusEvent(String value) {
+    if (device.currentValue('healthStatus') != value) {
+        String descriptionText = "healthStatus changed to $value"
+        sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} ${descriptionText}", type: "digital")
+        if (value != 'online') {
+            log.warn "${device.displayName} ${descriptionText}"
+        }
+        else {
+            log.info "${device.displayName} ${descriptionText}"
+        }
+    }
+}
+
+void resetPresence() {
+    if (!(isFP1() || isFP1E() || isFP300())) {
+        logWarn 'resetPresence() is supported only for FP1/FP1E/FP300 devices.'
+        return
+    }
+    logInfo 'reset presence'
+    //resetRegions()
+    sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x0157, DataType.UINT8, 0x01, [mfgCode: 0x115F], 0))
+}
+
+void restartDevice() {
+    if (!(isFP1E() || isFP300())) {
+        logWarn 'restartDevice() is supported only for FP1E/FP300 devices.'
+        return
+    }
+    logInfo 'restarting device...'
+    // Write 0x00 (boolean false) to attribute 0x00E8 (232) to trigger device restart
+    sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x00E8, DataType.BOOLEAN, 0x00, [mfgCode: 0x115F], 0))
+}
+
+void trackTargetDistance() {
+    def enable = "enable"
+    if (!isFP300()) {
+        logWarn 'trackTargetDistance() is supported only for FP300 devices.'
+        return
+    }
+    def value = (enable == "enable" || enable == "1") ? 0x01 : 0x00
+    def action = (value == 0x01) ? "enabled" : "disabled"
+    sendInfoEvent("Requesting target distance tracking")
+    // Write 0x01 to enable or 0x00 to disable attribute 0x0198 (408) for distance tracking
+    sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x0198, DataType.UINT8, value, [mfgCode: 0x115F], 0))
+}
+
+void deleteTargetDistanceAttribute() {
+    if (device.currentValue('targetDistance') != null) {
+        device.deleteCurrentState('targetDistance')
+        logInfo 'targetDistance attribute deleted after 5 minutes'
+    }
+}
+
+void lumiPreventLeave() {
+    logDebug 'lumiPreventLeave(): writing attribute 0x00FC = true'
+    sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x00FC, DataType.BOOLEAN, 0x01, [mfgCode: 0x115F], 0))
+}
+
+void setWatchdogTimer() {
+    boolean watchdogEnabled = (settings.stateResetInterval as Integer) > 0
+    if (watchdogEnabled) {
+        int seconds = (settings.stateResetInterval as int) * 60 * 60
+        runIn(seconds, 'resetState')
+    }
+}
+
+void refresh() {
+    logInfo 'refresh...'
+    List<String> cmds = []
+    if (isFP1E()) {
+        cmds += zigbee.readAttribute(0xFCC0, 0x015B, [mfgCode: 0x115F], delay=200)  // detection range
+    }
+    else if (isFP300()) {
+        /*
+        cmds += zigbee.readAttribute(0xFCC0, 0x00EE, [mfgCode: 0x115F], delay=200)
+        cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x014D, 0x014F, 0x0197, 0x0199, 0x015D, 0x015E], [mfgCode: 0x115F], delay=200)  // FP300 attributes
+        cmds += zigbee.readAttribute(0xFCC0, [0x0162, 0x0170, 0x0192, 0x0193], [mfgCode: 0x115F], delay=200)  // FP300 sampling configuration
+        cmds += zigbee.readAttribute(0xFCC0, [0x0163, 0x0164, 0x0165], [mfgCode: 0x115F], delay=200)  // FP300 temperature reporting config
+        cmds += zigbee.readAttribute(0xFCC0, [0x016A, 0x016B, 0x016C], [mfgCode: 0x115F], delay=200)  // FP300 humidity reporting config
+        cmds += zigbee.readAttribute(0xFCC0, [0x0194, 0x0195, 0x0196], [mfgCode: 0x115F], delay=200)  // FP300 light reporting config
+        cmds += zigbee.readAttribute(0xFCC0, 0x019A, [mfgCode: 0x115F], delay=200)  // FP300 detection range (separate read)
+        cmds += zigbee.readAttribute(0xFCC0, [0x0203, 0x023E, 0x00F7], [mfgCode: 0x115F], delay=200)  // FP300 LED disabled night (0x0203) & schedule (0x023E) + Aqara struct 
+        cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)  // Temperature
+        cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)  // Humidity
+        cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=200)  // Illuminance
+        cmds += zigbee.readAttribute(0x0001, [0x0004, 0x0005, 0x0006], [:], delay=200)
+        */
+        log.trace "refresh() for FP300 - skipped!"
+    }
+    else {
+        logDebug 'no refresh required'
+    }
+    if (cmds != []) {
+        sendZigbeeCommands(cmds)
+    }
+}
+
+// Start Spatial Learning - FP1E only. Sends a single write to ATTR_SPATIAL_LEARNING with value 0x01.
+void startSpatialLearning() {
+    if (!(isFP1E() || isFP300())) {
+        logWarn 'startSpatialLearning() is supported only for FP1E/FP300 devices.'
+        return
+    }
+    logInfo 'Starting FP1E/FP300 Spatial Learning...'
+    List<String> cmds = []
+    cmds += zigbee.writeAttribute(
+        CLUSTER_AQARA_FCC0,
+        ATTR_SPATIAL_LEARNING,
+        hubitat.zigbee.zcl.DataType.UINT8,
+        0x01,
+        [mfgCode: MFG_AQARA_FP1E],
+       100
+    )
+    sendZigbeeCommands(cmds)
+    // transient indicator
+    sendEvent(name: 'spatialLearning', value: 'started', type: 'digital', descriptionText: 'Spatial Learning started')
+    runIn(35, 'spatialLearningReset', [overwrite: true])
+}
+
+private void spatialLearningReset() {
+    sendEvent(name: 'spatialLearning', value: 'idle', type: 'digital', descriptionText: 'Spatial Learning idle')
+    logInfo 'Spatial Learning state reset to idle'
+}
+
+
+static String driverVersionAndTimeStamp() { version() + ' ' + timeStamp() }
+
+void checkDriverVersion() {
+    if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
+        logInfo "Hubitat hub model is ${getModel()}. Updating the settings from driver version ${state.driverVersion} to ${driverVersionAndTimeStamp()}"
+        state.comment = COMMENT_WORKS_WITH
+        if (state.lastBattery != null) state.remove("lastBattery")
+        initializeVars( fullInit = false ) 
+        state.motionStarted = now()
+        if(device.getDataValue('aqaraModel') == null) {
+            setDeviceName()
+        }
+        // Remove obsolete attributes for FP300
+        if (isFP300()) {
+            if (device.currentValue('parentNWK') != null) { device.deleteCurrentState('parentNWK'); logInfo "Removed obsolete parentNWK attribute" }
+            if (device.currentValue('roomActivity') != null) { device.deleteCurrentState('roomActivity'); logInfo "Removed obsolete roomActivity attribute" }
+        }
+        state.driverVersion = driverVersionAndTimeStamp()
+    }
+}
+
+void logsOff(){
+    if (settings?.logEnable) log.info "${device.displayName} debug logging disabled..."
+    device.updateSetting("logEnable",[value:"false",type:"bool"])
+}
+
+
+// called when preferences are saved
+void updated() {
+    logDebug "updated()..."
+    checkDriverVersion()
+    ArrayList<String> cmds = []
+    
+    if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getName()} model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> (driver version ${driverVersionAndTimeStamp()})"
+    if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
+    if (logEnable==true) {
+        runIn(86400, "logsOff", [overwrite: true, misfire: "ignore"])    // turn off debug logging after 24 hours
+        logInfo "Debug logging is will be turned off after 24 hours"
+    }
+    else {
+        unschedule(logsOff)
+    }
+    if (settings?.internalTemperature == false) {
+        device.deleteCurrentState("temperature")
+    }
+    if (settings?.filterSpam == true) {
+        if (device.currentValue('targetDistance') != null) {    
+            device.deleteCurrentState("targetDistance")
+        }
+    }
+
+    // restart the healthCheck timer
+    runIn( DEFAULT_POLLING_INTERVAL, "deviceHealthCheck", [overwrite: true, misfire: "ignore"])
+    
+    // Child device management for FP300
+    if (!isFP300()) {
+        def children = getChildDevices()
+        if (children.size() > 0) {
+            logWarn "Device is not FP300 but has child devices - cleaning up"
+            deleteChildDevices()
+        }
+    } else {
+        // Ensure child exists for FP300
+        createChildDevices()
+    }
+
+    def value = 0
+    if (isP1()) {
+        if (settings?.motionLED != null ) {
+            value = safeToInt( motionLED )
+            if (settings?.logEnable) log.debug "${device.displayName} setting motionLED to ${motionLED}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0152, 0x20, value, [mfgCode: 0x115F], delay=200)
+        }
+    }
+    if (isRTCGQ13LM() || isP1() || isFP1() || isFP1E() || isFP300()) {
+        if (hasParamChanged('motionSensitivity', settings?.motionSensitivity) && settings?.motionSensitivity != 0) {
+            value = safeToInt( motionSensitivity )
+            if (settings?.logEnable) log.debug "${device.displayName} setting motionSensitivity to ${sensitivityOptions[value.toString()]} (${value})"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x010C, 0x20, value, [mfgCode: 0x115F], delay=200)
+            cmds += zigbee.readAttribute(0xFCC0, 0x010C, [mfgCode: 0x115F], delay=200)    // read it back
+            // Will be stored after parse() confirmation
+            if (isFP1E()) {
+                //log.trace "detectionRange = ${settings?.detectionRange}"
+                value = (settings?.detectionRange * 100 as Integer) ?: 600
+                //log.trace "value = ${value}"
+                if (settings?.logEnable) log.debug "${device.displayName} setting detectionRange to ${value}"
+                cmds += zigbee.writeAttribute(0xFCC0, 0x015B, 0x23, value, [mfgCode: 0x115F], delay=201)    // detection range
+                cmds += zigbee.readAttribute(0xFCC0, 0x015B, [mfgCode: 0x115F], delay=201)    // read it back
+            }
+        }
+    }
+    if (isRTCGQ13LM() || isP1() || isT1()) {
+        if (settings?.motionRetriggerInterval != null && settings?.motionRetriggerInterval != 0) {
+            value = safeToInt( motionRetriggerInterval )
+            logDebug "setting motionRetriggerInterval to ${motionRetriggerInterval} (${value})"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0102, 0x20, value.toInteger(), [mfgCode: 0x115F], delay=200)
+            cmds += zigbee.readAttribute(0xFCC0, 0x0102, [mfgCode: 0x115F], delay=200)    // read it back
+        }
+    }
+    //
+    if (isFP1()) { // FP1
+        if (settings?.approachDistance != null) {    // [0:"far", 1:"medium", 2:"near" ]
+            value = safeToInt( approachDistance )
+            if (settings?.logEnable) log.debug "${device.displayName} setting approachDistance to ${approachDistanceOptions[value.toString()]} (${value})"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0146, 0x20, value, [mfgCode: 0x115F], delay=200)
+        }
+        if (settings?.monitoringMode != null) {    // [0:"undirected", 1:"left_right" ]
+            value = safeToInt( monitoringMode )
+            if (settings?.logEnable) log.debug "${device.displayName} setting monitoringMode to ${monitoringModeOptions[value.toString()]} (${value})"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0144, 0x20, value, [mfgCode: 0x115F], delay=200)
+        }
+        device.deleteCurrentState("battery")
+    }
+    //
+    if (isFP300()) {
+        // Physical parameters - only send if changed
+        if (hasParamChanged('presenceDetectionMode', settings?.presenceDetectionMode)) {
+            def modeValue = ["both": 0, "mmwave": 1, "pir": 2][settings.presenceDetectionMode] ?: 0
+            if (settings?.logEnable) log.debug "${device.displayName} setting presenceDetectionMode to ${settings.presenceDetectionMode} (${modeValue})"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0199, 0x20, modeValue, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('absenceDelayTimer', settings?.absenceDelayTimer)) {
+            if (settings?.logEnable) log.debug "${device.displayName} setting absenceDelayTimer to ${settings.absenceDelayTimer} seconds"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0197, 0x23, settings.absenceDelayTimer as Integer, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('pirDetectionInterval', settings?.pirDetectionInterval)) {
+            if (settings?.logEnable) log.debug "${device.displayName} setting pirDetectionInterval to ${settings.pirDetectionInterval} seconds"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x014F, 0x21, settings.pirDetectionInterval as Integer, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('aiInterferenceIdentification', settings?.aiInterferenceIdentification)) {
+            if (settings?.logEnable) log.debug "${device.displayName} setting aiInterferenceIdentification to ${settings.aiInterferenceIdentification}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x015E, 0x20, settings.aiInterferenceIdentification ? 1 : 0, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('aiSensitivityAdaptive', settings?.aiSensitivityAdaptive)) {
+            if (settings?.logEnable) log.debug "${device.displayName} setting aiSensitivityAdaptive to ${settings.aiSensitivityAdaptive}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x015D, 0x20, settings.aiSensitivityAdaptive ? 1 : 0, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        
+        // Virtual parameters - store immediately (local only, not sent to device)
+        if (hasParamChanged('tempOffset', settings?.tempOffset)) {
+            storeParamValue('tempOffset', settings.tempOffset, 'decimal', true)
+            if (settings?.logEnable) log.debug "${device.displayName} updated virtual parameter tempOffset to ${settings.tempOffset}"
+        }
+        if (hasParamChanged('humidityOffset', settings?.humidityOffset)) {
+            storeParamValue('humidityOffset', settings.humidityOffset, 'decimal', true)
+            if (settings?.logEnable) log.debug "${device.displayName} updated virtual parameter humidityOffset to ${settings.humidityOffset}"
+        }
+        
+        // Advanced sampling configuration parameters
+        if (hasParamChanged('tempHumiditySamplingPeriod', settings?.tempHumiditySamplingPeriod)) {
+            def valueMs = (settings.tempHumiditySamplingPeriod as Integer) * 1000
+            if (settings?.logEnable) log.debug "${device.displayName} setting tempHumiditySamplingPeriod to ${settings.tempHumiditySamplingPeriod} seconds"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0162, 0x23, valueMs, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('tempHumiditySamplingFrequency', settings?.tempHumiditySamplingFrequency)) {
+            def freqValue = settings.tempHumiditySamplingFrequency as Integer
+            if (settings?.logEnable) log.debug "${device.displayName} setting tempHumiditySamplingFrequency to ${['Off','Low','Medium','High','Custom'][freqValue]}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0170, 0x20, freqValue, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('temperatureReportingThreshold', settings?.temperatureReportingThreshold)) {
+            def valueCentiDegrees = ((settings.temperatureReportingThreshold as BigDecimal) * 100) as Integer
+            if (settings?.logEnable) log.debug "${device.displayName} setting temperatureReportingThreshold to ${settings.temperatureReportingThreshold}°C"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0164, 0x21, valueCentiDegrees, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('temperatureReportingInterval', settings?.temperatureReportingInterval)) {
+            def valueMs = (settings.temperatureReportingInterval as Integer) * 1000
+            if (settings?.logEnable) log.debug "${device.displayName} setting temperatureReportingInterval to ${settings.temperatureReportingInterval} seconds"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0163, 0x23, valueMs, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('temperatureReportingMode', settings?.temperatureReportingMode)) {
+            def modeValue = settings.temperatureReportingMode as Integer
+            def modeNames = ["unknown", "Threshold only", "Interval only", "Threshold and Interval"]
+            if (settings?.logEnable) log.debug "${device.displayName} setting temperatureReportingMode to ${modeNames[modeValue]}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0165, 0x20, modeValue, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('humidityReportingThreshold', settings?.humidityReportingThreshold)) {
+            def valueHundredths = ((settings.humidityReportingThreshold as BigDecimal) * 100) as Integer
+            if (settings?.logEnable) log.debug "${device.displayName} setting humidityReportingThreshold to ${settings.humidityReportingThreshold}%"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x016B, 0x21, valueHundredths, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('humidityReportingInterval', settings?.humidityReportingInterval)) {
+            def valueMs = (settings.humidityReportingInterval as Integer) * 1000
+            if (settings?.logEnable) log.debug "${device.displayName} setting humidityReportingInterval to ${settings.humidityReportingInterval} seconds"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x016A, 0x23, valueMs, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('humidityReportingMode', settings?.humidityReportingMode)) {
+            def modeValue = settings.humidityReportingMode as Integer
+            def modeNames = ["unknown", "Threshold only", "Interval only", "Threshold and Interval"]
+            if (settings?.logEnable) log.debug "${device.displayName} setting humidityReportingMode to ${modeNames[modeValue]}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x016C, 0x20, modeValue, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('lightSamplingPeriod', settings?.lightSamplingPeriod)) {
+            def valueMs = (settings.lightSamplingPeriod as Integer) * 1000
+            if (settings?.logEnable) log.debug "${device.displayName} setting lightSamplingPeriod to ${settings.lightSamplingPeriod} seconds"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0193, 0x23, valueMs, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('lightSamplingFrequency', settings?.lightSamplingFrequency)) {
+            def freqValue = settings.lightSamplingFrequency as Integer
+            if (settings?.logEnable) log.debug "${device.displayName} setting lightSamplingFrequency to ${['Off','Low','Medium','High','Custom'][freqValue]}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0192, 0x20, freqValue, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('lightReportingInterval', settings?.lightReportingInterval)) {
+            def valueMs = (settings.lightReportingInterval as Integer) * 1000
+            if (settings?.logEnable) log.debug "${device.displayName} setting lightReportingInterval to ${settings.lightReportingInterval} seconds"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0194, 0x23, valueMs, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('lightReportingThreshold', settings?.lightReportingThreshold)) {
+            def valueHundredths = ((settings.lightReportingThreshold as BigDecimal) * 100) as Integer
+            if (settings?.logEnable) log.debug "${device.displayName} setting lightReportingThreshold to ${settings.lightReportingThreshold}%"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0195, 0x21, valueHundredths, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        if (hasParamChanged('lightReportingMode', settings?.lightReportingMode)) {
+            def modeValue = settings.lightReportingMode as Integer
+            def modeNames = ["No reporting", "Threshold only", "Interval only", "Threshold and Interval"]
+            if (settings?.logEnable) log.debug "${device.displayName} setting lightReportingMode to ${modeNames[modeValue]}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0196, 0x20, modeValue, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        
+        // Advanced detection range configuration
+        // Parse the setting to get the bitmap, then compare with stored hex value
+        def parseResult = parseDetectionRangeZones(settings?.detectionRangeZones ?: "")
+        def newBitmapHex = parseResult.success ? String.format('%06X', parseResult.bitmap) : null
+        
+        if (newBitmapHex && hasParamChanged('detectionRangeZones', newBitmapHex)) {
+            // Log any validation errors/warnings
+            if (parseResult.errors) {
+                parseResult.errors.each { err ->
+                    if (err.startsWith("WARNING") || err.startsWith("CRITICAL")) {
+                        logWarn "Detection range: ${err}"
+                    } else {
+                        logInfo "Detection range: ${err}"
+                    }
+                }
+            }
+            
+            def payload = detectionRangeBitmapToPayload(parseResult.bitmap)
+            if (settings?.logEnable) {
+                log.debug "${device.displayName} setting detection range zones: ${parseResult.zones.join(', ')}"
+                log.debug "${device.displayName} detection range bitmap: 0x${newBitmapHex}"
+                log.debug "${device.displayName} detection range payload: ${payload}"
+            }
+            
+            cmds += zigbee.writeAttribute(0xFCC0, 0x019A, 0x41, payload, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        } else if (parseResult.errors && !parseResult.success) {
+            logWarn "Failed to configure detection range: ${parseResult.errors.join('; ')}"
+        }
+        
+        // LED disabled at night (attribute 0x0203, BOOLEAN)
+        def ledChanged = hasParamChanged('ledDisabledNight', settings?.ledDisabledNight)
+        if (ledChanged) {
+            if (settings?.logEnable) log.debug "${device.displayName} setting ledDisabledNight to ${settings.ledDisabledNight}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0203, 0x10, settings.ledDisabledNight ? 1 : 0, [mfgCode: 0x115F], delay=200)
+            // Will be stored after parse() confirmation
+        }
+        
+        // LED night time schedule (attribute 0x023E, UINT32) - send when schedule changes OR when LED disabled night is enabled for first time
+        def scheduleValue = settings?.ledNightTimeSchedule ?: "21:00-09:00"
+        if (hasParamChanged('ledNightTimeSchedule', scheduleValue) || 
+            (settings?.ledDisabledNight == true && ledChanged)) {
+            def schedulePayload = ledNightTimeToPayload(scheduleValue)
+            if (schedulePayload != null) {
+                if (settings?.logEnable) log.debug "${device.displayName} setting ledNightTimeSchedule to ${scheduleValue} (payload: 0x${String.format('%08X', schedulePayload)})"
+                cmds += zigbee.writeAttribute(0xFCC0, 0x023E, 0x23, schedulePayload.intValue(), [mfgCode: 0x115F], delay=200)
+                // Will be stored after parse() confirmation
+            } else {
+                logWarn "Failed to set LED night time schedule: invalid format '${scheduleValue}'"
+            }
+        }
+        
+        // FP300 is battery powered - do not delete battery state
+    }
+    //
+    // Illuminance reporting configuration - only send if any parameter changed
+    if (isLightSensor()) {
+        boolean illumConfigChanged = false
+        illumConfigChanged |= hasParamChanged('illuminanceMinReportingTime', settings?.illuminanceMinReportingTime)
+        illumConfigChanged |= hasParamChanged('illuminanceMaxReportingTime', settings?.illuminanceMaxReportingTime)
+        illumConfigChanged |= hasParamChanged('illuminanceThreshold', settings?.illuminanceThreshold)
+        
+        if (illumConfigChanged) {
+            if (settings?.logEnable) log.debug "${device.displayName} illuminance reporting configuration changed - reconfiguring"
+            cmds += configureIlluminance()
+            // Store immediately (no device confirmation for bind/configure commands)
+            storeParamValue('illuminanceMinReportingTime', settings.illuminanceMinReportingTime, 'number', false)
+            storeParamValue('illuminanceMaxReportingTime', settings.illuminanceMaxReportingTime, 'number', false)
+            storeParamValue('illuminanceThreshold', settings.illuminanceThreshold, 'number', false)
+        }
+    }
+    if (cmds != null && cmds != []) {
+        sendZigbeeCommands( cmds )     
+    }
+    else {
+        logInfo "no preferences were changed that require configuration commands to be sent."
+    }
+    /*
+    // Ensure the zigbeeLogsocket WebSocket is connected for FP300.
+    // updated() is the callback Hubitat invokes when a new driver version is saved,
+    // so this is the reliable place to (re)connect without requiring Configure/Initialize.
+    if (isFP300()) {
+        runIn(3, 'connectZigbeeLogSocket', [overwrite: true])
+    }
+    */
+}    
+
+// called from  initializeVars( fullInit = true)
+void setDeviceName() {
+    String deviceName
+    def currentModelMap = null
+    aqaraModels.each { k, v -> 
+        //log.trace "${k}:${v}" 
+        if (v.model ==  device.getDataValue('model') /*&& v.manufacturer == device.getDataValue('manufacturer')*/) {
+            currentModelMap = k
+            //log.trace "found ${k}"
+            updateDataValue("aqaraModel", currentModelMap)
+            deviceName = aqaraModels[currentModelMap].deviceJoinName
+        }
+    }
+    if (currentModelMap == null) {
+        //log.trace "not found!"
+        if (device.getDataValue('manufacturer') in ['aqara', 'LUMI']) {
+            deviceName = "Aqara Sensor"
+            updateDataValue("aqaraModel", currentModelMap)
+        }
+        else {
+            logWarn "unknown model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}"
+            // don't change the device name when unknown
+            updateDataValue("aqaraModel", currentModelMap)
+        }        
+    }
+    if (deviceName != NULL) {
+        device.setName(deviceName)
+        logInfo "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} <b>aqaraModel ${device.getDataValue('aqaraModel')}</b> deviceName was set to ${deviceName}"
+    }
+    else {
+        logWarn "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} <b>aqaraModel ${device.getDataValue('aqaraModel')}</b> was not found!"
+    }
+}
+
+void initializeVars(boolean fullInit = false) {
+    if (logEnable==true) { log.info "${device.displayName} InitializeVars... fullInit = ${fullInit} (driver version ${driverVersionAndTimeStamp()})" }
+    if (fullInit == true) {
+        state.clear()
+        setDeviceName()
+        state.driverVersion = driverVersionAndTimeStamp()
+    }
+    
+    // Initialize parameter storage system
+    initializeParamStorage()
+    
+    if (fullInit == true || state.health == null) { state.health = [:] }
+    if (fullInit == true || state.rxCounter == null) { state.rxCounter = 0 }
+    if (fullInit == true || state.txCounter == null) { state.txCounter = 0 }
+    if (fullInit == true || state.notPresentCounter == null) { state.notPresentCounter = 0 }
+    if (fullInit == true || state.motionStarted == null) { state.motionStarted = now() }
+    
+    if (fullInit == true || settings?.logEnable == null) { device.updateSetting("logEnable", true) }
+    if (fullInit == true || settings?.txtEnable == null) { device.updateSetting("txtEnable", true) }
+    if (fullInit == true || settings?.internalTemperature == null) { device.updateSetting("internalTemperature", false) }
+    if (fullInit == true || settings?.motionResetTimer == null) { device.updateSetting("motionResetTimer", 30) }
+    
+    if (isLightSensor()) {
+        if (fullInit == true || settings?.illuminanceMinReportingTime == null) { device.updateSetting("illuminanceMinReportingTime", [value: DEFAULT_ILLUMINANCE_MIN_TIME , type:"number"]) }
+        if (fullInit == true || settings?.illuminanceMaxReportingTime == null) { device.updateSetting("illuminanceMaxReportingTime", [value: DEFAULT_ILLUMINANCE_MAX_TIME , type:"number"]) }
+        if (fullInit == true || settings?.illuminanceThreshold == null) { device.updateSetting("illuminanceThreshold", [value: DEFAULT_ILLUMINANCE_THRESHOLD , type:"number"]) }
+        if (fullInit == true || settings?.illuminanceCoeff == null) { device.updateSetting('illuminanceCoeff', [value:1.00, type:'decimal']) }
+    }
+    
+    if (isFP1() || isFP1E()) {
+        device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP1
+    }
+    if (isFP1E()) {
+        if (fullInit == true || settings?.filterSpam == null) { device.updateSetting("filterSpam", true) }
+        if (fullInit == true || settings?.detectionRange == null) { device.updateSetting('detectionRange', [value:6.00, type:'decimal']) }
+    }
+    if (isFP300()) {
+        device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP300
+        if (fullInit == true || settings?.presenceDetectionMode == null) { device.updateSetting("presenceDetectionMode", "both") }
+        if (fullInit == true || settings?.absenceDelayTimer == null) { device.updateSetting("absenceDelayTimer", [value: 30 , type:"number"]) }
+        if (fullInit == true || settings?.pirDetectionInterval == null) { device.updateSetting("pirDetectionInterval", [value: 10 , type:"number"]) }
+        if (fullInit == true || settings?.aiInterferenceIdentification == null) { device.updateSetting("aiInterferenceIdentification", false) }
+        if (fullInit == true || settings?.aiSensitivityAdaptive == null) { device.updateSetting("aiSensitivityAdaptive", false) }
+    }
+    if (fullInit == true || settings.internalTempOffset == null) { device.updateSetting("internalTempOffset", 0) }
+    if (isFP300()) {
+        if (fullInit == true || settings.tempOffset == null) { device.updateSetting("tempOffset", 0) }
+        if (fullInit == true || settings.humidityOffset == null) { device.updateSetting("humidityOffset", 0) }
+    }
+    if (fullInit == true ) { powerSourceEvent() }
+    
+    updateAqaraVersion()
+}
+
+void installed() {
+    log.info "${device.displayName} installed() model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
+    sendHealthStatusEvent("unknown")
+    aqaraBlackMagic()
+    
+    // Create child devices for FP300 (delayed to ensure parent is fully initialized)
+    if (isFP300()) {
+        runIn(2, 'createChildDevices')
+    }
+}
+
+void uninstalled() {
+    log.info "${device.displayName} uninstalled() model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
+}
+
+void configure(boolean fullInit = false) {
+    log.info "${device.displayName} configure...fullInit = ${fullInit} (driver version ${driverVersionAndTimeStamp()})"
+    unschedule()
+    initializeVars(fullInit)
+    runIn( DEFAULT_POLLING_INTERVAL, "deviceHealthCheck", [overwrite: true, misfire: "ignore"])
+    logWarn "<b>if no more logs, please pair the device again to HE!</b>"
+    
+    // Ensure child device exists for FP300
+    if (isFP300()) {
+        runIn(3, 'createChildDevices')
+    }
+    runIn( 10, "aqaraReadAttributes", [overwrite: true])
+}
+
+def initialize() {
+    log.info "${device.displayName} Initialize... (driver version ${driverVersionAndTimeStamp()})"
+    configure(fullInit = true)
+}
+
+Integer safeToInt(val, Integer defaultVal=0) {
+	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
+}
+
+Double safeToDouble(val, Double defaultVal=0.0) {
+	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
+}
+
+void sendZigbeeCommands(List<String> cmds) {
+    if (logEnable) {log.debug "${device.displayName} <b>sending</b> ZigbeeCommands : ${cmds}"}
+	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
+    if (state.txCounter != null) state.txCounter = state.txCounter + 1
+}
+
+// ============================================================================================================
+// PARAMETER STORAGE AND CHANGE DETECTION FUNCTIONS
+// ============================================================================================================
+
+/**
+ * List of virtual (local-only) parameters that are not sent to the device
+ * These are applied during parse() to modify raw values
+ */
+@Field static final List<String> VIRTUAL_PARAMS = [
+    'tempOffset', 
+    'humidityOffset', 
+    'internalTempOffset', 
+    'illuminanceOffset'
+]
+
+/**
+ * Check if a parameter is virtual (local-only, not sent to device)
+ * @param paramName The parameter name to check
+ * @return true if parameter is virtual/local-only
+ */
+Boolean isVirtualParam(String paramName) {
+    return paramName in VIRTUAL_PARAMS
+}
+
+/**
+ * Store a parameter value in state for change detection
+ * @param paramName The parameter name (matches settings.xxx)
+ * @param value The current value to store
+ * @param type The data type ('number', 'decimal', 'enum', 'bool')
+ * @param isLocal True if this is a local-only parameter
+ */
+void storeParamValue(String paramName, Object value, String type, Boolean isLocal = false) {
+    if (state.params == null) {
+        state.params = []
+    }
+    
+    def existing = state.params.find { it.n == paramName }
+    
+    // Check if value actually changed before storing/logging (debounce duplicate device responses)
+    if (existing?.v == value && existing?.t == type && existing?.l == isLocal) {
+        // Value unchanged - skip storage and logging to avoid duplicate responses
+        return
+    }
+    
+    // Remove existing entry if present
+    state.params.removeAll { it.n == paramName }
+    
+    // Add new entry
+    state.params << [n: paramName, t: type, v: value, l: isLocal]
+    
+    if (logEnable) {
+        log.debug "${device.displayName} stored parameter: ${paramName} = ${value} (${type})${isLocal ? ' [local]' : ''}"
+    }
+}
+
+/**
+ * Get stored parameter value for comparison
+ * @param paramName The parameter name to retrieve
+ * @return The stored value, or null if not found
+ */
+Object getStoredParamValue(String paramName) {
+    if (state.params == null) {
+        return null
+    }
+    def param = state.params.find { it.n == paramName }
+    return param?.v
+}
+
+/**
+ * Check if a parameter value has changed from stored value
+ * Handles type conversions and null checks
+ * @param paramName The parameter name to check
+ * @param newValue The new value from settings
+ * @return true if value has changed or is not yet stored
+ */
+Boolean hasParamChanged(String paramName, Object newValue) {
+    def storedValue = getStoredParamValue(paramName)
+    
+    // If not stored yet, consider it changed (first time setup)
+    if (storedValue == null) {
+        return newValue != null
+    }
+    
+    // If new value is null and stored exists, no change
+    if (newValue == null) {
+        return false
+    }
+    
+    // Normalize values for comparison
+    def normalizedNew = normalizeParamValue(newValue)
+    def normalizedStored = normalizeParamValue(storedValue)
+    
+    return normalizedNew != normalizedStored
+}
+
+/**
+ * Normalize parameter values for comparison
+ * Handles type conversions (e.g., "1" vs 1, "true" vs true)
+ * @param value The value to normalize
+ * @return Normalized value for comparison
+ */
+private Object normalizeParamValue(Object value) {
+    if (value == null) return null
+    
+    // Convert string numbers to actual numbers
+    if (value instanceof String) {
+        if (value.isInteger()) {
+            return value.toInteger()
+        }
+        if (value.isDouble()) {
+            return value.toDouble()
+        }
+        if (value.toLowerCase() in ['true', 'false']) {
+            return value.toLowerCase() == 'true'
+        }
+    }
+    
+    return value
+}
+
+/**
+ * Initialize or migrate parameter storage
+ * Called during configure() or driver upgrade
+ */
+void initializeParamStorage() {
+    if (state.params == null) {
+        state.params = []
+        logDebug "Initialized parameter storage"
+    }
+    
+    // Check if driver version changed - may need migration
+    if (state.driverVersion != version()) {
+        logInfo "Driver version changed from ${state.driverVersion} to ${version()}"
+        state.driverVersion = version()
+        // Migration logic can be added here if needed
+    }
+}
+
+/**
+ * Clear all stored parameters (for testing/reset)
+ */
+void clearParamStorage() {
+    state.params = []
+    logInfo "Cleared all stored parameters"
+}
+
+/**
+ * Parse and validate detection range zone input
+ * @param input User input string (e.g., "0.5-2.0" or "0.25-1.5,3.0-5.0")
+ * @return Map with [success: boolean, bitmap: Integer, zones: List, errors: List]
+ */
+Map parseDetectionRangeZones(String input) {
+    def result = [success: true, bitmap: 0, zones: [], errors: []]
+    
+    // Empty input = all zones enabled (safest default)
+    if (!input || input.trim().isEmpty()) {
+        result.bitmap = 0xFFFFFF  // All 24 bits set
+        result.zones = ["0.00-6.00m (all zones)"]
+        return result
+    }
+    
+    // Parse comma-separated ranges
+    def ranges = input.split(',').collect { it.trim() }
+    def enabledBits = [] as Set
+    
+    ranges.each { range ->
+        // Parse "start-end" format
+        def parts = range.split('-')
+        if (parts.size() != 2) {
+            result.errors << "Invalid format '${range}' (expected 'start-end')"
+            return
+        }
+        
+        try {
+            def startM = parts[0].trim().replaceAll(/(?i)m$/, '') as BigDecimal
+            def endM   = parts[1].trim().replaceAll(/(?i)m$/, '') as BigDecimal
+            
+            // Validation: Range limits
+            if (startM < 0 || startM > 6.0) {
+                result.errors << "Start ${startM}m out of range (0.00-6.00m)"
+                startM = Math.max(0, Math.min(6.0, startM))  // Auto-correct
+                result.errors << "Auto-corrected to ${startM}m"
+            }
+            if (endM < 0 || endM > 6.0) {
+                result.errors << "End ${endM}m out of range (0.00-6.00m)"
+                endM = Math.max(0, Math.min(6.0, endM))  // Auto-correct
+                result.errors << "Auto-corrected to ${endM}m"
+            }
+            
+            // Validation: Start must be less than end
+            if (startM >= endM) {
+                result.errors << "Invalid range ${startM}m-${endM}m (start >= end)"
+                // Auto-correct: swap them
+                def temp = startM
+                startM = endM
+                endM = temp
+                result.errors << "Auto-corrected to ${startM}m-${endM}m"
+            }
+            
+            // Convert to zone indices (0.25m resolution)
+            // Zone 0 = 0.00-0.25m, Zone 1 = 0.25-0.50m, etc.
+            def startZone = (int)(startM / 0.25)
+            def endZone = (int)Math.ceil(endM / 0.25) - 1
+            
+            // Cap at 23 (max zone for 6.0m)
+            startZone = Math.max(0, Math.min(23, startZone))
+            endZone = Math.max(0, Math.min(23, endZone))
+            
+            // Enable all zones in this range
+            for (int i = startZone; i <= endZone; i++) {
+                enabledBits.add(i)
+            }
+            
+            result.zones << "${startM}m-${endM}m (zones ${startZone}-${endZone})"
+            
+        } catch (NumberFormatException e) {
+            result.errors << "Invalid number in '${range}'"
+        }
+    }
+    
+    // Convert bit set to 24-bit bitmap
+    enabledBits.each { bit ->
+        result.bitmap |= (1 << bit)
+    }
+    
+    // Mark as failed if critical errors
+    if (result.bitmap == 0) {
+        result.success = false
+        result.errors << "CRITICAL: No valid zones enabled"
+    }
+    
+    return result
+}
+
+/**
+ * Convert 24-bit bitmap to Zigbee octet string payload for detection range
+ * @param bitmap 24-bit integer bitmap
+ * @return Hex string for zigbee.writeAttribute payload (with length prefix for OCTET_STRING)
+ */
+String detectionRangeBitmapToPayload(int bitmap) {
+    // OCTET_STRING format: length byte + data bytes
+    // Payload: 0x0003 prefix (2 bytes) + 24-bit bitmap (3 bytes) = 5 bytes total
+    // Result: 05 03 00 XX XX XX (length=5, then 5 data bytes in little-endian)
+    def byte1 = bitmap & 0xFF
+    def byte2 = (bitmap >> 8) & 0xFF
+    def byte3 = (bitmap >> 16) & 0xFF
+    
+    return String.format("050300%02X%02X%02X", byte1, byte2, byte3)
+}
+
+/**
+ * Parse LED night time string to UINT32 value for Z2M-compatible format
+ * @param timeRange String in format "HH:MM-HH:MM" (e.g., "21:00-09:00")
+ * @return Long value in little-endian format 0xMMHHmmhh (endMin|endHour|startMin|startHour) or null if invalid
+ */
+Long ledNightTimeToPayload(String timeRange) {
+    // Default schedule if empty
+    if (!timeRange || timeRange.trim().isEmpty()) {
+        timeRange = "21:00-09:00"
+    }
+    
+    // Parse "HH:MM-HH:MM" format
+    def parts = timeRange?.trim()?.split('-')
+    if (!parts || parts.size() != 2) {
+        logWarn "Invalid LED night time format: ${timeRange} (expected 'HH:MM-HH:MM')"
+        return null
+    }
+    
+    try {
+        def start = parts[0].trim().split(':')
+        def end = parts[1].trim().split(':')
+        
+        if (start.size() != 2 || end.size() != 2) {
+            logWarn "Invalid time format in: ${timeRange}"
+            return null
+        }
+        
+        def startHour = start[0] as int
+        def startMin = start[1] as int
+        def endHour = end[0] as int
+        def endMin = end[1] as int
+        
+        // Validate ranges
+        if (startHour < 0 || startHour > 23 || endHour < 0 || endHour > 23) {
+            logWarn "Hour out of range (0-23) in: ${timeRange}"
+            return null
+        }
+        if (startMin < 0 || startMin > 59 || endMin < 0 || endMin > 59) {
+            logWarn "Minute out of range (0-59) in: ${timeRange}"
+            return null
+        }
+        
+        // UINT32 format (little-endian): 0xMMHHmmhh = (endMin << 24) | (endHour << 16) | (startMin << 8) | startHour
+        // Example: "21:00-09:00" = 0x00091500 = startHour=0x15(21), startMin=0x00, endHour=0x09, endMin=0x00
+        long value = (long)startHour | ((long)startMin << 8) | ((long)endHour << 16) | ((long)endMin << 24)
+        return value
+    } catch (Exception e) {
+        logWarn "Failed to parse LED night time '${timeRange}': ${e.message}"
+        return null
+    }
+}
+
+/**
+ * Consolidate consecutive 0.25m zones into readable ranges
+ * @param zones List of individual zone strings (e.g., ["0.00-0.25m", "0.25-0.50m"])
+ * @return Consolidated string (e.g., "0.00-0.50m, 1.00-2.00m")
+ */
+String consolidateZoneRanges(List zones) {
+    if (!zones) return "none"
+    
+    def ranges = []
+    def currentStart = null
+    def currentEnd = null
+    
+    zones.each { zone ->
+        def parts = zone.replace('m', '').split('-')
+        def start = parts[0] as BigDecimal
+        def end = parts[1] as BigDecimal
+        
+        if (currentStart == null) {
+            currentStart = start
+            currentEnd = end
+        } else if (start == currentEnd) {
+            // Consecutive zone - extend range
+            currentEnd = end
+        } else {
+            // Gap - save current range and start new one
+            ranges << "${String.format('%.2f', currentStart)}-${String.format('%.2f', currentEnd)}m"
+            currentStart = start
+            currentEnd = end
+        }
+    }
+    
+    // Add final range
+    if (currentStart != null) {
+        ranges << "${String.format('%.2f', currentStart)}-${String.format('%.2f', currentEnd)}m"
+    }
+    
+    return ranges.join(', ')
+}
+
+// ============================================================================================================
+
+// device Web UI command
+void setMotion(final String mode) {
+    switch (mode) {
+        case "active" : 
+            handleMotion(true, isDigital=true)
+            if (isFP1() || isFP1E() || isFP300()) {
+                roomStateEvent("occupied", isDigital=true)
+                presenceTypeEvent("enter", isDigital=true)
+            }
+            break
+        case "inactive" :
+            handleMotion(false, isDigital=true)
+            if (isFP1() || isFP1E() || isFP300()) {
+                roomStateEvent("unoccupied", isDigital=true)
+                presenceTypeEvent("leave", isDigital=true)
+                resetPresence()
+            }
+            break
+        default :
+            logWarn "select motion action"
+            break
+    }
+}
+
+String integerToHexString(BigDecimal value, Integer minBytes, boolean reverse=false) {
+    return integerToHexString(value.intValue(), minBytes, reverse=reverse)
+}
+
+String integerToHexString(Integer value, Integer minBytes, boolean reverse=false) {
+    if(reverse == true) {
+        return HexUtils.integerToHexString(value, minBytes).split("(?<=\\G..)").reverse().join()
+    } else {
+        return HexUtils.integerToHexString(value, minBytes)
+    }
+    
+}
+
+void aqaraReadAttributes() {
+    List<String> cmds = []
+
+    if (isT1()) {             // RTCGQ12LM Aqara T1 human body movement and illuminance sensor
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)     // TODO: check - battery voltage
+        cmds += zigbee.readAttribute(0xFCC0, 0x0102, [mfgCode: 0x115F], delay=200)
+    }
+    else if (isRTCGQ13LM()) {         // Aqara high precision motion sensor
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // TODO: check - battery voltage
+        cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay=200)
+    }
+    else if (isP1()) {    // Aqara P1 human body movement and illuminance sensor
+        cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C, 0x0152], [mfgCode: 0x115F], delay=200)
+    }
+    else if (isFP1() || isFP1E()) {  // Aqara presence detector FP1 
+        cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x0144, 0x0146], [mfgCode: 0x115F], delay=200)
+    }
+    else if (isFP300()) {  // Aqara FP300 presence detector 
+        //cmds += zigbee.readAttribute(0xFCC0, [0x014D, 0x014F, 0x015D, 0x015E, 0x0197, 0x0199], [mfgCode: 0x115F], delay=200)  // Removed 0x0018 (unsupported)
+        log.trace "aqaraReadAttributes() for FP300 - SKIPPED!"
+    }
+    else if (isLightSensorAqara()) {
+        cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x115F], delay=200)
+        cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x126E], delay=200)    // added 05/14/2023 - try both Aqara and Xiaomi codes
+    }
+    else if (isLightSensorXiaomi()) {
+        cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x126E], delay=201)
+        cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x115F], delay=202)
+        cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=203)
+    }
+    else {
+        logWarn "skipped unknown device ${device.getDataValue('manufacturer')} ${device.getDataValue('model')}"
+    }    
+    sendZigbeeCommands( cmds )       
+}
+
+void aqaraBlackMagic() {
+    List<String> cmds = []
+
+    if (isP1()) {
+        cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0005], [:], delay=200)
+    }
+    else if (isFP1() /*|| isFP1E()*/) {
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",]
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 FF 00 41 10 02 32 71 76 20 79 16 48 28 87 18 12 21 55 72 36}  {0x0104}", "delay 50",]      // FP1 write attr 0xFF 16 bytes
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 07 01 01 ff ff 00 00 ff}  {0x0104}", "delay 50",]                                 // FP1 write attr 0x0150 8 bytes
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 03 06 55 35}  {0x0104}", "delay 50",]                                             // FP1 (seq:5) write attr 0x0150 4 bytes
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 07 01 02 ff ff 00 00 ff}  {0x0104}", "delay 50",]                                 // FP1 (seq:6) write attr 0x0150 8 bytes
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 03 06 55 35}  {0x0104}", "delay 50",]                                             // FP1 (seq:7) write attr 0x0150 4 bytes
+        cmds += zigbee.writeAttribute(0xFCC0, 0x0155, 0x20, 0x01, [mfgCode: 0x115F], delay=50)                                                                                                // FP1 (seq 8) write attr 0x0155 : 1 byte 01
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 f2 ff 41 aa 74 02 44 00 9c 03 20}  {0x0104}", "delay 50",]                                 // FP1 (seq:9) write attr 0xfff2 8 bytes
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 f2 ff 41 aa 74 02 44 01 9b 01 20}  {0x0104}", "delay 50",]                                 // FP1 (seq:10) write attr 0xfff2 8 bytes
+        //cmds += activeEndpoints()         
+        logDebug "aqaraBlackMagic() for FP1"
+    }
+    else if (isFP1E()) {
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",]
+//        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 FF 00 41 10 02 32 71 76 20 79 16 48 28 87 18 12 21 55 72 36}  {0x0104}", "delay 50",]      // FP1 write attr 0xFF 16 bytes
+//        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 07 01 01 ff ff 00 00 ff}  {0x0104}", "delay 50",]                                 // FP1 write attr 0x0150 8 bytes
+//        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 03 06 55 35}  {0x0104}", "delay 50",]                                             // FP1 (seq:5) write attr 0x0150 4 bytes
+//        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 07 01 02 ff ff 00 00 ff}  {0x0104}", "delay 50",]                                 // FP1 (seq:6) write attr 0x0150 8 bytes
+//        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 03 06 55 35}  {0x0104}", "delay 50",]                                             // FP1 (seq:7) write attr 0x0150 4 bytes
+//        cmds += zigbee.writeAttribute(0xFCC0, 0x0155, 0x20, 0x01, [mfgCode: 0x115F], delay=50)                                                                                                // FP1 (seq 8) write attr 0x0155 : 1 byte 01
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 f2 ff 41 aa 74 02 44 00 9c 03 20}  {0x0104}", "delay 50",]                                 // FP1 (seq:9) write attr 0xfff2 8 bytes
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 f2 ff 41 aa 74 02 44 01 9b 01 20}  {0x0104}", "delay 50",]                                 // FP1 (seq:10) write attr 0xfff2 8 bytes
+        //cmds += activeEndpoints()         
+        logDebug "aqaraBlackMagic() for FP1E"
+    }
+    else if (isFP300()) {
+        /*
+        cmds += zigbee.readAttribute(0xFCC0, 0x00EE, [mfgCode: 0x115F], delay=200)   // Read OTA data; makes the device expose more attributes related to OTA
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
+        cmds += zigbee.configureReporting(0xFCC0, 0x0142, 0x20, 0, 300, 1, [mfgCode: 0x115F], delay=200)   // Configure presence (0x0142) reporting: min=0s, max=300s, change=1
+        cmds += zigbee.configureReporting(0xFCC0, 0x014D, 0x20, 0, 300, 1, [mfgCode: 0x115F], delay=200)   // Configure PIR detection (0x014D) reporting: min=0s, max=300s, change=1
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}"    // bind Illuminance Measurement cluster
+        cmds += zigbee.configureReporting(0x0400, 0x0000, 0x21, 10, 300, 500, [:], delay=200)     // configure illuminance reporting: min=10s, max=300s, change=500 (raw)
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0405 {${device.zigbeeId}} {}"    // bind Relative Humidity Measurement cluster
+        cmds += zigbee.configureReporting(0x0405, 0x0000, 0x21, 10, 300, 100, [:], delay=200)     // configure humidity reporting: min=10s, max=300s, change=1% (100 in units of 0.01%)
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}"    // bind Temperature Measurement cluster
+        cmds += zigbee.configureReporting(0x0402, 0x0000, 0x29, 10, 300, 20, [:], delay=200)      // configure temperature reporting: min=10s, max=300s, change=0.2°C (20 in units of 0.01°C)
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}"    // bind Basic cluster for button press (attr 0x0005)
+        cmds += zigbee.configureReporting(0x0000, 0x0005, 0x42, 0, 7200, null, [:], delay=200)    // configure reporting: Basic attr 0x0005 (CharacterString), button press indicator
+        cmds += zigbee.readAttribute(0xFCC0, 0x010C, [mfgCode: 0x115F], delay=200)   // Read motion sensitivity
+        cmds += zigbee.readAttribute(0xFCC0, 0x0142, [mfgCode: 0x115F], delay=200)   // Read current presence
+        cmds += zigbee.readAttribute(0xFCC0, 0x014D, [mfgCode: 0x115F], delay=200)   // Read current PIR detection
+        cmds += zigbee.readAttribute(0xFCC0, 0x014F, [mfgCode: 0x115F], delay=200)   // Read current PIR interval
+        cmds += zigbee.readAttribute(0xFCC0, 0x0197, [mfgCode: 0x115F], delay=200)   // Read current absence delay timer value
+        cmds += zigbee.readAttribute(0xFCC0, 0x019A, [mfgCode: 0x115F], delay=200)   // Read detection range
+        */
+
+        cmds += zigbee.readAttribute(0xFCC0, 0x00EE, [mfgCode: 0x115F], delay=200)   // Read OTA data; makes the device expose more attributes related to OTA
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
+
+
+        // Replicating Aqara E1-style init
+        cmds += zigbee.readAttribute(0xFCC0, 0x0142, [mfgCode: 0x115F], delay = 200)        // seq 80
+        //cmds += ["he raw 0x${device.deviceNetworkId} 1 1 0xFCC0 {04 5F 11 53 02 FF 00 41 10 09 16 81 10 89 42 59 66 26 46 36 19 55 92 51 24} {0x0104}", "delay 200"]    // seq 81
+        cmds += aqaraFp300Write00ffRandomTokenCmd(200)
+        cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x115F], delay = 100)        // seq 82
+        cmds += zigbee.readAttribute(0x0402, 0x0000, [mfgCode: 0x115F], delay = 100)        // seq 83
+        cmds += zigbee.readAttribute(0x0405, 0x0000, [mfgCode: 0x115F], delay = 100)        // seq 84
+        cmds += zigbee.readAttribute(0x0001, 0x0021, [mfgCode: 0x115F], delay = 100)        // seq 85
+
+
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
+        cmds += zigbee.configureReporting(0xFCC0, 0x0142, 0x20, 0, 300, 1, [mfgCode: 0x115F], delay=200)   // Configure presence (0x0142) reporting: min=0s, max=300s, change=1
+        cmds += zigbee.configureReporting(0xFCC0, 0x014D, 0x20, 0, 300, 1, [mfgCode: 0x115F], delay=200)   // Configure PIR detection (0x014D) reporting: min=0s, max=300s, change=1
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}"    // bind Basic cluster for button press (attr 0x0005)
+        cmds += zigbee.configureReporting(0x0000, 0x0005, 0x42, 0, 7200, null, [:], delay=200)    // configure reporting: Basic attr 0x0005 (CharacterString), button press indicator
+
+
+
+
+        cmds += zigbee.readAttribute(0xFCC0, 0x010C, [mfgCode: 0x115F], delay=200)   // Read motion sensitivity
+        cmds += zigbee.readAttribute(0xFCC0, 0x0142, [mfgCode: 0x115F], delay=200)   // Read current presence
+        cmds += zigbee.readAttribute(0xFCC0, 0x014D, [mfgCode: 0x115F], delay=200)   // Read current PIR detection
+        cmds += zigbee.readAttribute(0xFCC0, 0x014F, [mfgCode: 0x115F], delay=200)   // Read current PIR interval
+        cmds += zigbee.readAttribute(0xFCC0, 0x0197, [mfgCode: 0x115F], delay=200)   // Read current absence delay timer value
+        cmds += zigbee.readAttribute(0xFCC0, 0x019A, [mfgCode: 0x115F], delay=200)   // Read detection range
+
+
+
+        logDebug "aqaraBlackMagic() for FP300"
+    }
+    else if (isLightSensorXiaomi() || isLightSensorAqara()) {
+        cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 50",]
+        cmds += zigbee.configureReporting(0x0001, 0x0020, 0x20, 3600, 3600, null, [:], delay=208)
+        cmds += zigbee.reportingConfiguration(0x0001, 0x0020, [:], 201)
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=202)
+		cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}", "delay 50",]
+        cmds += configureIlluminance()
+	    cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=207)
+    }
+    else {
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}"    // bind Basic cluster for button press reports (attr 0x0005)
+        cmds += zigbee.configureReporting(0x0000, 0x0005, 0x42, 0, 7200, null, [:], delay=200)    // configure reporting: Basic attr 0x0005 (CharacterString), button press indicator
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // TODO: check - battery voltage
+        cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay=200)    // motion sensitivity, including FP1E
+    }
+    //cmds += activeEndpoints()
+    sendZigbeeCommands( cmds )
+}
+
+
+private List<String> aqaraFp300Write00ffRandomTokenCmd(final Integer delayMs = 200) {
+    // Generate 16 Aqara-style BCD-like bytes: every nibble is 0..9
+    // Example: 62 03 01 70 53 46 71 50 74 78 65 63 46 33 58 42
+
+    def token = (1..16).collect {
+        String.format(
+            '%X%X',
+            ((Math.random() * 10) as int),
+            ((Math.random() * 10) as int)
+        )
+    }.join(' ')
+
+    if (logEnable) {
+        log.debug "${device.displayName} Aqara FP300 0x00FF random token: ${token}"
+    }
+
+    return [
+        "he raw 0x${device.deviceNetworkId} 1 1 0xFCC0 {04 5F 11 53 02 FF 00 41 10 ${token}} {0x0104}",
+        "delay ${delayMs}"
+    ]
+}
+
+
+
+
+List<String> activeEndpoints() {
+    List<String> cmds = []
+    cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0005 {00 ${zigbee.swapOctets(device.deviceNetworkId)}} {0x0000}"] //get all the endpoints...
+    String endpointIdTemp = endpointId == null ? "01" : endpointId
+    cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0004 {00 ${zigbee.swapOctets(device.deviceNetworkId)} $endpointIdTemp} {0x0000}"]
+    return cmds    
+}
+
+// TIME CLUSTER: respond to time-sync requests (cluster 0x000A) is now handled on Hubitat platform level!
+
+// credits @thebearmay
+String getModel(){
+    try{
+        String model = getHubVersion() // requires >=2.2.8.141
+    } catch (ignore){
+        try{
+            httpGet("http://${location.hub.localIP}:8080/api/hubitat.xml") { res ->
+                model = res.data.device.modelName
+            return model
+            }        
+        } catch(ignore_again) {
+            return ""
+        }
+    }
+}
+
+// credits @thebearmay
+boolean isCompatible(Integer minLevel) { //check to see if the hub version meets the minimum requirement ( 7 or 8 )
+    String model = getModel()            // <modelName>Rev C-7</modelName>
+    String[] tokens = model.split('-')
+    String revision = tokens.last()
+    return (Integer.parseInt(revision) >= minLevel)
+}
+
+void updateAqaraVersion() {
+    def application = device.getDataValue("application") 
+    if (application != null) {
+        def str = "0.0.0_" + String.format("%04d", zigbee.convertHexToInt(application.substring(0, Math.min(application.length(), 2))));
+        if (device.getDataValue("aqaraVersion") != str) {
+            device.updateDataValue("aqaraVersion", str)
+            logInfo "aqaraVersion set to $str"
+        }
+    }
+}
+
+void logDebug(final String msg) {
+    if (settings?.logEnable) {
+        log.debug "${device.displayName} " + msg
+    }
+}
+
+void logInfo(final String msg) {
+    if (settings?.txtEnable) {
+        log.info "${device.displayName} " + msg
+    }
+}
+
+void logWarn(final String msg) {
+    if (settings?.logEnable) {
+        log.warn "${device.displayName} " + msg
+    }
+}
+
+List<String> configureIlluminance() {
+    List<String> cmds = []
+    int secondsMinLux = settings.illuminanceMinReportingTime ?: DEFAULT_ILLUMINANCE_MIN_TIME
+    int secondsMaxLux = settings.illuminanceMaxReportingTime ?: DEFAULT_ILLUMINANCE_MAX_TIME
+    int variance = settings.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD
+    logDebug "configureIlluminance: min=${secondsMinLux} max=${secondsMaxLux} delta=${variance}"
+    cmds += zigbee.configureReporting(0x0400, 0x0000, DataType.UINT16, secondsMinLux as int, secondsMaxLux as int, variance as int, [:], delay=201)
+    cmds += zigbee.reportingConfiguration(0x0400, 0x0000, [:], 203)
+    return cmds 
+}
+
+void test(String description ) {
+        List<String> cmds = []
+        cmds = zigbee.writeAttribute(0xFCC0, 0x015B, 0x23, 420, [mfgCode: 0x115F], delay=200)
+        log.trace "test() ${cmds}"
+        sendZigbeeCommands( cmds )
+
+}
