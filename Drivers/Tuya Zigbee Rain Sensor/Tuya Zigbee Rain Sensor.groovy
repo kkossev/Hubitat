@@ -15,13 +15,14 @@
  * ver. 3.0.0  2024-08-08 kkossev  - first test version
  * ver. 3.0.1  2024-08-09 kkossev  - added capability 'WaterSensor'; rainSensorVoltage scale 1000; illuminance changed to illuminanceVoltage and scale 1000; 
  * ver. 3.0.2  2024-09-15 kkossev  - fixed exception in resetPreferencesToDefaults(); refresh using queryAllTuyaDP(); force 2 minutes health check interval; illuminanceVoltage event bug fix;
- * ver. 3.0.3  2026-05-29 kkossev  - added capability 'IlluminanceMeasurement'; illuminance (lux) is derived from averageLightIntensity20mins using the calibratable illuminanceCoeff preference;
+ * ver. 3.0.3  2026-05-29 Alex4Dev - added capability 'IlluminanceMeasurement'; illuminance (lux) is derived from averageLightIntensity20mins using the calibratable illuminanceCoeff preference;
+ * ver. 3.0.4  2026-06-22 kkossev -  included deviceProfileLib ver. 3.5.6  2026-06-04 (bugfix)
  *
  *                                   TODO: HPM
  */
 
-static String version() { "3.0.3" }
-static String timeStamp() {"2026/05/29 10:22 AM"}
+static String version() { "3.0.4" }
+static String timeStamp() {"2026/06/22 10:36 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
