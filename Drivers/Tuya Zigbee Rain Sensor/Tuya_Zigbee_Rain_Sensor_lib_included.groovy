@@ -15,16 +15,18 @@
  * ver. 3.0.0  2024-08-08 kkossev  - first test version
  * ver. 3.0.1  2024-08-09 kkossev  - added capability 'WaterSensor'; rainSensorVoltage scale 1000; illuminance changed to illuminanceVoltage and scale 1000; 
  * ver. 3.0.2  2024-09-15 kkossev  - fixed exception in resetPreferencesToDefaults(); refresh using queryAllTuyaDP(); force 2 minutes health check interval; illuminanceVoltage event bug fix;
- *                                   
+ * ver. 3.0.3  2026-05-29 kkossev  - added capability 'IlluminanceMeasurement'; illuminance (lux) is derived from averageLightIntensity20mins using the calibratable illuminanceCoeff preference;
+ *
  *                                   TODO: HPM
  */
 
-static String version() { "3.0.2" }
-static String timeStamp() {"2024/09/15 10:22 AM"}
+static String version() { "3.0.3" }
+static String timeStamp() {"2026/05/29 10:22 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = false   // disable it for production
+@Field static final BigDecimal DEFAULT_ILLUMINANCE_COEFF = 1000.0   // volts -> lux multiplier (the device reports a raw voltage, calibrate against a known reference)
 
 import groovy.transform.Field
 import groovy.transform.CompileStatic
@@ -43,7 +45,8 @@ metadata {
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Rain%20Sensor/Tuya_Zigbee_Rain_Sensor_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
-        capability "WaterSensor"        
+        capability "WaterSensor"
+        capability "IlluminanceMeasurement"
 
         attribute 'dropletDetectionState',       'enum',    ['off', 'on']
         attribute 'battery',                     'number'
@@ -73,6 +76,7 @@ metadata {
         }
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables events logging.'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_DEBUG_LOGGING, description: 'Turns on debug logging for 24 hours.'
+        input name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Coefficient</b>', defaultValue: DEFAULT_ILLUMINANCE_COEFF, description: 'Multiplier used to convert the light sensor voltage (V) into illuminance (lux): illuminance = round(averageLightIntensity20mins * coeff). The device reports a raw voltage, not calibrated lux - adjust this against a known reference if needed.'
         // the rest of the preferences are inputIt from the deviceProfileLib and from the included libraries
     }
 }
@@ -93,6 +97,7 @@ metadata {
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences', 'printFingerprints':'printFingerprints', 'printPreferences':'printPreferences'],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0001,0500,EF00", outClusters:"0003,0004,0006,1000,000A,0019", model:"TS0207", manufacturer:"_TZ3210_tgvtvdoc", controllerType: "ZGB", deviceJoinName: 'Tuya Zigbee Rain Sensor'],
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,EF00,0001,0400", outClusters:"", model:"TS0601", manufacturer:"_TZE200_u6x1zyv2", controllerType: "ZGB", deviceJoinName: 'Tuya Zigbee Rain Sensor'],
             ],
             tuyaDPs:        [
                 [dp:1,   name:'dropletDetectionState',       type:'enum',    rw: 'ro', defVal:'0', map:[0:'off', 1:'on'], description:'Droplet Detection State'],
@@ -137,12 +142,27 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, value
     logTrace "customProcessDeviceProfileEvent(${name}, ${valueScaled}) called"
     Map eventMap = [name: name, value: valueScaled, unit: unitText, descriptionText: descText, type: 'physical', isStateChange: true]
     switch (name) {
+        case 'averageLightIntensity20mins' :
+            sendEvent(eventMap)    // send the raw light intensity voltage event as usual
+            logTrace "event ${name} sent w/ value ${valueScaled}"
+            logInfo "${descText}"
+            sendIlluminanceEvent(valueScaled)    // derive and send the illuminance (lux) event
+            break
         default :
             sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
             logTrace "event ${name} sent w/ value ${valueScaled}"
             logInfo "${descText}"   // TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
             break
     }
+}
+
+// derives the illuminance (lux) value from the light sensor voltage using the calibratable illuminanceCoeff preference
+void sendIlluminanceEvent(illuminanceVoltage) {
+    BigDecimal coeff = (settings?.illuminanceCoeff != null) ? safeToBigDecimal(settings?.illuminanceCoeff) : DEFAULT_ILLUMINANCE_COEFF
+    Integer lux = Math.round(safeToDouble(illuminanceVoltage) * coeff.toDouble()) as Integer
+    String descText = "illuminance is ${lux} lux (derived from ${illuminanceVoltage} V)"
+    sendEvent(name: 'illuminance', value: lux, unit: 'lx', descriptionText: descText, type: 'physical', isStateChange: true)
+    logInfo "${descText}"
 }
 
 public void customParseIasMessage(final String description) {
@@ -248,6 +268,7 @@ void customInitEvents(final boolean fullInit=false) {
     if ((device.currentState('dropletDetectionState')?.value == null)) { sendEvent(name: 'dropletDetectionState', value: 'off', type:'digital') }
     if ((device.currentState('battery')?.value == null)) { sendEvent(name: 'battery', value: 0, unit:'%', type:'digital') }
     if ((device.currentState('illuminanceVoltage')?.value == null)) { sendEvent(name: 'illuminanceVoltage', value: 0.0, unit:'V', type:'digital') }
+    if ((device.currentState('illuminance')?.value == null)) { sendEvent(name: 'illuminance', value: 0, unit:'lx', type:'digital') }
     if ((device.currentState('averageLightIntensity20mins')?.value == null)) { sendEvent(name: 'averageLightIntensity20mins', value: 0.0, unit:'V', type:'digital') }
     if ((device.currentState('todaysMaxLightIntensity')?.value == null)) { sendEvent(name: 'todaysMaxLightIntensity', value: 0.0, unit:'V', type:'digital') }
     if ((device.currentState('cleaningReminder')?.value == null)) { sendEvent(name: 'cleaningReminder', value: 'off', type:'digital') }
@@ -601,7 +622,7 @@ List<String> zclWriteAttribute(Map attributesMap, int scaledValue) { // library 
         map['cluster'] = hubitat.helper.HexUtils.hexStringToInt((attributesMap.at).split(':')[0]) as Integer // library marker kkossev.deviceProfileLib, line 326
         map['attribute'] = hubitat.helper.HexUtils.hexStringToInt((attributesMap.at).split(':')[1]) as Integer // library marker kkossev.deviceProfileLib, line 327
         map['dt']  = (attributesMap.dt != null && attributesMap.dt != '') ? hubitat.helper.HexUtils.hexStringToInt(attributesMap.dt) as Integer : null // library marker kkossev.deviceProfileLib, line 328
-        map['mfgCode'] = attributesMap.mfgCode ? attributesMap.mfgCode as String : null // library marker kkossev.deviceProfileLib, line 329
+        map['mfgCode'] = attrfibutesMap.mfgCode ? attributesMap.mfgCode as String : null // library marker kkossev.deviceProfileLib, line 329
     } // library marker kkossev.deviceProfileLib, line 330
     catch (e) { logWarn "setPar: Exception caught while splitting cluser and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val})) :  '${e}' " ; return [] } // library marker kkossev.deviceProfileLib, line 331
     // dt (data type) is obligatory when writing to a cluster... // library marker kkossev.deviceProfileLib, line 332
