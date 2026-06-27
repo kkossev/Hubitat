@@ -962,8 +962,8 @@
       "spammyDPsToNotTrace": [19]
     } 
   },
-  "version": "4.1.1",
-  "timestamp": "2026-02-01 10:41 PM",
+  "version": "4.1.4",
+  "timestamp": "2026-06-27 5:23 PM",
   "description": "Device profiles for Tuya Zigbee mmWave Sensor",
   "author": "kkossev",
   "comments": [
