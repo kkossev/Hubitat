@@ -627,8 +627,7 @@
       "preferences": { "radarSensitivity": "2", "staticDetectionSensitivity": "102", "fadingTime": "105", "minimumDistance": "3", "maximumDistance": "4", "distanceReporting": "101" },
       "commands": { "resetStats": "" },
       "fingerprints": [
-        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_ya4ft0w4", "deviceJoinName": "Tuya Human Presence Detector YA4FT0W4 ZY-M100-24GV372" },
-        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_gkfbdvyx", "deviceJoinName": "Tuya Human Presence Detector ZY-M100-24GV3.1" }
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_ya4ft0w4", "deviceJoinName": "Tuya Human Presence Detector YA4FT0W4 ZY-M100-24GV372" }
       ],
       "tuyaDPs": [
         { "dp": 1, "name": "humanMotionState", "preProc": "motionOrNotYA4FT0W4", "type": "enum", "rw": "ro", "map": { "0": "none", "1": "present", "2": "moving", "3": "none" }, "description": "Presence state" },
@@ -649,6 +648,38 @@
         "https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/M100-ya4ft0-V3-20240907.js",
         "https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/ms.zy24g3.js",
         "distanceReporting DP101 to disable spammy distance reports"
+      ]
+    },
+
+    "TS0601_GKFBDVYX_RADAR": {
+      "description": "Tuya Human Presence Detector ZY-M100-24GV3",
+      "device": { "powerSource": "dc" },
+      "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement": true, "HumanMotionState": true },
+      "preferences": { "radarSensitivity": "2", "staticDetectionSensitivity": "102", "fadingTime": "105", "minimumDistance": "3", "maximumDistance": "4", "distanceReporting": "101" },
+      "commands": { "resetStats": "" },
+      "fingerprints": [
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_gkfbdvyx", "deviceJoinName": "Tuya Human Presence Detector ZY-M100-24GV3.1" },
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_gkfbdvyx", "deviceJoinName": "Tuya Human Presence Detector ZY-M100-24GV3" }
+      ],
+      "tuyaDPs": [
+        { "dp": 1, "name": "humanMotionState", "preProc": "motionOrNotYA4FT0W4", "type": "enum", "rw": "ro", "map": { "0": "none", "1": "present", "2": "moving", "3": "none" }, "description": "Presence state" },
+        { "dp": 2, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 1, "max": 10, "defVal": 5, "title": "<b>Motion sensitivity</b>", "description": "Radar motion sensitivity" },
+        { "dp": 3, "name": "minimumDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 6.0, "defVal": 0.5, "step": 50, "scale": 100, "unit": "meters", "title": "<b>Minimum distance</b>", "description": "Shield range of the radar" },
+        { "dp": 4, "name": "maximumDistance", "type": "decimal", "rw": "rw", "min": 0.5, "max": 9.00, "defVal": 6.00, "step": 50, "scale": 100, "unit": "meters", "title": "<b>Maximum distance</b>", "description": "Detection range of the radar" },
+        { "dp": 9, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 10.0, "scale": 10, "unit": "meters", "description": "Target distance" },
+        { "dp": 101, "name": "distanceReporting", "type": "enum", "rw": "rw", "min": 0, "max": 1, "defVal": "0", "map": { "0": "disabled", "1": "enabled" }, "title": "<b>Distance Reports</b>", "description": "Effectively disable the spammy distance reporting!<br>The recommended default value is <b>disabled</b>" },
+        { "dp": 102, "name": "staticDetectionSensitivity", "type": "decimal", "rw": "rw", "min": 0.0, "max": 10.0, "defVal": 5.0, "scale": 1, "title": "<b>Static detection sensitivity</b>", "description": "Presence sensitivity" },
+        { "dp": 103, "name": "illuminance", "type": "number", "rw": "ro", "unit": "lx", "description": "illuminance" },
+        { "dp": 105, "name": "fadingTime", "type": "decimal", "rw": "rw", "min": 5, "max": 15000, "defVal": 15, "unit": "seconds", "title": "<b>Delay time</b>", "description": "Delay (fading) time" },
+        { "dp": 255, "name": "unknownDp255", "type": "enum", "rw": "ro", "description": "unknownDp255" }
+      ],
+      "refresh": ["queryAllTuyaDP"],
+      "spammyDPsToIgnore": [9],
+      "spammyDPsToNotTrace": [9],
+      "comments": [
+        "https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/M100-ya4ft0-V3-20240907.js",
+        "https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/ms.zy24g3.js",
+        "Z2M gkfbdvyx variant with 0.5m distance step and 0..6m minimum distance range"
       ]
     },
 
@@ -962,8 +993,8 @@
       "spammyDPsToNotTrace": [19]
     } 
   },
-  "version": "4.1.4",
-  "timestamp": "2026-06-27 5:23 PM",
+  "version": "4.1.5",
+  "timestamp": "2026-06-27 10:22 PM",
   "description": "Device profiles for Tuya Zigbee mmWave Sensor",
   "author": "kkossev",
   "comments": [
@@ -973,6 +1004,7 @@
     "v.4.1.1 - fixed TS0601_YA4FT0W4_RADAR radar device profile - thanks @lukaszbet",
     "v.4.1.2 - added TS0601 _TZE204_aai5grix fingerprint to WENZHI_MTD285_ZB profile",
     "v.4.1.3 - WENZHI_MTD285_ZB profile improvements (+JSON Standard Profile bugfix)",
-    "v.4.1.4 - added HOBEIAN ZG-204ZK 24 GHz Human Presence Detector (TS0601 _TZE200_ka8l86iu)"
+    "v.4.1.4 - added HOBEIAN ZG-204ZK 24 GHz Human Presence Detector (TS0601 _TZE200_ka8l86iu)",
+    "v.4.1.5 - split GKFBDVYX into dedicated profile; added TS0601 _TZE200_gkfbdvyx and Z2M-aligned distance ranges/steps"
   ]
 }
