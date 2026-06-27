@@ -652,14 +652,14 @@
     },
 
     "TS0601_GKFBDVYX_RADAR": {
-      "description": "Tuya Human Presence Detector ZY-M100-24GV3",
+      "description": "Human Presence Detector GKFBDVYX",
       "device": { "powerSource": "dc" },
       "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement": true, "HumanMotionState": true },
       "preferences": { "radarSensitivity": "2", "staticDetectionSensitivity": "102", "fadingTime": "105", "minimumDistance": "3", "maximumDistance": "4", "distanceReporting": "101" },
       "commands": { "resetStats": "" },
       "fingerprints": [
-        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_gkfbdvyx", "deviceJoinName": "Tuya Human Presence Detector ZY-M100-24GV3.1" },
-        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_gkfbdvyx", "deviceJoinName": "Tuya Human Presence Detector ZY-M100-24GV3" }
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_gkfbdvyx", "deviceJoinName": "Human Presence Detector GKFBDVYX" },
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE200_gkfbdvyx", "deviceJoinName": "Human Presence Detector GKFBDVYX" }
       ],
       "tuyaDPs": [
         { "dp": 1, "name": "humanMotionState", "preProc": "motionOrNotYA4FT0W4", "type": "enum", "rw": "ro", "map": { "0": "none", "1": "present", "2": "moving", "3": "none" }, "description": "Presence state" },
