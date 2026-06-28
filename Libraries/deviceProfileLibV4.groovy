@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLibV4', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/deviceProfileLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-deviceProfileLib',
-    version: '4.1.0'
+    version: '4.1.1'
 )
 /*
  *  Device Profile Library V4
@@ -23,13 +23,14 @@ library(
  * ver. 4.0.1  2025-09-15 kkossev  - added debug commands to sendCommand(); 
  * ver. 4.0.2  2025-09-18 kkossev  - (deviceProfileV4 branch) cooldown timer is started on JSON local storage read or parsing error;
  * ver. 4.1.0  2025-10-12 kkossev  - (development branch) zclWriteAttribute delay default is 150ms if tuyaDelay not defined in the device profile;
+ * ver. 4.1.1  2026-06-28 kkossev  - add ignoreSSLIssues=true for HTTPS profile JSON downloads;
  *
  *                                   TODO - updateStateUnknownDPs() from the earlier versions of 4 in 1 driver
  *
 */
 
-static String deviceProfileLibVersion()   { '4.1.0' }
-static String deviceProfileLibStamp() { '2025/10/18 06:04 PM' }
+static String deviceProfileLibVersion()   { '4.1.1' }
+static String deviceProfileLibStamp() { '2026/06/28 12:00 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -2438,6 +2439,12 @@ void downloadFromGitHubAndSaveToHE(String url) {
             uri: gitHubUrl,
             //textParser: true  // This is the key! Same as working readFile method
         ]
+
+        // Hubitat 2.1.8+: ignore SSL cert/hostname validation issues for HTTPS profile downloads.
+        if ((gitHubUrl ?: '').toLowerCase().startsWith('https://')) {
+            params.ignoreSSLIssues = true
+            logDebug "loadProfilesFromJSON: using ignoreSSLIssues=true for HTTPS profile download"
+        }
         
         logDebug "updateFromGitHub: HTTP params: ${params}"
         
