@@ -5,7 +5,7 @@
  *   EP0  : Basic Information (0x0028), General Diagnostics (0x0033)
  *   EP1  : Extended Color Light — OnOff (0x0006), LevelControl (0x0008), ColorControl (0x0300)
  *
- * Last edited: 2026/07/04 - added power-restore preferences + StartUpOnOff/StartUpCurrentLevel configure/parse support
+ * Last edited: 2026/07/05 - bug fixes : 'Previous state' now actually works via the experimental TLV Null (0x14) write; WriteAttributes acks are handled properly in parse(), ending the preference flip-flop; The read-back race is closed with the delayed read and write-before-refresh ordering.
  */
 
 import hubitat.device.HubAction
@@ -74,8 +74,10 @@ void installed() {
 void updated() {
     logInfo "updated..."
     if (logEnable) runIn(7200, "logsOff")
-    initialize()
+    // Write power-restore config before initialize(): refresh() reads the startup attributes,
+    // and a read sent before the write returns the stale pre-write value (possibly out of order)
     configurePowerRestore()
+    initialize()
 }
 
 void logsOff() {
@@ -131,7 +133,14 @@ private void configurePowerRestore() {
                 startupOnOffValue = 0x02
                 break
             case "previous":
-                logWarn "Power restore behavior 'previous' requires nullable StartUpOnOff write, which is not supported here; skipping"
+                // Matter spec: StartUpOnOff (0x4003) = NULL means 'restore previous state'.
+                // Hubitat has no documented NULL DataType; attempt a raw TLV Null (0x14) write - experimental.
+                try {
+                    attributeWriteRequests.add(matter.attributeWriteRequest(0x01, 0x0006, 0x4003, 0x14, ""))
+                    logInfo "Configuring StartUpOnOff to previous (experimental TLV Null write)"
+                } catch (Exception e) {
+                    logWarn "StartUpOnOff nullable (TLV Null) write rejected by platform (${e.message}); skipping"
+                }
                 break
             default:
                 logWarn "Unknown powerRestoreBehavior='${startupOnOff}', skipping"
@@ -163,7 +172,13 @@ private void configurePowerRestore() {
                 startupLevelPct = Math.max(1, Math.min(customLevelPct, 100))
                 break
             case "previous":
-                logWarn "Power restore brightness 'previous' requires nullable StartUpCurrentLevel write, which is not supported here; skipping"
+                // Matter spec: StartUpCurrentLevel (0x4000) = NULL means 'restore previous level'.
+                try {
+                    attributeWriteRequests.add(matter.attributeWriteRequest(0x01, 0x0008, 0x4000, 0x14, ""))
+                    logInfo "Configuring StartUpCurrentLevel to previous (experimental TLV Null write)"
+                } catch (Exception e) {
+                    logWarn "StartUpCurrentLevel nullable (TLV Null) write rejected by platform (${e.message}); skipping"
+                }
                 break
             default:
                 logWarn "Unknown powerRestoreLevel='${startupLevel}', skipping"
@@ -180,18 +195,32 @@ private void configurePowerRestore() {
     }
 
     if (!attributeWriteRequests.isEmpty()) {
-        String cmd = matter.writeAttributes(attributeWriteRequests)
+        String cmd
+        try {
+            cmd = matter.writeAttributes(attributeWriteRequests)
+        } catch (Exception e) {
+            logWarn "configurePowerRestore: writeAttributes failed to build (${e.message}); nothing sent"
+            return
+        }
         logDebug "configurePowerRestore write cmd=${cmd}"
         sendHubCommand(new HubAction(cmd, Protocol.MATTER))
 
-        // Read-back startup attributes immediately after write.
-        List<Map<String,String>> readBackPaths = []
-        readBackPaths.add(matter.attributePath(0x01, 0x0006, 0x4003))
-        readBackPaths.add(matter.attributePath(0x01, 0x0008, 0x4000))
-        sendHubCommand(new HubAction(matter.readAttributes(readBackPaths), Protocol.MATTER))
+        // Read back the startup attributes after a delay, not immediately: Thread responses can arrive
+        // out of order, and a read racing the write may deliver a stale pre-write value last,
+        // which then overwrites the preference. The delayed read arrives after all in-flight
+        // responses and settles the preference on the true device value.
+        runIn(3, "readBackPowerRestore")
     } else {
         logDebug "configurePowerRestore: nothing to write"
     }
+}
+
+void readBackPowerRestore() {
+    logDebug "readBackPowerRestore()"
+    List<Map<String,String>> readBackPaths = []
+    readBackPaths.add(matter.attributePath(0x01, 0x0006, 0x4003))
+    readBackPaths.add(matter.attributePath(0x01, 0x0008, 0x4000))
+    sendHubCommand(new HubAction(matter.readAttributes(readBackPaths), Protocol.MATTER))
 }
 
 private void subscribeToAttributes() {
@@ -351,6 +380,21 @@ void parse(Map msg) {
         }
         logDebug "Implicit ping success (msg arrived while ping in-flight), RTT: ${rtt} ms"
         state.pingStart = null
+    }
+
+    // WriteAttributes acknowledgements carry no value - must not reach the attribute report handlers,
+    // where the missing value is misparsed as a NULL report (flip-flops powerRestoreBehavior to 'previous')
+    if (msg.callbackType?.toString() == "WriteAttributes") {
+        String attrName = "cluster 0x${HexUtils.integerToHexString(msg.clusterInt ?: 0, 2)} attr 0x${HexUtils.integerToHexString(msg.attrInt ?: 0, 2)}"
+        if (msg.clusterInt == 0x0006 && msg.attrInt == 0x4003) { attrName = "StartUpOnOff" }
+        if (msg.clusterInt == 0x0008 && msg.attrInt == 0x4000) { attrName = "StartUpCurrentLevel" }
+        Boolean ok = (msg.sucess == true) || (msg.success == true)   // platform spells the status key 'sucess'
+        if (ok) {
+            logInfo "${attrName} write confirmed by the device"
+        } else {
+            logWarn "${attrName} write FAILED: ${msg}"
+        }
+        return
     }
 
     Integer ep     = msg.endpointInt
