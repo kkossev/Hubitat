@@ -53,6 +53,12 @@
       "codeType": "driver",
       "id": 5191,
       "version": 19
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Drivers/Ikea Matter/IKEA KAJPLATS Matter RGBW Bulb.groovy",
+      "id": 5191,
+      "codeType": "driver",
+      "version": 24
     }
   ]
 }

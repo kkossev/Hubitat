@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLibV4', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/deviceProfileLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-deviceProfileLib',
-    version: '4.1.1'
+    version: '4.1.2'
 )
 /*
  *  Device Profile Library V4
@@ -24,13 +24,15 @@ library(
  * ver. 4.0.2  2025-09-18 kkossev  - (deviceProfileV4 branch) cooldown timer is started on JSON local storage read or parsing error;
  * ver. 4.1.0  2025-10-12 kkossev  - (development branch) zclWriteAttribute delay default is 150ms if tuyaDelay not defined in the device profile;
  * ver. 4.1.1  2026-06-28 kkossev  - add ignoreSSLIssues=true for HTTPS profile JSON downloads;
+ * ver. 4.1.2  2026-07-03 kkossev  - fixed forceDisposeV4Profiles() log message; standardized custom profile filename state key to 'customJSONFilename'; removed stale 'customFilename' key on revert to standard profiles;
+ *                                   fixed clearProfilesCache() not resetting cooldown flag, causing loadStandardProfilesFromGitHub() to fail after a prior load error; fixed wrong log prefix in downloadFromGitHubAndSaveToHE();
  *
  *                                   TODO - updateStateUnknownDPs() from the earlier versions of 4 in 1 driver
  *
 */
 
-static String deviceProfileLibVersion()   { '4.1.1' }
-static String deviceProfileLibStamp() { '2026/06/28 12:00 PM' }
+static String deviceProfileLibVersion()   { '4.1.2' }
+static String deviceProfileLibStamp() { '2026/07/03 9:41 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -193,7 +195,7 @@ private boolean loadCustomProfilesForDevice(String dni, String filename) {
         // Also store metadata in state
         if (state.profilesV4 == null) { state.profilesV4 = [:] }
         state.profilesV4['lastJSONSource'] = 'custom'
-        state.profilesV4['customFilename'] = filename
+        state.profilesV4['customJSONFilename'] = filename
         state.profilesV4['customVersion'] = parsed?.version ?: 'unknown'
         state.profilesV4['customTimestamp'] = parsed?.timestamp ?: 'unknown'
         state.profilesV4['customProfileCount'] = customProfiles.size()
@@ -295,7 +297,7 @@ void forceDisposeV4Profiles() {
     int sizeBefore = g_deviceProfilesV4?.size() ?: 0
     g_deviceProfilesV4 = null
     if (this.hasProperty('g_profilesLoaded')) { g_profilesLoaded = false }
-    logInfo "forceDisposeV3Profiles: disposed ${sizeBefore} V3 profiles to free memory"
+    logInfo "forceDisposeV4Profiles: disposed ${sizeBefore} V4 profiles to free memory"
 }
 
 public Set     getDeviceProfiles()      { g_deviceProfilesV4 != null ? g_deviceProfilesV4?.keySet() : [] }
@@ -1834,7 +1836,7 @@ void profilesV4info() {
     
     // Get profile source information from state
     String lastJSONSource = state.profilesV4?.get('lastJSONSource') ?: 'unknown'
-    String customFilename = state.profilesV4?.get('customFilename')
+    String customFilename = state.profilesV4?.get('customJSONFilename')
     String customVersion = state.profilesV4?.get('customVersion')
     String customTimestamp = state.profilesV4?.get('customTimestamp')
     String standardVersion = state.profilesV4?.get('version')
@@ -1891,7 +1893,8 @@ void clearProfilesCache() {
     g_currentProfilesV4 = null
     g_profilesLoaded = false
     g_profilesLoading = false
-    
+    resetCooldownFlag()    // explicit cache clear always allows an immediate reload
+
     // Also clear custom profiles for this device if any
     String dni = device?.deviceNetworkId
     if (dni && this.hasProperty('g_customProfilesV4') && g_customProfilesV4?.containsKey(dni)) {
@@ -2223,7 +2226,7 @@ private boolean ensureProfilesLoaded() {
             
             // State-based persistence: Check if we should auto-load custom profiles
             String lastSource = state.profilesV4?.get('lastJSONSource')
-            String customFilename = state.profilesV4?.get('customFilename')
+            String customFilename = state.profilesV4?.get('customJSONFilename')
             String dni = device?.deviceNetworkId
             
             if (result && lastSource == 'custom' && customFilename != null && dni) {
@@ -2242,7 +2245,6 @@ private boolean ensureProfilesLoaded() {
         
         return true
     } finally {
-        state.profilesV4['loadProfilesExceptionsCtr'] = (state.profilesV4['loadProfilesExceptionsCtr'] ?: 0) + 1
         g_profilesLoading = false
     }
 }
@@ -2256,19 +2258,20 @@ void loadStandardProfilesFromGitHub() {
     
     // Download from GitHub and save to local storage
     downloadFromGitHubAndSaveToHE(defaultGitHubURL)
-    
+
     // Clear all cached profiles
     clearProfilesCache()
-    
+
     // Load standard profiles
     boolean result = ensureProfilesLoaded()
-    
+
     if (result) {
         // Remember this choice - user explicitly chose standard profiles
         if (state.profilesV4 == null) { state.profilesV4 = [:] }
         state.profilesV4['lastJSONSource'] = 'standard'
         state.profilesV4.remove('customJSONFilename')  // Clear custom filename
-        
+        state.profilesV4.remove('customFilename')       // Remove legacy key from older versions
+
         // Clear any custom profiles for this device
         String dni = device?.deviceNetworkId
         if (dni && g_customProfilesV4?.containsKey(dni)) {
@@ -2309,13 +2312,14 @@ void loadStandardProfilesFromLocalStorage() {
     
     // Load standard profiles from local storage
     boolean result = ensureProfilesLoaded()
-    
+
     if (result) {
         // Remember this choice - user explicitly chose standard profiles
         if (state.profilesV4 == null) { state.profilesV4 = [:] }
         state.profilesV4['lastJSONSource'] = 'standard'
         state.profilesV4.remove('customJSONFilename')  // Clear custom filename
-        
+        state.profilesV4.remove('customFilename')       // Remove legacy key from older versions
+
         // Clear any custom profiles for this device
         String dni = device?.deviceNetworkId
         if (dni && g_customProfilesV4?.containsKey(dni)) {
@@ -2443,7 +2447,7 @@ void downloadFromGitHubAndSaveToHE(String url) {
         // Hubitat 2.1.8+: ignore SSL cert/hostname validation issues for HTTPS profile downloads.
         if ((gitHubUrl ?: '').toLowerCase().startsWith('https://')) {
             params.ignoreSSLIssues = true
-            logDebug "loadProfilesFromJSON: using ignoreSSLIssues=true for HTTPS profile download"
+            logDebug "downloadFromGitHubAndSaveToHE: using ignoreSSLIssues=true for HTTPS profile download"
         }
         
         logDebug "updateFromGitHub: HTTP params: ${params}"

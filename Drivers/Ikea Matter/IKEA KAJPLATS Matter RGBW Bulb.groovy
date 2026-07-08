@@ -5,7 +5,7 @@
  *   EP0  : Basic Information (0x0028), General Diagnostics (0x0033)
  *   EP1  : Extended Color Light — OnOff (0x0006), LevelControl (0x0008), ColorControl (0x0300)
  *
- * Last edited: 2026/05/16 11:26 AM
+ * Last edited: 2026/07/05 - bug fixes : 'Previous state' now actually works via the experimental TLV Null (0x14) write; WriteAttributes acks are handled properly in parse(), ending the preference flip-flop; The read-back race is closed with the delayed read and write-before-refresh ordering.
  */
 
 import hubitat.device.HubAction
@@ -48,6 +48,13 @@ metadata {
         input name: "levelChangeRate",    type: "enum", title: "Hold-to-dim rate (startLevelChange)",
             options: ["slow":"Slow (~10s full sweep)", "medium":"Medium (~5s full sweep)", "fast":"Fast (~2.5s full sweep)", "vfast":"Very fast (~1.5s full sweep)"],
             defaultValue: "medium"
+        input name: "powerRestoreBehavior", type: "enum", title: "Power restore behavior",
+            options: ["noChange":"Do not configure", "previous":"Previous state / device default", "off":"Off", "on":"On", "toggle":"Toggle"],
+            defaultValue: "noChange"
+        input name: "powerRestoreLevel", type: "enum", title: "Power restore brightness",
+            options: ["noChange":"Do not configure", "previous":"Previous/default level", "current":"Current level", "custom":"Custom level"],
+            defaultValue: "noChange"
+        input name: "powerRestoreLevelCustom", type: "number", title: "Custom power restore brightness level (%)", range: "1..100", defaultValue: 100
         input name: "enableHealthCheck", type: "bool", title: "Enable health check (ping every 5 min)",                defaultValue: true
         input name: "enableAutoReInit",  type: "bool", title: "Auto re-initialize after 2 consecutive ping failures",  defaultValue: true
     }
@@ -67,6 +74,9 @@ void installed() {
 void updated() {
     logInfo "updated..."
     if (logEnable) runIn(7200, "logsOff")
+    // Write power-restore config before initialize(): refresh() reads the startup attributes,
+    // and a read sent before the write returns the stale pre-write value (possibly out of order)
+    configurePowerRestore()
     initialize()
 }
 
@@ -95,13 +105,122 @@ void refresh() {
     logDebug "refresh()"
     List<Map<String,String>> paths = []
     paths.add(matter.attributePath(0x01, 0x0006, 0x0000)) // OnOff
+    paths.add(matter.attributePath(0x01, 0x0006, 0x4003)) // StartUpOnOff
     paths.add(matter.attributePath(0x01, 0x0008, 0x0000)) // CurrentLevel
+    paths.add(matter.attributePath(0x01, 0x0008, 0x4000)) // StartUpCurrentLevel
     paths.add(matter.attributePath(0x01, 0x0300, 0x0000)) // CurrentHue
     paths.add(matter.attributePath(0x01, 0x0300, 0x0001)) // CurrentSaturation
     paths.add(matter.attributePath(0x01, 0x0300, 0x0007)) // ColorTemperatureMireds
     paths.add(matter.attributePath(0x01, 0x0300, 0x0008)) // ColorMode
     paths.add(matter.attributePath(0x00, 0x0028, 0x000A)) // SoftwareVersionString
     sendHubCommand(new HubAction(matter.readAttributes(paths), Protocol.MATTER))
+}
+
+private void configurePowerRestore() {
+    List<Map<String, String>> attributeWriteRequests = []
+
+    String startupOnOff = settings?.powerRestoreBehavior ?: "noChange"
+    if (startupOnOff != "noChange") {
+        Integer startupOnOffValue = null
+        switch (startupOnOff) {
+            case "off":
+                startupOnOffValue = 0x00
+                break
+            case "on":
+                startupOnOffValue = 0x01
+                break
+            case "toggle":
+                startupOnOffValue = 0x02
+                break
+            case "previous":
+                // Matter spec: StartUpOnOff (0x4003) = NULL means 'restore previous state'.
+                // Hubitat has no documented NULL DataType; attempt a raw TLV Null (0x14) write - experimental.
+                try {
+                    attributeWriteRequests.add(matter.attributeWriteRequest(0x01, 0x0006, 0x4003, 0x14, ""))
+                    logInfo "Configuring StartUpOnOff to previous (experimental TLV Null write)"
+                } catch (Exception e) {
+                    logWarn "StartUpOnOff nullable (TLV Null) write rejected by platform (${e.message}); skipping"
+                }
+                break
+            default:
+                logWarn "Unknown powerRestoreBehavior='${startupOnOff}', skipping"
+                break
+        }
+        if (startupOnOffValue != null) {
+            attributeWriteRequests.add(
+                matter.attributeWriteRequest(0x01, 0x0006, 0x4003, DataType.ENUM8, HexUtils.integerToHexString(startupOnOffValue, 1))
+            )
+            logInfo "Configuring StartUpOnOff to ${startupOnOff}"
+        }
+    }
+
+    String startupLevel = settings?.powerRestoreLevel ?: "noChange"
+    if (startupLevel != "noChange") {
+        Integer startupLevelPct = null
+        switch (startupLevel) {
+            case "current":
+                Integer currentLevelPct = safeInt(device.currentValue("level"))
+                if (currentLevelPct == null) {
+                    logWarn "Power restore brightness 'current' requested, but current level is unavailable; skipping"
+                } else {
+                    startupLevelPct = Math.max(1, Math.min(currentLevelPct, 100))
+                }
+                break
+            case "custom":
+                Integer customLevelPct = safeInt(settings?.powerRestoreLevelCustom)
+                if (customLevelPct == null) { customLevelPct = 100 }
+                startupLevelPct = Math.max(1, Math.min(customLevelPct, 100))
+                break
+            case "previous":
+                // Matter spec: StartUpCurrentLevel (0x4000) = NULL means 'restore previous level'.
+                try {
+                    attributeWriteRequests.add(matter.attributeWriteRequest(0x01, 0x0008, 0x4000, 0x14, ""))
+                    logInfo "Configuring StartUpCurrentLevel to previous (experimental TLV Null write)"
+                } catch (Exception e) {
+                    logWarn "StartUpCurrentLevel nullable (TLV Null) write rejected by platform (${e.message}); skipping"
+                }
+                break
+            default:
+                logWarn "Unknown powerRestoreLevel='${startupLevel}', skipping"
+                break
+        }
+        if (startupLevelPct != null) {
+            Integer startupLevelRaw = int100To254(startupLevelPct)
+            startupLevelRaw = Math.max(1, Math.min(startupLevelRaw, 254))
+            attributeWriteRequests.add(
+                matter.attributeWriteRequest(0x01, 0x0008, 0x4000, DataType.UINT8, HexUtils.integerToHexString(startupLevelRaw, 1))
+            )
+            logInfo "Configuring StartUpCurrentLevel to ${startupLevelPct}% (${startupLevelRaw})"
+        }
+    }
+
+    if (!attributeWriteRequests.isEmpty()) {
+        String cmd
+        try {
+            cmd = matter.writeAttributes(attributeWriteRequests)
+        } catch (Exception e) {
+            logWarn "configurePowerRestore: writeAttributes failed to build (${e.message}); nothing sent"
+            return
+        }
+        logDebug "configurePowerRestore write cmd=${cmd}"
+        sendHubCommand(new HubAction(cmd, Protocol.MATTER))
+
+        // Read back the startup attributes after a delay, not immediately: Thread responses can arrive
+        // out of order, and a read racing the write may deliver a stale pre-write value last,
+        // which then overwrites the preference. The delayed read arrives after all in-flight
+        // responses and settles the preference on the true device value.
+        runIn(3, "readBackPowerRestore")
+    } else {
+        logDebug "configurePowerRestore: nothing to write"
+    }
+}
+
+void readBackPowerRestore() {
+    logDebug "readBackPowerRestore()"
+    List<Map<String,String>> readBackPaths = []
+    readBackPaths.add(matter.attributePath(0x01, 0x0006, 0x4003))
+    readBackPaths.add(matter.attributePath(0x01, 0x0008, 0x4000))
+    sendHubCommand(new HubAction(matter.readAttributes(readBackPaths), Protocol.MATTER))
 }
 
 private void subscribeToAttributes() {
@@ -263,6 +382,21 @@ void parse(Map msg) {
         state.pingStart = null
     }
 
+    // WriteAttributes acknowledgements carry no value - must not reach the attribute report handlers,
+    // where the missing value is misparsed as a NULL report (flip-flops powerRestoreBehavior to 'previous')
+    if (msg.callbackType?.toString() == "WriteAttributes") {
+        String attrName = "cluster 0x${HexUtils.integerToHexString(msg.clusterInt ?: 0, 2)} attr 0x${HexUtils.integerToHexString(msg.attrInt ?: 0, 2)}"
+        if (msg.clusterInt == 0x0006 && msg.attrInt == 0x4003) { attrName = "StartUpOnOff" }
+        if (msg.clusterInt == 0x0008 && msg.attrInt == 0x4000) { attrName = "StartUpCurrentLevel" }
+        Boolean ok = (msg.sucess == true) || (msg.success == true)   // platform spells the status key 'sucess'
+        if (ok) {
+            logInfo "${attrName} write confirmed by the device"
+        } else {
+            logWarn "${attrName} write FAILED: ${msg}"
+        }
+        return
+    }
+
     Integer ep     = msg.endpointInt
     Integer clus   = msg.clusterInt
     Integer attrId = msg.attrInt
@@ -294,6 +428,38 @@ void parse(Map msg) {
         return
     }
 
+    // StartUpOnOff: cluster 0x0006 attr 0x4003 (nullable enum8)
+    if (clus == 0x0006 && attrId == 0x4003) {
+        String prefBehavior = null
+        if (msg.value == null) {
+            prefBehavior = "previous"
+            logInfo "StartUpOnOff is previous/default"
+            updatePreferenceIfChanged("powerRestoreBehavior", prefBehavior, "enum")
+            return
+        }
+        Integer raw = safeInt(msg.value)
+        if (raw == null) {
+            logWarn "StartUpOnOff parse failed for value=${msg.value}"
+            return
+        }
+        if (raw == 0) {
+            prefBehavior = "off"
+        } else if (raw == 1) {
+            prefBehavior = "on"
+        } else if (raw == 2) {
+            prefBehavior = "toggle"
+        }
+
+        String behavior = prefBehavior ?: "unknown(${raw})"
+        if (prefBehavior == null) {
+            logWarn "StartUpOnOff is ${behavior}"
+        } else {
+            logInfo "StartUpOnOff is ${behavior}"
+            updatePreferenceIfChanged("powerRestoreBehavior", prefBehavior, "enum")
+        }
+        return
+    }
+
     // CurrentLevel: cluster 0x0008 attr 0x0000 (0-254 -> 0-100)
     if (clus == 0x0008 && attrId == 0x0000) {
         Integer raw = safeInt(msg.value)
@@ -302,6 +468,28 @@ void parse(Map msg) {
             sendEvent(name: "level", value: lvl, unit: "%", descriptionText: "${device.displayName} level is ${lvl}%", type: "physical")
             logInfo "Level is ${lvl}%"
         }
+        return
+    }
+
+    // StartUpCurrentLevel: cluster 0x0008 attr 0x4000 (nullable uint8)
+    if (clus == 0x0008 && attrId == 0x4000) {
+        if (msg.value == null) {
+            logInfo "StartUpCurrentLevel is previous/default"
+            return
+        }
+        Integer raw = safeInt(msg.value)
+        if (raw == null) {
+            logWarn "StartUpCurrentLevel parse failed for value=${msg.value}"
+            return
+        }
+        if (raw < 1 || raw > 254) {
+            logWarn "StartUpCurrentLevel out of range: ${raw}"
+            return
+        }
+        Integer startupPct = int254To100(raw)
+        logInfo "StartUpCurrentLevel is ${startupPct}% (${raw})"
+        updatePreferenceIfChanged("powerRestoreLevel", "custom", "enum")
+        updatePreferenceIfChanged("powerRestoreLevelCustom", startupPct as String, "number")
         return
     }
 
@@ -383,6 +571,13 @@ private Integer safeInt(def v) {
     if (v == null) return null
     if (v instanceof Boolean) return v ? 1 : 0
     try { return Integer.parseInt(v.toString(), 10) } catch (Exception ignored) { return null }
+}
+
+private void updatePreferenceIfChanged(String name, String value, String type) {
+    String current = settings?."${name}"?.toString()
+    if (current == value) { return }
+    device.updateSetting(name, [value: value, type: type])
+    logDebug "Preference ${name} updated to ${value} from device report"
 }
 
 // 0-100 (Hubitat) <-> 0-254 (Matter)

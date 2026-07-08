@@ -29,7 +29,8 @@
  * ver. 4.2.1  2025-10-19 kkossev  - added attributes 'switch', 'switchOnTime', 'switchState' for NEO NAS-PS10B2; added 'blockTime', 'motionDetectionDelayTime', 'radarScene', 'sensorMode', 'distanceReportMode' for TS0225_LEAPMMW_RADAR Z2M compatibility
  * ver. 4.2.2  2026-06-27 kkossev  - added HOBEIAN ZG-204ZK 24 GHz Human Presence Detector (TS0601 _TZE200_ka8l86iu)
  * ver. 4.2.3  2026-06-28 kkossev  - added ignoreSSLIssues=true for HTTPS profile JSON downloads;
- *                                   
+ * ver. 4.2.4  2026-07-03 kkossev  - fixed updateIndicatorLight() typo in customParseZdoClusters(); fixed customFilename/customJSONFilename state key inconsistency in deviceProfileLibV4; fixed clearProfilesCache() not resetting cooldown flag, causing reload to fail after explicit GitHub download;
+ *
  *                                   TODO: new info page on WiKi
  *                                   TODO: Show both the profile key and the profile name in the Preferences page!
  *                                   TODO: handle the Unprocessed ZDO command: cluster=8032 after hub reboot
@@ -38,8 +39,8 @@
  *                                   TODO: 
 */
 
-static String version() { "4.2.3" }
-static String timeStamp() {"2026/06/28 10:16 PM"}
+static String version() { "4.2.4" }
+static String timeStamp() {"2026/07/03 10:23 PM"}
 
 @Field static final Boolean _DEBUG = false           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -382,7 +383,7 @@ void updateIndicatorLight() {
 
 void customParseZdoClusters(final Map descMap){
     if (descMap.clusterInt == 0x0013 && getDeviceProfile() == 'TS0601_BLACK_SQUARE_RADAR') {  // device announcement
-        updateInidicatorLight()
+        updateIndicatorLight()
     }
 }
 
