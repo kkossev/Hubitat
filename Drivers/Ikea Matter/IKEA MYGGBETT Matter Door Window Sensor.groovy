@@ -3,7 +3,7 @@
  *
  * https://community.hubitat.com/t/what-do-i-need-at-ikea/158182/76?u=kkossev
  *
- * Last edited: 2026/05/14 5:03 PM
+ * Last edited: 2026/06/17 11:37 PM
  */
 
 import hubitat.device.HubAction
@@ -74,6 +74,7 @@ void initialize() {
     if (getDataValue("newParse") != "true") { device.updateDataValue("newParse", "true") }
     logInfo "initialize... (initializeCounter=${state.stats.initializeCounter})"
     logInfo "model=${device.getDataValue('model') ?: device.model} newParse=${getDataValue("newParse")} uptime=${location.hub.uptime}"
+    detectMatterEndpoints()
     subscribeToAttributes()
     refresh()
     if (enableHealthCheck != false) { runEvery5Minutes("deviceHealthCheck") }
@@ -86,10 +87,10 @@ void refresh() {
     List<Map<String,String>> paths = []
 
     // Contact state (cluster 0x0045 attr 0x0000 => boolean)
-    paths.add(matter.attributePath(0x01, 0x0045, 0x0000))
+    paths.add(matter.attributePath(getContactEndpoint(), 0x0045, 0x0000))
 
     // Battery (endpoint 0, Power Source cluster 0x002F, attr 0x000C)
-    paths.add(matter.attributePath(0x00, 0x002F, 0x000C))
+    paths.add(matter.attributePath(getPowerSourceEndpoint(), 0x002F, 0x000C))
 
     // Software version string (Basic Information cluster 0x0028, attr 0x000A)
     paths.add(matter.attributePath(0x00, 0x0028, 0x000A))
@@ -100,13 +101,13 @@ void refresh() {
 
 private void subscribeToAttributes() {
     List<Map<String,String>> paths = []
-    paths.add(matter.attributePath(0x01, 0x0045, 0x0000))
-    paths.add(matter.attributePath(0x00, 0x002F, 0x000C))
+    paths.add(matter.attributePath(getContactEndpoint(), 0x0045, 0x0000))
+    paths.add(matter.attributePath(getPowerSourceEndpoint(), 0x002F, 0x000C))
 
     String cmd = matter.cleanSubscribe(0, 600, paths)
     sendHubCommand(new HubAction(cmd, Protocol.MATTER))
 
-    logInfo "subscribing to contact (EP1/0x0045) + battery (EP0/0x002F/0x000C)"
+    logInfo "subscribing to contact (EP${getContactEndpoint()}/0x0045) + battery (EP${getPowerSourceEndpoint()}/0x002F/0x000C)"
 }
 
 void parse(String description) {
@@ -118,6 +119,11 @@ void parse(String description) {
 // Battery report   : [callbackType:Report, endpointInt:0, clusterInt:47,  attrInt:12, value:200]
 void parse(Map msg) {
     logDebug "parse(Map) received: ${msg}"
+
+    if (msg.callbackType == "SubscriptionResult") {
+        return
+    }
+
     handleLiveness(msg)
 
     // Ping response (explicit) or implicit ping success (any msg while ping in-flight)
@@ -135,7 +141,7 @@ void parse(Map msg) {
     }
 
     // Contact state: EP1 cluster 0x0045 attr 0x0000 (BooleanState; value 0=open, 1=closed, or boolean false/true)
-    if (msg.endpointInt == 0x01 && msg.clusterInt == 0x0045 && msg.attrInt == 0x0000) {
+    if (msg.endpointInt == getContactEndpoint() && msg.clusterInt == 0x0045 && msg.attrInt == 0x0000) {
         Integer v = safeInt(msg.value)
         if (v != null) {
             String contact = (v == 0) ? "open" : "closed"
@@ -152,7 +158,7 @@ void parse(Map msg) {
     }
 
     // Battery: EP0 cluster 0x002F attr 0x000C (raw 0..200)
-    if (msg.endpointInt == 0x00 && msg.clusterInt == 0x002F && msg.attrInt == 0x000C) {
+    if (msg.endpointInt == getPowerSourceEndpoint() && msg.clusterInt == 0x002F && msg.attrInt == 0x000C) {
         Integer raw = safeInt(msg.value)
         if (raw != null) {
             Integer pct = Math.round(raw / 2.0f)
@@ -187,6 +193,47 @@ private Integer safeInt(def v) {
     try { return Integer.parseInt(v.toString(), 10) } catch (Exception ignored) { return null }
 }
 
+private Integer getContactEndpoint() {
+    return (state.contactEndpoint ?: 0x01) as Integer
+}
+
+private Integer getPowerSourceEndpoint() {
+    return (state.powerSourceEndpoint ?: 0x00) as Integer
+}
+
+private void detectMatterEndpoints() {
+    state.contactEndpoint = 0x01
+    state.powerSourceEndpoint = 0x00
+
+    try {
+        def fps = matter.getMatterFingerprints()
+
+        fps?.each { fp ->
+            String s = fp?.toString() ?: ""
+            logDebug "Parsing fingerprint: ${s}"
+            def m = (s =~ /Fingerprint\([^,]*,[^,]*,[^,]*,\s*([0-9A-Fa-f]{2}),/)
+            if (m.find()) {
+                Integer ep = Integer.parseInt(m.group(1), 16)
+
+                if (s.contains("0045")) {
+                    state.contactEndpoint = ep
+                }
+
+                if (s.contains("002F")) {
+                    state.powerSourceEndpoint = ep
+                }
+            }
+        }
+
+        logInfo "Matter endpoints detected: contact EP${state.contactEndpoint}, powerSource EP${state.powerSourceEndpoint}"
+    }
+    catch (e) {
+        state.contactEndpoint = 0x01
+        state.powerSourceEndpoint = 0x00
+        logWarn "detectMatterEndpoints() failed: ${e}; using defaults contact EP1, powerSource EP0"
+    }
+}
+
 /* ---------- health check ---------- */
 
 private void handleLiveness(Map msg) {
@@ -218,7 +265,7 @@ void deviceHealthCheck() {
     def lastBat = device.currentState("battery")
     if (lastBat == null || (now() - lastBat.date.time) > 12 * 3600 * 1000L) {
         logWarn "No battery report in >12h — requesting battery attribute read"
-        sendHubCommand(new HubAction(matter.readAttributes([matter.attributePath(0x00, 0x002F, 0x000C)]), Protocol.MATTER))
+        sendHubCommand(new HubAction(matter.readAttributes([matter.attributePath(getPowerSourceEndpoint(), 0x002F, 0x000C)]), Protocol.MATTER))
     } else {
         logDebug "Battery report is recent (last: ${lastBat.date})"
     }

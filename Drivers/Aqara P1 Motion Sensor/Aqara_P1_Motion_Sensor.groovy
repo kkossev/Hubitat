@@ -69,17 +69,19 @@
  * ver. 2.1.5 2026-06-11 kkossev  - Added FP300 Time-cluster Read Attributes handling through the Hubitat zigbeeLogsocket WebSocket; replies now echo the exact request ZCL transaction sequence number.
  * ver. 2.1.6 2026-06-13 kkossev  - HE platform 2.5.0.157 - Complete hub attribute responses for Zigbee Time Cluster (0x000A) read attribute requests; code cleanup
  * ver. 2.1.7 2026-06-14 kkossev  - Aqara's like initialization of FP300 (0.0.0_6542) 
+ * ver. 2.1.8 2026-06-20 kkossev  - (dev. branch) code cleanup; re-enabled refresh() for FP300;
  * 
  *
- *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event
+ *                                 TODO: scheduleDeviceHealthCheck() never called!
+ *                                 TODO: received LUMI LEAVE report: (cluster=0xFCC0 attrId=0x00FC value=0x00) : set the device offline and INFO message/event;
  *                                 TODO: resetPresence() : _info_messages and timeout check 
  *                                 TODO: scheduleCommandTimeoutCheck() - implementation for FP300 commands
  *                                 TODO: update the true aqaraVersion from Xiaomi struct tag:0x0D 
  *
  */
 
-static String version() { "2.1.7" }
-static String timeStamp() {"2026/06/14 7:59 AM"}
+static String version() { "2.1.8" }
+static String timeStamp() {"2026/06/20 9:49 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -446,15 +448,6 @@ private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled
 def getSensitivityOptions() { aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.motionSensitivity?.options ?: sensitivityOptions }
 
 void parse(String description) {
-    /*
-    // Intercept WebSocket JSON frames BEFORE normal Zigbee parsing.
-    // WebSocket messages must not increment rxCounter, set health status, or enter parseDescriptionAsMap.
-    String trimmed = description?.trim()
-    if (trimmed?.startsWith('{')) {
-        //parseZigbeeLogWebSocketMessage(trimmed)
-        return
-    }
-    */
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1 ; else state.rxCounter = 1
     setHealthStatusOnline()
@@ -1507,74 +1500,15 @@ def parseZDOcommand( Map descMap ) {
     List<String> cmds = []
     switch (descMap.clusterId) {
         case '0000' : // Network Address Request (NWK_addr_req)
-            /*
-            if (logEnable) {
-                log.debug "${device.displayName} ZDO Network Address request, data=${descMap.data} (Sequence Number:${descMap.data[0]})"
-            }
-            List data = descMap.data as List
-            if (data == null || data.size() < 11) {
-                if (logEnable) { log.debug "${device.displayName} invalid NWK_addr_req payload: ${data}" }
-                break
-            }
-            Integer tsn = (data[0] instanceof String) ? Integer.parseInt(data[0], 16) : (data[0] as Integer)
-            String seqNum = zigbee.convertToHexString(tsn & 0xFF, 2)
-            // Requested IEEE address is already in little-endian order in the ZDO payload.
-            String requestedIeeeLe = data[1..8].collect {
-                it instanceof String ? it.padLeft(2, '0').toUpperCase() : zigbee.convertToHexString((it as int) & 0xFF, 2)
-            }.join(' ')
-            String requestedIeeeKey = requestedIeeeLe.replace(' ', '').toUpperCase()
-            // Hubitat exposes hub Zigbee EUI as big-endian string, e.g. 000D6F0016C1E513.
-            String hubIeeeBe = "${location.hub.zigbeeEui ?: location.hub.zigbeeId ?: ''}".replaceAll('[^0-9A-Fa-f]', '').toUpperCase()
-            String hubIeeeLeKey = ''
-            if (hubIeeeBe.length() == 16) {
-                hubIeeeLeKey = hubIeeeBe.replaceAll('(..)', '$1 ').trim().split(' ').reverse().join('').toUpperCase()
-            }
-            // Device IEEE from device data is usually big-endian.
-            String deviceIeeeBe = "${device.getDataValue('ieee') ?: device.getDataValue('mac') ?: ''}".replaceAll('[^0-9A-Fa-f]', '').toUpperCase()
-            String deviceIeeeLeKey = ''
-            if (deviceIeeeBe.length() == 16) {
-                deviceIeeeLeKey = deviceIeeeBe.replaceAll('(..)', '$1 ').trim().split(' ').reverse().join('').toUpperCase()
-            }
-            String nwkAddr = null
-            if (requestedIeeeKey == hubIeeeLeKey) {
-                // Coordinator is always NWK 0x0000; encoded little-endian.
-                nwkAddr = '00 00'
-                if (logEnable) { log.debug "${device.displayName} NWK_addr_req is for coordinator IEEE ${requestedIeeeLe}; responding NWK 0000" }
-            }
-            else if (requestedIeeeKey == deviceIeeeLeKey) {
-                // This device's current DNI; encode little-endian.
-                String dni = "${device.deviceNetworkId}".padLeft(4, '0').toUpperCase()
-                nwkAddr = "${dni[2..3]} ${dni[0..1]}"
-                if (logEnable) { log.debug "${device.displayName} NWK_addr_req is for this device IEEE ${requestedIeeeLe}; responding NWK ${dni}" }
-            }
-            else {
-                if (logEnable) {
-                    log.debug "${device.displayName} NWK_addr_req for unknown IEEE ${requestedIeeeLe}; ignored (hub=${hubIeeeBe}, device=${deviceIeeeBe})"
-                }
-                break
-            }
-            */
-            // Response format:
-            // TSN + status(00=success) + IEEE address (8 bytes LE) + NWK address (2 bytes LE)
-            // + number of associated devices (00) + start index (00)
-            /*
-            cmds = ["he raw ${device.deviceNetworkId} 0 0 0x8000 {${seqNum} 00 ${requestedIeeeLe} ${nwkAddr} 00 00} {0x0000}"]
-            sendZigbeeCommands(cmds)
-            */
-            log.warn "ZDO Network Address Request received for IEEE ${requestedIeeeLe}; response is currently disabled (expecting HE platform to handle it)."
+            logDebug "ZDO Network Address Request received for IEEE ${requestedIeeeLe}; response is currently disabled (expecting HE platform to handle it)."
             break
 
         case '0002' : // Node Descriptor Request (Node_Desc_req)
-            if (logEnable) {
-                log.debug "${device.displayName} ZDO Node Descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]})"
-            }
-           // log.warn "ZDO Node Descriptor request data: temporarily ignored!"
-           // break
-            
+            logDebug "${device.displayName} ZDO Node Descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]})"
 
             List data = descMap.data as List
             if (data == null || data.size() < 3) {
-                if (logEnable) { log.debug "${device.displayName} invalid Node_Desc_req payload: ${data}" }
+                logDebug "${device.displayName} invalid Node_Desc_req payload: ${data}" 
                 break
             }
             // Request format: TSN + NwkAddrOfInterest (2 bytes little-endian)
@@ -1584,11 +1518,8 @@ def parseZDOcommand( Map descMap ) {
                 it instanceof String ? it.padLeft(2, '0').toUpperCase() : zigbee.convertToHexString((it as int) & 0xFF, 2)
             }.join(' ')
             // Only answer Node Descriptor requests for the coordinator (0x0000).
-            // Do not fabricate descriptors for other nodes.
             if (nwkAddrRequested != '00 00') {
-                if (logEnable) {
-                    log.debug "${device.displayName} Node_Desc_req for NWK ${nwkAddrRequested}; ignored"
-                }
+                logDebug "${device.displayName} Node_Desc_req for NWK ${nwkAddrRequested}; ignored"
                 break
             }
             
@@ -1617,12 +1548,8 @@ def parseZDOcommand( Map descMap ) {
             state.lastRx.zdo0002 = new Date().getTime()
 
             sendZigbeeCommands(cmds)
-                        /*         
-            // sync the time - just in case..
-            //runIn(1, "sendTimeSync")  
-            runIn(2, "aqaraBlackMagic") // 06/04/2026
-            */
-            log.warn "ZDO Node Descriptor Request received for NWK ${nwkAddrRequested}; response is currently disabled (expecting HE platform to handle it)."
+
+            logDebug "Overriding Hubutat ZDO Node Descriptor Response for NWK ${nwkAddrRequested}; nodeDesc=${nodeDesc} (TSN=${seqNum})"
             break
         case "0006" :
             if (logEnable) log.info "${device.displayName} Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7]+descMap.data[6]})"
@@ -1630,7 +1557,6 @@ def parseZDOcommand( Map descMap ) {
         case "0013" : // device announcement
             if (logEnable) log.info "${device.displayName} Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
             aqaraBlackMagic()
-            //aqaraReadAttributes()
             break
         case '0036' : // End Device Timeout Request
             Integer tsn = (descMap.data[0] instanceof String) ? Integer.parseInt(descMap.data[0], 16) : (descMap.data[0] as int)
@@ -2185,21 +2111,23 @@ void refresh() {
         cmds += zigbee.readAttribute(0xFCC0, 0x015B, [mfgCode: 0x115F], delay=200)  // detection range
     }
     else if (isFP300()) {
-        /*
-        cmds += zigbee.readAttribute(0xFCC0, 0x00EE, [mfgCode: 0x115F], delay=200)
-        cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x014D, 0x014F, 0x0197, 0x0199, 0x015D, 0x015E], [mfgCode: 0x115F], delay=200)  // FP300 attributes
+        cmds =  zigbee.readAttribute(0x0000, [0x0001,0x0002, 0x0005], [:], delay=200)
+        cmds += zigbee.readAttribute(0x0000, 0xF003, [:], delay=200)
+        
+        cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x014D, 0x014F], [mfgCode: 0x115F], delay=200)  // FP300 attributes
+        cmds += zigbee.readAttribute(0xFCC0, [0x0197, 0x0199, 0x015D, 0x015E], [mfgCode: 0x115F], delay=200)  // FP300 attributes
         cmds += zigbee.readAttribute(0xFCC0, [0x0162, 0x0170, 0x0192, 0x0193], [mfgCode: 0x115F], delay=200)  // FP300 sampling configuration
         cmds += zigbee.readAttribute(0xFCC0, [0x0163, 0x0164, 0x0165], [mfgCode: 0x115F], delay=200)  // FP300 temperature reporting config
         cmds += zigbee.readAttribute(0xFCC0, [0x016A, 0x016B, 0x016C], [mfgCode: 0x115F], delay=200)  // FP300 humidity reporting config
         cmds += zigbee.readAttribute(0xFCC0, [0x0194, 0x0195, 0x0196], [mfgCode: 0x115F], delay=200)  // FP300 light reporting config
         cmds += zigbee.readAttribute(0xFCC0, 0x019A, [mfgCode: 0x115F], delay=200)  // FP300 detection range (separate read)
-        cmds += zigbee.readAttribute(0xFCC0, [0x0203, 0x023E, 0x00F7], [mfgCode: 0x115F], delay=200)  // FP300 LED disabled night (0x0203) & schedule (0x023E) + Aqara struct 
+        cmds += zigbee.readAttribute(0xFCC0, [0x0203, 0x023E], [mfgCode: 0x115F], delay=200)  // FP300 LED disabled night (0x0203) & schedule (0x023E)
+        //cmds += zigbee.readAttribute(0xFCC0, 0x00F7, [mfgCode: 0x115F], delay=200)  // Aqara struct
         cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)  // Temperature
         cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)  // Humidity
         cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=200)  // Illuminance
-        cmds += zigbee.readAttribute(0x0001, [0x0004, 0x0005, 0x0006], [:], delay=200)
-        */
-        log.trace "refresh() for FP300 - skipped!"
+        
+        // log.trace "refresh() for FP300 - skipped!" // refresh was disabled for FP300 since version 2.1.7 !
     }
     else {
         logDebug 'no refresh required'
@@ -2550,14 +2478,6 @@ void updated() {
     else {
         logInfo "no preferences were changed that require configuration commands to be sent."
     }
-    /*
-    // Ensure the zigbeeLogsocket WebSocket is connected for FP300.
-    // updated() is the callback Hubitat invokes when a new driver version is saved,
-    // so this is the reliable place to (re)connect without requiring Configure/Initialize.
-    if (isFP300()) {
-        runIn(3, 'connectZigbeeLogSocket', [overwrite: true])
-    }
-    */
 }    
 
 // called from  initializeVars( fullInit = true)
