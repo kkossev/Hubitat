@@ -40,7 +40,7 @@
 */
 
 static String version() { "4.2.4" }
-static String timeStamp() {"2026/07/09 10:02 PM"}
+static String timeStamp() {"2026/07/09 10:53 PM"}
 
 @Field static final Boolean _DEBUG = false           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -2196,7 +2196,7 @@ library( // library marker kkossev.deviceProfileLibV4, line 2
 */ // library marker kkossev.deviceProfileLibV4, line 32
 
 static String deviceProfileLibVersion()   { '4.1.2' } // library marker kkossev.deviceProfileLibV4, line 34
-static String deviceProfileLibStamp() { '2026/07/09 10:25 PM' } // library marker kkossev.deviceProfileLibV4, line 35
+static String deviceProfileLibStamp() { '2026/07/09 10:53 PM' } // library marker kkossev.deviceProfileLibV4, line 35
 import groovy.json.* // library marker kkossev.deviceProfileLibV4, line 36
 import groovy.transform.Field // library marker kkossev.deviceProfileLibV4, line 37
 import hubitat.zigbee.clusters.iaszone.ZoneStatus // library marker kkossev.deviceProfileLibV4, line 38
@@ -4204,576 +4204,584 @@ public def readFile(fName, boolean allowRetryOnSslError) { // library marker kko
         // 'unable to find valid certification path' failures have been reported on this call even with // library marker kkossev.deviceProfileLibV4, line 2040
         // hub security disabled - if the request ends up on TLS for any reason, skip cert validation. // library marker kkossev.deviceProfileLibV4, line 2041
         ignoreSSLIssues: true, // library marker kkossev.deviceProfileLibV4, line 2042
-    ] // library marker kkossev.deviceProfileLibV4, line 2043
-    if (state.profilesV4 == null) { state.profilesV4 = [:] } // library marker kkossev.deviceProfileLibV4, line 2044
-    state.profilesV4['lastReadFileError'] = '' // library marker kkossev.deviceProfileLibV4, line 2045
-    try { // library marker kkossev.deviceProfileLibV4, line 2046
-        httpGet(params) { resp -> // library marker kkossev.deviceProfileLibV4, line 2047
-            if(resp!= null) { // library marker kkossev.deviceProfileLibV4, line 2048
-                def data = resp.getData(); // library marker kkossev.deviceProfileLibV4, line 2049
-                logDebug "readFile: read ${data.length} chars from ${uri}" // library marker kkossev.deviceProfileLibV4, line 2050
-                long contentEndTime = now() // library marker kkossev.deviceProfileLibV4, line 2051
-                long contentDuration = contentEndTime - contentStartTime // library marker kkossev.deviceProfileLibV4, line 2052
-                logDebug "Performance: Content=${contentDuration}ms" // library marker kkossev.deviceProfileLibV4, line 2053
-                state.profilesV4['lastReadFileError'] = 'OK' // library marker kkossev.deviceProfileLibV4, line 2054
-                return data // library marker kkossev.deviceProfileLibV4, line 2055
-            } // library marker kkossev.deviceProfileLibV4, line 2056
-            else { // library marker kkossev.deviceProfileLibV4, line 2057
-                log.error "${device?.displayName}  Null Response" // library marker kkossev.deviceProfileLibV4, line 2058
-                state.profilesV4['lastReadFileError'] = 'null response' // library marker kkossev.deviceProfileLibV4, line 2059
+        // This call runs while holding the device's singleThreaded semaphore (often from the parse path); // library marker kkossev.deviceProfileLibV4, line 2043
+        // without an explicit timeout a hung connection blocks ALL queued methods until the platform's // library marker kkossev.deviceProfileLibV4, line 2044
+        // 120s semaphore limit kills them ('Failed to acquire semaphore ... within 120 seconds'). // library marker kkossev.deviceProfileLibV4, line 2045
+        timeout: 20, // library marker kkossev.deviceProfileLibV4, line 2046
+    ] // library marker kkossev.deviceProfileLibV4, line 2047
+    if (state.profilesV4 == null) { state.profilesV4 = [:] } // library marker kkossev.deviceProfileLibV4, line 2048
+    state.profilesV4['lastReadFileError'] = '' // library marker kkossev.deviceProfileLibV4, line 2049
+    try { // library marker kkossev.deviceProfileLibV4, line 2050
+        httpGet(params) { resp -> // library marker kkossev.deviceProfileLibV4, line 2051
+            if(resp!= null) { // library marker kkossev.deviceProfileLibV4, line 2052
+                def data = resp.getData(); // library marker kkossev.deviceProfileLibV4, line 2053
+                logDebug "readFile: read ${data.length} chars from ${uri}" // library marker kkossev.deviceProfileLibV4, line 2054
+                long contentEndTime = now() // library marker kkossev.deviceProfileLibV4, line 2055
+                long contentDuration = contentEndTime - contentStartTime // library marker kkossev.deviceProfileLibV4, line 2056
+                logDebug "Performance: Content=${contentDuration}ms" // library marker kkossev.deviceProfileLibV4, line 2057
+                state.profilesV4['lastReadFileError'] = 'OK' // library marker kkossev.deviceProfileLibV4, line 2058
+                return data // library marker kkossev.deviceProfileLibV4, line 2059
             } // library marker kkossev.deviceProfileLibV4, line 2060
-        } // library marker kkossev.deviceProfileLibV4, line 2061
-    } catch (exception) { // library marker kkossev.deviceProfileLibV4, line 2062
-        String msg = exception.message ?: '' // library marker kkossev.deviceProfileLibV4, line 2063
-        // PKIX/certificate-chain errors have been reported on this plain http:// local-storage read // library marker kkossev.deviceProfileLibV4, line 2064
-        // (root cause on the hub side not identified yet - seen even with hub security disabled) - // library marker kkossev.deviceProfileLibV4, line 2065
-        // retry once after a short delay in case the condition is transient. // library marker kkossev.deviceProfileLibV4, line 2066
-        boolean isSslError = msg.contains('PKIX') || msg.contains('SSLHandshake') || msg.contains('certification path') // library marker kkossev.deviceProfileLibV4, line 2067
-        if (isSslError && allowRetryOnSslError) { // library marker kkossev.deviceProfileLibV4, line 2068
-            logWarn "readFile: SSL/certificate exception reading ${fName} (${msg}) - retrying once after a short delay" // library marker kkossev.deviceProfileLibV4, line 2069
-            pauseExecution(1000) // library marker kkossev.deviceProfileLibV4, line 2070
-            return readFile(fName, false) // library marker kkossev.deviceProfileLibV4, line 2071
-        } // library marker kkossev.deviceProfileLibV4, line 2072
-        log.error "${device?.displayName} Connection Exception: ${exception.message} (uri=${uri})" // library marker kkossev.deviceProfileLibV4, line 2073
-        state.profilesV4['lastReadFileError'] = exception.message // library marker kkossev.deviceProfileLibV4, line 2074
-        return null; // library marker kkossev.deviceProfileLibV4, line 2075
-    } // library marker kkossev.deviceProfileLibV4, line 2076
-} // library marker kkossev.deviceProfileLibV4, line 2077
+            else { // library marker kkossev.deviceProfileLibV4, line 2061
+                log.error "${device?.displayName}  Null Response" // library marker kkossev.deviceProfileLibV4, line 2062
+                state.profilesV4['lastReadFileError'] = 'null response' // library marker kkossev.deviceProfileLibV4, line 2063
+            } // library marker kkossev.deviceProfileLibV4, line 2064
+        } // library marker kkossev.deviceProfileLibV4, line 2065
+    } catch (exception) { // library marker kkossev.deviceProfileLibV4, line 2066
+        String msg = exception.message ?: '' // library marker kkossev.deviceProfileLibV4, line 2067
+        // PKIX/certificate-chain errors have been reported on this plain http:// local-storage read // library marker kkossev.deviceProfileLibV4, line 2068
+        // (root cause on the hub side not identified yet - seen even with hub security disabled) - // library marker kkossev.deviceProfileLibV4, line 2069
+        // retry once after a short delay in case the condition is transient. // library marker kkossev.deviceProfileLibV4, line 2070
+        boolean isSslError = msg.contains('PKIX') || msg.contains('SSLHandshake') || msg.contains('certification path') // library marker kkossev.deviceProfileLibV4, line 2071
+        if (isSslError && allowRetryOnSslError) { // library marker kkossev.deviceProfileLibV4, line 2072
+            logWarn "readFile: SSL/certificate exception reading ${fName} (${msg}) - retrying once after a short delay" // library marker kkossev.deviceProfileLibV4, line 2073
+            pauseExecution(1000) // library marker kkossev.deviceProfileLibV4, line 2074
+            return readFile(fName, false) // library marker kkossev.deviceProfileLibV4, line 2075
+        } // library marker kkossev.deviceProfileLibV4, line 2076
+        log.error "${device?.displayName} Connection Exception: ${exception.message} (uri=${uri})" // library marker kkossev.deviceProfileLibV4, line 2077
+        state.profilesV4['lastReadFileError'] = exception.message // library marker kkossev.deviceProfileLibV4, line 2078
+        return null; // library marker kkossev.deviceProfileLibV4, line 2079
+    } // library marker kkossev.deviceProfileLibV4, line 2080
+} // library marker kkossev.deviceProfileLibV4, line 2081
 
 
 
-boolean loadProfilesFromJSONstring(stringifiedJSON) { // library marker kkossev.deviceProfileLibV4, line 2081
-    long startTime = now() // library marker kkossev.deviceProfileLibV4, line 2082
+boolean loadProfilesFromJSONstring(stringifiedJSON) { // library marker kkossev.deviceProfileLibV4, line 2085
+    long startTime = now() // library marker kkossev.deviceProfileLibV4, line 2086
 
-    // idempotent : don't re-parse if already populated // library marker kkossev.deviceProfileLibV4, line 2084
-    if (g_deviceProfilesV4 != null && !g_deviceProfilesV4?.isEmpty()) { // library marker kkossev.deviceProfileLibV4, line 2085
-        logDebug "loadProfilesFromJSON: already loaded (${g_deviceProfilesV4.size()} profiles)" // library marker kkossev.deviceProfileLibV4, line 2086
-        return true // library marker kkossev.deviceProfileLibV4, line 2087
-    } // library marker kkossev.deviceProfileLibV4, line 2088
-    try { // library marker kkossev.deviceProfileLibV4, line 2089
-        logDebug "loadProfilesFromJSON: start loading device profiles from JSON..." // library marker kkossev.deviceProfileLibV4, line 2090
-        if (!stringifiedJSON) { // library marker kkossev.deviceProfileLibV4, line 2091
-            logWarn "loadProfilesFromJSON: stringifiedJSON is empty/null" // library marker kkossev.deviceProfileLibV4, line 2092
-            return false // library marker kkossev.deviceProfileLibV4, line 2093
-        } // library marker kkossev.deviceProfileLibV4, line 2094
+    // idempotent : don't re-parse if already populated // library marker kkossev.deviceProfileLibV4, line 2088
+    if (g_deviceProfilesV4 != null && !g_deviceProfilesV4?.isEmpty()) { // library marker kkossev.deviceProfileLibV4, line 2089
+        logDebug "loadProfilesFromJSON: already loaded (${g_deviceProfilesV4.size()} profiles)" // library marker kkossev.deviceProfileLibV4, line 2090
+        return true // library marker kkossev.deviceProfileLibV4, line 2091
+    } // library marker kkossev.deviceProfileLibV4, line 2092
+    try { // library marker kkossev.deviceProfileLibV4, line 2093
+        logDebug "loadProfilesFromJSON: start loading device profiles from JSON..." // library marker kkossev.deviceProfileLibV4, line 2094
+        if (!stringifiedJSON) { // library marker kkossev.deviceProfileLibV4, line 2095
+            logWarn "loadProfilesFromJSON: stringifiedJSON is empty/null" // library marker kkossev.deviceProfileLibV4, line 2096
+            return false // library marker kkossev.deviceProfileLibV4, line 2097
+        } // library marker kkossev.deviceProfileLibV4, line 2098
 
-        def jsonSlurper = new JsonSlurper(); // library marker kkossev.deviceProfileLibV4, line 2096
-        def parsed = jsonSlurper.parseText("${stringifiedJSON}"); // library marker kkossev.deviceProfileLibV4, line 2097
+        def jsonSlurper = new JsonSlurper(); // library marker kkossev.deviceProfileLibV4, line 2100
+        def parsed = jsonSlurper.parseText("${stringifiedJSON}"); // library marker kkossev.deviceProfileLibV4, line 2101
 
-        def dp = parsed?.deviceProfiles // library marker kkossev.deviceProfileLibV4, line 2099
-        if (!(dp instanceof Map) || dp.isEmpty()) { // library marker kkossev.deviceProfileLibV4, line 2100
-            logWarn "loadProfilesFromJSON: parsed deviceProfiles missing or empty" // library marker kkossev.deviceProfileLibV4, line 2101
-            startCooldownTimer() // library marker kkossev.deviceProfileLibV4, line 2102
-            return false // library marker kkossev.deviceProfileLibV4, line 2103
-        } // library marker kkossev.deviceProfileLibV4, line 2104
-        resetCooldownFlag() // library marker kkossev.deviceProfileLibV4, line 2105
+        def dp = parsed?.deviceProfiles // library marker kkossev.deviceProfileLibV4, line 2103
+        if (!(dp instanceof Map) || dp.isEmpty()) { // library marker kkossev.deviceProfileLibV4, line 2104
+            logWarn "loadProfilesFromJSON: parsed deviceProfiles missing or empty" // library marker kkossev.deviceProfileLibV4, line 2105
+            startCooldownTimer() // library marker kkossev.deviceProfileLibV4, line 2106
+            return false // library marker kkossev.deviceProfileLibV4, line 2107
+        } // library marker kkossev.deviceProfileLibV4, line 2108
+        resetCooldownFlag() // library marker kkossev.deviceProfileLibV4, line 2109
 
-        // Extract version and timestamp metadata // library marker kkossev.deviceProfileLibV4, line 2107
-        if (state.profilesV4 == null) { state.profilesV4 = [:] } // library marker kkossev.deviceProfileLibV4, line 2108
-        state.profilesV4['version'] = parsed?.version ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2109
-        state.profilesV4['timestamp'] = parsed?.timestamp ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2110
-        logDebug "loadProfilesFromJSON: JSON version=${state.profilesV4['version']}, timestamp=${state.profilesV4['timestamp']}" // library marker kkossev.deviceProfileLibV4, line 2111
+        // Extract version and timestamp metadata // library marker kkossev.deviceProfileLibV4, line 2111
+        if (state.profilesV4 == null) { state.profilesV4 = [:] } // library marker kkossev.deviceProfileLibV4, line 2112
+        state.profilesV4['version'] = parsed?.version ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2113
+        state.profilesV4['timestamp'] = parsed?.timestamp ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2114
+        logDebug "loadProfilesFromJSON: JSON version=${state.profilesV4['version']}, timestamp=${state.profilesV4['timestamp']}" // library marker kkossev.deviceProfileLibV4, line 2115
 
-        // !!!!!!!!!!!!!!!!!!!!!!! // library marker kkossev.deviceProfileLibV4, line 2113
-        // Populate g_deviceProfilesV4 // library marker kkossev.deviceProfileLibV4, line 2114
-        if (g_deviceProfilesV4 == null) { g_deviceProfilesV4 = [:] }   // initialize if null // library marker kkossev.deviceProfileLibV4, line 2115
-        else { g_deviceProfilesV4.clear() }                             // clear existing entries if any // library marker kkossev.deviceProfileLibV4, line 2116
-        g_deviceProfilesV4.putAll(dp as Map) // library marker kkossev.deviceProfileLibV4, line 2117
-        logDebug "loadProfilesFromJSON: g_deviceProfilesV4 populated with ${g_deviceProfilesV4.size()} profiles" // library marker kkossev.deviceProfileLibV4, line 2118
+        // !!!!!!!!!!!!!!!!!!!!!!! // library marker kkossev.deviceProfileLibV4, line 2117
+        // Populate g_deviceProfilesV4 // library marker kkossev.deviceProfileLibV4, line 2118
+        if (g_deviceProfilesV4 == null) { g_deviceProfilesV4 = [:] }   // initialize if null // library marker kkossev.deviceProfileLibV4, line 2119
+        else { g_deviceProfilesV4.clear() }                             // clear existing entries if any // library marker kkossev.deviceProfileLibV4, line 2120
+        g_deviceProfilesV4.putAll(dp as Map) // library marker kkossev.deviceProfileLibV4, line 2121
+        logDebug "loadProfilesFromJSON: g_deviceProfilesV4 populated with ${g_deviceProfilesV4.size()} profiles" // library marker kkossev.deviceProfileLibV4, line 2122
 
-        // Populate g_deviceFingerprintsV4 using bulk assignment for better performance // library marker kkossev.deviceProfileLibV4, line 2120
-        // Use fingerprintIt() logic to reconstruct complete fingerprint data // library marker kkossev.deviceProfileLibV4, line 2121
-        Map localFingerprints = [:] // library marker kkossev.deviceProfileLibV4, line 2122
+        // Populate g_deviceFingerprintsV4 using bulk assignment for better performance // library marker kkossev.deviceProfileLibV4, line 2124
+        // Use fingerprintIt() logic to reconstruct complete fingerprint data // library marker kkossev.deviceProfileLibV4, line 2125
+        Map localFingerprints = [:] // library marker kkossev.deviceProfileLibV4, line 2126
 
-        g_deviceProfilesV4.each { profileKey, profileMap -> // library marker kkossev.deviceProfileLibV4, line 2124
-            // Reconstruct complete fingerprint Maps and pre-compute strings // library marker kkossev.deviceProfileLibV4, line 2125
-            List<Map> reconstructedFingerprints = [] // library marker kkossev.deviceProfileLibV4, line 2126
-            List<String> computedFingerprintStrings = [] // library marker kkossev.deviceProfileLibV4, line 2127
+        g_deviceProfilesV4.each { profileKey, profileMap -> // library marker kkossev.deviceProfileLibV4, line 2128
+            // Reconstruct complete fingerprint Maps and pre-compute strings // library marker kkossev.deviceProfileLibV4, line 2129
+            List<Map> reconstructedFingerprints = [] // library marker kkossev.deviceProfileLibV4, line 2130
+            List<String> computedFingerprintStrings = [] // library marker kkossev.deviceProfileLibV4, line 2131
 
-            if (profileMap.fingerprints != null) { // library marker kkossev.deviceProfileLibV4, line 2129
-                profileMap.fingerprints.each { fingerprint -> // library marker kkossev.deviceProfileLibV4, line 2130
-                    // Reconstruct complete fingerprint using fingerprintIt logic // library marker kkossev.deviceProfileLibV4, line 2131
-                    Map reconstructedFingerprint = reconstructFingerprint(profileMap, fingerprint) // library marker kkossev.deviceProfileLibV4, line 2132
-                    reconstructedFingerprints.add(reconstructedFingerprint) // library marker kkossev.deviceProfileLibV4, line 2133
+            if (profileMap.fingerprints != null) { // library marker kkossev.deviceProfileLibV4, line 2133
+                profileMap.fingerprints.each { fingerprint -> // library marker kkossev.deviceProfileLibV4, line 2134
+                    // Reconstruct complete fingerprint using fingerprintIt logic // library marker kkossev.deviceProfileLibV4, line 2135
+                    Map reconstructedFingerprint = reconstructFingerprint(profileMap, fingerprint) // library marker kkossev.deviceProfileLibV4, line 2136
+                    reconstructedFingerprints.add(reconstructedFingerprint) // library marker kkossev.deviceProfileLibV4, line 2137
 
-                    // Also create formatted string for debugging // library marker kkossev.deviceProfileLibV4, line 2135
-                    String fpString = fingerprintIt(profileMap, fingerprint) // library marker kkossev.deviceProfileLibV4, line 2136
-                    if (fpString && fpString != 'profileMap is null' && fpString != 'fingerprint is null') { // library marker kkossev.deviceProfileLibV4, line 2137
-                        computedFingerprintStrings.add(fpString) // library marker kkossev.deviceProfileLibV4, line 2138
-                    } // library marker kkossev.deviceProfileLibV4, line 2139
-                } // library marker kkossev.deviceProfileLibV4, line 2140
-            } // library marker kkossev.deviceProfileLibV4, line 2141
+                    // Also create formatted string for debugging // library marker kkossev.deviceProfileLibV4, line 2139
+                    String fpString = fingerprintIt(profileMap, fingerprint) // library marker kkossev.deviceProfileLibV4, line 2140
+                    if (fpString && fpString != 'profileMap is null' && fpString != 'fingerprint is null') { // library marker kkossev.deviceProfileLibV4, line 2141
+                        computedFingerprintStrings.add(fpString) // library marker kkossev.deviceProfileLibV4, line 2142
+                    } // library marker kkossev.deviceProfileLibV4, line 2143
+                } // library marker kkossev.deviceProfileLibV4, line 2144
+            } // library marker kkossev.deviceProfileLibV4, line 2145
 
-            localFingerprints[profileKey] = [ // library marker kkossev.deviceProfileLibV4, line 2143
-                description: profileMap.description ?: '', // library marker kkossev.deviceProfileLibV4, line 2144
-                fingerprints: reconstructedFingerprints, // Use reconstructed complete fingerprints // library marker kkossev.deviceProfileLibV4, line 2145
-                computedFingerprints: computedFingerprintStrings // library marker kkossev.deviceProfileLibV4, line 2146
-            ] // library marker kkossev.deviceProfileLibV4, line 2147
-        } // library marker kkossev.deviceProfileLibV4, line 2148
-        if (g_deviceFingerprintsV4 == null) { g_deviceFingerprintsV4 = [:] }   // initialize if null // library marker kkossev.deviceProfileLibV4, line 2149
-        else { g_deviceFingerprintsV4.clear() }                             // clear existing entries if any // library marker kkossev.deviceProfileLibV4, line 2150
-        g_deviceFingerprintsV4.putAll(localFingerprints) // library marker kkossev.deviceProfileLibV4, line 2151
-        logDebug "loadProfilesFromJSON: g_deviceFingerprintsV4 populated with ${g_deviceFingerprintsV4.size()} entries" // library marker kkossev.deviceProfileLibV4, line 2152
+            localFingerprints[profileKey] = [ // library marker kkossev.deviceProfileLibV4, line 2147
+                description: profileMap.description ?: '', // library marker kkossev.deviceProfileLibV4, line 2148
+                fingerprints: reconstructedFingerprints, // Use reconstructed complete fingerprints // library marker kkossev.deviceProfileLibV4, line 2149
+                computedFingerprints: computedFingerprintStrings // library marker kkossev.deviceProfileLibV4, line 2150
+            ] // library marker kkossev.deviceProfileLibV4, line 2151
+        } // library marker kkossev.deviceProfileLibV4, line 2152
+        if (g_deviceFingerprintsV4 == null) { g_deviceFingerprintsV4 = [:] }   // initialize if null // library marker kkossev.deviceProfileLibV4, line 2153
+        else { g_deviceFingerprintsV4.clear() }                             // clear existing entries if any // library marker kkossev.deviceProfileLibV4, line 2154
+        g_deviceFingerprintsV4.putAll(localFingerprints) // library marker kkossev.deviceProfileLibV4, line 2155
+        logDebug "loadProfilesFromJSON: g_deviceFingerprintsV4 populated with ${g_deviceFingerprintsV4.size()} entries" // library marker kkossev.deviceProfileLibV4, line 2156
 
-        // Count total computed fingerprint strings // library marker kkossev.deviceProfileLibV4, line 2154
-        int totalComputedFingerprints = 0 // library marker kkossev.deviceProfileLibV4, line 2155
-        localFingerprints.each { key, value -> // library marker kkossev.deviceProfileLibV4, line 2156
-            totalComputedFingerprints += value.computedFingerprints?.size() ?: 0 // library marker kkossev.deviceProfileLibV4, line 2157
-        } // library marker kkossev.deviceProfileLibV4, line 2158
+        // Count total computed fingerprint strings // library marker kkossev.deviceProfileLibV4, line 2158
+        int totalComputedFingerprints = 0 // library marker kkossev.deviceProfileLibV4, line 2159
+        localFingerprints.each { key, value -> // library marker kkossev.deviceProfileLibV4, line 2160
+            totalComputedFingerprints += value.computedFingerprints?.size() ?: 0 // library marker kkossev.deviceProfileLibV4, line 2161
+        } // library marker kkossev.deviceProfileLibV4, line 2162
 
-        // NOTE: g_profilesLoaded flag is managed by ensureProfilesLoaded(), not here // library marker kkossev.deviceProfileLibV4, line 2160
-        // This keeps loadProfilesFromJSON() as a pure function // library marker kkossev.deviceProfileLibV4, line 2161
-        long endTime = now() // library marker kkossev.deviceProfileLibV4, line 2162
-        long executionTime = endTime - startTime // library marker kkossev.deviceProfileLibV4, line 2163
+        // NOTE: g_profilesLoaded flag is managed by ensureProfilesLoaded(), not here // library marker kkossev.deviceProfileLibV4, line 2164
+        // This keeps loadProfilesFromJSON() as a pure function // library marker kkossev.deviceProfileLibV4, line 2165
+        long endTime = now() // library marker kkossev.deviceProfileLibV4, line 2166
+        long executionTime = endTime - startTime // library marker kkossev.deviceProfileLibV4, line 2167
 
-        logDebug "loadProfilesFromJSON: loaded ${g_deviceProfilesV4.size()} profiles: ${g_deviceProfilesV4.keySet()}" // library marker kkossev.deviceProfileLibV4, line 2165
-        logDebug "loadProfilesFromJSON: populated ${g_deviceFingerprintsV4.size()} fingerprint entries" // library marker kkossev.deviceProfileLibV4, line 2166
-        logDebug "loadProfilesFromJSON: pre-computed ${totalComputedFingerprints} fingerprint strings" // library marker kkossev.deviceProfileLibV4, line 2167
-        logDebug "loadProfilesFromJSON: execution time: ${executionTime}ms" // library marker kkossev.deviceProfileLibV4, line 2168
-        return true // library marker kkossev.deviceProfileLibV4, line 2169
+        logDebug "loadProfilesFromJSON: loaded ${g_deviceProfilesV4.size()} profiles: ${g_deviceProfilesV4.keySet()}" // library marker kkossev.deviceProfileLibV4, line 2169
+        logDebug "loadProfilesFromJSON: populated ${g_deviceFingerprintsV4.size()} fingerprint entries" // library marker kkossev.deviceProfileLibV4, line 2170
+        logDebug "loadProfilesFromJSON: pre-computed ${totalComputedFingerprints} fingerprint strings" // library marker kkossev.deviceProfileLibV4, line 2171
+        logDebug "loadProfilesFromJSON: execution time: ${executionTime}ms" // library marker kkossev.deviceProfileLibV4, line 2172
+        return true // library marker kkossev.deviceProfileLibV4, line 2173
 
-    } catch (Exception e) { // library marker kkossev.deviceProfileLibV4, line 2171
-        long endTime = now() // library marker kkossev.deviceProfileLibV4, line 2172
-        long executionTime = endTime - startTime // library marker kkossev.deviceProfileLibV4, line 2173
-        logError "loadProfilesFromJSON exception: error converting JSON: ${e.message} (execution time: ${executionTime}ms)" // library marker kkossev.deviceProfileLibV4, line 2174
-        startCooldownTimer() // library marker kkossev.deviceProfileLibV4, line 2175
-        return false // library marker kkossev.deviceProfileLibV4, line 2176
-    } // library marker kkossev.deviceProfileLibV4, line 2177
-} // library marker kkossev.deviceProfileLibV4, line 2178
+    } catch (Exception e) { // library marker kkossev.deviceProfileLibV4, line 2175
+        long endTime = now() // library marker kkossev.deviceProfileLibV4, line 2176
+        long executionTime = endTime - startTime // library marker kkossev.deviceProfileLibV4, line 2177
+        logError "loadProfilesFromJSON exception: error converting JSON: ${e.message} (execution time: ${executionTime}ms)" // library marker kkossev.deviceProfileLibV4, line 2178
+        startCooldownTimer() // library marker kkossev.deviceProfileLibV4, line 2179
+        return false // library marker kkossev.deviceProfileLibV4, line 2180
+    } // library marker kkossev.deviceProfileLibV4, line 2181
+} // library marker kkossev.deviceProfileLibV4, line 2182
 
 
-void startCooldownTimer() { // library marker kkossev.deviceProfileLibV4, line 2181
-    if (g_loadProfilesCooldown) { // library marker kkossev.deviceProfileLibV4, line 2182
-        return // library marker kkossev.deviceProfileLibV4, line 2183
-    } // library marker kkossev.deviceProfileLibV4, line 2184
-    g_loadProfilesCooldown = true // library marker kkossev.deviceProfileLibV4, line 2185
-    runInMillis(LOAD_PROFILES_COOLDOWN_MS, resetCooldownFlag, [overwrite: true]) // library marker kkossev.deviceProfileLibV4, line 2186
-    logWarn "startCooldownTimer: starting cooldown timer for ${LOAD_PROFILES_COOLDOWN_MS} ms to prevent multiple profile loading attempts" // library marker kkossev.deviceProfileLibV4, line 2187
-} // library marker kkossev.deviceProfileLibV4, line 2188
+void startCooldownTimer() { // library marker kkossev.deviceProfileLibV4, line 2185
+    if (g_loadProfilesCooldown) { // library marker kkossev.deviceProfileLibV4, line 2186
+        return // library marker kkossev.deviceProfileLibV4, line 2187
+    } // library marker kkossev.deviceProfileLibV4, line 2188
+    g_loadProfilesCooldown = true // library marker kkossev.deviceProfileLibV4, line 2189
+    runInMillis(LOAD_PROFILES_COOLDOWN_MS, resetCooldownFlag, [overwrite: true]) // library marker kkossev.deviceProfileLibV4, line 2190
+    logWarn "startCooldownTimer: starting cooldown timer for ${LOAD_PROFILES_COOLDOWN_MS} ms to prevent multiple profile loading attempts" // library marker kkossev.deviceProfileLibV4, line 2191
+} // library marker kkossev.deviceProfileLibV4, line 2192
 
-void resetCooldownFlag() { // library marker kkossev.deviceProfileLibV4, line 2190
-    g_loadProfilesCooldown = false // library marker kkossev.deviceProfileLibV4, line 2191
-    logDebug "resetCooldownFlag: cooldown period ended, can attempt profile loading again" // library marker kkossev.deviceProfileLibV4, line 2192
-} // library marker kkossev.deviceProfileLibV4, line 2193
-
-boolean isInCooldown() { // library marker kkossev.deviceProfileLibV4, line 2195
-    return g_loadProfilesCooldown // library marker kkossev.deviceProfileLibV4, line 2196
+void resetCooldownFlag() { // library marker kkossev.deviceProfileLibV4, line 2194
+    g_loadProfilesCooldown = false // library marker kkossev.deviceProfileLibV4, line 2195
+    logDebug "resetCooldownFlag: cooldown period ended, can attempt profile loading again" // library marker kkossev.deviceProfileLibV4, line 2196
 } // library marker kkossev.deviceProfileLibV4, line 2197
 
-
-
-/** // library marker kkossev.deviceProfileLibV4, line 2201
- * Ensures that device profiles are loaded with thread-safe lazy loading // library marker kkossev.deviceProfileLibV4, line 2202
- * This is the main function that should be called before accessing g_deviceProfilesV4 // library marker kkossev.deviceProfileLibV4, line 2203
- * @return true if profiles are loaded successfully, false otherwise // library marker kkossev.deviceProfileLibV4, line 2204
- */ // library marker kkossev.deviceProfileLibV4, line 2205
-private boolean ensureProfilesLoaded() { // library marker kkossev.deviceProfileLibV4, line 2206
-    // Fast path: already loaded // library marker kkossev.deviceProfileLibV4, line 2207
-//    if (!g_deviceProfilesV4.isEmpty() && g_profilesLoaded) { // library marker kkossev.deviceProfileLibV4, line 2208
-    if (g_profilesLoaded && !g_currentProfilesV4?.isEmpty()) {       // !!!!!!!!!!!!!!!!!!!!!!!! TODO - check !!!!!!!!!!!!!!!!!!!!!!!!!! // library marker kkossev.deviceProfileLibV4, line 2209
-        return true // library marker kkossev.deviceProfileLibV4, line 2210
-    } // library marker kkossev.deviceProfileLibV4, line 2211
-    if (state.profilesV4 == null) { state.profilesV4 = [:] }   // initialize state variable if not present // library marker kkossev.deviceProfileLibV4, line 2212
-    if (isInCooldown()) { // library marker kkossev.deviceProfileLibV4, line 2213
-        state.profilesV4['cooldownSkipsCtr'] = (state.profilesV4['cooldownSkipsCtr'] ?: 0) + 1 // library marker kkossev.deviceProfileLibV4, line 2214
-        logDebug "ensureProfilesLoaded: in cooldown period, skipping profile load attempt" // library marker kkossev.deviceProfileLibV4, line 2215
-        return false // library marker kkossev.deviceProfileLibV4, line 2216
-    } // library marker kkossev.deviceProfileLibV4, line 2217
-    // Check if another thread is already loading // library marker kkossev.deviceProfileLibV4, line 2218
-    if (g_profilesLoading) { // library marker kkossev.deviceProfileLibV4, line 2219
-        // Wait briefly for other thread to finish // library marker kkossev.deviceProfileLibV4, line 2220
-        for (int i = 0; i < 10; i++) { // library marker kkossev.deviceProfileLibV4, line 2221
-            state.profilesV4['waitForOtherThreadCtr'] = (state.profilesV4['waitForOtherThreadCtr'] ?: 0) + 1 // library marker kkossev.deviceProfileLibV4, line 2222
-            logInfo "ensureProfilesLoaded: waiting <b>100ms</b> for other thread to finish loading... try ${i+1}/10" // library marker kkossev.deviceProfileLibV4, line 2223
-            pauseExecution(100) // library marker kkossev.deviceProfileLibV4, line 2224
-            if (g_profilesLoaded && !g_deviceProfilesV4?.isEmpty()) { // library marker kkossev.deviceProfileLibV4, line 2225
-                sendInfoEvent "ensureProfilesLoaded: other thread finished loading" // library marker kkossev.deviceProfileLibV4, line 2226
-                return true // library marker kkossev.deviceProfileLibV4, line 2227
-            } // library marker kkossev.deviceProfileLibV4, line 2228
-        } // library marker kkossev.deviceProfileLibV4, line 2229
-        // If still loading after wait, return false - don't interfere with other thread // library marker kkossev.deviceProfileLibV4, line 2230
-        sendInfoEvent "ensureProfilesLoaded: timeout waiting for other thread, giving up!" // library marker kkossev.deviceProfileLibV4, line 2231
-        state.profilesV4['waitForOtherThreadTimeouts'] = (state.profilesV4['waitForOtherThreadTimeouts'] ?: 0) + 1 // library marker kkossev.deviceProfileLibV4, line 2232
-        return false // library marker kkossev.deviceProfileLibV4, line 2233
-    } // library marker kkossev.deviceProfileLibV4, line 2234
-
-    // Acquire loading lock // library marker kkossev.deviceProfileLibV4, line 2236
-    g_profilesLoading = true // library marker kkossev.deviceProfileLibV4, line 2237
-    try { // library marker kkossev.deviceProfileLibV4, line 2238
-        // Double-check after acquiring lock // library marker kkossev.deviceProfileLibV4, line 2239
-        Boolean isEmpty = (g_deviceProfilesV4 == null) ? true : g_deviceProfilesV4?.isEmpty() // library marker kkossev.deviceProfileLibV4, line 2240
-        if (isEmpty || !g_profilesLoaded) { // library marker kkossev.deviceProfileLibV4, line 2241
-            state.profilesV4['loadProfilesCtr'] = (state.profilesV4['loadProfilesCtr'] ?: 0) + 1 // library marker kkossev.deviceProfileLibV4, line 2242
-            logDebug "ensureProfilesLoaded: loading device profiles...(isEmpty=${isEmpty}, g_profilesLoaded=${g_profilesLoaded})" // library marker kkossev.deviceProfileLibV4, line 2243
-            boolean result = loadProfilesFromJSON() // library marker kkossev.deviceProfileLibV4, line 2244
-            if (result) { // library marker kkossev.deviceProfileLibV4, line 2245
-                g_profilesLoaded = true // library marker kkossev.deviceProfileLibV4, line 2246
-                String version = state.profilesV4?.version ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2247
-                String timestamp = state.profilesV4?.timestamp ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2248
-                sendInfoEvent "Successfully loaded ${g_deviceProfilesV4.size()} deviceProfilesV4 profiles (version: ${version}, timestamp: ${timestamp})  ⚠️ Refresh this page to see updated profiles in the dropdown!" // library marker kkossev.deviceProfileLibV4, line 2249
-            } else { // library marker kkossev.deviceProfileLibV4, line 2250
-                sendInfoEvent "ensureProfilesLoaded: failed to load device profiles (loadProfilesFromJSON() failed)" // library marker kkossev.deviceProfileLibV4, line 2251
-                startCooldownTimer() // library marker kkossev.deviceProfileLibV4, line 2252
-            } // library marker kkossev.deviceProfileLibV4, line 2253
-            g_profilesLoading = false // library marker kkossev.deviceProfileLibV4, line 2254
-
-            // State-based persistence: Check if we should auto-load custom profiles // library marker kkossev.deviceProfileLibV4, line 2256
-            String lastSource = state.profilesV4?.get('lastJSONSource') // library marker kkossev.deviceProfileLibV4, line 2257
-            String customFilename = state.profilesV4?.get('customJSONFilename') // library marker kkossev.deviceProfileLibV4, line 2258
-            String dni = device?.deviceNetworkId // library marker kkossev.deviceProfileLibV4, line 2259
-
-            if (result && lastSource == 'custom' && customFilename != null && dni) { // library marker kkossev.deviceProfileLibV4, line 2261
-                logDebug "ensureProfilesLoaded: lastJSONSource is 'custom', attempting to load ${customFilename} for device ${dni}" // library marker kkossev.deviceProfileLibV4, line 2262
-                boolean customResult = loadCustomProfilesForDevice(dni, customFilename) // library marker kkossev.deviceProfileLibV4, line 2263
-                if (!customResult) { // library marker kkossev.deviceProfileLibV4, line 2264
-                    logWarn "ensureProfilesLoaded: failed to auto-load custom profiles from '${customFilename}', device will use standard profiles" // library marker kkossev.deviceProfileLibV4, line 2265
-                    // Don't fail - standard profiles are still loaded and valid // library marker kkossev.deviceProfileLibV4, line 2266
-                } // library marker kkossev.deviceProfileLibV4, line 2267
-            } else if (result && lastSource == 'standard') { // library marker kkossev.deviceProfileLibV4, line 2268
-                logDebug "ensureProfilesLoaded: lastJSONSource is 'standard', using standard profiles" // library marker kkossev.deviceProfileLibV4, line 2269
-            } // library marker kkossev.deviceProfileLibV4, line 2270
-
-            return result  // Return true if standard profiles loaded, even if custom failed // library marker kkossev.deviceProfileLibV4, line 2272
-        } // library marker kkossev.deviceProfileLibV4, line 2273
-
-        return true // library marker kkossev.deviceProfileLibV4, line 2275
-    } finally { // library marker kkossev.deviceProfileLibV4, line 2276
-        g_profilesLoading = false // library marker kkossev.deviceProfileLibV4, line 2277
-    } // library marker kkossev.deviceProfileLibV4, line 2278
-} // library marker kkossev.deviceProfileLibV4, line 2279
-
-/** // library marker kkossev.deviceProfileLibV4, line 2281
- * Downloads and loads STANDARD device profiles from GitHub // library marker kkossev.deviceProfileLibV4, line 2282
- * Saves to local storage and remembers this choice after reboot // library marker kkossev.deviceProfileLibV4, line 2283
- */ // library marker kkossev.deviceProfileLibV4, line 2284
-void loadStandardProfilesFromGitHub() { // library marker kkossev.deviceProfileLibV4, line 2285
-    logInfo "loadStandardProfilesFromGitHub: downloading and loading STANDARD profiles from GitHub" // library marker kkossev.deviceProfileLibV4, line 2286
-
-    // Download from GitHub and save to local storage // library marker kkossev.deviceProfileLibV4, line 2288
-    downloadFromGitHubAndSaveToHE(defaultGitHubURL) // library marker kkossev.deviceProfileLibV4, line 2289
-
-    // downloadFromGitHubAndSaveToHE() already loads the profiles directly from the downloaded content when // library marker kkossev.deviceProfileLibV4, line 2291
-    // it succeeds - only fall back to re-reading them from local storage if that direct load didn't happen // library marker kkossev.deviceProfileLibV4, line 2292
-    // (e.g. the download itself failed). // library marker kkossev.deviceProfileLibV4, line 2293
-    boolean result = g_profilesLoaded && !g_deviceProfilesV4?.isEmpty() // library marker kkossev.deviceProfileLibV4, line 2294
-    if (!result) { // library marker kkossev.deviceProfileLibV4, line 2295
-        clearProfilesCache() // library marker kkossev.deviceProfileLibV4, line 2296
-        result = ensureProfilesLoaded() // library marker kkossev.deviceProfileLibV4, line 2297
-    } // library marker kkossev.deviceProfileLibV4, line 2298
-
-    if (result) { // library marker kkossev.deviceProfileLibV4, line 2300
-        // Remember this choice - user explicitly chose standard profiles // library marker kkossev.deviceProfileLibV4, line 2301
-        if (state.profilesV4 == null) { state.profilesV4 = [:] } // library marker kkossev.deviceProfileLibV4, line 2302
-        state.profilesV4['lastJSONSource'] = 'standard' // library marker kkossev.deviceProfileLibV4, line 2303
-        state.profilesV4.remove('customJSONFilename')  // Clear custom filename // library marker kkossev.deviceProfileLibV4, line 2304
-        state.profilesV4.remove('customFilename')       // Remove legacy key from older versions // library marker kkossev.deviceProfileLibV4, line 2305
-
-        // Clear any custom profiles for this device // library marker kkossev.deviceProfileLibV4, line 2307
-        String dni = device?.deviceNetworkId // library marker kkossev.deviceProfileLibV4, line 2308
-        if (dni && g_customProfilesV4?.containsKey(dni)) { // library marker kkossev.deviceProfileLibV4, line 2309
-            g_customProfilesV4.remove(dni) // library marker kkossev.deviceProfileLibV4, line 2310
-            clearCustomJSONAttribute() // library marker kkossev.deviceProfileLibV4, line 2311
-        } // library marker kkossev.deviceProfileLibV4, line 2312
-
-        // Retry profile detection if this device was previously stuck at UNKNOWN - the newly (re)loaded // library marker kkossev.deviceProfileLibV4, line 2314
-        // profiles may now contain a matching fingerprint that wasn't available on the last attempt // library marker kkossev.deviceProfileLibV4, line 2315
-        if (shouldDetectDeviceProfile()) { setDeviceNameAndProfile() } // library marker kkossev.deviceProfileLibV4, line 2316
-        ensureCurrentProfileLoaded() // library marker kkossev.deviceProfileLibV4, line 2317
-
-        // Update deviceProfileFile attribute to show currently loaded file // library marker kkossev.deviceProfileLibV4, line 2319
-        sendEvent(name: 'deviceProfileFile', value: DEFAULT_PROFILES_FILENAME, type: 'digital') // library marker kkossev.deviceProfileLibV4, line 2320
-
-        String version = state.profilesV4?.version ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2322
-        String timestamp = state.profilesV4?.timestamp ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2323
-        logInfo "✅ Successfully loaded STANDARD profiles from GitHub (version: ${version}, timestamp: ${timestamp})" // library marker kkossev.deviceProfileLibV4, line 2324
-        sendInfoEvent "Standard profiles loaded from GitHub. Press F5 to refresh the page." // library marker kkossev.deviceProfileLibV4, line 2325
-    } else { // library marker kkossev.deviceProfileLibV4, line 2326
-        sendInfoEvent "❌ Failed to download standard profiles from GitHub" // library marker kkossev.deviceProfileLibV4, line 2327
-    } // library marker kkossev.deviceProfileLibV4, line 2328
-} // library marker kkossev.deviceProfileLibV4, line 2329
-
-// Backward compatibility - redirect old command to new one // library marker kkossev.deviceProfileLibV4, line 2331
-void updateFromGitHub() { // library marker kkossev.deviceProfileLibV4, line 2332
-    logDebug "updateFromGitHub: redirecting to loadStandardProfilesFromGitHub()" // library marker kkossev.deviceProfileLibV4, line 2333
-    loadStandardProfilesFromGitHub() // library marker kkossev.deviceProfileLibV4, line 2334
-} // library marker kkossev.deviceProfileLibV4, line 2335
-
-/** // library marker kkossev.deviceProfileLibV4, line 2337
- * Reloads STANDARD device profiles from Hubitat local storage // library marker kkossev.deviceProfileLibV4, line 2338
- * Use after manual edits to the local standard JSON file // library marker kkossev.deviceProfileLibV4, line 2339
- * Remembers this choice after reboot // library marker kkossev.deviceProfileLibV4, line 2340
- */ // library marker kkossev.deviceProfileLibV4, line 2341
-void loadStandardProfilesFromLocalStorage() { // library marker kkossev.deviceProfileLibV4, line 2342
-    logInfo "loadStandardProfilesFromLocalStorage: reloading STANDARD device profiles from Hubitat local storage (${DEFAULT_PROFILES_FILENAME})" // library marker kkossev.deviceProfileLibV4, line 2343
-
-    // Clear all cached profiles // library marker kkossev.deviceProfileLibV4, line 2345
-    clearProfilesCache() // library marker kkossev.deviceProfileLibV4, line 2346
-
-    // Load standard profiles from local storage // library marker kkossev.deviceProfileLibV4, line 2348
-    boolean result = ensureProfilesLoaded() // library marker kkossev.deviceProfileLibV4, line 2349
-
-    if (result) { // library marker kkossev.deviceProfileLibV4, line 2351
-        // Remember this choice - user explicitly chose standard profiles // library marker kkossev.deviceProfileLibV4, line 2352
-        if (state.profilesV4 == null) { state.profilesV4 = [:] } // library marker kkossev.deviceProfileLibV4, line 2353
-        state.profilesV4['lastJSONSource'] = 'standard' // library marker kkossev.deviceProfileLibV4, line 2354
-        state.profilesV4.remove('customJSONFilename')  // Clear custom filename // library marker kkossev.deviceProfileLibV4, line 2355
-        state.profilesV4.remove('customFilename')       // Remove legacy key from older versions // library marker kkossev.deviceProfileLibV4, line 2356
-
-        // Clear any custom profiles for this device // library marker kkossev.deviceProfileLibV4, line 2358
-        String dni = device?.deviceNetworkId // library marker kkossev.deviceProfileLibV4, line 2359
-        if (dni && g_customProfilesV4?.containsKey(dni)) { // library marker kkossev.deviceProfileLibV4, line 2360
-            g_customProfilesV4.remove(dni) // library marker kkossev.deviceProfileLibV4, line 2361
-            clearCustomJSONAttribute() // library marker kkossev.deviceProfileLibV4, line 2362
-        } // library marker kkossev.deviceProfileLibV4, line 2363
-
-        // Retry profile detection if this device was previously stuck at UNKNOWN - the newly (re)loaded // library marker kkossev.deviceProfileLibV4, line 2365
-        // profiles may now contain a matching fingerprint that wasn't available on the last attempt // library marker kkossev.deviceProfileLibV4, line 2366
-        if (shouldDetectDeviceProfile()) { setDeviceNameAndProfile() } // library marker kkossev.deviceProfileLibV4, line 2367
-        ensureCurrentProfileLoaded() // library marker kkossev.deviceProfileLibV4, line 2368
-
-        // Update deviceProfileFile attribute to show currently loaded file // library marker kkossev.deviceProfileLibV4, line 2370
-        sendEvent(name: 'deviceProfileFile', value: DEFAULT_PROFILES_FILENAME, type: 'digital') // library marker kkossev.deviceProfileLibV4, line 2371
-
-        String version = state.profilesV4?.version ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2373
-        String timestamp = state.profilesV4?.timestamp ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2374
-        logInfo "✅ Successfully loaded STANDARD profiles (version: ${version}, timestamp: ${timestamp})" // library marker kkossev.deviceProfileLibV4, line 2375
-        sendInfoEvent "Standard profiles loaded from ${DEFAULT_PROFILES_FILENAME}. Press F5 to refresh the page." // library marker kkossev.deviceProfileLibV4, line 2376
-    } else { // library marker kkossev.deviceProfileLibV4, line 2377
-        sendInfoEvent "❌ Failed to reload standard device profiles from local storage" // library marker kkossev.deviceProfileLibV4, line 2378
-    } // library marker kkossev.deviceProfileLibV4, line 2379
-} // library marker kkossev.deviceProfileLibV4, line 2380
-
-// Backward compatibility - redirect old command to new one // library marker kkossev.deviceProfileLibV4, line 2382
-void updateFromLocalStorage() { // library marker kkossev.deviceProfileLibV4, line 2383
-    logDebug "updateFromLocalStorage: redirecting to loadStandardProfilesFromLocalStorage()" // library marker kkossev.deviceProfileLibV4, line 2384
-    loadStandardProfilesFromLocalStorage() // library marker kkossev.deviceProfileLibV4, line 2385
-} // library marker kkossev.deviceProfileLibV4, line 2386
-
-// Backward compatibility alias // library marker kkossev.deviceProfileLibV4, line 2388
-void loadStandardProfiles() { // library marker kkossev.deviceProfileLibV4, line 2389
-    logDebug "loadStandardProfiles: redirecting to loadStandardProfilesFromLocalStorage()" // library marker kkossev.deviceProfileLibV4, line 2390
-    loadStandardProfilesFromLocalStorage() // library marker kkossev.deviceProfileLibV4, line 2391
-} // library marker kkossev.deviceProfileLibV4, line 2392
-
-/** // library marker kkossev.deviceProfileLibV4, line 2394
- * Loads CUSTOM device profiles from a specific JSON file on Hubitat local storage // library marker kkossev.deviceProfileLibV4, line 2395
- * Remembers this choice after reboot via state persistence // library marker kkossev.deviceProfileLibV4, line 2396
- * @param filename Custom JSON filename (e.g., "deviceProfilesV4_custom.json") // library marker kkossev.deviceProfileLibV4, line 2397
- */ // library marker kkossev.deviceProfileLibV4, line 2398
-void loadUserCustomProfilesFromLocalStorage(String filename) { // library marker kkossev.deviceProfileLibV4, line 2399
-    String trimmedFilename = filename?.trim() ?: "" // library marker kkossev.deviceProfileLibV4, line 2400
-
-    // If filename is empty, check the deviceProfileFile attribute // library marker kkossev.deviceProfileLibV4, line 2402
-    if (trimmedFilename.isEmpty()) { // library marker kkossev.deviceProfileLibV4, line 2403
-        String attrValue = device.currentValue('deviceProfileFile') // library marker kkossev.deviceProfileLibV4, line 2404
-        if (attrValue != null && !attrValue.isEmpty() && attrValue != DEFAULT_PROFILES_FILENAME) { // library marker kkossev.deviceProfileLibV4, line 2405
-            logInfo "loadUserCustomProfilesFromLocalStorage: using deviceProfileFile attribute value: ${attrValue}" // library marker kkossev.deviceProfileLibV4, line 2406
-            trimmedFilename = attrValue // library marker kkossev.deviceProfileLibV4, line 2407
-        } else { // library marker kkossev.deviceProfileLibV4, line 2408
-            logWarn "loadUserCustomProfilesFromLocalStorage: filename parameter is required and deviceProfileFile attribute is empty or default" // library marker kkossev.deviceProfileLibV4, line 2409
-            sendInfoEvent "❌ Custom JSON filename is required" // library marker kkossev.deviceProfileLibV4, line 2410
-            return // library marker kkossev.deviceProfileLibV4, line 2411
-        } // library marker kkossev.deviceProfileLibV4, line 2412
-    } // library marker kkossev.deviceProfileLibV4, line 2413
-    logInfo "loadUserCustomProfilesFromLocalStorage: loading CUSTOM device profiles from ${trimmedFilename}" // library marker kkossev.deviceProfileLibV4, line 2414
-
-    // Clear all cached profiles first // library marker kkossev.deviceProfileLibV4, line 2416
-    clearProfilesCache() // library marker kkossev.deviceProfileLibV4, line 2417
-
-    // First ensure standard profiles are loaded (needed for fallback) // library marker kkossev.deviceProfileLibV4, line 2419
-    boolean standardResult = ensureProfilesLoaded() // library marker kkossev.deviceProfileLibV4, line 2420
-
-    if (!standardResult) { // library marker kkossev.deviceProfileLibV4, line 2422
-        sendInfoEvent "❌ Failed to load standard profiles - cannot proceed with custom profiles" // library marker kkossev.deviceProfileLibV4, line 2423
-        return // library marker kkossev.deviceProfileLibV4, line 2424
-    } // library marker kkossev.deviceProfileLibV4, line 2425
-
-    // Load custom profiles for this device // library marker kkossev.deviceProfileLibV4, line 2427
-    String dni = device?.deviceNetworkId // library marker kkossev.deviceProfileLibV4, line 2428
-    if (!dni) { // library marker kkossev.deviceProfileLibV4, line 2429
-        logWarn "loadCustomProfiles: device DNI is null" // library marker kkossev.deviceProfileLibV4, line 2430
-        sendInfoEvent "❌ Device DNI is null - cannot load custom profiles" // library marker kkossev.deviceProfileLibV4, line 2431
-        return // library marker kkossev.deviceProfileLibV4, line 2432
-    } // library marker kkossev.deviceProfileLibV4, line 2433
-
-    boolean customResult = loadCustomProfilesForDevice(dni, trimmedFilename) // library marker kkossev.deviceProfileLibV4, line 2435
-
-    if (customResult) { // library marker kkossev.deviceProfileLibV4, line 2437
-        // Remember this choice - user explicitly chose custom profiles // library marker kkossev.deviceProfileLibV4, line 2438
-        if (state.profilesV4 == null) { state.profilesV4 = [:] } // library marker kkossev.deviceProfileLibV4, line 2439
-        state.profilesV4['lastJSONSource'] = 'custom' // library marker kkossev.deviceProfileLibV4, line 2440
-        state.profilesV4['customJSONFilename'] = trimmedFilename // library marker kkossev.deviceProfileLibV4, line 2441
-
-        // Retry profile detection if this device was previously stuck at UNKNOWN - the newly loaded // library marker kkossev.deviceProfileLibV4, line 2443
-        // custom profile may now contain a matching fingerprint that wasn't available on the last attempt // library marker kkossev.deviceProfileLibV4, line 2444
-        if (shouldDetectDeviceProfile()) { setDeviceNameAndProfile() } // library marker kkossev.deviceProfileLibV4, line 2445
-
-        // Reload current profile with custom data // library marker kkossev.deviceProfileLibV4, line 2447
-        ensureCurrentProfileLoaded() // library marker kkossev.deviceProfileLibV4, line 2448
-
-        // Update deviceProfileFile attribute to show currently loaded custom file // library marker kkossev.deviceProfileLibV4, line 2450
-        sendEvent(name: 'deviceProfileFile', value: trimmedFilename, type: 'digital') // library marker kkossev.deviceProfileLibV4, line 2451
-
-        String version = state.profilesV4?.customVersion ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2453
-        String timestamp = state.profilesV4?.customTimestamp ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2454
-        int count = state.profilesV4?.customProfileCount ?: 0 // library marker kkossev.deviceProfileLibV4, line 2455
-        logInfo "✅ Successfully loaded CUSTOM profiles from ${trimmedFilename} (version: ${version}, timestamp: ${timestamp}, profiles: ${count})" // library marker kkossev.deviceProfileLibV4, line 2456
-        sendInfoEvent "Custom profiles loaded from ${trimmedFilename}. Press F5 to refresh the page." // library marker kkossev.deviceProfileLibV4, line 2457
-    } else { // library marker kkossev.deviceProfileLibV4, line 2458
-        sendInfoEvent "❌ Failed to load custom profiles from ${trimmedFilename}" // library marker kkossev.deviceProfileLibV4, line 2459
-    } // library marker kkossev.deviceProfileLibV4, line 2460
-} // library marker kkossev.deviceProfileLibV4, line 2461
+boolean isInCooldown() { // library marker kkossev.deviceProfileLibV4, line 2199
+    return g_loadProfilesCooldown // library marker kkossev.deviceProfileLibV4, line 2200
+} // library marker kkossev.deviceProfileLibV4, line 2201
 
 
 
-// updateFromGitHub command - download JSON profiles from GitHub and store to Hubitat local storage // library marker kkossev.deviceProfileLibV4, line 2465
-void downloadFromGitHubAndSaveToHE(String url) { // library marker kkossev.deviceProfileLibV4, line 2466
-    long startTime = now() // library marker kkossev.deviceProfileLibV4, line 2467
-    String gitHubUrl = url // library marker kkossev.deviceProfileLibV4, line 2468
-    String fileName = DEFAULT_PROFILES_FILENAME // library marker kkossev.deviceProfileLibV4, line 2469
+/** // library marker kkossev.deviceProfileLibV4, line 2205
+ * Ensures that device profiles are loaded with thread-safe lazy loading // library marker kkossev.deviceProfileLibV4, line 2206
+ * This is the main function that should be called before accessing g_deviceProfilesV4 // library marker kkossev.deviceProfileLibV4, line 2207
+ * @return true if profiles are loaded successfully, false otherwise // library marker kkossev.deviceProfileLibV4, line 2208
+ */ // library marker kkossev.deviceProfileLibV4, line 2209
+private boolean ensureProfilesLoaded() { // library marker kkossev.deviceProfileLibV4, line 2210
+    // Fast path: already loaded // library marker kkossev.deviceProfileLibV4, line 2211
+//    if (!g_deviceProfilesV4.isEmpty() && g_profilesLoaded) { // library marker kkossev.deviceProfileLibV4, line 2212
+    if (g_profilesLoaded && !g_currentProfilesV4?.isEmpty()) {       // !!!!!!!!!!!!!!!!!!!!!!!! TODO - check !!!!!!!!!!!!!!!!!!!!!!!!!! // library marker kkossev.deviceProfileLibV4, line 2213
+        return true // library marker kkossev.deviceProfileLibV4, line 2214
+    } // library marker kkossev.deviceProfileLibV4, line 2215
+    if (state.profilesV4 == null) { state.profilesV4 = [:] }   // initialize state variable if not present // library marker kkossev.deviceProfileLibV4, line 2216
+    if (isInCooldown()) { // library marker kkossev.deviceProfileLibV4, line 2217
+        state.profilesV4['cooldownSkipsCtr'] = (state.profilesV4['cooldownSkipsCtr'] ?: 0) + 1 // library marker kkossev.deviceProfileLibV4, line 2218
+        logDebug "ensureProfilesLoaded: in cooldown period, skipping profile load attempt" // library marker kkossev.deviceProfileLibV4, line 2219
+        return false // library marker kkossev.deviceProfileLibV4, line 2220
+    } // library marker kkossev.deviceProfileLibV4, line 2221
+    // Check if another thread is already loading // library marker kkossev.deviceProfileLibV4, line 2222
+    if (g_profilesLoading) { // library marker kkossev.deviceProfileLibV4, line 2223
+        // Wait briefly for other thread to finish // library marker kkossev.deviceProfileLibV4, line 2224
+        for (int i = 0; i < 10; i++) { // library marker kkossev.deviceProfileLibV4, line 2225
+            state.profilesV4['waitForOtherThreadCtr'] = (state.profilesV4['waitForOtherThreadCtr'] ?: 0) + 1 // library marker kkossev.deviceProfileLibV4, line 2226
+            logInfo "ensureProfilesLoaded: waiting <b>100ms</b> for other thread to finish loading... try ${i+1}/10" // library marker kkossev.deviceProfileLibV4, line 2227
+            pauseExecution(100) // library marker kkossev.deviceProfileLibV4, line 2228
+            if (g_profilesLoaded && !g_deviceProfilesV4?.isEmpty()) { // library marker kkossev.deviceProfileLibV4, line 2229
+                sendInfoEvent "ensureProfilesLoaded: other thread finished loading" // library marker kkossev.deviceProfileLibV4, line 2230
+                return true // library marker kkossev.deviceProfileLibV4, line 2231
+            } // library marker kkossev.deviceProfileLibV4, line 2232
+        } // library marker kkossev.deviceProfileLibV4, line 2233
+        // If still loading after wait, return false - don't interfere with other thread // library marker kkossev.deviceProfileLibV4, line 2234
+        sendInfoEvent "ensureProfilesLoaded: timeout waiting for other thread, giving up!" // library marker kkossev.deviceProfileLibV4, line 2235
+        state.profilesV4['waitForOtherThreadTimeouts'] = (state.profilesV4['waitForOtherThreadTimeouts'] ?: 0) + 1 // library marker kkossev.deviceProfileLibV4, line 2236
+        return false // library marker kkossev.deviceProfileLibV4, line 2237
+    } // library marker kkossev.deviceProfileLibV4, line 2238
 
-    // If URL is provided, try to extract filename from it // library marker kkossev.deviceProfileLibV4, line 2471
-    if (url?.trim()) { // library marker kkossev.deviceProfileLibV4, line 2472
-        try { // library marker kkossev.deviceProfileLibV4, line 2473
-            String urlPath = gitHubUrl.split('/').last() // library marker kkossev.deviceProfileLibV4, line 2474
-            if (urlPath.toLowerCase().endsWith('.json')) { // library marker kkossev.deviceProfileLibV4, line 2475
-                fileName = urlPath // library marker kkossev.deviceProfileLibV4, line 2476
-            } // library marker kkossev.deviceProfileLibV4, line 2477
-        } catch (Exception e) { } // library marker kkossev.deviceProfileLibV4, line 2478
-    } // library marker kkossev.deviceProfileLibV4, line 2479
-    logInfo "updateFromGitHub: downloading ${fileName} from ${gitHubUrl}" // library marker kkossev.deviceProfileLibV4, line 2480
-    try { // library marker kkossev.deviceProfileLibV4, line 2481
-        // Download JSON content from GitHub // library marker kkossev.deviceProfileLibV4, line 2482
-        long downloadStartTime = now() // library marker kkossev.deviceProfileLibV4, line 2483
-        def params = [ // library marker kkossev.deviceProfileLibV4, line 2484
-            uri: gitHubUrl, // library marker kkossev.deviceProfileLibV4, line 2485
-            //textParser: true  // This is the key! Same as working readFile method // library marker kkossev.deviceProfileLibV4, line 2486
-        ] // library marker kkossev.deviceProfileLibV4, line 2487
+    // Acquire loading lock // library marker kkossev.deviceProfileLibV4, line 2240
+    g_profilesLoading = true // library marker kkossev.deviceProfileLibV4, line 2241
+    try { // library marker kkossev.deviceProfileLibV4, line 2242
+        // Double-check after acquiring lock // library marker kkossev.deviceProfileLibV4, line 2243
+        Boolean isEmpty = (g_deviceProfilesV4 == null) ? true : g_deviceProfilesV4?.isEmpty() // library marker kkossev.deviceProfileLibV4, line 2244
+        if (isEmpty || !g_profilesLoaded) { // library marker kkossev.deviceProfileLibV4, line 2245
+            state.profilesV4['loadProfilesCtr'] = (state.profilesV4['loadProfilesCtr'] ?: 0) + 1 // library marker kkossev.deviceProfileLibV4, line 2246
+            logDebug "ensureProfilesLoaded: loading device profiles...(isEmpty=${isEmpty}, g_profilesLoaded=${g_profilesLoaded})" // library marker kkossev.deviceProfileLibV4, line 2247
+            boolean result = loadProfilesFromJSON() // library marker kkossev.deviceProfileLibV4, line 2248
+            if (result) { // library marker kkossev.deviceProfileLibV4, line 2249
+                g_profilesLoaded = true // library marker kkossev.deviceProfileLibV4, line 2250
+                String version = state.profilesV4?.version ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2251
+                String timestamp = state.profilesV4?.timestamp ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2252
+                sendInfoEvent "Successfully loaded ${g_deviceProfilesV4.size()} deviceProfilesV4 profiles (version: ${version}, timestamp: ${timestamp})  ⚠️ Refresh this page to see updated profiles in the dropdown!" // library marker kkossev.deviceProfileLibV4, line 2253
+            } else { // library marker kkossev.deviceProfileLibV4, line 2254
+                sendInfoEvent "ensureProfilesLoaded: failed to load device profiles (loadProfilesFromJSON() failed)" // library marker kkossev.deviceProfileLibV4, line 2255
+                startCooldownTimer() // library marker kkossev.deviceProfileLibV4, line 2256
+            } // library marker kkossev.deviceProfileLibV4, line 2257
+            g_profilesLoading = false // library marker kkossev.deviceProfileLibV4, line 2258
 
-        // Hubitat 2.1.8+: ignore SSL cert/hostname validation issues for HTTPS profile downloads. // library marker kkossev.deviceProfileLibV4, line 2489
-        if ((gitHubUrl ?: '').toLowerCase().startsWith('https://')) { // library marker kkossev.deviceProfileLibV4, line 2490
-            params.ignoreSSLIssues = true // library marker kkossev.deviceProfileLibV4, line 2491
-            logDebug "downloadFromGitHubAndSaveToHE: using ignoreSSLIssues=true for HTTPS profile download" // library marker kkossev.deviceProfileLibV4, line 2492
-        } // library marker kkossev.deviceProfileLibV4, line 2493
+            // State-based persistence: Check if we should auto-load custom profiles // library marker kkossev.deviceProfileLibV4, line 2260
+            String lastSource = state.profilesV4?.get('lastJSONSource') // library marker kkossev.deviceProfileLibV4, line 2261
+            String customFilename = state.profilesV4?.get('customJSONFilename') // library marker kkossev.deviceProfileLibV4, line 2262
+            String dni = device?.deviceNetworkId // library marker kkossev.deviceProfileLibV4, line 2263
 
-        logDebug "updateFromGitHub: HTTP params: ${params}" // library marker kkossev.deviceProfileLibV4, line 2495
+            if (result && lastSource == 'custom' && customFilename != null && dni) { // library marker kkossev.deviceProfileLibV4, line 2265
+                logDebug "ensureProfilesLoaded: lastJSONSource is 'custom', attempting to load ${customFilename} for device ${dni}" // library marker kkossev.deviceProfileLibV4, line 2266
+                boolean customResult = loadCustomProfilesForDevice(dni, customFilename) // library marker kkossev.deviceProfileLibV4, line 2267
+                if (!customResult) { // library marker kkossev.deviceProfileLibV4, line 2268
+                    logWarn "ensureProfilesLoaded: failed to auto-load custom profiles from '${customFilename}', device will use standard profiles" // library marker kkossev.deviceProfileLibV4, line 2269
+                    // Don't fail - standard profiles are still loaded and valid // library marker kkossev.deviceProfileLibV4, line 2270
+                } // library marker kkossev.deviceProfileLibV4, line 2271
+            } else if (result && lastSource == 'standard') { // library marker kkossev.deviceProfileLibV4, line 2272
+                logDebug "ensureProfilesLoaded: lastJSONSource is 'standard', using standard profiles" // library marker kkossev.deviceProfileLibV4, line 2273
+            } // library marker kkossev.deviceProfileLibV4, line 2274
 
-        httpGet(params) { resp -> // library marker kkossev.deviceProfileLibV4, line 2497
-            logDebug "updateFromGitHub: Response status: ${resp?.status}" // library marker kkossev.deviceProfileLibV4, line 2498
-            state.gitHubV4['httpGetCallsCtr'] = (state.gitHubV4['httpGetCallsCtr'] ?: 0) + 1 // library marker kkossev.deviceProfileLibV4, line 2499
-            state.gitHubV4['httpGetLastStatus'] = resp?.status // library marker kkossev.deviceProfileLibV4, line 2500
+            return result  // Return true if standard profiles loaded, even if custom failed // library marker kkossev.deviceProfileLibV4, line 2276
+        } // library marker kkossev.deviceProfileLibV4, line 2277
 
-            if (resp?.status == 200 && resp?.data) { // library marker kkossev.deviceProfileLibV4, line 2502
-                // Fix StringReader issue - get actual text content without explicit class references // library marker kkossev.deviceProfileLibV4, line 2503
-                String jsonContent = "" // library marker kkossev.deviceProfileLibV4, line 2504
-                def responseData = resp.getData() // library marker kkossev.deviceProfileLibV4, line 2505
+        return true // library marker kkossev.deviceProfileLibV4, line 2279
+    } finally { // library marker kkossev.deviceProfileLibV4, line 2280
+        g_profilesLoading = false // library marker kkossev.deviceProfileLibV4, line 2281
+    } // library marker kkossev.deviceProfileLibV4, line 2282
+} // library marker kkossev.deviceProfileLibV4, line 2283
 
-                if (responseData instanceof String) { // library marker kkossev.deviceProfileLibV4, line 2507
-                    jsonContent = responseData // library marker kkossev.deviceProfileLibV4, line 2508
-                } else if (responseData?.hasProperty('text')) { // library marker kkossev.deviceProfileLibV4, line 2509
-                    // Handle StringReader without explicit class reference // library marker kkossev.deviceProfileLibV4, line 2510
-                    jsonContent = responseData.text // library marker kkossev.deviceProfileLibV4, line 2511
-                } else { // library marker kkossev.deviceProfileLibV4, line 2512
-                    jsonContent = responseData.toString() // library marker kkossev.deviceProfileLibV4, line 2513
-                } // library marker kkossev.deviceProfileLibV4, line 2514
+/** // library marker kkossev.deviceProfileLibV4, line 2285
+ * Downloads and loads STANDARD device profiles from GitHub // library marker kkossev.deviceProfileLibV4, line 2286
+ * Saves to local storage and remembers this choice after reboot // library marker kkossev.deviceProfileLibV4, line 2287
+ */ // library marker kkossev.deviceProfileLibV4, line 2288
+void loadStandardProfilesFromGitHub() { // library marker kkossev.deviceProfileLibV4, line 2289
+    logInfo "loadStandardProfilesFromGitHub: downloading and loading STANDARD profiles from GitHub" // library marker kkossev.deviceProfileLibV4, line 2290
 
-                long downloadEndTime = now() // library marker kkossev.deviceProfileLibV4, line 2516
-                long downloadDuration = downloadEndTime - downloadStartTime // library marker kkossev.deviceProfileLibV4, line 2517
-                //logInfo "updateFromGitHub: downloaded ${jsonContent.length()} characters" // library marker kkossev.deviceProfileLibV4, line 2518
-                //logDebug "updateFromGitHub: first 100 chars: ${jsonContent.take(100)}" // library marker kkossev.deviceProfileLibV4, line 2519
-                //logInfo "updateFromGitHub: Performance - Download: ${downloadDuration}ms" // library marker kkossev.deviceProfileLibV4, line 2520
-                sendInfoEvent "Successfully downloaded ${fileName} from GitHub, ${jsonContent.length()} characters in ${downloadDuration}ms" // library marker kkossev.deviceProfileLibV4, line 2521
-                state.gitHubV4['lastDownloadSize'] = jsonContent.length() // library marker kkossev.deviceProfileLibV4, line 2522
-                state.gitHubV4['lastDownloadTime'] = now() // library marker kkossev.deviceProfileLibV4, line 2523
-                state.gitHubV4['lastDownloadDuration'] = downloadDuration // library marker kkossev.deviceProfileLibV4, line 2524
+    // Download from GitHub and save to local storage // library marker kkossev.deviceProfileLibV4, line 2292
+    downloadFromGitHubAndSaveToHE(defaultGitHubURL) // library marker kkossev.deviceProfileLibV4, line 2293
 
-                // Validate it's actually JSON content // library marker kkossev.deviceProfileLibV4, line 2526
-                if (jsonContent.length() < 100 || !jsonContent.trim().startsWith("{")) { // library marker kkossev.deviceProfileLibV4, line 2527
-                    //logWarn "updateFromGitHub: ❌ Downloaded content doesn't appear to be valid JSON" // library marker kkossev.deviceProfileLibV4, line 2528
-                    logWarn "updateFromGitHub: Content preview: ${jsonContent.take(200)}" // library marker kkossev.deviceProfileLibV4, line 2529
-                    state.gitHubV4['lastDownloadError'] = "Invalid JSON" // library marker kkossev.deviceProfileLibV4, line 2530
-                    sendInfoEvent "updateFromGitHub: ❌ Downloaded content doesn't appear to be valid JSON" // library marker kkossev.deviceProfileLibV4, line 2531
-                    return // library marker kkossev.deviceProfileLibV4, line 2532
-                } // library marker kkossev.deviceProfileLibV4, line 2533
-                state.gitHubV4['lastDownloadError'] = null // library marker kkossev.deviceProfileLibV4, line 2534
+    // downloadFromGitHubAndSaveToHE() already loads the profiles directly from the downloaded content when // library marker kkossev.deviceProfileLibV4, line 2295
+    // it succeeds - only fall back to re-reading them from local storage if that direct load didn't happen // library marker kkossev.deviceProfileLibV4, line 2296
+    // (e.g. the download itself failed). // library marker kkossev.deviceProfileLibV4, line 2297
+    boolean result = g_profilesLoaded && !g_deviceProfilesV4?.isEmpty() // library marker kkossev.deviceProfileLibV4, line 2298
+    if (!result) { // library marker kkossev.deviceProfileLibV4, line 2299
+        clearProfilesCache() // library marker kkossev.deviceProfileLibV4, line 2300
+        result = ensureProfilesLoaded() // library marker kkossev.deviceProfileLibV4, line 2301
+    } // library marker kkossev.deviceProfileLibV4, line 2302
 
-                // Parse and extract version/timestamp information for debugging // library marker kkossev.deviceProfileLibV4, line 2536
-                try { // library marker kkossev.deviceProfileLibV4, line 2537
-                    def jsonSlurper = new groovy.json.JsonSlurper() // library marker kkossev.deviceProfileLibV4, line 2538
-                    def parsedJson = jsonSlurper.parseText(jsonContent) // library marker kkossev.deviceProfileLibV4, line 2539
+    if (result) { // library marker kkossev.deviceProfileLibV4, line 2304
+        // Remember this choice - user explicitly chose standard profiles // library marker kkossev.deviceProfileLibV4, line 2305
+        if (state.profilesV4 == null) { state.profilesV4 = [:] } // library marker kkossev.deviceProfileLibV4, line 2306
+        state.profilesV4['lastJSONSource'] = 'standard' // library marker kkossev.deviceProfileLibV4, line 2307
+        state.profilesV4.remove('customJSONFilename')  // Clear custom filename // library marker kkossev.deviceProfileLibV4, line 2308
+        state.profilesV4.remove('customFilename')       // Remove legacy key from older versions // library marker kkossev.deviceProfileLibV4, line 2309
 
-                    def version = parsedJson?.version ?: "unknown" // library marker kkossev.deviceProfileLibV4, line 2541
-                    def timestamp = parsedJson?.timestamp ?: "unknown" // library marker kkossev.deviceProfileLibV4, line 2542
-                    def author = parsedJson?.author ?: "unknown" // library marker kkossev.deviceProfileLibV4, line 2543
-                    def profileCount = parsedJson?.deviceProfiles?.size() ?: 0 // library marker kkossev.deviceProfileLibV4, line 2544
+        // Clear any custom profiles for this device // library marker kkossev.deviceProfileLibV4, line 2311
+        String dni = device?.deviceNetworkId // library marker kkossev.deviceProfileLibV4, line 2312
+        if (dni && g_customProfilesV4?.containsKey(dni)) { // library marker kkossev.deviceProfileLibV4, line 2313
+            g_customProfilesV4.remove(dni) // library marker kkossev.deviceProfileLibV4, line 2314
+            clearCustomJSONAttribute() // library marker kkossev.deviceProfileLibV4, line 2315
+        } // library marker kkossev.deviceProfileLibV4, line 2316
 
-                    logDebug "updateFromGitHub: JSON Metadata - Version: ${version}, Timestamp: ${timestamp}" // library marker kkossev.deviceProfileLibV4, line 2546
-                    logDebug "updateFromGitHub: JSON Metadata - Author: ${author}, Device Profiles: ${profileCount}" // library marker kkossev.deviceProfileLibV4, line 2547
-                    state.gitHubV4['lastDownloadVersion'] = version // library marker kkossev.deviceProfileLibV4, line 2548
-                    state.gitHubV4['lastDownloadTimestamp'] = timestamp // library marker kkossev.deviceProfileLibV4, line 2549
+        // Retry profile detection if this device was previously stuck at UNKNOWN - the newly (re)loaded // library marker kkossev.deviceProfileLibV4, line 2318
+        // profiles may now contain a matching fingerprint that wasn't available on the last attempt // library marker kkossev.deviceProfileLibV4, line 2319
+        if (shouldDetectDeviceProfile()) { setDeviceNameAndProfile() } // library marker kkossev.deviceProfileLibV4, line 2320
+        ensureCurrentProfileLoaded() // library marker kkossev.deviceProfileLibV4, line 2321
 
-                } catch (Exception jsonException) { // library marker kkossev.deviceProfileLibV4, line 2551
-                    logWarn "updateFromGitHub: Could not parse JSON metadata: ${jsonException.message}" // library marker kkossev.deviceProfileLibV4, line 2552
-                    state.gitHubV4['lastDownloadVersion'] = null // library marker kkossev.deviceProfileLibV4, line 2553
-                    state.gitHubV4['lastDownloadTimestamp'] = null // library marker kkossev.deviceProfileLibV4, line 2554
-                    sendInfoEvent "updateFromGitHub: ❌ Could not parse JSON metadata: ${jsonException.message}" // library marker kkossev.deviceProfileLibV4, line 2555
-                    return // library marker kkossev.deviceProfileLibV4, line 2556
-                } // library marker kkossev.deviceProfileLibV4, line 2557
+        // Update deviceProfileFile attribute to show currently loaded file // library marker kkossev.deviceProfileLibV4, line 2323
+        sendEvent(name: 'deviceProfileFile', value: DEFAULT_PROFILES_FILENAME, type: 'digital') // library marker kkossev.deviceProfileLibV4, line 2324
 
-                // Store the content to Hubitat local storage using uploadHubFile // library marker kkossev.deviceProfileLibV4, line 2559
-                try { // library marker kkossev.deviceProfileLibV4, line 2560
-                    long uploadStartTime = now() // library marker kkossev.deviceProfileLibV4, line 2561
-                    // Use uploadHubFile to save content directly to local storage (correct API method) // library marker kkossev.deviceProfileLibV4, line 2562
-                    def fileBytes = jsonContent.getBytes("UTF-8") // library marker kkossev.deviceProfileLibV4, line 2563
-                    uploadHubFile(fileName, fileBytes)  // void method - no return value // library marker kkossev.deviceProfileLibV4, line 2564
+        String version = state.profilesV4?.version ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2326
+        String timestamp = state.profilesV4?.timestamp ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2327
+        logInfo "✅ Successfully loaded STANDARD profiles from GitHub (version: ${version}, timestamp: ${timestamp})" // library marker kkossev.deviceProfileLibV4, line 2328
+        sendInfoEvent "Standard profiles loaded from GitHub. Press F5 to refresh the page." // library marker kkossev.deviceProfileLibV4, line 2329
+    } else { // library marker kkossev.deviceProfileLibV4, line 2330
+        sendInfoEvent "❌ Failed to download standard profiles from GitHub" // library marker kkossev.deviceProfileLibV4, line 2331
+    } // library marker kkossev.deviceProfileLibV4, line 2332
+} // library marker kkossev.deviceProfileLibV4, line 2333
 
-                    long uploadEndTime = now() // library marker kkossev.deviceProfileLibV4, line 2566
-                    long uploadDuration = uploadEndTime - uploadStartTime // library marker kkossev.deviceProfileLibV4, line 2567
+// Backward compatibility - redirect old command to new one // library marker kkossev.deviceProfileLibV4, line 2335
+void updateFromGitHub() { // library marker kkossev.deviceProfileLibV4, line 2336
+    logDebug "updateFromGitHub: redirecting to loadStandardProfilesFromGitHub()" // library marker kkossev.deviceProfileLibV4, line 2337
+    loadStandardProfilesFromGitHub() // library marker kkossev.deviceProfileLibV4, line 2338
+} // library marker kkossev.deviceProfileLibV4, line 2339
 
-                    sendInfoEvent "updateFromGitHub: Successfully uploaded ${fileName} to Hubitat local storage, ${uploadDuration}ms, ${fileBytes.length} bytes" // library marker kkossev.deviceProfileLibV4, line 2569
-                    //logInfo "updateFromGitHub: File size: ${jsonContent.length()} characters" // library marker kkossev.deviceProfileLibV4, line 2570
-                    //logInfo "updateFromGitHub: Performance - Upload: ${uploadDuration}ms" // library marker kkossev.deviceProfileLibV4, line 2571
-                    //sendInfoEvent "Successfully updated ${fileName} (${jsonContent.length()} characters) in Hubitat local storage" // library marker kkossev.deviceProfileLibV4, line 2572
+/** // library marker kkossev.deviceProfileLibV4, line 2341
+ * Reloads STANDARD device profiles from Hubitat local storage // library marker kkossev.deviceProfileLibV4, line 2342
+ * Use after manual edits to the local standard JSON file // library marker kkossev.deviceProfileLibV4, line 2343
+ * Remembers this choice after reboot // library marker kkossev.deviceProfileLibV4, line 2344
+ */ // library marker kkossev.deviceProfileLibV4, line 2345
+void loadStandardProfilesFromLocalStorage() { // library marker kkossev.deviceProfileLibV4, line 2346
+    logInfo "loadStandardProfilesFromLocalStorage: reloading STANDARD device profiles from Hubitat local storage (${DEFAULT_PROFILES_FILENAME})" // library marker kkossev.deviceProfileLibV4, line 2347
 
-                    // Load the profiles directly from the content already in memory instead of reading the // library marker kkossev.deviceProfileLibV4, line 2574
-                    // file back from local storage over the network right after this HTTPS call - readFile() // library marker kkossev.deviceProfileLibV4, line 2575
-                    // uses a plain http:// httpGet, but chaining it immediately after an ignoreSSLIssues:true // library marker kkossev.deviceProfileLibV4, line 2576
-                    // HTTPS request has been observed to fail with PKIX certificate errors on some hubs. // library marker kkossev.deviceProfileLibV4, line 2577
-                    clearProfilesCache() // library marker kkossev.deviceProfileLibV4, line 2578
-                    if (loadProfilesFromJSONstring(jsonContent)) { // library marker kkossev.deviceProfileLibV4, line 2579
-                        g_profilesLoaded = true // library marker kkossev.deviceProfileLibV4, line 2580
-                        if (state.profilesV4 == null) { state.profilesV4 = [:] } // library marker kkossev.deviceProfileLibV4, line 2581
-                        state.profilesV4['lastUsedHeFile'] = fileName // library marker kkossev.deviceProfileLibV4, line 2582
-                    } else { // library marker kkossev.deviceProfileLibV4, line 2583
-                        logWarn "updateFromGitHub: loadProfilesFromJSONstring() failed on the downloaded content" // library marker kkossev.deviceProfileLibV4, line 2584
-                    } // library marker kkossev.deviceProfileLibV4, line 2585
+    // Clear all cached profiles // library marker kkossev.deviceProfileLibV4, line 2349
+    clearProfilesCache() // library marker kkossev.deviceProfileLibV4, line 2350
 
-                    long endTime = now() // library marker kkossev.deviceProfileLibV4, line 2587
-                    long totalDuration = endTime - startTime // library marker kkossev.deviceProfileLibV4, line 2588
-                    logInfo "updateFromGitHub: Performance - Total: ${totalDuration}ms" // library marker kkossev.deviceProfileLibV4, line 2589
-                } catch (Exception fileException) { // library marker kkossev.deviceProfileLibV4, line 2590
-                    logWarn "updateFromGitHub: ❌ Error saving file: ${fileException.message}" // library marker kkossev.deviceProfileLibV4, line 2591
-                    logDebug "updateFromGitHub: File save exception: ${fileException}" // library marker kkossev.deviceProfileLibV4, line 2592
-                    sendInfoEvent "Error saving file: ${fileException.message}" // library marker kkossev.deviceProfileLibV4, line 2593
-                    state.gitHubV4['lastDownloadError'] = "File save error" // library marker kkossev.deviceProfileLibV4, line 2594
-                } // library marker kkossev.deviceProfileLibV4, line 2595
-            } else { // library marker kkossev.deviceProfileLibV4, line 2596
-                logWarn "updateFromGitHub: ❌ Failed to download from GitHub. HTTP status: ${resp?.status}" // library marker kkossev.deviceProfileLibV4, line 2597
-                state.gitHubV4['lastDownloadError'] = "HTTP status ${resp?.status}" // library marker kkossev.deviceProfileLibV4, line 2598
-                sendInfoEvent "Failed to download from GitHub. HTTP status: ${resp?.status}" // library marker kkossev.deviceProfileLibV4, line 2599
-            } // library marker kkossev.deviceProfileLibV4, line 2600
-        } // library marker kkossev.deviceProfileLibV4, line 2601
+    // Load standard profiles from local storage // library marker kkossev.deviceProfileLibV4, line 2352
+    boolean result = ensureProfilesLoaded() // library marker kkossev.deviceProfileLibV4, line 2353
 
-    } catch (Exception e) { // library marker kkossev.deviceProfileLibV4, line 2603
-        if (state.gitHubV4 == null) { state.gitHubV4 = [:] } // library marker kkossev.deviceProfileLibV4, line 2604
-        state.gitHubV4['catchedExceptionsCtr'] = (state.gitHubV4['catchedExceptionsCtr'] ?: 0) + 1 // library marker kkossev.deviceProfileLibV4, line 2605
-        state.gitHubV4['lastException'] = e.message // library marker kkossev.deviceProfileLibV4, line 2606
-        state.gitHubV4['lastExceptionTime'] = now() // library marker kkossev.deviceProfileLibV4, line 2607
-        logWarn "updateFromGitHub: ❌ Error: ${e.message}" // library marker kkossev.deviceProfileLibV4, line 2608
-        logDebug "updateFromGitHub: Full exception: ${e}" // library marker kkossev.deviceProfileLibV4, line 2609
-        sendInfoEvent "updateFromGitHub: ❌ Error: ${e.message}" // library marker kkossev.deviceProfileLibV4, line 2610
-    } // library marker kkossev.deviceProfileLibV4, line 2611
-} // library marker kkossev.deviceProfileLibV4, line 2612
+    if (result) { // library marker kkossev.deviceProfileLibV4, line 2355
+        // Remember this choice - user explicitly chose standard profiles // library marker kkossev.deviceProfileLibV4, line 2356
+        if (state.profilesV4 == null) { state.profilesV4 = [:] } // library marker kkossev.deviceProfileLibV4, line 2357
+        state.profilesV4['lastJSONSource'] = 'standard' // library marker kkossev.deviceProfileLibV4, line 2358
+        state.profilesV4.remove('customJSONFilename')  // Clear custom filename // library marker kkossev.deviceProfileLibV4, line 2359
+        state.profilesV4.remove('customFilename')       // Remove legacy key from older versions // library marker kkossev.deviceProfileLibV4, line 2360
+
+        // Clear any custom profiles for this device // library marker kkossev.deviceProfileLibV4, line 2362
+        String dni = device?.deviceNetworkId // library marker kkossev.deviceProfileLibV4, line 2363
+        if (dni && g_customProfilesV4?.containsKey(dni)) { // library marker kkossev.deviceProfileLibV4, line 2364
+            g_customProfilesV4.remove(dni) // library marker kkossev.deviceProfileLibV4, line 2365
+            clearCustomJSONAttribute() // library marker kkossev.deviceProfileLibV4, line 2366
+        } // library marker kkossev.deviceProfileLibV4, line 2367
+
+        // Retry profile detection if this device was previously stuck at UNKNOWN - the newly (re)loaded // library marker kkossev.deviceProfileLibV4, line 2369
+        // profiles may now contain a matching fingerprint that wasn't available on the last attempt // library marker kkossev.deviceProfileLibV4, line 2370
+        if (shouldDetectDeviceProfile()) { setDeviceNameAndProfile() } // library marker kkossev.deviceProfileLibV4, line 2371
+        ensureCurrentProfileLoaded() // library marker kkossev.deviceProfileLibV4, line 2372
+
+        // Update deviceProfileFile attribute to show currently loaded file // library marker kkossev.deviceProfileLibV4, line 2374
+        sendEvent(name: 'deviceProfileFile', value: DEFAULT_PROFILES_FILENAME, type: 'digital') // library marker kkossev.deviceProfileLibV4, line 2375
+
+        String version = state.profilesV4?.version ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2377
+        String timestamp = state.profilesV4?.timestamp ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2378
+        logInfo "✅ Successfully loaded STANDARD profiles (version: ${version}, timestamp: ${timestamp})" // library marker kkossev.deviceProfileLibV4, line 2379
+        sendInfoEvent "Standard profiles loaded from ${DEFAULT_PROFILES_FILENAME}. Press F5 to refresh the page." // library marker kkossev.deviceProfileLibV4, line 2380
+    } else { // library marker kkossev.deviceProfileLibV4, line 2381
+        sendInfoEvent "❌ Failed to reload standard device profiles from local storage" // library marker kkossev.deviceProfileLibV4, line 2382
+    } // library marker kkossev.deviceProfileLibV4, line 2383
+} // library marker kkossev.deviceProfileLibV4, line 2384
+
+// Backward compatibility - redirect old command to new one // library marker kkossev.deviceProfileLibV4, line 2386
+void updateFromLocalStorage() { // library marker kkossev.deviceProfileLibV4, line 2387
+    logDebug "updateFromLocalStorage: redirecting to loadStandardProfilesFromLocalStorage()" // library marker kkossev.deviceProfileLibV4, line 2388
+    loadStandardProfilesFromLocalStorage() // library marker kkossev.deviceProfileLibV4, line 2389
+} // library marker kkossev.deviceProfileLibV4, line 2390
+
+// Backward compatibility alias // library marker kkossev.deviceProfileLibV4, line 2392
+void loadStandardProfiles() { // library marker kkossev.deviceProfileLibV4, line 2393
+    logDebug "loadStandardProfiles: redirecting to loadStandardProfilesFromLocalStorage()" // library marker kkossev.deviceProfileLibV4, line 2394
+    loadStandardProfilesFromLocalStorage() // library marker kkossev.deviceProfileLibV4, line 2395
+} // library marker kkossev.deviceProfileLibV4, line 2396
+
+/** // library marker kkossev.deviceProfileLibV4, line 2398
+ * Loads CUSTOM device profiles from a specific JSON file on Hubitat local storage // library marker kkossev.deviceProfileLibV4, line 2399
+ * Remembers this choice after reboot via state persistence // library marker kkossev.deviceProfileLibV4, line 2400
+ * @param filename Custom JSON filename (e.g., "deviceProfilesV4_custom.json") // library marker kkossev.deviceProfileLibV4, line 2401
+ */ // library marker kkossev.deviceProfileLibV4, line 2402
+void loadUserCustomProfilesFromLocalStorage(String filename) { // library marker kkossev.deviceProfileLibV4, line 2403
+    String trimmedFilename = filename?.trim() ?: "" // library marker kkossev.deviceProfileLibV4, line 2404
+
+    // If filename is empty, check the deviceProfileFile attribute // library marker kkossev.deviceProfileLibV4, line 2406
+    if (trimmedFilename.isEmpty()) { // library marker kkossev.deviceProfileLibV4, line 2407
+        String attrValue = device.currentValue('deviceProfileFile') // library marker kkossev.deviceProfileLibV4, line 2408
+        if (attrValue != null && !attrValue.isEmpty() && attrValue != DEFAULT_PROFILES_FILENAME) { // library marker kkossev.deviceProfileLibV4, line 2409
+            logInfo "loadUserCustomProfilesFromLocalStorage: using deviceProfileFile attribute value: ${attrValue}" // library marker kkossev.deviceProfileLibV4, line 2410
+            trimmedFilename = attrValue // library marker kkossev.deviceProfileLibV4, line 2411
+        } else { // library marker kkossev.deviceProfileLibV4, line 2412
+            logWarn "loadUserCustomProfilesFromLocalStorage: filename parameter is required and deviceProfileFile attribute is empty or default" // library marker kkossev.deviceProfileLibV4, line 2413
+            sendInfoEvent "❌ Custom JSON filename is required" // library marker kkossev.deviceProfileLibV4, line 2414
+            return // library marker kkossev.deviceProfileLibV4, line 2415
+        } // library marker kkossev.deviceProfileLibV4, line 2416
+    } // library marker kkossev.deviceProfileLibV4, line 2417
+    logInfo "loadUserCustomProfilesFromLocalStorage: loading CUSTOM device profiles from ${trimmedFilename}" // library marker kkossev.deviceProfileLibV4, line 2418
+
+    // Clear all cached profiles first // library marker kkossev.deviceProfileLibV4, line 2420
+    clearProfilesCache() // library marker kkossev.deviceProfileLibV4, line 2421
+
+    // First ensure standard profiles are loaded (needed for fallback) // library marker kkossev.deviceProfileLibV4, line 2423
+    boolean standardResult = ensureProfilesLoaded() // library marker kkossev.deviceProfileLibV4, line 2424
+
+    if (!standardResult) { // library marker kkossev.deviceProfileLibV4, line 2426
+        sendInfoEvent "❌ Failed to load standard profiles - cannot proceed with custom profiles" // library marker kkossev.deviceProfileLibV4, line 2427
+        return // library marker kkossev.deviceProfileLibV4, line 2428
+    } // library marker kkossev.deviceProfileLibV4, line 2429
+
+    // Load custom profiles for this device // library marker kkossev.deviceProfileLibV4, line 2431
+    String dni = device?.deviceNetworkId // library marker kkossev.deviceProfileLibV4, line 2432
+    if (!dni) { // library marker kkossev.deviceProfileLibV4, line 2433
+        logWarn "loadCustomProfiles: device DNI is null" // library marker kkossev.deviceProfileLibV4, line 2434
+        sendInfoEvent "❌ Device DNI is null - cannot load custom profiles" // library marker kkossev.deviceProfileLibV4, line 2435
+        return // library marker kkossev.deviceProfileLibV4, line 2436
+    } // library marker kkossev.deviceProfileLibV4, line 2437
+
+    boolean customResult = loadCustomProfilesForDevice(dni, trimmedFilename) // library marker kkossev.deviceProfileLibV4, line 2439
+
+    if (customResult) { // library marker kkossev.deviceProfileLibV4, line 2441
+        // Remember this choice - user explicitly chose custom profiles // library marker kkossev.deviceProfileLibV4, line 2442
+        if (state.profilesV4 == null) { state.profilesV4 = [:] } // library marker kkossev.deviceProfileLibV4, line 2443
+        state.profilesV4['lastJSONSource'] = 'custom' // library marker kkossev.deviceProfileLibV4, line 2444
+        state.profilesV4['customJSONFilename'] = trimmedFilename // library marker kkossev.deviceProfileLibV4, line 2445
+
+        // Retry profile detection if this device was previously stuck at UNKNOWN - the newly loaded // library marker kkossev.deviceProfileLibV4, line 2447
+        // custom profile may now contain a matching fingerprint that wasn't available on the last attempt // library marker kkossev.deviceProfileLibV4, line 2448
+        if (shouldDetectDeviceProfile()) { setDeviceNameAndProfile() } // library marker kkossev.deviceProfileLibV4, line 2449
+
+        // Reload current profile with custom data // library marker kkossev.deviceProfileLibV4, line 2451
+        ensureCurrentProfileLoaded() // library marker kkossev.deviceProfileLibV4, line 2452
+
+        // Update deviceProfileFile attribute to show currently loaded custom file // library marker kkossev.deviceProfileLibV4, line 2454
+        sendEvent(name: 'deviceProfileFile', value: trimmedFilename, type: 'digital') // library marker kkossev.deviceProfileLibV4, line 2455
+
+        String version = state.profilesV4?.customVersion ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2457
+        String timestamp = state.profilesV4?.customTimestamp ?: 'unknown' // library marker kkossev.deviceProfileLibV4, line 2458
+        int count = state.profilesV4?.customProfileCount ?: 0 // library marker kkossev.deviceProfileLibV4, line 2459
+        logInfo "✅ Successfully loaded CUSTOM profiles from ${trimmedFilename} (version: ${version}, timestamp: ${timestamp}, profiles: ${count})" // library marker kkossev.deviceProfileLibV4, line 2460
+        sendInfoEvent "Custom profiles loaded from ${trimmedFilename}. Press F5 to refresh the page." // library marker kkossev.deviceProfileLibV4, line 2461
+    } else { // library marker kkossev.deviceProfileLibV4, line 2462
+        sendInfoEvent "❌ Failed to load custom profiles from ${trimmedFilename}" // library marker kkossev.deviceProfileLibV4, line 2463
+    } // library marker kkossev.deviceProfileLibV4, line 2464
+} // library marker kkossev.deviceProfileLibV4, line 2465
+
+
+
+// updateFromGitHub command - download JSON profiles from GitHub and store to Hubitat local storage // library marker kkossev.deviceProfileLibV4, line 2469
+void downloadFromGitHubAndSaveToHE(String url) { // library marker kkossev.deviceProfileLibV4, line 2470
+    long startTime = now() // library marker kkossev.deviceProfileLibV4, line 2471
+    String gitHubUrl = url // library marker kkossev.deviceProfileLibV4, line 2472
+    String fileName = DEFAULT_PROFILES_FILENAME // library marker kkossev.deviceProfileLibV4, line 2473
+
+    // If URL is provided, try to extract filename from it // library marker kkossev.deviceProfileLibV4, line 2475
+    if (url?.trim()) { // library marker kkossev.deviceProfileLibV4, line 2476
+        try { // library marker kkossev.deviceProfileLibV4, line 2477
+            String urlPath = gitHubUrl.split('/').last() // library marker kkossev.deviceProfileLibV4, line 2478
+            if (urlPath.toLowerCase().endsWith('.json')) { // library marker kkossev.deviceProfileLibV4, line 2479
+                fileName = urlPath // library marker kkossev.deviceProfileLibV4, line 2480
+            } // library marker kkossev.deviceProfileLibV4, line 2481
+        } catch (Exception e) { } // library marker kkossev.deviceProfileLibV4, line 2482
+    } // library marker kkossev.deviceProfileLibV4, line 2483
+    logInfo "updateFromGitHub: downloading ${fileName} from ${gitHubUrl}" // library marker kkossev.deviceProfileLibV4, line 2484
+    try { // library marker kkossev.deviceProfileLibV4, line 2485
+        // Download JSON content from GitHub // library marker kkossev.deviceProfileLibV4, line 2486
+        long downloadStartTime = now() // library marker kkossev.deviceProfileLibV4, line 2487
+        def params = [ // library marker kkossev.deviceProfileLibV4, line 2488
+            uri: gitHubUrl, // library marker kkossev.deviceProfileLibV4, line 2489
+            //textParser: true  // This is the key! Same as working readFile method // library marker kkossev.deviceProfileLibV4, line 2490
+            // Bounded timeout: this download can run while holding the device's singleThreaded semaphore; // library marker kkossev.deviceProfileLibV4, line 2491
+            // a hub without internet access would otherwise hang here until the platform's 120s semaphore // library marker kkossev.deviceProfileLibV4, line 2492
+            // limit kills every queued method on this device. // library marker kkossev.deviceProfileLibV4, line 2493
+            timeout: 30, // library marker kkossev.deviceProfileLibV4, line 2494
+        ] // library marker kkossev.deviceProfileLibV4, line 2495
+
+        // Hubitat 2.1.8+: ignore SSL cert/hostname validation issues for HTTPS profile downloads. // library marker kkossev.deviceProfileLibV4, line 2497
+        if ((gitHubUrl ?: '').toLowerCase().startsWith('https://')) { // library marker kkossev.deviceProfileLibV4, line 2498
+            params.ignoreSSLIssues = true // library marker kkossev.deviceProfileLibV4, line 2499
+            logDebug "downloadFromGitHubAndSaveToHE: using ignoreSSLIssues=true for HTTPS profile download" // library marker kkossev.deviceProfileLibV4, line 2500
+        } // library marker kkossev.deviceProfileLibV4, line 2501
+
+        logDebug "updateFromGitHub: HTTP params: ${params}" // library marker kkossev.deviceProfileLibV4, line 2503
+
+        httpGet(params) { resp -> // library marker kkossev.deviceProfileLibV4, line 2505
+            logDebug "updateFromGitHub: Response status: ${resp?.status}" // library marker kkossev.deviceProfileLibV4, line 2506
+            state.gitHubV4['httpGetCallsCtr'] = (state.gitHubV4['httpGetCallsCtr'] ?: 0) + 1 // library marker kkossev.deviceProfileLibV4, line 2507
+            state.gitHubV4['httpGetLastStatus'] = resp?.status // library marker kkossev.deviceProfileLibV4, line 2508
+
+            if (resp?.status == 200 && resp?.data) { // library marker kkossev.deviceProfileLibV4, line 2510
+                // Fix StringReader issue - get actual text content without explicit class references // library marker kkossev.deviceProfileLibV4, line 2511
+                String jsonContent = "" // library marker kkossev.deviceProfileLibV4, line 2512
+                def responseData = resp.getData() // library marker kkossev.deviceProfileLibV4, line 2513
+
+                if (responseData instanceof String) { // library marker kkossev.deviceProfileLibV4, line 2515
+                    jsonContent = responseData // library marker kkossev.deviceProfileLibV4, line 2516
+                } else if (responseData?.hasProperty('text')) { // library marker kkossev.deviceProfileLibV4, line 2517
+                    // Handle StringReader without explicit class reference // library marker kkossev.deviceProfileLibV4, line 2518
+                    jsonContent = responseData.text // library marker kkossev.deviceProfileLibV4, line 2519
+                } else { // library marker kkossev.deviceProfileLibV4, line 2520
+                    jsonContent = responseData.toString() // library marker kkossev.deviceProfileLibV4, line 2521
+                } // library marker kkossev.deviceProfileLibV4, line 2522
+
+                long downloadEndTime = now() // library marker kkossev.deviceProfileLibV4, line 2524
+                long downloadDuration = downloadEndTime - downloadStartTime // library marker kkossev.deviceProfileLibV4, line 2525
+                //logInfo "updateFromGitHub: downloaded ${jsonContent.length()} characters" // library marker kkossev.deviceProfileLibV4, line 2526
+                //logDebug "updateFromGitHub: first 100 chars: ${jsonContent.take(100)}" // library marker kkossev.deviceProfileLibV4, line 2527
+                //logInfo "updateFromGitHub: Performance - Download: ${downloadDuration}ms" // library marker kkossev.deviceProfileLibV4, line 2528
+                sendInfoEvent "Successfully downloaded ${fileName} from GitHub, ${jsonContent.length()} characters in ${downloadDuration}ms" // library marker kkossev.deviceProfileLibV4, line 2529
+                state.gitHubV4['lastDownloadSize'] = jsonContent.length() // library marker kkossev.deviceProfileLibV4, line 2530
+                state.gitHubV4['lastDownloadTime'] = now() // library marker kkossev.deviceProfileLibV4, line 2531
+                state.gitHubV4['lastDownloadDuration'] = downloadDuration // library marker kkossev.deviceProfileLibV4, line 2532
+
+                // Validate it's actually JSON content // library marker kkossev.deviceProfileLibV4, line 2534
+                if (jsonContent.length() < 100 || !jsonContent.trim().startsWith("{")) { // library marker kkossev.deviceProfileLibV4, line 2535
+                    //logWarn "updateFromGitHub: ❌ Downloaded content doesn't appear to be valid JSON" // library marker kkossev.deviceProfileLibV4, line 2536
+                    logWarn "updateFromGitHub: Content preview: ${jsonContent.take(200)}" // library marker kkossev.deviceProfileLibV4, line 2537
+                    state.gitHubV4['lastDownloadError'] = "Invalid JSON" // library marker kkossev.deviceProfileLibV4, line 2538
+                    sendInfoEvent "updateFromGitHub: ❌ Downloaded content doesn't appear to be valid JSON" // library marker kkossev.deviceProfileLibV4, line 2539
+                    return // library marker kkossev.deviceProfileLibV4, line 2540
+                } // library marker kkossev.deviceProfileLibV4, line 2541
+                state.gitHubV4['lastDownloadError'] = null // library marker kkossev.deviceProfileLibV4, line 2542
+
+                // Parse and extract version/timestamp information for debugging // library marker kkossev.deviceProfileLibV4, line 2544
+                try { // library marker kkossev.deviceProfileLibV4, line 2545
+                    def jsonSlurper = new groovy.json.JsonSlurper() // library marker kkossev.deviceProfileLibV4, line 2546
+                    def parsedJson = jsonSlurper.parseText(jsonContent) // library marker kkossev.deviceProfileLibV4, line 2547
+
+                    def version = parsedJson?.version ?: "unknown" // library marker kkossev.deviceProfileLibV4, line 2549
+                    def timestamp = parsedJson?.timestamp ?: "unknown" // library marker kkossev.deviceProfileLibV4, line 2550
+                    def author = parsedJson?.author ?: "unknown" // library marker kkossev.deviceProfileLibV4, line 2551
+                    def profileCount = parsedJson?.deviceProfiles?.size() ?: 0 // library marker kkossev.deviceProfileLibV4, line 2552
+
+                    logDebug "updateFromGitHub: JSON Metadata - Version: ${version}, Timestamp: ${timestamp}" // library marker kkossev.deviceProfileLibV4, line 2554
+                    logDebug "updateFromGitHub: JSON Metadata - Author: ${author}, Device Profiles: ${profileCount}" // library marker kkossev.deviceProfileLibV4, line 2555
+                    state.gitHubV4['lastDownloadVersion'] = version // library marker kkossev.deviceProfileLibV4, line 2556
+                    state.gitHubV4['lastDownloadTimestamp'] = timestamp // library marker kkossev.deviceProfileLibV4, line 2557
+
+                } catch (Exception jsonException) { // library marker kkossev.deviceProfileLibV4, line 2559
+                    logWarn "updateFromGitHub: Could not parse JSON metadata: ${jsonException.message}" // library marker kkossev.deviceProfileLibV4, line 2560
+                    state.gitHubV4['lastDownloadVersion'] = null // library marker kkossev.deviceProfileLibV4, line 2561
+                    state.gitHubV4['lastDownloadTimestamp'] = null // library marker kkossev.deviceProfileLibV4, line 2562
+                    sendInfoEvent "updateFromGitHub: ❌ Could not parse JSON metadata: ${jsonException.message}" // library marker kkossev.deviceProfileLibV4, line 2563
+                    return // library marker kkossev.deviceProfileLibV4, line 2564
+                } // library marker kkossev.deviceProfileLibV4, line 2565
+
+                // Store the content to Hubitat local storage using uploadHubFile // library marker kkossev.deviceProfileLibV4, line 2567
+                try { // library marker kkossev.deviceProfileLibV4, line 2568
+                    long uploadStartTime = now() // library marker kkossev.deviceProfileLibV4, line 2569
+                    // Use uploadHubFile to save content directly to local storage (correct API method) // library marker kkossev.deviceProfileLibV4, line 2570
+                    def fileBytes = jsonContent.getBytes("UTF-8") // library marker kkossev.deviceProfileLibV4, line 2571
+                    uploadHubFile(fileName, fileBytes)  // void method - no return value // library marker kkossev.deviceProfileLibV4, line 2572
+
+                    long uploadEndTime = now() // library marker kkossev.deviceProfileLibV4, line 2574
+                    long uploadDuration = uploadEndTime - uploadStartTime // library marker kkossev.deviceProfileLibV4, line 2575
+
+                    sendInfoEvent "updateFromGitHub: Successfully uploaded ${fileName} to Hubitat local storage, ${uploadDuration}ms, ${fileBytes.length} bytes" // library marker kkossev.deviceProfileLibV4, line 2577
+                    //logInfo "updateFromGitHub: File size: ${jsonContent.length()} characters" // library marker kkossev.deviceProfileLibV4, line 2578
+                    //logInfo "updateFromGitHub: Performance - Upload: ${uploadDuration}ms" // library marker kkossev.deviceProfileLibV4, line 2579
+                    //sendInfoEvent "Successfully updated ${fileName} (${jsonContent.length()} characters) in Hubitat local storage" // library marker kkossev.deviceProfileLibV4, line 2580
+
+                    // Load the profiles directly from the content already in memory instead of reading the // library marker kkossev.deviceProfileLibV4, line 2582
+                    // file back from local storage over the network right after this HTTPS call - readFile() // library marker kkossev.deviceProfileLibV4, line 2583
+                    // uses a plain http:// httpGet, but chaining it immediately after an ignoreSSLIssues:true // library marker kkossev.deviceProfileLibV4, line 2584
+                    // HTTPS request has been observed to fail with PKIX certificate errors on some hubs. // library marker kkossev.deviceProfileLibV4, line 2585
+                    clearProfilesCache() // library marker kkossev.deviceProfileLibV4, line 2586
+                    if (loadProfilesFromJSONstring(jsonContent)) { // library marker kkossev.deviceProfileLibV4, line 2587
+                        g_profilesLoaded = true // library marker kkossev.deviceProfileLibV4, line 2588
+                        if (state.profilesV4 == null) { state.profilesV4 = [:] } // library marker kkossev.deviceProfileLibV4, line 2589
+                        state.profilesV4['lastUsedHeFile'] = fileName // library marker kkossev.deviceProfileLibV4, line 2590
+                    } else { // library marker kkossev.deviceProfileLibV4, line 2591
+                        logWarn "updateFromGitHub: loadProfilesFromJSONstring() failed on the downloaded content" // library marker kkossev.deviceProfileLibV4, line 2592
+                    } // library marker kkossev.deviceProfileLibV4, line 2593
+
+                    long endTime = now() // library marker kkossev.deviceProfileLibV4, line 2595
+                    long totalDuration = endTime - startTime // library marker kkossev.deviceProfileLibV4, line 2596
+                    logInfo "updateFromGitHub: Performance - Total: ${totalDuration}ms" // library marker kkossev.deviceProfileLibV4, line 2597
+                } catch (Exception fileException) { // library marker kkossev.deviceProfileLibV4, line 2598
+                    logWarn "updateFromGitHub: ❌ Error saving file: ${fileException.message}" // library marker kkossev.deviceProfileLibV4, line 2599
+                    logDebug "updateFromGitHub: File save exception: ${fileException}" // library marker kkossev.deviceProfileLibV4, line 2600
+                    sendInfoEvent "Error saving file: ${fileException.message}" // library marker kkossev.deviceProfileLibV4, line 2601
+                    state.gitHubV4['lastDownloadError'] = "File save error" // library marker kkossev.deviceProfileLibV4, line 2602
+                } // library marker kkossev.deviceProfileLibV4, line 2603
+            } else { // library marker kkossev.deviceProfileLibV4, line 2604
+                logWarn "updateFromGitHub: ❌ Failed to download from GitHub. HTTP status: ${resp?.status}" // library marker kkossev.deviceProfileLibV4, line 2605
+                state.gitHubV4['lastDownloadError'] = "HTTP status ${resp?.status}" // library marker kkossev.deviceProfileLibV4, line 2606
+                sendInfoEvent "Failed to download from GitHub. HTTP status: ${resp?.status}" // library marker kkossev.deviceProfileLibV4, line 2607
+            } // library marker kkossev.deviceProfileLibV4, line 2608
+        } // library marker kkossev.deviceProfileLibV4, line 2609
+
+    } catch (Exception e) { // library marker kkossev.deviceProfileLibV4, line 2611
+        if (state.gitHubV4 == null) { state.gitHubV4 = [:] } // library marker kkossev.deviceProfileLibV4, line 2612
+        state.gitHubV4['catchedExceptionsCtr'] = (state.gitHubV4['catchedExceptionsCtr'] ?: 0) + 1 // library marker kkossev.deviceProfileLibV4, line 2613
+        state.gitHubV4['lastException'] = e.message // library marker kkossev.deviceProfileLibV4, line 2614
+        state.gitHubV4['lastExceptionTime'] = now() // library marker kkossev.deviceProfileLibV4, line 2615
+        logWarn "updateFromGitHub: ❌ Error: ${e.message}" // library marker kkossev.deviceProfileLibV4, line 2616
+        logDebug "updateFromGitHub: Full exception: ${e}" // library marker kkossev.deviceProfileLibV4, line 2617
+        sendInfoEvent "updateFromGitHub: ❌ Error: ${e.message}" // library marker kkossev.deviceProfileLibV4, line 2618
+    } // library marker kkossev.deviceProfileLibV4, line 2619
+} // library marker kkossev.deviceProfileLibV4, line 2620
 
 
 

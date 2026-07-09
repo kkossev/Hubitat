@@ -32,7 +32,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '4.1.2' }
-static String deviceProfileLibStamp() { '2026/07/09 10:25 PM' }
+static String deviceProfileLibStamp() { '2026/07/09 10:53 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -2040,6 +2040,10 @@ public def readFile(fName, boolean allowRetryOnSslError) {
         // 'unable to find valid certification path' failures have been reported on this call even with
         // hub security disabled - if the request ends up on TLS for any reason, skip cert validation.
         ignoreSSLIssues: true,
+        // This call runs while holding the device's singleThreaded semaphore (often from the parse path);
+        // without an explicit timeout a hung connection blocks ALL queued methods until the platform's
+        // 120s semaphore limit kills them ('Failed to acquire semaphore ... within 120 seconds').
+        timeout: 20,
     ]
     if (state.profilesV4 == null) { state.profilesV4 = [:] }
     state.profilesV4['lastReadFileError'] = ''
@@ -2484,6 +2488,10 @@ void downloadFromGitHubAndSaveToHE(String url) {
         def params = [
             uri: gitHubUrl,
             //textParser: true  // This is the key! Same as working readFile method
+            // Bounded timeout: this download can run while holding the device's singleThreaded semaphore;
+            // a hub without internet access would otherwise hang here until the platform's 120s semaphore
+            // limit kills every queued method on this device.
+            timeout: 30,
         ]
 
         // Hubitat 2.1.8+: ignore SSL cert/hostname validation issues for HTTPS profile downloads.
