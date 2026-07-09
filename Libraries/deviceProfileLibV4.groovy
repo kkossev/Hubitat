@@ -32,7 +32,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '4.1.2' }
-static String deviceProfileLibStamp() { '2026/07/09 9:50 AM' }
+static String deviceProfileLibStamp() { '2026/07/09 11:04 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -1110,6 +1110,14 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
     return [deviceName, deviceProfile]
 }
 
+// UNKNOWN is not a final result - it means detection hasn't succeeded yet (missing metadata at pairing time,
+// profiles not loaded yet, or a transient failure). Treat it the same as null so retries keep happening
+// on every init/reload path instead of getting stuck forever after the first failed attempt.
+private boolean shouldDetectDeviceProfile() {
+    String currentProfile = state?.deviceProfile
+    return currentProfile == null || currentProfile == '' || currentProfile == UNKNOWN
+}
+
 // called from  initializeVars( fullInit = true)
 public void setDeviceNameAndProfile(String model=null, String manufacturer=null) {
     if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
@@ -1119,18 +1127,31 @@ public void setDeviceNameAndProfile(String model=null, String manufacturer=null)
     logDebug "setDeviceNameAndProfile: calling getDeviceNameAndProfile(${model}, ${manufacturer}) previousProfile = ${previousProfile}"
     def (String deviceName, String deviceProfile) = getDeviceNameAndProfile(model, manufacturer)
     logDebug "setDeviceNameAndProfile: returned deviceName=${deviceName} deviceProfile=${deviceProfile} previousProfile = ${previousProfile}"
+    String dataValueModel = model != null ? model : device.getDataValue('model') ?: UNKNOWN
+    String dataValueManufacturer  = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
     if (deviceProfile == null || deviceProfile == UNKNOWN) {
-        logInfo "setDeviceNameAndProfile: unknown model ${deviceModel} manufacturer ${deviceManufacturer} previousProfile = ${previousProfile} -> setting state.deviceProfile = UNKNOWN"
+        logInfo "setDeviceNameAndProfile: unknown model ${dataValueModel} manufacturer ${dataValueManufacturer} previousProfile = ${previousProfile} -> setting state.deviceProfile = UNKNOWN"
         // don't change the device name when unknown
         state.deviceProfile = UNKNOWN
     }
-    String dataValueModel = model != null ? model : device.getDataValue('model') ?: UNKNOWN
-    String dataValueManufacturer  = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
     logDebug "setDeviceNameAndProfile: deviceName=${deviceName} model=${dataValueModel} manufacturer=${dataValueManufacturer} previousProfile = ${previousProfile}"
-    if (deviceName != NULL && deviceName != UNKNOWN) {
+    if (deviceName != null && deviceName != UNKNOWN) {
         device.setName(deviceName)
         state.deviceProfile = deviceProfile
         device.updateSetting('forcedProfile', [value:g_deviceProfilesV4[deviceProfile]?.description, type:'enum'])
+        // Remember that WE set forcedProfile to this value, so a later stale/unchanged forcedProfile
+        // (e.g. left over from a previous device that used to occupy this DNI) is not mistaken for a
+        // deliberate user override and allowed to clobber a fresh, correct fingerprint match - see customUpdated().
+        // Two mechanisms, because Hubitat's 'settings' binding does NOT reflect updateSetting()/removeSetting()
+        // calls made earlier in the SAME script execution (confirmed: during loadAllDefaults(), settings.forcedProfile
+        // still reads the pre-deletion stale value all the way through, even after deleteAllSettings() ran):
+        //  - justAutoDetected: same-execution signal, read-and-cleared by customUpdated() - robust even when
+        //    'settings' itself is stale within this run (covers the loadAllDefaults() case).
+        //  - lastAutoSyncedProfile: cross-execution signal for the normal case (detection happened in an earlier,
+        //    separate execution, and this is a later standalone Save Preferences where 'settings' IS fresh).
+        if (state.profilesV4 == null) { state.profilesV4 = [:] }
+        state.profilesV4['lastAutoSyncedProfile'] = deviceProfile
+        state.profilesV4['justAutoDetected'] = true
         logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was set to : <b>deviceProfile=${deviceProfile} : deviceName=${deviceName}</b>"
         
         // Clear any stale WARNING attribute since we successfully set the profile
@@ -1244,7 +1265,7 @@ public void deviceProfileInitializeVars(boolean fullInit=false) {
     logDebug "deviceProfileInitializeVars(${fullInit})"
     // Eager loading during initialization
     if (this.respondsTo('ensureProfilesLoaded')) { ensureProfilesLoaded() }
-    if (state.deviceProfile == null) {
+    if (shouldDetectDeviceProfile()) {
         setDeviceNameAndProfile()
     }
 }
@@ -2279,12 +2300,15 @@ void loadStandardProfilesFromGitHub() {
             g_customProfilesV4.remove(dni)
             clearCustomJSONAttribute()
         }
-        
+
+        // Retry profile detection if this device was previously stuck at UNKNOWN - the newly (re)loaded
+        // profiles may now contain a matching fingerprint that wasn't available on the last attempt
+        if (shouldDetectDeviceProfile()) { setDeviceNameAndProfile() }
         ensureCurrentProfileLoaded()
-        
+
         // Update deviceProfileFile attribute to show currently loaded file
         sendEvent(name: 'deviceProfileFile', value: DEFAULT_PROFILES_FILENAME, type: 'digital')
-        
+
         String version = state.profilesV4?.version ?: 'unknown'
         String timestamp = state.profilesV4?.timestamp ?: 'unknown'
         logInfo "✅ Successfully loaded STANDARD profiles from GitHub (version: ${version}, timestamp: ${timestamp})"
@@ -2327,12 +2351,15 @@ void loadStandardProfilesFromLocalStorage() {
             g_customProfilesV4.remove(dni)
             clearCustomJSONAttribute()
         }
-        
+
+        // Retry profile detection if this device was previously stuck at UNKNOWN - the newly (re)loaded
+        // profiles may now contain a matching fingerprint that wasn't available on the last attempt
+        if (shouldDetectDeviceProfile()) { setDeviceNameAndProfile() }
         ensureCurrentProfileLoaded()
-        
+
         // Update deviceProfileFile attribute to show currently loaded file
         sendEvent(name: 'deviceProfileFile', value: DEFAULT_PROFILES_FILENAME, type: 'digital')
-        
+
         String version = state.profilesV4?.version ?: 'unknown'
         String timestamp = state.profilesV4?.timestamp ?: 'unknown'
         logInfo "✅ Successfully loaded STANDARD profiles (version: ${version}, timestamp: ${timestamp})"
@@ -2402,7 +2429,11 @@ void loadUserCustomProfilesFromLocalStorage(String filename) {
         if (state.profilesV4 == null) { state.profilesV4 = [:] }
         state.profilesV4['lastJSONSource'] = 'custom'
         state.profilesV4['customJSONFilename'] = trimmedFilename
-        
+
+        // Retry profile detection if this device was previously stuck at UNKNOWN - the newly loaded
+        // custom profile may now contain a matching fingerprint that wasn't available on the last attempt
+        if (shouldDetectDeviceProfile()) { setDeviceNameAndProfile() }
+
         // Reload current profile with custom data
         ensureCurrentProfileLoaded()
         

@@ -29,7 +29,7 @@
  * ver. 4.2.1  2025-10-19 kkossev  - added attributes 'switch', 'switchOnTime', 'switchState' for NEO NAS-PS10B2; added 'blockTime', 'motionDetectionDelayTime', 'radarScene', 'sensorMode', 'distanceReportMode' for TS0225_LEAPMMW_RADAR Z2M compatibility
  * ver. 4.2.2  2026-06-27 kkossev  - added HOBEIAN ZG-204ZK 24 GHz Human Presence Detector (TS0601 _TZE200_ka8l86iu)
  * ver. 4.2.3  2026-06-28 kkossev  - added ignoreSSLIssues=true for HTTPS profile JSON downloads;
- * ver. 4.2.4  2026-07-09 kkossev  - fixed updateIndicatorLight() typo in customParseZdoClusters(); fixed customFilename/customJSONFilename state key inconsistency in deviceProfileLibV4; fixed clearProfilesCache() not resetting cooldown flag, causing reload to fail after explicit GitHub download;
+ * ver. 4.2.4  2026-07-09 kkossev  - (dev. branch) multiple bug fixes
  *
  *                                   TODO: new info page on WiKi
  *                                   TODO: Show both the profile key and the profile name in the Preferences page!
@@ -40,9 +40,9 @@
 */
 
 static String version() { "4.2.4" }
-static String timeStamp() {"2026/07/09 9:52 AM"}
+static String timeStamp() {"2026/07/09 11:07 AM"}
 
-@Field static final Boolean _DEBUG = false           // debug commands
+@Field static final Boolean _DEBUG = true           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true 
 
@@ -289,14 +289,37 @@ void customUpdated() {
         }
     }
 
-    if (settings?.forcedProfile != null) {
-        logDebug "current state.deviceProfile=${state.deviceProfile}, settings.forcedProfile=${settings?.forcedProfile}, getProfileKey()=${getProfileKey(settings?.forcedProfile)}"
-        if (getProfileKey(settings?.forcedProfile) != state.deviceProfile) {
-            logInfo "changing the device profile from ${state.deviceProfile} to ${getProfileKey(settings?.forcedProfile)}"
-            state.deviceProfile = getProfileKey(settings?.forcedProfile)
-            initializeVars(fullInit = false)
-            resetPreferencesToDefaults(debug = true)
-            logInfo 'press F5 to refresh the page'
+    // Read-and-clear: was setDeviceNameAndProfile() just run successfully earlier in THIS SAME execution
+    // (e.g. as part of a loadAllDefaults() chain)? If so, trust that fresh result unconditionally and skip
+    // the forcedProfile check entirely - Hubitat's 'settings' binding does not reflect updateSetting()/
+    // removeSetting() calls made earlier in the same run, so settings.forcedProfile can look stale here
+    // even though it was just correctly synced (or deleted) moments ago in this very execution.
+    boolean justAutoDetected = state.profilesV4?.justAutoDetected == true
+    if (state.profilesV4 != null) { state.profilesV4['justAutoDetected'] = false }
+
+    if (justAutoDetected) {
+        logDebug "customUpdated: profile was just freshly auto-detected in this run (deviceProfile=${state.deviceProfile}) - skipping forcedProfile check (settings may be stale within this execution)"
+    }
+    else if (settings?.forcedProfile != null) {
+        String forcedProfileKey = getProfileKey(settings?.forcedProfile)
+        String lastAutoSyncedProfile = state.profilesV4?.lastAutoSyncedProfile
+        logDebug "current state.deviceProfile=${state.deviceProfile}, settings.forcedProfile=${settings?.forcedProfile}, getProfileKey()=${forcedProfileKey}, lastAutoSyncedProfile=${lastAutoSyncedProfile}"
+        if (forcedProfileKey != state.deviceProfile) {
+            if (forcedProfileKey == lastAutoSyncedProfile) {
+                // forcedProfile still holds whatever auto-detection itself last wrote there (e.g. a stale
+                // value left over from a previous device that used to occupy this DNI) - state.deviceProfile
+                // has since been (re)detected to something else, so trust the fresh fingerprint match instead
+                // of silently overwriting it with the stale dropdown value. Not a deliberate user override.
+                logDebug "forcedProfile (${forcedProfileKey}) matches the last auto-synced value, not the current deviceProfile (${state.deviceProfile}) - ignoring as stale, not a deliberate override"
+            } else {
+                // forcedProfile points somewhere neither auto-detection nor the current state agrees with -
+                // this is a deliberate user-chosen override, honor it
+                logInfo "changing the device profile from ${state.deviceProfile} to ${forcedProfileKey}"
+                state.deviceProfile = forcedProfileKey
+                initializeVars(fullInit = false)
+                resetPreferencesToDefaults(debug = true)
+                logInfo 'press F5 to refresh the page'
+            }
         }
     }
     /* groovylint-disable-next-line EmptyElseBlock */
@@ -331,7 +354,7 @@ void customInitialize() {
 
 void customInitializeVars(final boolean fullInit=false) {
     logDebug "customInitializeVars(${fullInit})"
-    if (state.deviceProfile == null) {
+    if (shouldDetectDeviceProfile()) {
         setDeviceNameAndProfile()               // in deviceProfileiLib.groovy
     }
     if (fullInit == true) {
@@ -340,7 +363,10 @@ void customInitializeVars(final boolean fullInit=false) {
     if (fullInit == true || settings?.ignoreDistance == null) { device.updateSetting('ignoreDistance', true) }
     if (fullInit == true || state.motionStarted == null) { state.motionStarted = unix2formattedDate(now()) }
     if (fullInit == true || state.gitHubV4 == null) { state.gitHubV4 = [:] }
-    if (fullInit == true || state.profilesV4 == null) { state.profilesV4 = [:] }
+    // NOT unconditionally reset on fullInit like the other state maps above: setDeviceNameAndProfile() (called
+    // earlier in this same fullInit cycle, just above) may have already written lastAutoSyncedProfile/justAutoDetected
+    // into it - wiping it here would erase that and reintroduce the stale-forcedProfile-wins bug on every full reset.
+    if (state.profilesV4 == null) { state.profilesV4 = [:] }
     if (fullInit || settings?.healthCheckInterval == null) { device.updateSetting('healthCheckInterval', [value: '60', type: 'enum']) }
     if (fullInit || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', [value: true, type: 'bool']) } // since ver 4.1.0
     resetCooldownFlag()
