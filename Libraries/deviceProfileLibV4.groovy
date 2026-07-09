@@ -32,7 +32,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '4.1.2' }
-static String deviceProfileLibStamp() { '2026/07/09 11:04 AM' }
+static String deviceProfileLibStamp() { '2026/07/09 10:25 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -1113,7 +1113,11 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
 // UNKNOWN is not a final result - it means detection hasn't succeeded yet (missing metadata at pairing time,
 // profiles not loaded yet, or a transient failure). Treat it the same as null so retries keep happening
 // on every init/reload path instead of getting stuck forever after the first failed attempt.
-private boolean shouldDetectDeviceProfile() {
+// Must be public (not private): called from the driver's customInitializeVars(), a different #include'd
+// file/trait - Hubitat composes driver+libraries as separate traits, and a trait's private methods are
+// not visible outside that trait, so a private declaration here throws MissingMethodException when called
+// from the driver (confirmed on-hub: only failed from customInitializeVars(), not from same-file callers).
+public boolean shouldDetectDeviceProfile() {
     String currentProfile = state?.deviceProfile
     return currentProfile == null || currentProfile == '' || currentProfile == UNKNOWN
 }
@@ -1976,27 +1980,6 @@ private Map reconstructFingerprint(Map profileMap, Map fingerprint) {
     return reconstructed
 }
 
-/**
- * Returns the appropriate JSON filename based on state-based persistence
- * Checks state.profilesV4['lastJSONSource'] to determine standard vs custom
- * @return Filename to load (standard or custom)
- */
-String getProfilesFilename() {
-    // Check state-based persistence instead of preference
-    if (state.profilesV4 == null) { state.profilesV4 = [:] }
-    
-    String lastSource = state.profilesV4['lastJSONSource']
-    String customFilename = state.profilesV4['customJSONFilename']
-    
-    if (lastSource == 'custom' && customFilename != null && customFilename != '') {
-        logDebug "getProfilesFilename: using CUSTOM JSON: ${customFilename} (lastJSONSource=${lastSource})"
-        return customFilename
-    } else {
-        logDebug "getProfilesFilename: using STANDARD JSON: ${DEFAULT_PROFILES_FILENAME} (lastJSONSource=${lastSource})"
-        return DEFAULT_PROFILES_FILENAME
-    }
-}
-
 @Field static boolean g_OneTimeProfileLoadAttempted = false
 
 boolean loadProfilesFromJSON() {
@@ -2004,7 +1987,13 @@ boolean loadProfilesFromJSON() {
         logDebug "loadProfilesFromJSON: in cooldown period, skipping profile load attempt"
         return false
     }
-    String fileName = getProfilesFilename()
+    // Always load the STANDARD profiles file here: g_deviceProfilesV4 is shared JVM-wide by ALL devices
+    // using this driver, and this lazy load runs in the context of whichever device happens to need
+    // profiles first. Sourcing the filename from that device's per-device state (custom JSON filename)
+    // used to poison the shared cache with one device's custom profiles for every other device.
+    // Custom profiles are delivered per-device only, via the g_customProfilesV4[dni] overlay
+    // (see ensureProfilesLoaded / loadCustomProfilesForDevice).
+    String fileName = DEFAULT_PROFILES_FILENAME
     state.profilesV4['lastUsedHeFile'] = fileName
     def data = readFile(fileName)
     if (data == null) {
@@ -2032,17 +2021,25 @@ void oneTimeUpdateFromGitHub(Map data) {
 }
 
 
-// called froloadProfilesFromJSON 
-def readFile(fName) {
+// called froloadProfilesFromJSON
+public def readFile(fName) {
+    return readFile(fName, true)
+}
+
+// allowRetryOnSslError: internal - set false on the retry attempt so we only ever retry once
+public def readFile(fName, boolean allowRetryOnSslError) {
     long contentStartTime = now()
-    //uri = "http://${location.hub.localIP}:8080/local/deviceProfilesV4_mmWave.json"
     // URL-encode the filename to handle spaces and special characters
     String encodedFileName = URLEncoder.encode(fName, "UTF-8")
-    uri = "http://${location.hub.localIP}:8080/local/${encodedFileName}"
+    String uri = "http://${location.hub.localIP}:8080/local/${encodedFileName}"
 
     def params = [
         uri: uri,
         textParser: true,
+        // Inert on a genuine plain-http connection (no TLS handshake, nothing to validate), but PKIX
+        // 'unable to find valid certification path' failures have been reported on this call even with
+        // hub security disabled - if the request ends up on TLS for any reason, skip cert validation.
+        ignoreSSLIssues: true,
     ]
     if (state.profilesV4 == null) { state.profilesV4 = [:] }
     state.profilesV4['lastReadFileError'] = ''
@@ -2063,7 +2060,17 @@ def readFile(fName) {
             }
         }
     } catch (exception) {
-        log.error "${device?.displayName} Connection Exception: ${exception.message}"
+        String msg = exception.message ?: ''
+        // PKIX/certificate-chain errors have been reported on this plain http:// local-storage read
+        // (root cause on the hub side not identified yet - seen even with hub security disabled) -
+        // retry once after a short delay in case the condition is transient.
+        boolean isSslError = msg.contains('PKIX') || msg.contains('SSLHandshake') || msg.contains('certification path')
+        if (isSslError && allowRetryOnSslError) {
+            logWarn "readFile: SSL/certificate exception reading ${fName} (${msg}) - retrying once after a short delay"
+            pauseExecution(1000)
+            return readFile(fName, false)
+        }
+        log.error "${device?.displayName} Connection Exception: ${exception.message} (uri=${uri})"
         state.profilesV4['lastReadFileError'] = exception.message
         return null;
     }
@@ -2281,11 +2288,14 @@ void loadStandardProfilesFromGitHub() {
     // Download from GitHub and save to local storage
     downloadFromGitHubAndSaveToHE(defaultGitHubURL)
 
-    // Clear all cached profiles
-    clearProfilesCache()
-
-    // Load standard profiles
-    boolean result = ensureProfilesLoaded()
+    // downloadFromGitHubAndSaveToHE() already loads the profiles directly from the downloaded content when
+    // it succeeds - only fall back to re-reading them from local storage if that direct load didn't happen
+    // (e.g. the download itself failed).
+    boolean result = g_profilesLoaded && !g_deviceProfilesV4?.isEmpty()
+    if (!result) {
+        clearProfilesCache()
+        result = ensureProfilesLoaded()
+    }
 
     if (result) {
         // Remember this choice - user explicitly chose standard profiles
@@ -2560,21 +2570,20 @@ void downloadFromGitHubAndSaveToHE(String url) {
                     //logInfo "updateFromGitHub: File size: ${jsonContent.length()} characters"
                     //logInfo "updateFromGitHub: Performance - Upload: ${uploadDuration}ms"
                     //sendInfoEvent "Successfully updated ${fileName} (${jsonContent.length()} characters) in Hubitat local storage"
-                    
-                    // Optional: Clear current profiles to force reload on next access
-                    //g_deviceProfilesV4.clear()
-                    //g_deviceFingerprintsV4.clear()
-                    //g_currentProfilesV4.clear()
-                    /*
-                    g_deviceProfilesV4 = null
-                    g_deviceFingerprintsV4 = null
-                    g_currentProfilesV4 = null
-                    g_profilesLoaded = false
-                    g_profilesLoading = false
-                    
-                    logInfo "updateFromGitHub: Cleared cached profiles - they will be reloaded on next access"
-                    */
-                    
+
+                    // Load the profiles directly from the content already in memory instead of reading the
+                    // file back from local storage over the network right after this HTTPS call - readFile()
+                    // uses a plain http:// httpGet, but chaining it immediately after an ignoreSSLIssues:true
+                    // HTTPS request has been observed to fail with PKIX certificate errors on some hubs.
+                    clearProfilesCache()
+                    if (loadProfilesFromJSONstring(jsonContent)) {
+                        g_profilesLoaded = true
+                        if (state.profilesV4 == null) { state.profilesV4 = [:] }
+                        state.profilesV4['lastUsedHeFile'] = fileName
+                    } else {
+                        logWarn "updateFromGitHub: loadProfilesFromJSONstring() failed on the downloaded content"
+                    }
+
                     long endTime = now()
                     long totalDuration = endTime - startTime
                     logInfo "updateFromGitHub: Performance - Total: ${totalDuration}ms"

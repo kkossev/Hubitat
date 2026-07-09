@@ -40,7 +40,7 @@
 */
 
 static String version() { "4.2.4" }
-static String timeStamp() {"2026/07/09 11:07 AM"}
+static String timeStamp() {"2026/07/09 10:02 PM"}
 
 @Field static final Boolean _DEBUG = true           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -445,7 +445,7 @@ void cacheTest(String action) {
         case 'Initialize':
             clearProfilesCacheInfo()  
             boolean ok = ensureProfilesLoaded()
-            logInfo "cacheTest Initialize: ensureProfilesLoaded(${getProfilesFilename()}) -> ${ok}; size now ${g_deviceProfilesV4.size()}"
+            logInfo "cacheTest Initialize: ensureProfilesLoaded(${DEFAULT_PROFILES_FILENAME}) -> ${ok}; size now ${g_deviceProfilesV4.size()}"
             ok = ensureCurrentProfileLoaded()
             logInfo "cacheTest Initialize: ensureCurrentProfileLoaded() -> ${ok}; current profile now ${state.deviceProfile}"
             break

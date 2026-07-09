@@ -89,3 +89,5 @@ Drivers/Tuya Zigbee mmWave Sensor/Tuya_Zigbee_mmWave_Sensor_OPTIMIZATION_PLAN.md
 Libraries/BUGS.md
 Libraries/CLAUDE.md
 Libraries/deviceProfileLibV4-OPTIMIZATION.md
+Drivers/Tuya Zigbee Valve/SONOFF_SWV_ZF2_SUPPORT_TODO.md
+Drivers/Tuya Zigbee Valve/ZDO_WARNING_TODO.md
