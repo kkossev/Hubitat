@@ -815,29 +815,6 @@
       "configuration": { "0x0406": "bind", "0xFC57": "bind" }
     },
 
-    "TS0601_MUVJRJR5_RADAR": {
-      "description": "Tuya Human Presence Detector MUVJRJR5",
-      "device": { "powerSource": "dc" },
-      "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": false, "DistanceMeasurement": true },
-      "preferences": { "radarSensitivity": "16", "fadingTime": "103", "maximumDistance": "13", "ledIndicator": "101", "powerSwitch": "102" },
-      "commands": { "resetStats": "" },
-      "fingerprints": [
-        { "profileId": "0104", "endpointId": "01", "inClusters": "0004,0005,EF00,0000", "outClusters": "0019,000A", "model": "TS0601", "manufacturer": "_TZE204_muvkrjr5", "deviceJoinName": "Tuya Human Presence Detector MUVJRJR5" }
-      ],
-      "tuyaDPs": [
-        { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "scale": 1, "map": { "0": "inactive", "1": "active" }, "unit": "", "title": "<b>Presence state</b>", "description": "<i>Presence state</i>" },
-        { "dp": 13, "name": "maximumDistance", "type": "decimal", "rw": "rw", "min": 1.5, "max": 6.0, "defVal": 5.0, "scale": 100, "unit": "meters", "title": "<b>Maximum distance</b>", "description": "<i>Breath detection maximum distance</i>" },
-        { "dp": 16, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 68, "max": 90, "defVal": 80, "scale": 1, "unit": "", "title": "<b>Radar sensitivity</b>", "description": "<i>Radar sensitivity</i>" },
-        { "dp": 19, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 10.0, "defVal": 0.0, "scale": 100, "unit": "meters", "description": "Distance" },
-        { "dp": 101, "name": "ledIndicator", "type": "enum", "rw": "rw", "min": 0, "max": 1, "defVal": "0", "map": { "0": "0 - OFF", "1": "1 - ON" }, "title": "<b>LED indicator mode</b>", "description": "<i>LED indicator mode</i>" },
-        { "dp": 102, "name": "powerSwitch", "type": "enum", "rw": "rw", "min": 0, "max": 1, "defVal": "1", "map": { "0": "OFF", "1": "ON" }, "title": "<b>powerSwitch</b>", "description": "<i>Switch</i>" },
-        { "dp": 103, "name": "fadingTime", "type": "number", "rw": "rw", "min": 3, "max": 1799, "defVal": 30, "scale": 1, "unit": "seconds", "title": "<b>Fading time</b>", "description": "<i>Presence (fading) delay time</i>" }
-      ],
-      "refresh": ["queryAllTuyaDP"],
-      "spammyDPsToIgnore": [19],
-      "spammyDPsToNotTrace": [19]
-    },
-
     "TS0601_NBKSHS6K_RADAR": {
       "description": "5GHz Tuya Generic White Square Basic",
       "device": { "powerSource": "dc" },
@@ -981,7 +958,7 @@
       ],
       "tuyaDPs": [
         { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "map": { "0": "inactive", "1": "active" }, "description": "Presence state" },
-        { "dp": 13, "name": "maximumDistance", "type": "decimal", "rw": "rw", "min": 1.5, "max": 6.0, "defVal": 6.0, "step": 1, "scale": 1, "unit": "meters", "title": "<b>Detection distance</b>", "description": "<i>Detection distance</i>" },
+        { "dp": 13, "name": "maximumDistance", "type": "decimal", "rw": "rw", "min": 1.5, "max": 6.0, "defVal": 6.0, "step": 1, "scale": 100, "unit": "meters", "title": "<b>Detection distance</b>", "description": "<i>Detection distance</i>" },
         { "dp": 16, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 68, "max": 90, "defVal": 75, "scale": 1, "unit": "", "title": "<b>Radar sensitivity</b>", "description": "<i>Presence sensitivity</i>" },
         { "dp": 19, "name": "distance", "type": "decimal", "rw": "ro", "min": 0.0, "max": 10.0, "defVal": 0.0, "scale": 100, "unit": "meters", "description": "Distance to target" },
         { "dp": 101, "name": "ledIndicator", "type": "enum", "rw": "rw", "map": { "0": "OFF", "1": "ON" }, "defVal": "1", "title": "<b>LED indicator</b>", "description": "<i>Power LED indicator</i>" },

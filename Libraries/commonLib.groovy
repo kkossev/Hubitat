@@ -28,6 +28,7 @@ library(
   * ver. 4.0.2  2025-10-18 kkossev  - added tuyaDelay in sendTuyaCommand()
   * ver. 4.0.3  2025-10-18 kkossev  - added ignoreDuplicatedZigbeeMessages setting; DIGITAL_TIMER increased to 5000 ms
   * ver. 4.0.4  2026-06-04 kkossev  - added ED00 cluster;
+  * ver. 4.0.5  2026-07-09 kkossev  - (dev. branch) bug fixes
   *
   *                                   TODO: change the offline threshold to 2 
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
@@ -44,8 +45,8 @@ library(
   *
 */
 
-String commonLibVersion() { '4.0.4' }
-String commonLibStamp() { '2026/06/04 4:15 PM' }
+String commonLibVersion() { '4.0.5' }
+String commonLibStamp() { '2026/07/09 9:45 AM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -871,7 +872,7 @@ public List<String> sendTuyaCommand(String dp, String dp_type, String fncmd, int
     // Get delay from device profile or use default
     int tuyaDelay = DEVICE?.device?.tuyaDelay as Integer ?: 201
     cmds = zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], delay = tuyaDelay, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd )
-    logDebug "${device.displayName} getTuyaCommand (dp=$dp fncmd=$fncmd dp_type=$dp_type) = ${cmds}"
+    logDebug "getTuyaCommand (dp=$dp fncmd=$fncmd dp_type=$dp_type) = ${cmds}"
     return cmds
 }
 

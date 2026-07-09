@@ -24,7 +24,7 @@ library(
  * ver. 4.0.2  2025-09-18 kkossev  - (deviceProfileV4 branch) cooldown timer is started on JSON local storage read or parsing error;
  * ver. 4.1.0  2025-10-12 kkossev  - (development branch) zclWriteAttribute delay default is 150ms if tuyaDelay not defined in the device profile;
  * ver. 4.1.1  2026-06-28 kkossev  - add ignoreSSLIssues=true for HTTPS profile JSON downloads;
- * ver. 4.1.2  2026-07-03 kkossev  - fixed forceDisposeV4Profiles() log message; standardized custom profile filename state key to 'customJSONFilename'; removed stale 'customFilename' key on revert to standard profiles;
+ * ver. 4.1.2  2026-07-09 kkossev  - fixed forceDisposeV4Profiles() log message; standardized custom profile filename state key to 'customJSONFilename'; removed stale 'customFilename' key on revert to standard profiles;
  *                                   fixed clearProfilesCache() not resetting cooldown flag, causing loadStandardProfilesFromGitHub() to fail after a prior load error; fixed wrong log prefix in downloadFromGitHubAndSaveToHE();
  *
  *                                   TODO - updateStateUnknownDPs() from the earlier versions of 4 in 1 driver
@@ -32,7 +32,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '4.1.2' }
-static String deviceProfileLibStamp() { '2026/07/03 9:41 PM' }
+static String deviceProfileLibStamp() { '2026/07/09 9:50 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -1090,22 +1090,23 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
     logDebug "getDeviceNameAndProfile: model=${deviceModel} manufacturer=${deviceManufacturer} profiles=${profiles != null}"
     
     if (profiles != null && !profiles.isEmpty()) {
-        profiles.each { profileName, profileMap ->
-            //log.trace "getDeviceNameAndProfile: checking profileName=${profileName} profileMap=${profileMap}"
-            profileMap.fingerprints.each { fingerprint ->
-                //log.trace "getDeviceNameAndProfile: checking fingerprint=${fingerprint}"
+        // explicit loops (not .each{}) so 'return' here exits the whole method on first match -
+        // closure 'return' inside nested .each only exits the innermost closure, causing last-match-wins on duplicate fingerprints
+        for (profileEntry in profiles) {
+            String profileName = profileEntry.key as String
+            Map profileMap = profileEntry.value as Map
+            for (fingerprint in (profileMap.fingerprints ?: [])) {
+                //log.trace "getDeviceNameAndProfile: checking profileName=${profileName} fingerprint=${fingerprint}"
                 if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
                     deviceProfile = profileName
-                    deviceName = fingerprint.deviceJoinName ?: profiles[deviceProfile].description ?: UNKNOWN
+                    deviceName = fingerprint.deviceJoinName ?: profileMap.description ?: UNKNOWN
                     logDebug "getDeviceNameAndProfile: <b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
                     return [deviceName, deviceProfile]
                 }
             }
         }
     }
-    if (deviceProfile == UNKNOWN) {
-        logWarn "getDeviceNameAndProfile: <b>NOT FOUND!</b> deviceName =${deviceName} profileName=${deviceProfile} for model ${deviceModel} manufacturer ${deviceManufacturer}"
-    }
+    logWarn "getDeviceNameAndProfile: <b>NOT FOUND!</b> deviceName =${deviceName} profileName=${deviceProfile} for model ${deviceModel} manufacturer ${deviceManufacturer}"
     return [deviceName, deviceProfile]
 }
 
