@@ -58,6 +58,7 @@
  *                                  fixed SWV workState (0x5010) labels: old SWV firmware uses boolean 0=idle/1=working, not ZN-series multi-state values.
  *                                  fixed Sonoff SWV on_with_timed_off auto-close timer cancelled by refresh(): skip genOnOff read (cluster 6) when valve is open.
  *  ver. 1.8.0 2026-07-10 kkossev - added SONOFF SWV-ZF2 dual-valve support with endpoint-aware control, child valves, and manual irrigation settings.
+ *                                  various bugfixes; 
  *
  *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes ''
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
@@ -68,7 +69,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 static String version() { '1.8.0' }
-static String timeStamp() { '2026/07/10 6:09 PM' }
+static String timeStamp() { '2026/07/10 11:57 PM' }
 
 @Field static final Boolean _DEBUG = false                                      // disable it for the production release !
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true                        // disable it for the production release !
@@ -94,6 +95,7 @@ metadata {
         attribute 'timerTimeLeft', 'number'
         attribute 'timerTimeLeft2', 'number'             // isTZE284()
         attribute 'lastValveOpenDuration', 'number'
+        attribute 'lastValveOpenDuration2', 'number'    // isTZE284()
         attribute 'weatherDelay', 'enum', ['disabled', '24h', '48h', '72h']
         attribute 'irrigationStartTime', 'string'
         attribute 'irrigationEndTime', 'string'
@@ -107,7 +109,8 @@ metadata {
         attribute 'valveOpenThreshold', 'number'        // FrankEver FK_V02 - the set threshold for valve open 
         attribute 'valveOpenPercentage', 'number'       // FrankEver FK_V02 - the current valve open percentage reported by the device
         attribute 'workState', 'enum', ['idle', 'working']
-        attribute 'valve2', 'enum', ['open', 'closed']  // isTZE284()
+        attribute 'valve2', 'enum', ['open', 'closed', 'unknown']  // isTZE284()
+        attribute 'waterMode', 'enum', ['duration', 'capacity']
         attribute 'sonoffAutoShutOff', 'number'         // Sonoff SWV - auto shut off timeout in minutes (requires firmware 1.0.4 or later)
         attribute 'valve1', 'enum', ['open', 'closed', 'unknown']
         attribute 'manualIrrigationDuration', 'number'  // SONOFF ZN; mirrored to component children for SWV-ZF2
@@ -117,7 +120,7 @@ metadata {
         attribute 'manualFailSafe', 'number'
 
         command 'initialize', [[name: 'Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****']]
-        command 'setIrrigationTimer', [[name:'auto-off timer (irrigationDuration ), in seconds or minutes (depending on the model)', type: 'NUMBER', description: 'Set the irrigation duration timer<br>, in seconds or minutes (depending on the model). Zero value disables the auto-off!', constraints: ['0..86400']]]
+        command 'setIrrigationTimer', [[name:'auto-off timer (irrigationDuration ), in seconds or minutes (depending on the model)', type: 'NUMBER', description: 'Set the irrigation duration timer<br>, in seconds (most models) or minutes (SWV-ZN/ZF2: 0-719 min; TZE284: 0-86400 min). Zero value disables the auto-off!', constraints: ['0..86400']]]
         command 'setIrrigationCapacity', [[name:'capacity, liters (Saswell and GiEX)', type: 'NUMBER', description: 'Set Irrigation Capacity, litres', constraints: ['0..9999']]]
         command 'setIrrigationMode', [[name:'select the mode (Saswell and GiEX)', type: 'ENUM', description: 'Set Irrigation Mode', constraints: ['duration', 'capacity']]]
         command 'setValveOpenThreshold', [[name:'Valve Open Threshold, % (FrankEver FK_V02)', type: 'NUMBER', description: 'Valve Open Threshold, % (FrankEver FK_V02)', constraints: ['0..100']]]
@@ -214,8 +217,9 @@ boolean isSASWELL()              { return getModelGroup().contains('SASWELL') }
 boolean isLIDL()                 { return getModelGroup().contains('LIDL') }
 boolean isTS0001()               { return getModelGroup().contains('TS0001') }
 boolean isTS0011()               { return getModelGroup().contains('TS0011') }
+boolean isTS011F()               { return getModelGroup().contains('TS011F') }
 boolean isTS0049()               { return getModelGroup().contains('TS0049') }
-boolean isBatteryPowered()       { return isGIEX() || isSASWELL() || isTS0049() }
+boolean isBatteryPowered()       { return isGIEX() || isSASWELL() || isTS0049() || isLIDL() || isFankEver() || isTZE284() }
 boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') }
 boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
 boolean isTZE284()               { return getModelGroup().contains('TZE284') || _DEBUG == true }
@@ -338,7 +342,7 @@ boolean isSonoffZF2()            { return getModelGroup().contains('SONOFF_SWV_Z
     ],
 
     'TS011F_VALVE_ONOFF'  : [
-            model         : 'TS0011',
+            model         : 'TS011F',
             manufacturers : ['_TZ3000_rk2yzt0u'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,E000,E001', outClusters:'0019,000A',     model:'TS011F', manufacturer:'_TZ3000_rk2yzt0u']     // clusters verified! model: 'ZN231392'
@@ -513,7 +517,7 @@ boolean isSonoffZF2()            { return getModelGroup().contains('SONOFF_SWV_Z
 
     'TS0601_TZE284_VALVE'   : [              // https://de.aliexpress.com/item/1005007836145637.html
             model         : 'TS0601',        // https://github.com/zigpy/zha-device-handlers/blob/a1f6378fba3a727b5f9432d711ef3d5320e45827/zhaquirks/tuya/ts0601_valve.py#L489 
-            manufacturers : ['_TZE284_8zizsafo', '_TZE284_eaet5qt5'],
+            manufacturers : ['_TZE284_8zizsafo', '_TZE284_eaet5qt5', '_TZE284_fhvpaltk'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,0000,ED00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_8zizsafo'],    // GX-03ZG
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,0000,ED00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_eaet5qt5'],    // Insoma SGW08W https://www.aliexpress.us/item/3256807355418184.html
@@ -604,7 +608,7 @@ void parse(String description) {
         if (descMap.attrId != null) {
             // attribute report received
             List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value, status: descMap.status]]
-            descMap.additionalAttrs.each {
+            descMap.additionalAttrs?.each {
                 attrData << [cluster: descMap.cluster, attrId: it.attrId, value: it.value, status: it.status]
             }
             attrData.each {
@@ -708,16 +712,17 @@ void sendZF2EndpointEvent(String endpoint, String switchValue) {
     int ep = Integer.parseInt(endpoint, 16)
     if (!(ep in [1, 2])) { logDebug "SWV-ZF2 OnOff report from unexpected endpoint ${endpoint}"; return }
     String valveValue = switchValue == 'on' ? 'open' : switchValue == 'off' ? 'closed' : 'unknown'
-    sendEvent(name:"valve${ep}", value:valveValue, type:'physical', descriptionText:"Valve ${ep} is ${valveValue}")
+    String eventType = (state.states['isDigital'] ?: false) ? 'digital' : 'physical'
+    sendEvent(name:"valve${ep}", value:valveValue, type:eventType, descriptionText:"Valve ${ep} is ${valveValue}")
     def child = getChildDevice(zf2ChildDni(ep))
     child?.parse([
-        [name:'valve', value:valveValue, type:'physical', descriptionText:"${child.displayName} valve is ${valveValue}"],
-        [name:'switch', value:switchValue, type:'physical', descriptionText:"${child.displayName} valve is ${switchValue}"]
+        [name:'valve', value:valveValue, type:eventType, descriptionText:"${child.displayName} valve is ${valveValue}"],
+        [name:'switch', value:switchValue, type:eventType, descriptionText:"${child.displayName} valve is ${switchValue}"]
     ])
     String other = device.currentValue("valve${ep == 1 ? 2 : 1}") ?: 'unknown'
     String summary = (valveValue == 'open' || other == 'open') ? 'open' : (valveValue == 'closed' && other == 'closed') ? 'closed' : 'unknown'
-    sendEvent(name:'valve', value:summary, type:'physical', descriptionText:"SWV-ZF2 summary is ${summary}")
-    sendEvent(name:'switch', value:summary == 'open' ? 'on' : summary == 'closed' ? 'off' : 'unknown', type:'physical')
+    sendEvent(name:'valve', value:summary, type:eventType, descriptionText:"SWV-ZF2 summary is ${summary}")
+    sendEvent(name:'switch', value:summary == 'open' ? 'on' : summary == 'closed' ? 'off' : 'unknown', type:eventType)
 }
 
 List<String> zf2EndpointCommand(int endpoint, boolean open) {
@@ -755,6 +760,9 @@ void componentApplyManualIrrigationPreferences(cd, String amountUnit, BigDecimal
 }
 void setZF2ValveFromChild(cd, boolean open) {
     int ep = cd.deviceNetworkId.endsWith('-2') ? 2 : 1
+    if (state.states == null) { state.states = [:] }
+    state.states['isDigital'] = true
+    runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
     sendZigbeeCommands(zf2EndpointCommand(ep, open))
 }
 
@@ -829,7 +837,6 @@ void parseZDOcommand(Map descMap) {
         case '8001' :  // Device and Service Discovery - IEEE_addr_rsp
             if (logEnable) { log.info "${device.displayName} Received Device and Service Discovery - IEEE_addr_rsp, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2] + descMap.data[1]}, Capability Information: ${descMap.data[11]})" }
             break
-            break
         case '8004' : // simple descriptor response
             if (logEnable) { log.info "${device.displayName} Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}" }
             parseSimpleDescriptorResponse(descMap)
@@ -880,7 +887,7 @@ void parseSimpleDescriptorResponse(Map descMap) {
                 if (logEnable == true) { log.warn "${device.displayName} outClusters=${getDataValue('outClusters')} differs from outputClusterList:${outputClusterList} -  will be updated!" }
                 updateDataValue('outClusters', outputClusterList)
             }
-            else { log.warn "device.outClusters = ${device.outClusters } outputClusterList = ${outputClusterList }" }
+            else if (logEnable == true) { log.debug "${device.displayName} outClusters already match: ${getDataValue('outClusters')}" }
         }
     }
 }
@@ -910,7 +917,7 @@ void parseZHAcommand(Map descMap) {
                                     logInfo "Water Valve Mode (dp=${cmd}) is: ${str} (${value})"  // 0 - 'duration'; 1 - 'capacity'     // TODO - Send to device ?
                                     sendEvent(name: 'waterMode', value: str, type: 'physical')
                                 }
-                                else if (isGIEX() || isLIDL()) { // switch
+                                else if (isLIDL()) { // switch
                                     sendSwitchEvent(value == 0 ? 'off' : 'on')    // also SASWELL and LIDL
                                     if (settings?.autoSendTimer == true) {
                                         // There is no way to disable the "Auto off" timer for when the valve is turned on manually
@@ -952,7 +959,7 @@ void parseZHAcommand(Map descMap) {
                                     logInfo "SASWELL measuredValue (dp=${cmd}) is: ${value} (data=${descMap.data})"
                                 }
                                 else if (isGIEX()) {
-                                    logInfo "GiEX measuredValue (dp=${cmd}) is: ${(value / 33.8140226).toFixed(2)} (data=${descMap.data})"    // or the reported value is in litres - keep it as it is?
+                                    logInfo "GiEX measuredValue (dp=${cmd}) is: ${(value / 33.8140226).setScale(2, java.math.RoundingMode.HALF_UP)} (data=${descMap.data})"    // or the reported value is in litres - keep it as it is?
                                 }
                                 else {
                                     logInfo "measuredValue (dp=${cmd}) is: ${value} (data=${descMap.data})"
@@ -1102,7 +1109,7 @@ void parseZHAcommand(Map descMap) {
                                 }
                                 else if (isTZE284()) {
                                     String valveStatus = tze284StateOptions[value.toString()]
-                                    descText = "valveStatus is ${valveStatus}"
+                                    String descText = "valveStatus is ${valveStatus}"
                                     logInfo "${descText} (${value})"
                                     sendEvent(name: 'valveStatus', value: valveStatus, descriptionText:descText, type: 'physical')
                                 }
@@ -1117,7 +1124,7 @@ void parseZHAcommand(Map descMap) {
                                 }
                                 else if (isTZE284()) {
                                     String valveStatus = tze284StateOptions[value.toString()]
-                                    descText = "valveStatus2 is ${valveStatus}"
+                                    String descText = "valveStatus2 is ${valveStatus}"
                                     logInfo "${descText} (${value})"
                                     sendEvent(name: 'valveStatus2', value: valveStatus, descriptionText:descText, type: 'physical')
                                 }
@@ -1220,19 +1227,19 @@ void parseZHAcommand(Map descMap) {
                         break
 
                     case 'EF01' :
-                        logInfo "EF01 timer time left /* (${cmd}) is: ${value} seconds */"
+                        logInfo "EF01 timer time left /* (${descMap.data[2]}) is: ${getAttributeValue(descMap.data)} seconds */"
                         //sendEvent(name: 'timerTimeLeft', value: value, type: "physical")
                         break
                     case 'EF02' :
-                        logInfo "EF02 timer_state (work state) /* (${cmd}) is: ${valueString} (${value}) */"
+                        logInfo "EF02 timer_state (work state) /* (${descMap.data[2]}) is: ${getAttributeValue(descMap.data)} */"
                         //sendEvent(name: 'timerState', value: valueString, type: "physical")
                         break
                     case 'EF03' :
-                        logInfo "EF03 last valve open duration /* (${cmd}) is: ${value} seconds */"
+                        logInfo "EF03 last valve open duration /* (${descMap.data[2]}) is: ${getAttributeValue(descMap.data)} seconds */"
                         //sendEvent(name: 'lastValveOpenDuration', value: value, type: "physical")
                         break
                     case 'EF04' :
-                        logInfo "EF04 unknown (dp4?) /*(${cmd}) is: ${value} seconds*/"
+                        logInfo "EF04 unknown (dp4?) /*(${descMap.data[2]}) is: ${getAttributeValue(descMap.data)} seconds*/"
                         break
 
                     default :
@@ -1576,8 +1583,12 @@ int getAttributeValue(ArrayList _data) {
     try {
         if (_data.size() >= 6) {
             int dataLength = zigbee.convertHexToInt(_data[5]) as Integer
+            if (dataLength <= 0 || _data.size() < 6 + dataLength) {
+                logWarn "getAttributeValue: invalid dataLength ${dataLength} for data.size()=${_data.size()} data=${_data}"
+                return 0
+            }
             int power = 1
-            for (i in dataLength..1) {
+            for (int i in dataLength..1) {
                 retValue = retValue + power * zigbee.convertHexToInt(_data[i + 5])
                 power = power * 256
             }
@@ -1786,7 +1797,7 @@ void refresh() {
     if (isSASWELL() || isGIEX()) {
         cmds += zigbee.command(0xEF00, 0x0, '00020100')
     }
-    else if (isTS0001() || isTS0011()) {
+    else if (isTS0001() || isTS0011() || isTS011F()) {
         cmds += zigbee.readAttribute(0xE000, 0xD001, [:], delay = 200)    // encoding:42, value:AAAA; attrId: D001, encoding: 48, value: 020006
         cmds += zigbee.readAttribute(0xE000, 0xD002, [:], delay = 200)    // encoding: 48, value: 02000A
         cmds += zigbee.readAttribute(0xE000, 0xD003, [:], delay = 200)
@@ -1868,10 +1879,9 @@ void configure() {
         }
     }
 
-    if (settings?.powerOnBehaviour != null) {
+    if (deviceProfilesV2[getModelGroup()]?.capabilities?.powerOnBehaviour != false && settings?.powerOnBehaviour != null) {
         Map.Entry modeName =  powerOnBehaviourOptions.find { it.key == settings?.powerOnBehaviour }
         if (modeName != null) {
-            // TODO - skip it for the battery powered irrigation timers? (Response cluster: E001 status:86)
             logDebug "setting powerOnBehaviour to ${modeName.value} (${settings?.powerOnBehaviour})"
             cmds += zigbee.writeAttribute(0xE001, 0xD010, DataType.ENUM8, (byte) safeToInt(settings?.powerOnBehaviour), [:], delay = 251)
         }
@@ -1980,7 +1990,7 @@ def setDeviceNameAndProfile(String model=null, String manufacturer=null) {
         state.deviceProfile = UNKNOWN
         state.detectedDeviceProfile = UNKNOWN
     }
-    if (deviceName != NULL) {
+    if (deviceName != null) {
         device.setName(deviceName)
         logInfo "device model ${deviceModel} manufacturer ${deviceManufacturer} deviceName was set to ${deviceName}"
     } else {
@@ -2018,7 +2028,7 @@ void updated() {
         String amountUnit = settings.manualAmountUnitPreference as String
         int failSafe = safeToInt(settings.manualFailSafePreference, 0)
         String previousUnit = cached.amountUnit ?: device.currentValue('manualIrrigationAmountUnit') ?: 'liter'
-        int previousFailSafe = safeToInt(cached.failSafe ?: device.currentValue('manualFailSafe'), 0)
+        int previousFailSafe = safeToInt(cached.failSafe != null ? cached.failSafe : device.currentValue('manualFailSafe'), 0)
         if (amountUnit != previousUnit || failSafe != previousFailSafe) {
             logInfo "applying manual irrigation preferences (unit=${amountUnit}, fail-safe=${failSafe} min)"
             writeManualIrrigationPreferences(amountUnit, failSafe)
@@ -2055,7 +2065,7 @@ void deleteAll() {
     logDebug "Deleted attributes: ${deleted}" ; deleted = ''
     state.each { it -> deleted += "${it.key}, " }
     state.clear()
-    logDebug "Deleted states: ${stateDeleted}" ; deleted = ''
+    logDebug "Deleted states: ${deleted}" ; deleted = ''
     unschedule() ; logDebug 'All scheduled jobs DELETED'
     getChildDevices().each { child -> log.info "${device.displayName} Deleting ${child.deviceNetworkId}" ; deleteChildDevice(child.deviceNetworkId) }
     logDebug 'All child devices DELETED'
@@ -2084,9 +2094,8 @@ void initializeVars(boolean fullInit = true) {
     if (fullInit == true || settings?.logEnable == null)  { device.updateSetting('logEnable', DEFAULT_DEBUG_LOGGING) }
     if (fullInit == true || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
     if (fullInit == true || settings?.powerOnBehaviour == null) { device.updateSetting('powerOnBehaviour', [value:'2', type:'enum']) }   // last state
-    if (fullInit == true || settings?.switchType == null) { device.updateSetting('switchType', [value:'0', type:'enum']) }               // toggle
     if (fullInit == true || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', [value:false, type:'bool']) }               // toggle
-    if (isSASWELL() || isGIEX() || isSonoff() || isFankEver()) {
+    if (isSASWELL() || isGIEX() || isSonoff() || isFankEver() || isTZE284()) {
         if (fullInit == true || settings?.autoOffTimer == null) { device.updateSetting('autoOffTimer', [value: DEFAULT_AUTOOFF_TIMER, type: 'number']) }
     }
     if (fullInit == true || settings?.autoSendTimer == null) { device.updateSetting('autoSendTimer', (isGIEX() ? true : false)) }
@@ -2333,12 +2342,13 @@ List<String> buildManualDefaultSettingsCmd(int duration, String mode, String amo
 Map getManualIrrigationSettingsForWrite(String amountUnit=null, Number failSafe=null) {
     Map cached = state.manualIrrigationSettings instanceof Map ? state.manualIrrigationSettings as Map : [:]
     String resolvedUnit = amountUnit ?: settings?.manualAmountUnitPreference ?: cached.amountUnit ?: device.currentValue('manualIrrigationAmountUnit') ?: 'liter'
-    int resolvedFailSafe = failSafe != null ? failSafe.intValue() : safeToInt(settings?.manualFailSafePreference ?: cached.failSafe ?: device.currentValue('manualFailSafe'), 0)
+    def failSafePref = settings?.manualFailSafePreference != null ? settings.manualFailSafePreference : (cached.failSafe != null ? cached.failSafe : device.currentValue('manualFailSafe'))
+    int resolvedFailSafe = failSafe != null ? failSafe.intValue() : safeToInt(failSafePref, 0)
     return [
-        duration:safeToInt(cached.duration ?: device.currentValue('manualIrrigationDuration'), 1),
+        duration:safeToInt(cached.duration != null ? cached.duration : device.currentValue('manualIrrigationDuration'), 1),
         mode:(cached.mode ?: device.currentValue('manualIrrigationMode') ?: 'duration').toString(),
         amountUnit:resolvedUnit,
-        amount:safeToInt(cached.amount ?: device.currentValue('manualIrrigationAmount'), 0),
+        amount:safeToInt(cached.amount != null ? cached.amount : device.currentValue('manualIrrigationAmount'), 0),
         failSafe:resolvedFailSafe
     ]
 }
@@ -2475,12 +2485,18 @@ void setIrrigationMode(String mode) {
 void setValve1(String mode) {
     if (!isSonoffZF2()) { logWarn 'setValve1 is available for SWV-ZF2 only'; return }
     if (!(mode in ['open', 'closed'])) { logWarn "setValve1 must be 'open' or 'closed'"; return }
+    if (state.states == null) { state.states = [:] }
+    state.states['isDigital'] = true
+    runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
     sendZigbeeCommands(zf2EndpointCommand(1, mode == 'open'))
 }
 
 void setValve2(String mode) {
     if (isSonoffZF2()) {
         if (!(mode in ['open', 'closed'])) { logWarn "setValve2 must be 'open' or 'closed'"; return }
+        if (state.states == null) { state.states = [:] }
+        state.states['isDigital'] = true
+        runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
         sendZigbeeCommands(zf2EndpointCommand(2, mode == 'open'))
         return
     }
@@ -2508,7 +2524,6 @@ void setValveOpenThreshold(Number percentage) {
         logWarn 'setValveOpenThreshold is avaiable only for FankEver valves'
         return
     }
-    List<String> cmds = []
     int value = safeToInt(percentage, -1)
     if (value < 0 || value > 100) {
         logWarn "valve open threshold must be withing 0 and 100"
@@ -2519,7 +2534,8 @@ void setValveOpenThreshold(Number percentage) {
     logDebug "setting the valve open threshold to ${roundedValue} % (was ${value})"
     device.updateSetting('valveOpenThreshold', [value: roundedValue, type: 'number'])
     sendEvent(name: 'valveOpenThreshold', value: roundedValue, type: 'digital')
-    sendTuyaCommand('65', DP_TYPE_VALUE, zigbee.convertToHexString(roundedValue, 8))
+    List<String> cmds = sendTuyaCommand('65', DP_TYPE_VALUE, zigbee.convertToHexString(roundedValue, 8))
+    sendZigbeeCommands(cmds)
 }
 
 void testTuyaCmd(String dpCommand, String dpValue, String dpTypeString) {
@@ -2613,7 +2629,5 @@ List<String> sendTuyaCommand(String dp, String dp_type, String fncmd) {
     int tuyaCmd = isTS0049() ? 0x04 : SETDATA
     cmds += zigbee.command(CLUSTER_TUYA, tuyaCmd, [:], delay = 200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd)
     if (settings?.logEnable) { log.trace "${device.displayName} sendTuyaCommand = ${cmds}" }
-    if (state.stats == null) { state.stats = [:] }
-    state.stats['TxCtr'] = state.stats['TxCtr'] != null ? state.stats['TxCtr'] + 1 : 1
     return cmds
 }

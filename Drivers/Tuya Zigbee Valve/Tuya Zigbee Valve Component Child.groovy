@@ -34,15 +34,16 @@ metadata {
     }
 }
 
+static String version() { '1.0.1' }
+static String timeStamp() { '2026/07/10 10:54 PM' }
+String driverVersionAndTimeStamp() { version() + ' ' + timeStamp() }
+
 void installed() {
-    log.info "${device.displayName} installed"
+    log.info "${device.displayName} installed; driver version ${driverVersionAndTimeStamp()}"
     sendEvent(name: 'valve', value: 'unknown')
     sendEvent(name: 'switch', value: 'unknown')
-    sendEvent(name: 'manualIrrigationDuration', value: 'unknown')
     sendEvent(name: 'manualIrrigationMode', value: 'unknown')
     sendEvent(name: 'manualIrrigationAmountUnit', value: 'unknown')
-    sendEvent(name: 'manualIrrigationAmount', value: 'unknown')
-    sendEvent(name: 'manualFailSafe', value: 'unknown')
     state.manualAmountUnitPreference = getManualAmountUnitPreference()
     state.manualFailSafePreference = getManualFailSafePreference()
 }
@@ -121,7 +122,11 @@ String getManualAmountUnitPreference() {
 }
 
 BigDecimal getManualFailSafePreference() {
-    return (settings?.manualFailSafePreference ?: device.currentValue('manualFailSafe') ?: 0) as BigDecimal
+    def v = settings?.manualFailSafePreference
+    if (v == null) {
+        v = getReportedManualFailSafe() ?: 0
+    }
+    return v as BigDecimal
 }
 
 BigDecimal getReportedManualFailSafe() {
