@@ -15,7 +15,7 @@
         { "at": "0x0400:0x0000", "name": "illuminance","type": "number", "dt": "0x21", "rw": "ro", "scale": 1, "unit": "lx", "description": "Illuminance measurement" },
         { "at": "0xFC11:0x2015", "name": "zoneStatus", "type": "number", "dt": "0x21", "mfgCode": "0x1286", "rw": "ro", "scale": 1, "unit": "", "description": "Zone occupancy status bitmap (bits 0-7 for zones 1-8)" },
         { "at": "0xFC11:0x2016", "name": "zoneEnable", "type": "number", "dt": "0x21", "mfgCode": "0x1286", "rw": "rw", "min": 0, "max": 255, "defVal": 255, "scale": 1, "unit": "", "title": "<b>Zone Enable Bitmap</b>", "description": "<i>Enable/disable detection zones (bit 0-7 = zones 1-8, default 255 = all enabled)</i>" },
-        { "at": "0xFC11:0x2018", "name": "illuminationOffset", "type": "number", "dt": "0x29", "mfgCode": "0x1286", "rw": "rw", "min": -1000, "max": 1000, "defVal": 0, "scale": 1, "unit": "lx", "title": "<b>Illuminance Offset</b>", "description": "<i>Illuminance calibration offset adjustment</i>" },
+        { "at": "0xFC11:0x2018", "name": "illuminationOffset", "type": "number", "dt": "0x29", "mfgCode": "0x1286", "rw": "rw", "min": -1000, "max": 1000, "defVal": 0, "scale": 1, "unit": "lx", "title": "<b>Illuminance Offset</b>", "description": "<i>Illuminance calibration offset adjustment</i>" }
       ],
       "refresh": ["motion", "fadingTime", "illuminance", "illuminationOffset", "zoneStatus", "zoneEnable"],
       "configuration": { "0x0406": "bind", "0x0400": "bind" },

@@ -91,3 +91,13 @@ Libraries/CLAUDE.md
 Libraries/deviceProfileLibV4-OPTIMIZATION.md
 Drivers/Tuya Zigbee Valve/SONOFF_SWV_ZF2_SUPPORT_TODO.md
 Drivers/Tuya Zigbee Valve/ZDO_WARNING_TODO.md
+Drivers/Tuya_Zigbee_Smoke_Detector/BUGS.md
+Drivers/Tuya_Zigbee_Smoke_Detector/CLAUDE.md
+Drivers/Aqara E1 Thermostat/BUGS.md
+Drivers/Aqara E1 Thermostat/CLAUDE.md
+Drivers/Tuya Smart Siren Zigbee/BUGS.md
+Drivers/Tuya Smart Siren Zigbee/CLAUDE.md
+Drivers/Tuya Zigbee Switch/BUGS.md
+Drivers/Tuya Zigbee Switch/CLAUDE.md
+Drivers/Tuya Zigbee Valve/BUGS.md
+Drivers/Tuya Zigbee Valve/CLAUDE.md
