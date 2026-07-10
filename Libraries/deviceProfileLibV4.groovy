@@ -32,7 +32,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '4.1.2' }
-static String deviceProfileLibStamp() { '2026/07/09 10:53 PM' }
+static String deviceProfileLibStamp() { '2026/07/09 11:27 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -47,7 +47,7 @@ import groovy.transform.CompileStatic
 @Field static  Map g_deviceFingerprintsV4 = [:]
 @Field static  Map g_currentProfilesV4 = [:]            // Key: device?.deviceNetworkId, Value: complete profile data
 @Field static  Map g_customProfilesV4 = [:]             // Key: device?.deviceNetworkId, Value: custom profiles for THIS device only
-@Field static  boolean g_loadProfilesCooldown = false
+@Field static  long g_loadProfilesCooldownUntil = 0L
 @Field static  int LOAD_PROFILES_COOLDOWN_MS = 30000  // 30 seconds cooldown to prevent multiple profile loading within short time
 
 
@@ -2183,21 +2183,21 @@ boolean loadProfilesFromJSONstring(stringifiedJSON) {
 
 
 void startCooldownTimer() {
-    if (g_loadProfilesCooldown) {
+    if (isInCooldown()) {
         return
     }
-    g_loadProfilesCooldown = true
+    g_loadProfilesCooldownUntil = now() + LOAD_PROFILES_COOLDOWN_MS
     runInMillis(LOAD_PROFILES_COOLDOWN_MS, resetCooldownFlag, [overwrite: true])
     logWarn "startCooldownTimer: starting cooldown timer for ${LOAD_PROFILES_COOLDOWN_MS} ms to prevent multiple profile loading attempts"
 }
 
 void resetCooldownFlag() {
-    g_loadProfilesCooldown = false
+    g_loadProfilesCooldownUntil = 0L
     logDebug "resetCooldownFlag: cooldown period ended, can attempt profile loading again"
 }
 
 boolean isInCooldown() {
-    return g_loadProfilesCooldown
+    return now() < g_loadProfilesCooldownUntil
 }
 
 

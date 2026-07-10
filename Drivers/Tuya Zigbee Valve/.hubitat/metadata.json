@@ -1,10 +1,16 @@
 {
   "files": [
     {
-      "filepath": "/c:/Work/Hubitat/Drivers/Tuya Zigbee Valve/Tuya Zigbee Valve.groovy",
+      "filepath": "/c:/work/Hubitat/Drivers/Tuya Zigbee Valve/Tuya Zigbee Valve.groovy",
       "id": 1765,
       "codeType": "driver",
-      "version": 816
+      "version": 835
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Drivers/Tuya Zigbee Valve/Tuya Zigbee Valve Component Child.groovy",
+      "id": 5209,
+      "codeType": "driver",
+      "version": 7
     }
   ]
 }
