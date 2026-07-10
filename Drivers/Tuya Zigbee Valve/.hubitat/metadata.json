@@ -11,6 +11,12 @@
       "id": 5209,
       "codeType": "driver",
       "version": 7
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Drivers/Tuya Zigbee Valve/Tuya Zigbee Valve v. 1.7.1.groovy",
+      "codeType": "driver",
+      "id": 5210,
+      "version": 1
     }
   ]
 }
