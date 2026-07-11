@@ -34,6 +34,10 @@ The driver can be also installed manually from this link : https://raw.githubuse
 * SONOFF SWV / SWV-ZN / SWV-ZF2 : SONOFF smart water valves with custom 0xFC11 cluster
 * Standard Zigbee 3.0 (ZHA 1.2) valves
 
+### SONOFF SWV-ZF2 parent and child semantics
+
+The two component children are the authoritative devices for independent valve automation. Child 1 controls endpoint 1 and child 2 controls endpoint 2. On the parent, `valve1` and `valve2` expose the individual endpoint states, while the standard `valve` and `switch` attributes are aggregate summaries: open/on if either endpoint is open, closed/off only when both endpoints are closed, and unknown when the combined state cannot be determined. Parent `open()`/`close()` control endpoint 1; use child 2 or `setValve2()` for endpoint 2.
+
 ---
 
 ## Features
@@ -49,4 +53,4 @@ The driver can be also installed manually from this link : https://raw.githubuse
 * Debug / description-text logging (debug auto-off after 24 h)
 
 -----
-(last edited 2026-07-10)
+(last edited 2026-07-11)

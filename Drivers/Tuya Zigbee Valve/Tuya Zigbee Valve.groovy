@@ -59,6 +59,7 @@
  *                                  fixed Sonoff SWV on_with_timed_off auto-close timer cancelled by refresh(): skip genOnOff read (cluster 6) when valve is open.
  *  ver. 1.8.0 2026-07-11 kkossev - added SONOFF SWV-ZF2 dual-valve support with endpoint-aware control, child valves, and manual irrigation settings.
  *                                  various bugfixes;
+ *  ver. 1.8.1 2026-07-11 kkossev - (dev. branch) implemented brianwilson's (bdwilson) SONOFF SWV-ZF2 (Hydro DUO) improvements from https://github.com/bdwilson/hubitat/tree/master/Tuya-Zigbee-Valve 
  *
  *                                  Open TODO items are tracked in TODO.md in this folder.
  */
@@ -66,8 +67,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-static String version() { '1.8.0' }
-static String timeStamp() { '2026/07/11 9:38 AM' }
+static String version() { '1.8.1' }
+static String timeStamp() { '2026/07/11 8:26 PM' }
 
 @Field static final Boolean _DEBUG = false                                      // disable it for the production release !
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true                        // disable it for the production release !
@@ -102,7 +103,7 @@ metadata {
         attribute 'irrigationVolume', 'number'
         attribute 'irrigationDuration', 'number'        // Sonoff SWV, frankEver FK_V02
         attribute 'irrigationCapacity', 'number'
-        attribute 'valveStatus',  'enum', ['normal', 'shortage', 'leakage', 'shortage and leakage', 'clear', 'manual', 'auto', 'idle']    // SONOFF {ID: 0x500c, type: 0x20},
+        attribute 'valveStatus',  'enum', ['normal', 'shortage', 'leakage', 'fail-safe', 'shortage and leakage', 'shortage and fail-safe', 'leakage and fail-safe', 'shortage, leakage and fail-safe', 'clear', 'manual', 'auto', 'idle']    // SONOFF {ID: 0x500c, type: 0x20},
         attribute 'valveStatus2', 'enum', ['normal', 'shortage', 'leakage', 'shortage and leakage', 'clear', 'manual', 'auto', 'idle']    // isTZE284()
         attribute 'valveOpenThreshold', 'number'        // FrankEver FK_V02 - the set threshold for valve open 
         attribute 'valveOpenPercentage', 'number'       // FrankEver FK_V02 - the current valve open percentage reported by the device
@@ -557,14 +558,31 @@ void parse(String description) {
     boolean suppress501FLogs = false
     if (settings?.ignoreDuplicatePackets == true && description.contains('cluster: FC11') && description.contains('attrId: 501F')) {
         String val501F = description.split('value: ').last()
-        if (val501F == state.states['znLast501FValue']) { return }
-        state.states['znLast501FValue'] = val501F
-        suppress501FLogs = true
+        String duplicateStateKey = 'znLast501FValue'
+        if (isSonoffZF2()) {
+            try {
+                Map duplicateDescMap = zigbee.parseDescriptionAsMap(description)
+                String duplicateEndpoint = normalizeZF2Endpoint(duplicateDescMap.sourceEndpoint ?: duplicateDescMap.endpoint)
+                duplicateStateKey = duplicateEndpoint == null ? null : "znLast501FValue${Integer.parseInt(duplicateEndpoint, 16)}"
+                val501F = duplicateDescMap.value ?: val501F
+            } catch (e) {
+                duplicateStateKey = null
+                logDebug "501F duplicate suppression skipped because endpoint parsing failed: ${e}"
+            }
+        }
+        if (duplicateStateKey != null) {
+            if (val501F == state.states[duplicateStateKey]) { return }
+            state.states[duplicateStateKey] = val501F
+            suppress501FLogs = true
+        }
     }
     if (!suppress501FLogs) { logDebug "parse: description is $description" }
 
     if (isTuyaE00xCluster(description) == true || otherTuyaOddities(description) == true) {
         return null
+    }
+    if (isSonoffZF2() && parseSonoffZF2OnOffAttribute(description)) {
+        return
     }
     Map event = [:]
     try {
@@ -668,7 +686,7 @@ void parse(String description) {
                     parseFlowMeasurementCluster(it)
                 }
                 else if (it.cluster == 'FC11') {
-                    parseSonoffCluster(it + [encoding:descMap.encoding, data:descMap.data], description)
+                    parseSonoffCluster(it + [encoding:descMap.encoding, data:descMap.data], description, descMap.sourceEndpoint ?: descMap.endpoint)
                 }
                 else if (it.cluster == 'FC57') {
                     logDebug "Sonoff private cluster=0xFC57 attr=${it.attrId} encoding=${descMap.encoding} raw=${it.value} decimal=${safeHexToInt(it.value)} additionalAttrs=${descMap.additionalAttrs}"
@@ -697,6 +715,89 @@ Integer safeHexToInt(String value) {
     try { return value == null ? null : zigbee.convertHexToInt(value) } catch (ignored) { return null }
 }
 
+// Hubitat's zigbee.getEvent() may not decode genOnOff reports from a secondary endpoint.
+// Decode ZF2 endpoint 1/2 onOff attribute reports directly before generic event parsing.
+boolean parseSonoffZF2OnOffAttribute(String description) {
+    Map descMap
+    try {
+        descMap = zigbee.parseDescriptionAsMap(description)
+    } catch (e) {
+        logDebug "SWV-ZF2 OnOff description parse failed: ${e}"
+        return false
+    }
+
+    String cluster = (descMap?.cluster ?: descMap?.clusterId)?.toString()?.toUpperCase()
+    String endpoint = (descMap?.sourceEndpoint ?: descMap?.endpoint)?.toString()?.toUpperCase()?.padLeft(2, '0')
+    String attrId = descMap?.attrId?.toString()?.toUpperCase()?.padLeft(4, '0')
+    if (cluster != '0006' || attrId != '0000' || !(endpoint in ['01', '02'])) {
+        return false
+    }
+
+    String rawValue = descMap?.value?.toString()?.toUpperCase()?.padLeft(2, '0')
+    if (!(rawValue in ['00', '01'])) {
+        logDebug "SWV-ZF2 OnOff report from endpoint ${endpoint} has unsupported value ${descMap?.value}"
+        return true
+    }
+
+    sendZF2EndpointEvent(endpoint, rawValue == '01' ? 'on' : 'off')
+    return true
+}
+
+String normalizeZF2Endpoint(sourceEndpoint) {
+    if (sourceEndpoint == null) { return '01' }
+    String endpoint = sourceEndpoint.toString().toUpperCase().padLeft(2, '0')
+    if (!(endpoint in ['01', '02'])) {
+        logDebug "SWV-ZF2 report from unexpected endpoint ${sourceEndpoint}"
+        return null
+    }
+    return endpoint
+}
+
+void sendZF2PortEvent(String endpoint, Map event) {
+    if (!isSonoffZF2()) {
+        sendEvent(event)
+        return
+    }
+    int ep = Integer.parseInt(endpoint, 16)
+    if (ep == 1) { sendEvent(event) }
+    def child = getChildDevice(zf2ChildDni(ep))
+    if (child != null) { child.parse([event.clone() as Map]) }
+}
+
+// ZF2 0x500C bit layout is converter-verified but still requires induced-fault hardware validation.
+String decodeZF2ValveStatus(int value, int channel) {
+    boolean shortage = channel == 1 ? (value & 0x01) != 0 : channel == 2 ? (value & 0x10) != 0 : (value & 0x11) != 0
+    boolean leakage = (value & 0x02) != 0
+    boolean failSafe = channel == 1 ? (value & 0x08) != 0 : channel == 2 ? (value & 0x20) != 0 : (value & 0x28) != 0
+    List<String> faults = []
+    if (shortage) { faults << 'shortage' }
+    if (leakage) { faults << 'leakage' }
+    if (failSafe) { faults << 'fail-safe' }
+    if (faults.isEmpty()) { return 'normal' }
+    if (faults.size() == 1) { return faults[0] }
+    if (faults.size() == 2) { return "${faults[0]} and ${faults[1]}" }
+    return "${faults[0]}, ${faults[1]} and ${faults[2]}"
+}
+
+void sendZF2ValveStatusEvents(int rawValue) {
+    Map<Integer, String> channelStatus = [
+        1:decodeZF2ValveStatus(rawValue, 1),
+        2:decodeZF2ValveStatus(rawValue, 2)
+    ]
+    channelStatus.each { int ep, String status ->
+        def child = getChildDevice(zf2ChildDni(ep))
+        if (child != null && child.currentValue('valveStatus') != status) {
+            child.parse([[name:'valveStatus', value:status, type:'physical', descriptionText:"${child.displayName} valveStatus is ${status}"]])
+        }
+    }
+    String aggregateStatus = decodeZF2ValveStatus(rawValue, 0)
+    if (device.currentValue('valveStatus') != aggregateStatus) {
+        sendEvent(name:'valveStatus', value:aggregateStatus, type:'physical', descriptionText:"SWV-ZF2 valveStatus is ${aggregateStatus}")
+    }
+    int unknownBits = rawValue & ~0x3B
+    if (unknownBits != 0) { logDebug "SWV-ZF2 valveStatus contains unknown bits 0x${Integer.toHexString(unknownBits)} (raw=${rawValue})" }
+}
+
 String zf2ChildDni(int endpoint) { "${device.deviceNetworkId}-ZF2-${endpoint}" }
 
 void createZF2ChildDevices() {
@@ -710,21 +811,53 @@ void createZF2ChildDevices() {
     }
 }
 
+// ZF2 children are authoritative for independent-port automations. The parent valve/switch are summaries:
+// open when either port is open, closed only when both ports are closed, otherwise unknown.
+String calculateZF2AggregateValveState(String valve1State, String valve2State) {
+    String valve1 = valve1State in ['open', 'closed'] ? valve1State : 'unknown'
+    String valve2 = valve2State in ['open', 'closed'] ? valve2State : 'unknown'
+    if (valve1 == 'open' || valve2 == 'open') { return 'open' }
+    if (valve1 == 'closed' && valve2 == 'closed') { return 'closed' }
+    return 'unknown'
+}
+
+String calculateZF2AggregateSwitchState(String aggregateValveState) {
+    return aggregateValveState == 'open' ? 'on' : aggregateValveState == 'closed' ? 'off' : 'unknown'
+}
+
 void sendZF2EndpointEvent(String endpoint, String switchValue) {
     int ep = Integer.parseInt(endpoint, 16)
     if (!(ep in [1, 2])) { logDebug "SWV-ZF2 OnOff report from unexpected endpoint ${endpoint}"; return }
     String valveValue = switchValue == 'on' ? 'open' : switchValue == 'off' ? 'closed' : 'unknown'
-    String eventType = (state.states['isDigital'] ?: false) ? 'digital' : 'physical'
-    sendEvent(name:"valve${ep}", value:valveValue, type:eventType, descriptionText:"Valve ${ep} is ${valveValue}")
+    String eventType = state.states["isDigital${ep}"] == true ? 'digital' : 'physical'
+    String valveAttribute = "valve${ep}"
+    boolean endpointChanged = device.currentValue(valveAttribute) != valveValue
+    if (endpointChanged) {
+        sendEvent(name:valveAttribute, value:valveValue, type:eventType, descriptionText:"Valve ${ep} is ${valveValue}")
+    }
+
     def child = getChildDevice(zf2ChildDni(ep))
-    child?.parse([
-        [name:'valve', value:valveValue, type:eventType, descriptionText:"${child.displayName} valve is ${valveValue}"],
-        [name:'switch', value:switchValue, type:eventType, descriptionText:"${child.displayName} valve is ${switchValue}"]
-    ])
-    String other = device.currentValue("valve${ep == 1 ? 2 : 1}") ?: 'unknown'
-    String summary = (valveValue == 'open' || other == 'open') ? 'open' : (valveValue == 'closed' && other == 'closed') ? 'closed' : 'unknown'
-    sendEvent(name:'valve', value:summary, type:eventType, descriptionText:"SWV-ZF2 summary is ${summary}")
-    sendEvent(name:'switch', value:summary == 'open' ? 'on' : summary == 'closed' ? 'off' : 'unknown', type:eventType)
+    List<Map> childEvents = []
+    if (child != null && child.currentValue('valve') != valveValue) {
+        childEvents << [name:'valve', value:valveValue, type:eventType, descriptionText:"${child.displayName} valve is ${valveValue}"]
+    }
+    if (child != null && child.currentValue('switch') != switchValue) {
+        childEvents << [name:'switch', value:switchValue, type:eventType, descriptionText:"${child.displayName} valve is ${switchValue}"]
+    }
+    if (childEvents) { child.parse(childEvents) }
+
+    String valve1State = ep == 1 ? valveValue : (device.currentValue('valve1') ?: 'unknown')
+    String valve2State = ep == 2 ? valveValue : (device.currentValue('valve2') ?: 'unknown')
+    String summary = calculateZF2AggregateValveState(valve1State, valve2State)
+    String summarySwitch = calculateZF2AggregateSwitchState(summary)
+    if (device.currentValue('valve') != summary) {
+        sendEvent(name:'valve', value:summary, type:eventType, descriptionText:"SWV-ZF2 summary is ${summary}")
+    }
+    if (device.currentValue('switch') != summarySwitch) {
+        sendEvent(name:'switch', value:summarySwitch, type:eventType, descriptionText:"SWV-ZF2 summary switch is ${summarySwitch}")
+    }
+    if (!endpointChanged && !childEvents) { logDebug "SWV-ZF2 ignored unchanged valve ${ep} state ${valveValue}" }
+    clearZF2DigitalCommand(ep)
 }
 
 List<String> zf2EndpointCommand(int endpoint, boolean open) {
@@ -762,11 +895,27 @@ void componentApplyManualIrrigationPreferences(cd, String amountUnit, BigDecimal
 }
 void setZF2ValveFromChild(cd, boolean open) {
     int ep = cd.deviceNetworkId.endsWith('-2') ? 2 : 1
-    if (state.states == null) { state.states = [:] }
-    state.states['isDigital'] = true
-    runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
+    markZF2DigitalCommand(ep)
     sendZigbeeCommands(zf2EndpointCommand(ep, open))
 }
+
+void markZF2DigitalCommand(int endpoint) {
+    if (state.states == null) { state.states = [:] }
+    state.states["isDigital${endpoint}"] = true
+    if (endpoint == 1) {
+        runInMillis(DIGITAL_TIMER, clearZF2Digital1, [overwrite:true])
+    } else {
+        runInMillis(DIGITAL_TIMER, clearZF2Digital2, [overwrite:true])
+    }
+}
+
+void clearZF2DigitalCommand(int endpoint) {
+    if (state.states == null) { state.states = [:] }
+    state.states["isDigital${endpoint}"] = false
+}
+
+void clearZF2Digital1() { clearZF2DigitalCommand(1) }
+void clearZF2Digital2() { clearZF2DigitalCommand(2) }
 
 void sendZF2ManualSettingsEvents(Map values) {
     if (!isSonoffZF2()) { return }
@@ -1309,7 +1458,7 @@ void parseZHAcommand(Map descMap) {
 
 import java.text.SimpleDateFormat
 
-void parseSonoffCluster(Map it, String description) {
+void parseSonoffCluster(Map it, String description, sourceEndpoint=null) {
     //logDebug "parseSonoffCluster: ${it}"
     // Define a date format
     SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
@@ -1323,11 +1472,13 @@ void parseSonoffCluster(Map it, String description) {
     }
     // Firmware >= 1.0.4 uses Unix epoch (1970); older firmware uses Zigbee epoch (year 2000)
     long epochOffset = isSonoffFwGte(1004) ? 0L : 946684800L
+    String zf2Endpoint = isSonoffZF2() ? normalizeZF2Endpoint(sourceEndpoint) : '01'
+    if (isSonoffZF2() && zf2Endpoint == null) { return }
     switch (it.attrId) {
         case '5006' :   // Real-time irrigation duration (0..86400, seconds)
             logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} value is ${intValue} (raw: ${it.value})"
             descText = "lastValveOpenDuration is ${intValue} seconds"
-            sendEvent(name: 'lastValveOpenDuration', value: intValue, descriptionText: descText, type: 'physical')
+            sendZF2PortEvent(zf2Endpoint, [name:'lastValveOpenDuration', value:intValue, descriptionText:descText, type:'physical'])
             logInfo "${descText}"
             break
         case '5007' :   // Real-time Irrigation Volume (0..1000, divisor:10, unit: 'L')
@@ -1350,12 +1501,17 @@ void parseSonoffCluster(Map it, String description) {
         case '500B' :   // Schedule Skip
             logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Schedule Skip : value is ${intValue} (raw: ${it.value})"
             break
-        case '500C' :	// Valve Abnormal State // valveStatus :  0 - 'normal'; 1 - 'shortage'; 2 - 'leakage'; 3 - 'shortage and leakage'
+        case '500C' :	// Valve Abnormal State; ZF2 uses a two-channel bitmask, classic SWV uses values 0..3.
             logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Valve Abnormal State value is ${intValue} (raw: ${it.value})"
-            String valveStatus = valveStatusOptions[intValue.toString()]
-            descText = "valveStatus is ${valveStatus}"
-            logInfo "${descText} (${intValue})"
-            sendEvent(name: 'valveStatus', value: valveStatus, descriptionText:descText, type: 'physical')
+            if (isSonoffZF2()) {
+                sendZF2ValveStatusEvents(intValue)
+                logInfo "SWV-ZF2 valveStatus is ${decodeZF2ValveStatus(intValue, 0)} (${intValue})"
+            } else {
+                String valveStatus = valveStatusOptions[intValue.toString()]
+                descText = "valveStatus is ${valveStatus}"
+                logInfo "${descText} (${intValue})"
+                sendEvent(name: 'valveStatus', value: valveStatus, descriptionText:descText, type: 'physical')
+            }
             break
         case '500D' :   // Irrigation Start Time // uint32  // Unix epoch (fw>=1.0.4) or Zigbee epoch/year 2000 (fw<1.0.4)
             logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} Irrigation Start Time : value is ${intValue} (raw: ${it.value})"
@@ -1363,10 +1519,16 @@ void parseSonoffCluster(Map it, String description) {
             String startDateString = dateFormat.format(startDate)
             descText = "Irrigation Start Time is ${startDateString}" ; if (settings?.logEnable) { descText += " (raw: ${it.value})" }
             logInfo "${descText}"
-            sendEvent(name: 'irrigationStartTime', value: startDateString, descriptionText:descText, type: 'physical')
-            // Set valve/switch to open/on only for autonomous (unsolicited) reports, not during Refresh polling
+            sendZF2PortEvent(zf2Endpoint, [name:'irrigationStartTime', value:startDateString, descriptionText:descText, type:'physical'])
+            // FC11 and genOnOff are redundant transition signals; both use the same ZF2 state router.
             if (!(state.states['isRefresh'] ?: false)) {
-                if (device.currentValue('valve') != 'open' || device.currentValue('switch') != 'on') {
+                if (isSonoffZF2()) {
+                    int ep = Integer.parseInt(zf2Endpoint, 16)
+                    if (device.currentValue("valve${ep}") != 'open') {
+                        logInfo "Irrigation started (autonomous) - setting ZF2 valve ${ep} to open"
+                        sendZF2EndpointEvent(zf2Endpoint, 'on')
+                    }
+                } else if (device.currentValue('valve') != 'open' || device.currentValue('switch') != 'on') {
                     logInfo 'Irrigation started (autonomous) - setting valve to open and switch to on'
                     sendEvent(name: 'valve', value: 'open', descriptionText: 'Valve opened (irrigation started)', type: 'digital')
                     sendEvent(name: 'switch', value: 'on', descriptionText: 'Switch turned on (irrigation started)', type: 'digital')
@@ -1380,10 +1542,16 @@ void parseSonoffCluster(Map it, String description) {
             String endDateString = dateFormat.format(endDate)
             descText = "Irrigation End Time is ${endDateString}"  ; if (settings?.logEnable) { descText += " (raw: ${it.value})" }
             logInfo "${descText}"
-            sendEvent(name: 'irrigationEndTime', value: endDateString, descriptionText:descText, type: 'physical')
-            // Set valve/switch to closed/off only for autonomous (unsolicited) reports, not during Refresh polling
+            sendZF2PortEvent(zf2Endpoint, [name:'irrigationEndTime', value:endDateString, descriptionText:descText, type:'physical'])
+            // FC11 and genOnOff are redundant transition signals; both use the same ZF2 state router.
             if (!(state.states['isRefresh'] ?: false)) {
-                if (device.currentValue('valve') != 'closed' || device.currentValue('switch') != 'off') {
+                if (isSonoffZF2()) {
+                    int ep = Integer.parseInt(zf2Endpoint, 16)
+                    if (device.currentValue("valve${ep}") != 'closed') {
+                        logInfo "Irrigation ended (autonomous) - setting ZF2 valve ${ep} to closed"
+                        sendZF2EndpointEvent(zf2Endpoint, 'off')
+                    }
+                } else if (device.currentValue('valve') != 'closed' || device.currentValue('switch') != 'off') {
                     logInfo 'Irrigation ended (autonomous) - setting valve to closed and switch to off'
                     sendEvent(name: 'valve', value: 'closed', descriptionText: 'Valve closed (irrigation ended)', type: 'digital')
                     sendEvent(name: 'switch', value: 'off', descriptionText: 'Switch turned off (irrigation ended)', type: 'digital')
@@ -1463,10 +1631,13 @@ void parseSonoffCluster(Map it, String description) {
                 String statusStr = statusMap[schedStatus] ?: "unknown(${schedStatus})"
                 String typeStr   = typeMap[schedType]     ?: "unknown(${schedType})"
                 String modeStr   = modeMap[schedMode]     ?: "unknown(${schedMode})"
+                int scheduleEndpoint = isSonoffZF2() ? Integer.parseInt(zf2Endpoint, 16) : 0
+                String scheduleStatusKey = isSonoffZF2() ? "znLastScheduleStatus${scheduleEndpoint}" : 'znLastScheduleStatus'
+                String epochOffsetKey = isSonoffZF2() ? "znDeviceEpochOffset${scheduleEndpoint}" : 'znDeviceEpochOffset'
                 //logDebug "501F irrigationScheduleStatus: status=${statusStr} type=${typeStr} mode=${modeStr} index=${schedIndex}"
                 // --- Timestamp events (fire on status change only; not gated by isRefresh) ---
                 // Deduplicate by tracking last emitted status: running floods 2x/sec, so only emit once per transition
-                if (bytes.size() >= 15 && schedStatus != (state.states['znLastScheduleStatus'] as Integer)) {
+                if (bytes.size() >= 15 && schedStatus != (state.states[scheduleStatusKey] as Integer)) {
                     long expStart = (long)(bytes[7]  & 0xFF) << 24 | (long)(bytes[8]  & 0xFF) << 16 | (long)(bytes[9]  & 0xFF) << 8 | (long)(bytes[10] & 0xFF)
                     long expEnd   = (long)(bytes[11] & 0xFF) << 24 | (long)(bytes[12] & 0xFF) << 16 | (long)(bytes[13] & 0xFF) << 8 | (long)(bytes[14] & 0xFF)
                     logDebug "501F: expStart=0x${Long.toHexString(expStart)} expEnd=0x${Long.toHexString(expEnd)} (device uptime seconds)"
@@ -1474,42 +1645,46 @@ void parseSonoffCluster(Map it, String description) {
                         // 24-byte form (running/end): bytes[15-18] = deviceCurrentTime (running) or actualEndTime (end)
                         long devNow = (long)(bytes[15] & 0xFF) << 24 | (long)(bytes[16] & 0xFF) << 16 | (long)(bytes[17] & 0xFF) << 8 | (long)(bytes[18] & 0xFF)
                         long offset = now() / 1000L - devNow   // wall-clock offset: converts device uptime → Unix seconds
-                        state.states['znDeviceEpochOffset'] = offset
+                        state.states[epochOffsetKey] = offset
                         if (schedStatus == 2) {   // first running → emit scheduled start/end
                             String startStr = dateFormat.format(new Date((expStart + offset) * 1000L))
                             String endStr   = dateFormat.format(new Date((expEnd   + offset) * 1000L))
-                            sendEvent(name: 'irrigationStartTime', value: startStr, descriptionText: "irrigationStartTime is ${startStr}", type: 'physical')
-                            sendEvent(name: 'irrigationEndTime',   value: endStr,   descriptionText: "irrigationEndTime is ${endStr}",     type: 'physical')
+                            sendZF2PortEvent(zf2Endpoint, [name:'irrigationStartTime', value:startStr, descriptionText:"irrigationStartTime is ${startStr}", type:'physical'])
+                            sendZF2PortEvent(zf2Endpoint, [name:'irrigationEndTime', value:endStr, descriptionText:"irrigationEndTime is ${endStr}", type:'physical'])
                             logInfo "501F: irrigationStartTime=${startStr} irrigationEndTime=${endStr}"
                         } else if (schedStatus == 1) {   // end → actual end time + duration
                             long durationSec = devNow - expStart
                             String actualEndStr = dateFormat.format(new Date(now()))
                             String durationStr  = String.format('%02d:%02d:%02d', durationSec.intdiv(3600L), (durationSec % 3600L).intdiv(60L), durationSec % 60L)
-                            sendEvent(name: 'irrigationEndTime',      value: actualEndStr, descriptionText: "irrigationEndTime is ${actualEndStr}",      type: 'physical')
-                            sendEvent(name: 'lastIrrigationDuration', value: durationStr,  descriptionText: "lastIrrigationDuration is ${durationStr}",  type: 'physical')
+                            sendZF2PortEvent(zf2Endpoint, [name:'irrigationEndTime', value:actualEndStr, descriptionText:"irrigationEndTime is ${actualEndStr}", type:'physical'])
+                            sendZF2PortEvent(zf2Endpoint, [name:'lastIrrigationDuration', value:durationStr, descriptionText:"lastIrrigationDuration is ${durationStr}", type:'physical'])
                             logInfo "501F: irrigationEndTime=${actualEndStr} lastIrrigationDuration=${durationStr}"
                         }
                     } else if (schedStatus == 0) {
                         // 18-byte form (start): no deviceCurrentTime; use stored offset from previous running/end or approximate
-                        long offset = (state.states['znDeviceEpochOffset'] as Long) ?: (now() / 1000L - expStart)
+                        long offset = (state.states[epochOffsetKey] as Long) ?: (now() / 1000L - expStart)
                         String startStr = dateFormat.format(new Date((expStart + offset) * 1000L))
                         String endStr   = dateFormat.format(new Date((expEnd   + offset) * 1000L))
-                        sendEvent(name: 'irrigationStartTime', value: startStr, descriptionText: "irrigationStartTime is ${startStr}", type: 'physical')
-                        sendEvent(name: 'irrigationEndTime',   value: endStr,   descriptionText: "irrigationEndTime is ${endStr}",     type: 'physical')
+                        sendZF2PortEvent(zf2Endpoint, [name:'irrigationStartTime', value:startStr, descriptionText:"irrigationStartTime is ${startStr}", type:'physical'])
+                        sendZF2PortEvent(zf2Endpoint, [name:'irrigationEndTime', value:endStr, descriptionText:"irrigationEndTime is ${endStr}", type:'physical'])
                         logInfo "501F: irrigationStartTime=${startStr} irrigationEndTime=${endStr} (start event)"
                     }
-                    state.states['znLastScheduleStatus'] = schedStatus
+                    state.states[scheduleStatusKey] = schedStatus
                 }
-                // --- Valve/switch update (guarded by isRefresh) ---
+                String newValveVal  = (schedStatus == 0 || schedStatus == 2) ? 'open' : 'closed'
+                String newSwitchVal = (schedStatus == 0 || schedStatus == 2) ? 'on'   : 'off'
+                // FC11 and genOnOff are redundant transition signals; both use the same ZF2 state router.
                 if (!(state.states['isRefresh'] ?: false)) {
-                    String newValveVal  = (schedStatus == 0 || schedStatus == 2) ? 'open' : 'closed'
-                    String newSwitchVal = (schedStatus == 0 || schedStatus == 2) ? 'on'   : 'off'
-                    if (device.currentValue('valve') != newValveVal) {   // deduplicate: skip if state unchanged (e.g. repeated 'running' reports)
+                    if (isSonoffZF2()) {
+                        int ep = Integer.parseInt(zf2Endpoint, 16)
+                        if (device.currentValue("valve${ep}") != newValveVal) {
+                            logInfo "Irrigation schedule ${statusStr} (autonomous) - setting ZF2 valve ${ep} to ${newValveVal} (${typeStr}, ${modeStr} mode, index=${schedIndex})"
+                            sendZF2EndpointEvent(zf2Endpoint, newSwitchVal)
+                        }
+                    } else if (device.currentValue('valve') != newValveVal) {
                         logInfo "Irrigation schedule ${statusStr} (autonomous) - setting valve to ${newValveVal} and switch to ${newSwitchVal} (${typeStr}, ${modeStr} mode, index=${schedIndex})"
                         sendEvent(name: 'valve',  value: newValveVal,  descriptionText: "Valve ${newValveVal} (irrigation ${statusStr})", type: 'physical')
                         sendEvent(name: 'switch', value: newSwitchVal, descriptionText: "Switch ${newSwitchVal} (irrigation ${statusStr})", type: 'physical')
-                    } else {
-                        //logDebug "501F irrigationScheduleStatus: valve already ${newValveVal}, skipping sendEvent for status=${statusStr}"
                     }
                 } else {
                     logDebug '501F irrigationScheduleStatus: valve/switch state inference skipped during Refresh'
@@ -1606,6 +1781,7 @@ void off() { close() }
 void close() {
     if (state.states == null) { state.states = [:] }
     state.states['isDigital'] = true
+    if (isSonoffZF2()) { markZF2DigitalCommand(1) }
     if (settings?.threeStateEnable == true) {
         sendEvent(name: 'valve', value: 'closing', descriptionText: 'sent a command to close the valve', type: 'digital')
         logInfo 'closing ...'
@@ -1637,13 +1813,14 @@ void on() { open() }
 void open() {
     if (state.states == null) { state.states = [:] }
     state.states['isDigital'] = true
+    if (isSonoffZF2()) { markZF2DigitalCommand(1) }
     if (settings?.threeStateEnable == true) {
         sendEvent(name: 'valve', value: 'opening', descriptionText: 'sent a command to open the valve', type: 'digital')
         logInfo 'opening ...'
     }
     if (isSonoff()) {
         String lastValveStatus = device.currentValue('valveStatus')
-        if (lastValveStatus != null && !(lastValveStatus in ['normal', 'clear'])) {
+        if (!isSonoffZF2() && lastValveStatus != null && !(lastValveStatus in ['normal', 'clear'])) {
             sendEvent(name: 'valveStatus', value: 'clear', type: 'digital')
         }
         sendEvent(name: 'irrigationStartTime', value: DATE_TIME_UNKNOWN, type: 'digital')
@@ -1772,7 +1949,9 @@ void refresh() {
     else {
         cmds = zigbee.onOffRefresh()
         if (isSonoffZF2()) {
+            // Endpoint 2 owns its genOnOff state and per-channel irrigation duration only.
             cmds += "he rattr 0x${device.deviceNetworkId} 0x02 0x0006 0x0000 {}"
+            cmds += "he rattr 0x${device.deviceNetworkId} 0x02 0xFC11 0x5006 {}"
         }
     }
     if (deviceProfilesV2[getModelGroup()]?.capabilities?.battery?.value == true) {
@@ -1808,9 +1987,13 @@ void refresh() {
         if (isSonoffZN() || isSonoffZF2()) {
             cmds += zigbee.readAttribute(0xFC11, 0x501D, [:], delay = 200)
         }
-        // cluster=0xFC11 common attributes (supported by all Sonoff valve models)
-        //  0x5006 realTimeIrrigationDuration, 0x5007 realTimeIrrigationVolume, 0x500C valveAbnormalState, 0x500F dailyIrrigationVolume
-        cmds += zigbee.readAttribute(0xFC11, [0x5006, 0x5007, 0x500C, 0x500F], [:], delay = 201)
+        // Endpoint 1 owns shared volume/fault settings. ZF2 does not declare 0x500F.
+        if (isSonoffZF2()) {
+            cmds += zigbee.readAttribute(0xFC11, [0x5006, 0x5007, 0x500C], [:], delay = 201)
+        } else {
+            // Common attributes for the classic SWV and ZN series.
+            cmds += zigbee.readAttribute(0xFC11, [0x5006, 0x5007, 0x500C, 0x500F], [:], delay = 201)
+        }
         if (!(isSonoffZN() || isSonoffZF2())) {
             // cluster=0xFC11 SWV-only attributes (not supported on SWV-ZN series)
             //  0x500D irrigationStartTime, 0x500E irrigationEndTime, 0x5010 workState
@@ -1887,6 +2070,7 @@ void configure() {
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}" // genOnOff
         if (isSonoffZF2()) {
             createZF2ChildDevices()
+            // Keep raw endpoint-specific commands for compatibility with the minimum supported Hubitat version.
             cmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0006 {${device.zigbeeId}} {}"
             cmds += "he cr 0x${device.deviceNetworkId} 0x02 0x0006 0x0000 0x10 1 1800 {}"
         }
@@ -2476,9 +2660,7 @@ void setIrrigationMode(String mode) {
 void setValve2(String mode) {
     if (isSonoffZF2()) {
         if (!(mode in ['open', 'closed'])) { logWarn "setValve2 must be 'open' or 'closed'"; return }
-        if (state.states == null) { state.states = [:] }
-        state.states['isDigital'] = true
-        runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
+        markZF2DigitalCommand(2)
         sendZigbeeCommands(zf2EndpointCommand(2, mode == 'open'))
         return
     }

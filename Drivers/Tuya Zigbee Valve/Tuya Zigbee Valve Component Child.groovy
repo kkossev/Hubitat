@@ -16,6 +16,12 @@ metadata {
         capability 'Switch'
         capability 'Refresh'
 
+        attribute 'irrigationStartTime', 'string'
+        attribute 'irrigationEndTime', 'string'
+        attribute 'lastIrrigationDuration', 'string'
+        attribute 'lastValveOpenDuration', 'number'
+        attribute 'valveStatus', 'enum', ['normal', 'shortage', 'leakage', 'fail-safe', 'shortage and leakage', 'shortage and fail-safe', 'leakage and fail-safe', 'shortage, leakage and fail-safe']
+
         attribute 'manualIrrigationDuration', 'number'
         attribute 'manualIrrigationMode', 'enum', ['duration', 'capacity']
         attribute 'manualIrrigationAmountUnit', 'enum', ['US gallon', 'liter']
@@ -34,8 +40,8 @@ metadata {
     }
 }
 
-static String version() { '1.0.1' }
-static String timeStamp() { '2026/07/10 10:54 PM' }
+static String version() { '1.1.0' }
+static String timeStamp() { '2026/07/11 8:24 PM' }
 String driverVersionAndTimeStamp() { version() + ' ' + timeStamp() }
 
 void installed() {
