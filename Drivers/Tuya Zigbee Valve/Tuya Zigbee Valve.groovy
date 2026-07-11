@@ -60,7 +60,8 @@
  *  ver. 1.8.0 2026-07-10 kkossev - added SONOFF SWV-ZF2 dual-valve support with endpoint-aware control, child valves, and manual irrigation settings.
  *                                  various bugfixes; 
  *
- *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes ''
+ *                                  TODO: Sonoff SWV irrigationStartTime irrigationEndTimetime is off by 3 hours!;
+ *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes;
  *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
  *                                  TODO: clear the old states on update; add rejoinCtr;
  */
@@ -69,7 +70,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 static String version() { '1.8.0' }
-static String timeStamp() { '2026/07/10 11:57 PM' }
+static String timeStamp() { '2026/07/11 9:38 AM' }
 
 @Field static final Boolean _DEBUG = false                                      // disable it for the production release !
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true                        // disable it for the production release !
@@ -121,11 +122,10 @@ metadata {
 
         command 'initialize', [[name: 'Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****']]
         command 'setIrrigationTimer', [[name:'auto-off timer (irrigationDuration ), in seconds or minutes (depending on the model)', type: 'NUMBER', description: 'Set the irrigation duration timer<br>, in seconds (most models) or minutes (SWV-ZN/ZF2: 0-719 min; TZE284: 0-86400 min). Zero value disables the auto-off!', constraints: ['0..86400']]]
-        command 'setIrrigationCapacity', [[name:'capacity, liters (Saswell and GiEX)', type: 'NUMBER', description: 'Set Irrigation Capacity, litres', constraints: ['0..9999']]]
+        command 'setIrrigationCapacity', [[name:'capacity, liters (Saswell and GiEX)', type: 'NUMBER', description: 'Set Irrigation Capacity, litres (0..999)', constraints: ['0..999']]]
         command 'setIrrigationMode', [[name:'select the mode (Saswell and GiEX)', type: 'ENUM', description: 'Set Irrigation Mode', constraints: ['duration', 'capacity']]]
         command 'setValveOpenThreshold', [[name:'Valve Open Threshold, % (FrankEver FK_V02)', type: 'NUMBER', description: 'Valve Open Threshold, % (FrankEver FK_V02)', constraints: ['0..100']]]
         command 'setValve2', [[name:'select state (TZE284/SWV-ZF2)', type: 'ENUM', description: 'Set second valve', constraints: ['open', 'closed']]]
-        command 'setValve1', [[name:'select state (SWV-ZF2)', type: 'ENUM', description: 'Set SWV-ZF2 valve 1', constraints: ['open', 'closed']]]
         command 'updateZigbeeFirmware', [[name:'Update Zigbee Firmware', description: 'Request Zigbee OTA update for supported devices']]
 
         if (_DEBUG == true) {
@@ -158,7 +158,7 @@ metadata {
                 input(name: 'autoOffTimer', type: 'number', title: '<b>Auto off timer (Irrigation Duration)</b> ', description: 'Automatically turn off after how many <b>seconds</b> (most models) or <b>minutes</b> (SWV-ZN: 0–719 min; TZE284).<br>Zero value disables the auto-off!', defaultValue: DEFAULT_AUTOOFF_TIMER, required: false)
             }
             if (isSASWELL() || isGIEX()) {
-                input(name: 'irrigationCapacity', type: 'number', title: '<b>Irrigation Capacity</b>', description: 'Automatically turn off agter how many liters?', defaultValue: DEFAULT_CAPACITY, required: false)
+                input(name: 'irrigationCapacity', type: 'number', title: '<b>Irrigation Capacity</b>', description: 'Automatically turn off agter how many liters?', defaultValue: DEFAULT_CAPACITY, range: '0..999', required: false)
             }
             if (isSonoffZN()) {
                 input(name: 'manualAmountUnitPreference', type: 'enum', title: '<b>Manual irrigation amount unit</b>', description: 'Amount unit used by the simple manual-irrigation commands.', options: ['US gallon', 'liter'], defaultValue: 'liter', required: true)
@@ -223,7 +223,13 @@ boolean isBatteryPowered()       { return isGIEX() || isSASWELL() || isTS0049() 
 boolean isFankEver()             { return getModelGroup().contains('FRANKEVER') }
 boolean isSonoff()               { return getModelGroup().contains('SONOFF') }
 boolean isTZE284()               { return getModelGroup().contains('TZE284') || _DEBUG == true }
-Integer getSonoffFwVersion()     { String fw = device.getDataValue('softwareBuild') ?: '0'; try { return Integer.parseInt(fw.replaceAll(/^0+(?!$)/, '')) } catch (e) { return 0 } }
+Integer getSonoffFwVersion() {   // zero-padded '00001004' -> 1004; dotted '1.0.7' (SWV-ZF2) -> 1007 = major*1000 + minor*100 + patch, matching the isSonoffFwGte(1004) comparison scheme
+    String fw = device.getDataValue('softwareBuild') ?: '0'
+    try {
+        if (fw.contains('.')) { List<String> p = fw.tokenize('.'); return (p[0] as int) * 1000 + (p.size() > 1 ? (p[1] as int) * 100 : 0) + (p.size() > 2 ? (p[2] as int) : 0) }
+        return Integer.parseInt(fw.replaceAll(/^0+(?!$)/, ''))
+    } catch (e) { return 0 }
+}
 boolean isSonoffFwGte(Integer v) { return getSonoffFwVersion() >= v }
 boolean isSonoffZN()             { return getModelGroup().contains('SONOFF_SWV_ZN') }  // Sonoff SWV-ZN series (SWV-ZNE, SWV-ZFE, SWV-ZNU, SWV-ZFU)
 boolean isSonoffZF2()            { return getModelGroup().contains('SONOFF_SWV_ZF2') }
@@ -414,11 +420,10 @@ boolean isSonoffZF2()            { return getModelGroup().contains('SONOFF_SWV_Z
     ],
 
     'TS0601_LIDL_VALVE'   : [
-            model         : 'TS0601',                                    // TS0601 _TZE200_c88teujp model: 'PSBZS A1'   PARKSIDE? Smart Irrigation Computer     Lidl https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
-            manufacturers : ['_TZE200_htnnfasr', '_TZE200_c88teujp'],    // TS0601 _TZE200_htnnfasr 'Parkside smart watering timer' -  only DP1 and 5 (timer) !!!  'PSBZS A1',    // https://github.com/mgrom/zigbee-herdsman-converters/blob/ce171e86f9bde6004046b9f4a3701b8024569a2a/devices/lidl.js
+            model         : 'TS0601',                                    // TS0601 _TZE200_htnnfasr model: 'PSBZS A1'  PARKSIDE Smart Irrigation Computer  Lidl https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
+            manufacturers : ['_TZE200_htnnfasr'],                        // TS0601 _TZE200_htnnfasr 'Parkside smart watering timer' - only DP1 and 5 (timer) !!! 'PSBZS A1'  https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/lidl.ts  (_TZE200_c88teujp removed 2026-07-11: it is a Saswell SEA801/SEA802 heating TRV thermostat, not this valve)
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,EF00', outClusters:'000A,0019', model:'TS0601', manufacturer:'_TZE200_htnnfasr'],     // not tested // LIDL // PARKSIDE? Smart Irrigation Computer //https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,EF00', outClusters:'000A,0019', model:'TS0601', manufacturer:'_TZE200_htnnfasr']      // not tested // LIDL // PARKSIDE? Smart Irrigation Computer //https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,EF00', outClusters:'000A,0019', model:'TS0601', manufacturer:'_TZE200_htnnfasr']      // not tested // LIDL // PARKSIDE Smart Irrigation Computer //https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
             ],
             deviceJoinName: 'LIDL Parkside smart watering timer',        // also https://gist.github.com/zinserjan/e0486af73d0aa8c6aeed31762e831022
             capabilities  : ['valve': true, 'battery': true],            // Lidl commands set : https://github.com/Koenkk/zigbee2mqtt/issues/7695#issuecomment-1084932081
@@ -1562,22 +1567,6 @@ void parseDiagnosticCluster(Map it) {
     }
 }
 
-void decodeSonoffCiclicTimedIrrigationAtt005008(Map it) {
-    logDebug "decodeSonoffCiclicTimedIrrigationAtt: ${it} it.data.size() = ${it.data.size()}"
-    int currentCount, totalNumber, irrigationDuration, irrigationInterval
-    if (it.data.size() >= 10) {
-        currentCount = zigbee.convertHexToInt(it.data[0])
-        totalNumber = zigbee.convertHexToInt(it.data[1])        // 0 - 100 'Total times of circulating irrigation'
-        irrigationDuration = (zigbee.convertHexToInt(it.data[2]) << 24) + (zigbee.convertHexToInt(it.data[3]) << 16) + (zigbee.convertHexToInt(it.data[4]) << 8) + zigbee.convertHexToInt(it.data[5])       // 0..86400 'Single irrigation duration', seconds
-        irrigationInterval = (zigbee.convertHexToInt(it.data[6]) << 24) + (zigbee.convertHexToInt(it.data[7]) << 16) + (zigbee.convertHexToInt(it.data[8]) << 8) + zigbee.convertHexToInt(it.data[9])       // 0..86400 'Time interval between two adjacent irrigations', seconds
-        logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} value is ${it.value} currentCount=${currentCount} totalNumber=${totalNumber} irrigationDuration=${irrigationDuration} irrigationInterval=${irrigationInterval}"
-    }
-    else {
-        logWarn "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} value is ${it.value} data.size() = ${it.data.size()}"
-    }
-
-}
-
 int getAttributeValue(ArrayList _data) {
     int retValue = 0
     try {
@@ -1819,7 +1808,7 @@ void refresh() {
             // Read Attribute Response, status=SUCCESS, endpoint=0x01, cluster=0x0B05 (Diagnostics Cluster), attribute=0x011D (Last Message RSSI), value=DB
             cmds += zigbee.readAttribute(0x0B05, [0x011B, 0x011C, 0x011D], [:], delay = 200)
         }
-        if (isSonoffZF2()) {
+        if (isSonoffZN() || isSonoffZF2()) {
             cmds += zigbee.readAttribute(0xFC11, 0x501D, [:], delay = 200)
         }
         // cluster=0xFC11 common attributes (supported by all Sonoff valve models)
@@ -1956,6 +1945,7 @@ def setDeviceNameAndProfile(String model=null, String manufacturer=null) {
     String deviceModel        = model != null ? model : device.getDataValue('model')
     String deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer')
     deviceProfilesV2.each { profileName, profileMap ->
+        if (currentModelMap != null) { return }    // already found
         if (profileMap.model == deviceModel) {
             if (profileMap.manufacturers.contains(deviceManufacturer)) {
                 currentModelMap = profileName
@@ -2379,19 +2369,23 @@ void writeManualIrrigationPreferences(String amountUnit=null, Number failSafe=nu
 }
 
 // Build ZCL Write Attributes command for FC11 attr 0x501D (manualDefaultSettings) on SWV-ZN series.
-// Payload: 12-byte ARRAY (UINT8 elements). All duration/interval fields are in minutes (range 0-719).
+// Delegates to buildManualDefaultSettingsCmd() via getManualIrrigationSettingsForWrite() so the
+// cached/reported unit, amount and fail-safe are preserved; only duration (and mode='duration')
+// are overridden here. Fixes B3: open()/sendIrrigationDuration() no longer clobber the user's
+// manual-irrigation unit/amount/fail-safe every time a non-zero autoOffTimer is used.
 List<String> buildZNManualDefaultSettingsCmd(int durationMin) {
-    int hi = (durationMin >> 8) & 0xFF
-    int lo = durationMin & 0xFF
-    // byte[0]=mode(0=duration), bytes[1-2]=totalDuration BE, bytes[3-4]=irrigDuration BE,
-    // bytes[5-6]=interval(0), byte[7]=unit(1=liter), bytes[8-9]=volume(0), bytes[10-11]=failSafe(0)
-    List<Integer> data = [0x00, hi, lo, hi, lo, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]
-    String dataHex = data.collect { String.format('%02X', it) }.join(' ')
-    // ZCL Write Attributes (foundation cmd 0x02): attrId=0x501D LE, type=ARRAY(0x48),
-    // element_type=UINT8(0x20), count=12(0x0C 0x00 LE), then 12 data bytes
-    String zclFrame = "00 00 02 1D 50 48 20 0C 00 ${dataHex}"
-    logDebug "buildZNManualDefaultSettingsCmd: durationMin=${durationMin} frame=${zclFrame}"
-    return ["he raw ${device.deviceNetworkId} 0x01 0x01 0xFC11 {${zclFrame}}"]
+    int clampedDuration = Math.max(1, Math.min(durationMin, 719))
+    Map values = getManualIrrigationSettingsForWrite()
+    values.duration = clampedDuration
+    values.mode = 'duration'
+    try {
+        List<String> cmds = buildManualDefaultSettingsCmd(values.duration as int, values.mode as String, values.amountUnit as String, values.amount as int, values.failSafe as int)
+        logDebug "buildZNManualDefaultSettingsCmd: duration=${clampedDuration} unit=${values.amountUnit} amount=${values.amount} failSafe=${values.failSafe} cmds=${cmds}"
+        return cmds
+    } catch (e) {
+        logWarn "buildZNManualDefaultSettingsCmd: invalid manual irrigation settings (${e.message}); skipping 0x501D write"
+        return []
+    }
 }
 
 void sendIrrigationDuration() {
@@ -2481,15 +2475,6 @@ void setIrrigationMode(String mode) {
     sendZigbeeCommands( cmds )
 }
 
-
-void setValve1(String mode) {
-    if (!isSonoffZF2()) { logWarn 'setValve1 is available for SWV-ZF2 only'; return }
-    if (!(mode in ['open', 'closed'])) { logWarn "setValve1 must be 'open' or 'closed'"; return }
-    if (state.states == null) { state.states = [:] }
-    state.states['isDigital'] = true
-    runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
-    sendZigbeeCommands(zf2EndpointCommand(1, mode == 'open'))
-}
 
 void setValve2(String mode) {
     if (isSonoffZF2()) {
