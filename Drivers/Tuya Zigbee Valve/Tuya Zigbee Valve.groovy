@@ -57,13 +57,10 @@
  *                                  fixed SWV flow rate reported 10x too high (ZCL 0x0404 units are 0.1 m³/h, now divided by 10);
  *                                  fixed SWV workState (0x5010) labels: old SWV firmware uses boolean 0=idle/1=working, not ZN-series multi-state values.
  *                                  fixed Sonoff SWV on_with_timed_off auto-close timer cancelled by refresh(): skip genOnOff read (cluster 6) when valve is open.
- *  ver. 1.8.0 2026-07-10 kkossev - added SONOFF SWV-ZF2 dual-valve support with endpoint-aware control, child valves, and manual irrigation settings.
- *                                  various bugfixes; 
+ *  ver. 1.8.0 2026-07-11 kkossev - added SONOFF SWV-ZF2 dual-valve support with endpoint-aware control, child valves, and manual irrigation settings.
+ *                                  various bugfixes;
  *
- *                                  TODO: Sonoff SWV irrigationStartTime irrigationEndTimetime is off by 3 hours!;
- *                                  TODO: @rgr - add a timer to the driver that shows how much time is left before the valve closes;
- *                                  TODO: document the attributes (per valve model) in GitHub; add links to the HE forum and GitHub pages; 
- *                                  TODO: clear the old states on update; add rejoinCtr;
+ *                                  Open TODO items are tracked in TODO.md in this folder.
  */
 import groovy.json.*
 import groovy.transform.Field
