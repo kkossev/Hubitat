@@ -5,6 +5,12 @@
       "id": 2539,
       "codeType": "driver",
       "version": 664
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Drivers/Tuya Contact Sensor/Tuya Contact Sensor.groovy",
+      "id": 2539,
+      "codeType": "driver",
+      "version": 672
     }
   ]
 }
