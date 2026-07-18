@@ -32,6 +32,7 @@
  * ver 1.4.1 2025-08-30 kkossev - added TS0210 _TZ3210100000_5oy7cysk for tests @masachapa34
  * ver 1.4.2 2026-02-04 kkossev - added TS0210 _TZ32101000000_5oy7cysk (alternative variant); added _TZE200_hggxgsjj _TZE200_yjryxpot _TZE200_afycb3cg (ZG-103Z variants); added Tuya sensitivity setting for some models;
  * ver 1.4.3 2026-03-22 kkossev - _TZ32101000000_5oy7cysk bugfix
+ * ver 1.4.4 2026-07-18 kkossev - added HOBEIAN ZG-102ZM vibration sensor support (_TZE200_jfw0a4aa, _TZE200_wzk0x7fq); bugs fixes;
  * 
  *                                TODO: save the configuration commands in a state and send them on device wakes up
  *                                TODO: this driver does not process ZCL battery percentage reports, only voltage reports!
@@ -43,8 +44,8 @@
  *                                TODO: handle tamper: (zoneStatus & 1<<2); handle battery_low: (zoneStatus & 1<<3); TODO: check const sens = {'high': 0, 'medium': 2, 'low': 6}[value];
  */
 
-static String version() { "1.4.3" }
-static String timeStamp() { "2026/03/22 9:07 PM" }
+static String version() { "1.4.4" }
+static String timeStamp() { "2026/07/18 4:39 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -88,6 +89,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,FFF1",           outClusters:"0019", model:"3RVS01031Z", manufacturer:"Third Reality, Inc"        // Third Reality vibration sensor   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0500,0B05,FC02", outClusters:"0003,0019", model:"multi", manufacturer:"Samjin"          // Samsung Multisensor
 		fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_kzm5w4iz"         // https://github.com/flatsiedatsie/zigbee-herdsman-converters/blob/ef4d559ccba0a39cd6957d2270352e29fb1d0296/converters/fromZigbee.js#L7449-L7467
+		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,EF00,0001",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_jfw0a4aa"         // HOBEIAN ZG-102ZM
+		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,EF00,0001",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_wzk0x7fq"         // HOBEIAN ZG-102ZM variant
 		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_iba1ckek"         // https://nl.aliexpress.com/item/1005007520278259.html Tilt Xyz Axis Sensor (ZG-103Z)
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_hggxgsjj"         // ZG-103Z variant
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_yjryxpot"         // ZG-103Z variant
@@ -102,14 +105,17 @@ metadata {
 	preferences {
 		input name: "txtEnable", type: "bool", title: "<b>Enable info message logging</b>", description: ""
 		input name: "logEnable", type: "bool", title: "<b>Enable debug message logging</b>", description: ""
-        if (device && supportsIasSensitivity()) {
+        if (device && supportsNumericSensitivity()) {
+            input name: 'sensitivity', type: 'number', title: '<b>Vibration Sensitivity</b>', description: 'Vibration detection sensitivity (ZG-102ZM)', range: '1..50'
+        }
+        else if (device && supportsIasSensitivity()) {
             input name: "sensitivity", type: "enum", title: "<b>Vibration Sensitivity</b>", description: "Select Vibration Sensitivity", defaultValue: "3", options:["0":"0 - Maximum", "1":"1", "2":"2", "3":"3 - Medium", "4":"4", "5":"5", "6":"6 - Minimum"]
         }
         if (device && supportsTuyaSensitivity()) {
             input name: 'tuyaSensitivity', type: 'enum', title: '<b>Tuya Sensitivity</b>', description: 'Vibration detection sensitivity (ZG-103Z family)', defaultValue: TuyaSensitivityOpts.defaultValue, options: TuyaSensitivityOpts.options
         }
 		input "vibrationReset", "number", title: "After vibration is detected, wait $vibrationReset second(s) until <b>resetting to inactive state</b>. Default = $VIBRATION_RESET seconds.", description: "", range: "1..7200", defaultValue: VIBRATION_RESET
-        if (device && (!isTuya() || isTuyaTiltXyzAxisSensor )) {
+        if (device && (!isTuya() || isTuyaTiltXyzAxisSensor())) {
             input name: 'threeAxis', type: 'enum', title: '<b>Three Axis</b>', description: 'Enable or disable the Three Axis reporting<br>(ThirdReality and Samsung)', defaultValue: ThreeAxisOpts.defaultValue, options: ThreeAxisOpts.options
         }
         if (device) {
@@ -127,6 +133,15 @@ metadata {
 boolean isTuyaVibrationDoorSensor() {
     return device.getDataValue("manufacturer") == "_TZE200_kzm5w4iz"    // Tuya TS0601 Vibration and Door Sensor
 }
+
+boolean isTuyaZG102ZM() {
+    return device?.getDataValue('model') == 'TS0601' && TuyaZG102ZMManufacturers.contains(device?.getDataValue('manufacturer'))
+}
+
+@Field static final Set<String> TuyaZG102ZMManufacturers = [
+    '_TZE200_jfw0a4aa',
+    '_TZE200_wzk0x7fq',
+].toSet()
 
 boolean isTuyaVibrationSensorTZ32101000000() {
     return device?.getDataValue('manufacturer') == '_TZ32101000000_5oy7cysk'
@@ -146,11 +161,15 @@ boolean isTuyaTiltXyzAxisSensor() {
 ].toSet()
 
 boolean supportsTuyaSensitivity() {
-    return isTuya() && isTuyaTiltXyzAxisSensor()
+    return isTuya() && !supportsNumericSensitivity() && isTuyaTiltXyzAxisSensor()
 }
 
 boolean supportsIasSensitivity() {
-    return isTuya() && !supportsTuyaSensitivity()
+    return isTuya() && !supportsTuyaSensitivity() && !supportsNumericSensitivity()
+}
+
+boolean supportsNumericSensitivity() {
+    return isTuya() && isTuyaZG102ZM()
 }
 
 @Field static final Integer COMMAND_TIMEOUT = 10             // timeout time in seconds
@@ -160,7 +179,7 @@ boolean supportsIasSensitivity() {
 @Field static final int PING_ATTR_ID = 0x01
 
 @Field static final Map HealthcheckMethodOpts = [            // used by healthCheckMethod
-    defaultValue: 1, options: [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
+    defaultValue: 1, options: [0: 'Disabled', 1: 'Activity check']
 ]
 @Field static final Map HealthcheckIntervalOpts = [          // used by healthCheckInterval
     defaultValue: 240, options: [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
@@ -326,9 +345,9 @@ def parse(String description) {
         } 
         else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0013) {
             String descText = "IAS Zone Sensitivity: ${descMap.value}"
-            int iSens = descMap.value?.toInteger()
+            int iSens = zigbee.convertHexToInt(descMap.value)
             logInfo "vibration sensitivity : ${iSens}"
-            sendEvent(name: "sensitivity", value: iSens, descText: descText)
+            sendEvent(name: "sensitivity", value: iSens, descriptionText: descText)
             if (iSens>=0 && iSens<7)  {
                 device.updateSetting("sensitivity",[value:iSens.toString(), type:"enum"])
             }
@@ -358,9 +377,17 @@ def parse(String description) {
             }
             boolean isSpammyDeviceProfileDefined = this.respondsTo('isSpammyDeviceProfile') // check if the method exists 05/21/2024
             for (int i = 0; i < (dataLen - 4); ) {
+                if (i + 5 >= dataLen) {
+                    logWarn "malformed Tuya DP record: index=${i} dataLen=${dataLen} data=${descMap?.data}"
+                    break
+                }
                 int dp = zigbee.convertHexToInt(descMap?.data[2 + i])          // "dp" field describes the action/message of a command frame
                 int dp_id = zigbee.convertHexToInt(descMap?.data[3 + i])       // "dp_identifier" is device dependant
                 int fncmd_len = zigbee.convertHexToInt(descMap?.data[5 + i])
+                if (i + 6 + fncmd_len > dataLen) {
+                    logWarn "malformed Tuya DP record: index=${i} fncmd_len=${fncmd_len} dataLen=${dataLen} data=${descMap?.data}"
+                    break
+                }
                 int fncmd = getTuyaAttributeValue(descMap?.data, i)          //
                 processTuyaDP(descMap, dp, dp_id, fncmd)
                 i = i + fncmd_len + 4
@@ -409,6 +436,10 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
                 logInfo "TuyaVibrationDoorSensor: contact is ${fncmd == 1 ? 'open' : 'closed'}"
             // TODO - create a child device?
             }
+            else if (isTuyaZG102ZM()) {
+                logDebug "Tuya vibration cmd (ZG-102ZM): dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                sendVibrationEvent(fncmd != 0)
+            }
             else {
                 // isTuyaTiltXyzAxisSensor() - Vibration State 
                 logDebug "Tuya Vibration State cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -429,6 +460,28 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
                 sendBatteryPercentageEvent(fncmd)
                 sendLastBatteryEvent()
             }
+            else if (isTuyaZG102ZM()) {
+                logDebug "Tuya battery cmd (ZG-102ZM): dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                sendBatteryPercentageEvent(fncmd)
+                sendLastBatteryEvent()
+            }
+            else {
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            break
+        case 0x06:  // (6) ZG-102ZM numeric sensitivity
+            if (isTuyaZG102ZM()) {
+                logDebug "Tuya sensitivity cmd (ZG-102ZM): dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                if (fncmd >= 1 && fncmd <= 50) {
+                    sendEvent(name: 'sensitivity', value: fncmd, descriptionText: "Vibration sensitivity is ${fncmd}")
+                    if (settings?.sensitivity != fncmd) {
+                        device.updateSetting('sensitivity', [value: fncmd, type: 'number'])
+                    }
+                }
+                else {
+                    logWarn "unsupported ZG-102ZM sensitivity value ${fncmd}"
+                }
+            }
             else {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             }
@@ -442,8 +495,13 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
             sendVibrationEvent(fncmd != 0)
             break
         case 0x65:  // (101) X-axis acceleration
-            logDebug "Tuya X-axis acceleration cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
-            state.lastAcceleration['x'] = fncmd
+            if (isTuyaZG102ZM()) {
+                logDebug "Tuya contact cmd (ZG-102ZM) ignored: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            else {
+                logDebug "Tuya X-axis acceleration cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                state.lastAcceleration['x'] = fncmd
+            }
             break
         case 0x66:  // (102) Y-axis acceleration
             logDebug "Tuya 102) Y-axis acceleration cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -632,9 +690,6 @@ void sendVibrationEvent(boolean vibrationActive) {
     if (result != [:]) {
         sendEvent(result)
         logInfo (result.descriptionText)
-        if (settings.shockSensor == true) {
-            sendEvent(getShockResult(vibrationActive))
-        }
     }
     else {
         logDebug "Vibration event not sent"
@@ -649,13 +704,17 @@ Map handleVibration(boolean vibrationActive) {
         if (device.currentState('acceleration')?.value != "active") {
             state.vibrationStarted = now()
         }
-        sendEvent(getShockResult(vibrationActive))
+        if (settings.shockSensor == true) {
+            sendEvent(getShockResult(vibrationActive))
+        }
     	return getVibrationResult(vibrationActive)
     }
     else { // vibration inactive event
         unschedule('resetToVibrationInactive')
         if (device.currentState('acceleration')?.value != "inactive") {
-            sendEvent(getShockResult(vibrationActive))
+            if (settings.shockSensor == true) {
+                sendEvent(getShockResult(vibrationActive))
+            }
         	return getVibrationResult(vibrationActive)
         }
         else {
@@ -729,7 +788,7 @@ private parseBatteryVoltage(valueHex) {
 	def minVolts = voltsmin ? voltsmin : 2.5
 	def maxVolts = voltsmax ? voltsmax : 3.0
 	def pct = (rawVolts - minVolts) / (maxVolts - minVolts)
-	def roundedPct = Math.min(100, Math.round(pct * 100))
+	def roundedPct = Math.max(0, Math.min(100, Math.round(pct * 100)))
 	def descText = "Battery level is ${roundedPct}% (${rawVolts} Volts)"
 	//logInfo(descText)
     // sendEvent(name: "batteryLevelLastReceived", value: new Date())    
@@ -754,6 +813,10 @@ import groovy.json.JsonOutput
 
 /* Some parts borrowed from veeceeoh in this method */
 void convertXYZtoPsiPhiTheta(int x, int y, int z) {
+    if (x == 0 && y == 0 && z == 0) {
+        logDebug 'Ignoring invalid all-zero three-axis vector'
+        return
+    }
     BigDecimal psi = new BigDecimal(Math.atan(x.div(Math.sqrt(z * z + y * y))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
     BigDecimal phi = new BigDecimal(Math.atan(y.div(Math.sqrt(x * x + z * z))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
     BigDecimal theta = new BigDecimal(Math.atan(z.div(Math.sqrt(x * x + y * y))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
@@ -818,6 +881,7 @@ def installed() {
 	logInfo "Installing..."
     sendEvent(name: 'healthStatus', value: 'unknown')
     initializeVars(fullInit = true)
+    configureDeviceHealthCheck()
     updateTuyaVersion()
     refresh()
 }
@@ -837,6 +901,11 @@ List<String> queryAllTuyaDP() {
 void refresh() {
 	logInfo("Refreshing...")
     List<String> cmds = []
+    if (isTuyaZG102ZM()) {
+        cmds += queryAllTuyaDP()
+        sendZigbeeCommands(cmds)
+        return
+    }
     cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, [:], delay=200) // battery voltage
     if (supportsIasSensitivity()) {
         cmds += zigbee.readAttribute(0x0500, 0x0013, [:], delay=200)    // IAS sensitivity
@@ -859,6 +928,9 @@ void updated() {
     checkDriverVersion(state)
     logInfo("Updating settings...") // added 2026-02-01
     unschedule()        // added 05/21/2024
+    if (device.currentState('acceleration')?.value == 'active') {
+        runIn(vibrationReset ?: 3, resetToVibrationInactive, [overwrite: true])
+    }
     if (logEnable == true) {
         runIn(86400, 'logsOff', [overwrite: true, misfire: 'ignore'])    // turn off debug logging after 30 minutes
         if (settings?.txtEnable) { log.info "${device.displayName} Debug logging will be turned off after 24 hours" }
@@ -866,20 +938,7 @@ void updated() {
     else {
         unschedule('logsOff')
     }
-    final int healthMethod = (settings.healthCheckMethod as Integer) ?: 0
-    if (healthMethod == 1 || healthMethod == 2) {                            //    [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
-        // schedule the periodic timer
-        final int interval = (settings.healthCheckInterval as Integer) ?: 0
-        if (interval > 0) {
-            //log.trace "healthMethod=${healthMethod} interval=${interval}"
-            log.info "scheduling health check every ${interval} minutes by ${HealthcheckMethodOpts.options[healthCheckMethod as int]} method"
-            scheduleDeviceHealthCheck(interval, healthMethod)
-        }
-    }
-    else {
-        unScheduleDeviceHealthCheck()        // unschedule the periodic job, depending on the healthMethod
-        logInfo 'Health Check is disabled!'
-    }
+    configureDeviceHealthCheck()
     if (settings.shockSensor == true) {
         logInfo "Shock Sensor is enabled"
         if (device.currentState('shock') == null) {
@@ -920,6 +979,36 @@ private List<String> tuyaSetEnumDp(final int dp, final int value, final Integer 
     // Tuya EF00 payload format (common): status(00) + transId + dpId + dpType(enum=04) + lenHi(00) + lenLo(01) + value
     String payload = "00" + zigbee.convertToHexString(tid, 2) + zigbee.convertToHexString(dp, 2) + "04" + "00" + "01" + zigbee.convertToHexString(value & 0xFF, 2)
     return zigbee.command(0xEF00, 0x00, payload)
+}
+
+private List<String> tuyaSetValueDp(final int dp, final int value, final Integer transId = null) {
+    Integer tid = transId
+    if (tid == null) {
+        int prev = (state.tuyaTransId ?: 0) as int
+        tid = (prev + 1) & 0xFF
+        state.tuyaTransId = tid
+    }
+    // Tuya EF00 payload format (common): status(00) + transId + dpId + dpType(value=02) + lenHi(00) + lenLo(04) + 4-byte big-endian value
+    String payload = "00" + zigbee.convertToHexString(tid, 2) + zigbee.convertToHexString(dp, 2) + "02" + "00" + "04" + zigbee.convertToHexString(value, 8)
+    return zigbee.command(0xEF00, 0x00, payload)
+}
+
+private List<String> setTuyaNumericSensitivity(final Object sens) {
+    if (!supportsNumericSensitivity()) { return [] }
+    Integer value
+    try {
+        value = sens as Integer
+    }
+    catch (e) {
+        logWarn "setTuyaNumericSensitivity: unsupported value ${sens}"
+        return []
+    }
+    if (value < 1 || value > 50) {
+        logWarn "setTuyaNumericSensitivity: value ${value} is outside the supported range 1..50"
+        return []
+    }
+    logDebug "Sending Tuya sensitivity set command dp=6 value=${value}"
+    return tuyaSetValueDp(0x06, value)
 }
 
 private List<String> setTuyaSensitivity(final String sens) {
@@ -1071,12 +1160,35 @@ String getCron(int timeInSeconds) {
     return cron
 }
 
+private void configureDeviceHealthCheck() {
+    Integer configuredHealthMethod = settings?.healthCheckMethod as Integer
+    int healthMethod = configuredHealthMethod == null ? HealthcheckMethodOpts.defaultValue as int : configuredHealthMethod
+    if (healthMethod == 2) {
+        logInfo 'Migrating legacy Periodic polling setting to Activity check'
+        device.updateSetting('healthCheckMethod', [value: '1', type: 'enum'])
+        healthMethod = 1
+    }
+    if (healthMethod == 1) {                                                //    [0: 'Disabled', 1: 'Activity check']
+        Integer configuredInterval = settings?.healthCheckInterval as Integer
+        int interval = configuredInterval == null ? HealthcheckIntervalOpts.defaultValue as int : configuredInterval
+        if (interval > 0) {
+            //log.trace "healthMethod=${healthMethod} interval=${interval}"
+            log.info "scheduling health check every ${interval} minutes by ${HealthcheckMethodOpts.options[healthMethod as int]} method"
+            scheduleDeviceHealthCheck(interval, healthMethod)
+        }
+    }
+    else {
+        unScheduleDeviceHealthCheck()        // unschedule the periodic job, depending on the healthMethod
+        logInfo 'Health Check is disabled!'
+    }
+}
+
 /**
  * Schedule a device health check
  * @param intervalMins interval in minutes
  */
 private void scheduleDeviceHealthCheck(final int intervalMins, final int healthMethod) {
-    if (healthMethod == 1 || healthMethod == 2)  {
+    if (healthMethod == 1)  {
         String cron = getCron( intervalMins * 60 )
         schedule(cron, 'deviceHealthCheck')
         logDebug "deviceHealthCheck is scheduled every ${intervalMins} minutes"
@@ -1221,11 +1333,18 @@ void logsOff() {
 }
 
 void configureReporting() {
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)
+    if (isTuyaZG102ZM()) {
+        if (settings?.sensitivity != null) {
+            cmds += setTuyaNumericSensitivity(settings.sensitivity)
+        }
+        sendZigbeeCommands(cmds)
+        return
+    }
     int seconds = Math.round((settings?.batteryReportingHours ?: 12)*3600)
     logInfo("Battery reporting frequency: ${seconds/3600}h")    
     
-    List<String> cmds = []
-    cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200) 
     cmds += zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, DataType.UINT8, seconds-1, seconds, 0x00, [:], delay=200)
     cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20, [:], delay=200)
     // added 03/07/2023
