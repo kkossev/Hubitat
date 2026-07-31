@@ -106,3 +106,10 @@ Drivers/Tuya Zigbee Valve/DEVICES.md
 DISCOURSE_TODO.md
 Drivers/Tuya Zigbee Valve/TODO.md
 Drivers/Tuya ZigBee Vibration Sensor/TODO.md
+Drivers/Misc/tests/HUBITAT_MATTER_API.md
+Drivers/Misc/tests/Matter Methods Dumper.groovy
+HUBDIAGNOSTICS_DRIVER_IMPROVEMENTS.md
+HUBDIAGNOSTICS_UNDOCUMENTED_APIS.md
+U200_MATTER_SUBSCRIPTION_INVESTIGATION.md
+Drivers/Tuya ZigBee Vibration Sensor/codex_TS0210_fix.md
+Drivers/Tuya ZigBee Vibration Sensor/TS0210_FIXES_PLAN.md

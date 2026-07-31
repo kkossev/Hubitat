@@ -3,7 +3,7 @@
  *
  * https://community.hubitat.com/t/what-do-i-need-at-ikea/158182/83?u=kkossev
  *
- * Last edited: 2026/05/22 8:33 PM
+ * Last edited: 2026/07/21 7:03 AM
  *
  * WARNING:
  * This driver runs on pure magic, optimism, and several offerings to the Hubitat gods.
@@ -556,7 +556,7 @@ private void subscribeToPaths() {
     
     // matter events are always enabled    
     for (int ep = 1; ep <= epCount; ep++) {
-        paths.add(matter.eventPath(ep, 0x003B, -1))         // We need to subscribe for ALL events from the switch cluster 
+        paths.add(matter.eventPath(ep, 0x003B, -1, isUrgent=true))         // We need to subscribe for ALL events from the switch cluster. isUrgent available from HE platform version 2.5.1.132 !
     }
 
     // General Diagnostics cluster: UpTime attribute
