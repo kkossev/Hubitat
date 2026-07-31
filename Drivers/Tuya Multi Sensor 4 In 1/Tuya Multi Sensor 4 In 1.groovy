@@ -42,7 +42,7 @@
  */
 
 static String version() { "3.5.7" }
-static String timeStamp() {"2026/07/31 9:45 AM"}
+static String timeStamp() {"2026/07/31 10:12 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -72,7 +72,7 @@ deviceType = "MultiSensor4in1"
 
 metadata {
     definition (
-        name: 'Tuya Multi Sensor 4 In 1 (V3)',
+        name: 'Tuya Multi Sensor 4 In 1',
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
