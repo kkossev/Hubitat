@@ -34,6 +34,7 @@
  * ver 1.4.3 2026-03-22 kkossev - _TZ32101000000_5oy7cysk bugfix
  * ver 1.4.4 2026-07-18 kkossev - added HOBEIAN ZG-102ZM vibration sensor support (_TZE200_jfw0a4aa, _TZE200_wzk0x7fq); bugs fixes;
  * ver 1.4.5 2026-07-18 kkossev - added Third Reality 3RDTS01056Z garage door tilt sensor custom contact attribute support;
+ * ver 1.4.6 2026-07-31 kkossev - TS0210 IAS sensitivity 0..50; repeated vibration reset timer; tamper and battery-low reporting;
  * 
  *                                TODO: save the configuration commands in a state and send them on device wakes up
  *                                TODO: this driver does not process ZCL battery percentage reports, only voltage reports!
@@ -45,8 +46,8 @@
  *                                TODO: handle tamper: (zoneStatus & 1<<2); handle battery_low: (zoneStatus & 1<<3); TODO: check const sens = {'high': 0, 'medium': 2, 'low': 6}[value];
  */
 
-static String version() { "1.4.5" }
-static String timeStamp() { "2026/07/18 10:51 PM" }
+static String version() { "1.4.6" }
+static String timeStamp() { "2026/07/31 9:49 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -59,7 +60,7 @@ metadata {
         capability "Sensor"
         capability "AccelerationSensor"
         capability "ShockSensor"              // shock - ENUM ["clear", "detected"] attribute
-        //capability "TamperAlert"            // tamper - ENUM ["clear", "detected"]
+        capability "TamperAlert"              // tamper - ENUM ["clear", "detected"]
 		capability "Battery"
 		capability "Configuration"
         capability "Refresh"
@@ -112,7 +113,7 @@ metadata {
             input name: 'sensitivity', type: 'number', title: '<b>Vibration Sensitivity</b>', description: 'Vibration detection sensitivity (ZG-102ZM)', range: '1..50'
         }
         else if (device && supportsIasSensitivity()) {
-            input name: "sensitivity", type: "enum", title: "<b>Vibration Sensitivity</b>", description: "Select Vibration Sensitivity", defaultValue: "3", options:["0":"0 - Maximum", "1":"1", "2":"2", "3":"3 - Medium", "4":"4", "5":"5", "6":"6 - Minimum"]
+            input name: "sensitivity", type: "number", title: "<b>Vibration Sensitivity</b>", description: "Vibration detection sensitivity: 0 = maximum ... 50 = minimum.<br>Wake up the device (press its button) right before clicking Save Preferences!", range: "0..50"
         }
         if (device && supportsTuyaSensitivity()) {
             input name: 'tuyaSensitivity', type: 'enum', title: '<b>Tuya Sensitivity</b>', description: 'Vibration detection sensitivity (ZG-103Z family)', defaultValue: TuyaSensitivityOpts.defaultValue, options: TuyaSensitivityOpts.options
@@ -361,13 +362,18 @@ def parse(String description) {
         else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0011) {
             logInfo("IAS Zone ID: ${descMap.value}")
         } 
+        else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0012) {
+            if (descMap.value != null) {
+                logInfo "number of zone sensitivity levels supported: ${zigbee.convertHexToInt(descMap.value)}"
+            }
+        }
         else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0013) {
             String descText = "IAS Zone Sensitivity: ${descMap.value}"
             int iSens = zigbee.convertHexToInt(descMap.value)
             logInfo "vibration sensitivity : ${iSens}"
             sendEvent(name: "sensitivity", value: iSens, descriptionText: descText)
-            if (iSens>=0 && iSens<7)  {
-                device.updateSetting("sensitivity",[value:iSens.toString(), type:"enum"])
+            if (iSens>=0 && iSens<=50)  {
+                device.updateSetting("sensitivity", [value:iSens, type:"number"])
             }
             else {
                 logDebug "unsupported sensitivity value ${iSens} !"
@@ -688,7 +694,11 @@ def sendEnrollResponse() {
 Map parseIasMessage(ZoneStatus zs) {
     if (isThirdRealityGarageDoorTiltSensor()) {
         sendGarageDoorContactEvent(zs.alarm1Set)
-        sendGarageDoorBatteryStatusEvent(zs.batterySet)
+        sendBatteryStatusEvent(zs.batterySet)
+    }
+    else {
+        sendTamperEvent(zs.tamperSet)
+        sendBatteryStatusEvent(zs.batterySet)
     }
     String currentAccel = device.currentState('acceleration')?.value
     String zsStr = ''
@@ -701,6 +711,8 @@ Map parseIasMessage(ZoneStatus zs) {
             return handleVibration(true)
         }
         else {
+            // Sensors send repeated active notifications but no clear; restart the countdown each time.
+            runIn(vibrationReset ?: 3, resetToVibrationInactive, [overwrite: true])
             logDebug "Vibration already active"
             return [:]
         }
@@ -732,7 +744,7 @@ void sendGarageDoorContactEvent(final boolean isOpen) {
     logInfo descriptionText
 }
 
-void sendGarageDoorBatteryStatusEvent(final boolean isBatteryLow) {
+void sendBatteryStatusEvent(final boolean isBatteryLow) {
     final String batteryStatusValue = isBatteryLow ? 'replace' : 'normal'
     if (device.currentValue('batteryStatus') == batteryStatusValue) {
         logDebug 'batteryStatus is already ' + batteryStatusValue
@@ -740,6 +752,17 @@ void sendGarageDoorBatteryStatusEvent(final boolean isBatteryLow) {
     }
     final String descriptionText = 'Battery status is ' + batteryStatusValue
     sendEvent(name: 'batteryStatus', value: batteryStatusValue, type: 'physical', descriptionText: descriptionText)
+    logInfo descriptionText
+}
+
+void sendTamperEvent(final boolean isTampered) {
+    final String tamperValue = isTampered ? 'detected' : 'clear'
+    if (device.currentValue('tamper') == tamperValue) {
+        //logDebug 'Tamper is already ' + tamperValue
+        return
+    }
+    final String descriptionText = 'Tamper alert is ' + tamperValue
+    sendEvent(name: 'tamper', value: tamperValue, type: 'physical', descriptionText: descriptionText)
     logInfo descriptionText
 }
 
@@ -1028,6 +1051,7 @@ void refresh() {
         // note: the private cluster 0xFF01 attributes 0x0000 (open delay) and 0x0003 (calibration) are write-only - reads return status 0x86
     }
     if (supportsIasSensitivity()) {
+        cmds += zigbee.readAttribute(0x0500, 0x0012, [:], delay=200)    // IAS sensitivity levels supported
         cmds += zigbee.readAttribute(0x0500, 0x0013, [:], delay=200)    // IAS sensitivity
     }
     if (device?.getDataValue('manufacturer') == 'Samjin') {
@@ -1491,7 +1515,7 @@ void configureReporting() {
     if (settings?.sensitivity != null && supportsIasSensitivity()) {
         logDebug("Configuring IAS vibration sensitivity to : ${settings?.sensitivity}")
             int iSens = settings.sensitivity?.toInteger()
-            if (iSens>=0 && iSens<7)  {
+            if (iSens>=0 && iSens<=50)  {
                 cmds += zigbee.writeAttribute(0x0500, 0x0013,  DataType.UINT8, iSens, [:], delay=200)
             }    
     }
