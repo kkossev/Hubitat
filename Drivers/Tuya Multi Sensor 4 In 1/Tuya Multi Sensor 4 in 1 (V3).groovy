@@ -34,14 +34,15 @@
  * ver. 3.5.4  2025-10-03 kkossev  - added model:'ZG-204ZL' (note the 'ZL' sufix!), manufacturer:'HOBEIAN' 2-in-1 sensor into TS0601_2IN1' device profile group
  * ver. 3.5.5  2025-10-20 kkossev  - added IMOU Motion Sensor ZP1 model:'ZP2-EN', manufacturer:'MultIR'
  * ver. 3.5.6  2026-06-04 kkossev  - added TS0601 _TZE284_gnpflcoq 4-in-1 mmWave Radar Sensor profile 'TS0601_TZE284_4IN1'
+ * ver. 3.5.7  2026-07-31 kkossev  - added HOBEIAN ZG-204ZX fingerprint to 'TS0601_TZE284_4IN1'
  *
  *                                   TODO: show Temperature Offset and Humidity Offset only when the device profile supports TemperatureMeasurement and RelativeHumidityMeasurement capabilities
  *                                   TODO: check why no preferences : updateAllPreferences: no preferences defined for device profile SIHAS_USM-300Z_4_IN_1
  *                                   TODO: update documentation : https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1 
  */
 
-static String version() { "3.5.6" }
-static String timeStamp() {"2026/06/04 5:30 PM"}
+static String version() { "3.5.7" }
+static String timeStamp() {"2026/07/31 9:45 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -533,7 +534,8 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             preferences   : ['radarSensitivity':'2', 'pirSensitivity':'9', 'pirDelay':'12', 'detectionRange':'13'],
             commands      : ['resetStats':'resetStats', 'resetPreferencesToDefaults':'resetPreferencesToDefaults'],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_gnpflcoq', deviceJoinName: 'Tuya TS0601 4-in-1 mmWave Radar Sensor']
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_gnpflcoq', deviceJoinName: 'Tuya TS0601 4-in-1 mmWave Radar Sensor'],
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,EF00,0402,0405,0001,0400', outClusters:'0003', model:'ZG-204ZX', manufacturer:'HOBEIAN', controllerType:'ZGB', deviceJoinName: 'HOBEIAN ZG-204ZX 4-in-1 mmWave Presence Sensor']
             ],
             tuyaDPs:        [
                 [dp:1,   name:'motion',             type:'enum',    rw: 'ro', min:0,   max:1,    defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'],              unit:'',        title:'<b>Presence</b>',             description:'Presence detection (mmWave radar)'],
