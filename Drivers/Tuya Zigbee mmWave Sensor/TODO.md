@@ -174,7 +174,7 @@ Two production incidents came from malformed published JSON: a missing comma bro
 hub's GitHub reload until fixed ([#494](https://community.hubitat.com/t/-/137410/494)–[#495](https://community.hubitat.com/t/-/137410/495), sigfreund, 2026-04), and a duplicated
 `defVal` key went unnoticed because Groovy's parser tolerates it ([#379](https://community.hubitat.com/t/-/137410/379)). Add a
 pre-push validation step (even a local `JsonSlurper` parse script / CI check) — this is the
-enforcement mechanism for CLAUDE.md golden rule 6.
+enforcement mechanism for AGENTS.md golden rule 6.
 
 ---
 
@@ -187,7 +187,7 @@ enforcement mechanism for CLAUDE.md golden rule 6.
   user5504 — worked around with the archived 3.5.2 driver) → driver-header TODO +
   IMPROVEMENT_PLAN item 3.
 - Load commands don't re-evaluate `metadata{}` fingerprints (two-step activation) →
-  IMPROVEMENT_PLAN item 4 / CLAUDE.md golden rule 5.
+  IMPROVEMENT_PLAN item 4 / AGENTS.md golden rule 5.
 - `switch` attribute enum `['manual','auto']` vs MUVKRJR5_2 OFF/ON mismatch →
   OPTIMIZATION_PLAN appendix #19 (the rename proposal itself is folded into item 1.1 here).
 - HPM still serving 3.5.1 → deliberate: the author keeps 4.x manual-update/Repair-only until

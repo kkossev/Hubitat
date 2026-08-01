@@ -3,7 +3,7 @@
  *  Tuya ZigBee Vibration Sensor
  *  Device Driver for Hubitat Elevation hub
  *
- *  https://community.hubitat.com/t/tuya-vibration-sensor/75269
+ *  https://community.hubitat.com/t/release-tuya-zigbee-vibration-sensor/138208
  *  
  *  Based on Mikhail Diatchenko (muxa) 'Konke ZigBee Motion Sensor' Version 1.0.2, based on code from Robert Morris and ssalahi.
  *
@@ -16,38 +16,16 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  * 
- * ver 1.0.3 2022-02-28 kkossev - inital version
- * ver 1.0.4 2022-03-02 kkossev - 'acceleration' misspelled bug fix
- * ver 1.0.5 2022-03-03 kkossev - Battery reporting
- * ver 1.0.6 2022-03-03 kkossev - Vibration Sensitivity
- * ver 1.0.7 2022-05-12 kkossev - TS0210 _TYZB01_pbgpvhgx Smart Vibration Sensor HS1VS 
- * ver 1.0.8 2022-11-08 kkossev - TS0210 _TZ3000_bmfw9ykl
- * ver 1.1.0 2023-03-07 kkossev - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj ; IAS is initialized on configure();
- * ver 1.2.0 2024-05-20 kkossev - add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability and preference 'ThreeAxis'; added Samsung multisensor; logsOff scheduler; added sensitivity attribute,
- * ver 1.2.1 2024-05-22 kkossev - delete scheduled jobs on Save Preferences; added lastBattery attribute; added setAccelarationInactive command;
- * ver 1.2.2 2024-06-03 kkossev - sensitivity preference is hidden for non-Tuya models; threeAxis preference is hidden for Tuya models;
- * ver 1.3.0 2025-01-28 kkossev - added Tuya Cluster parser; added TS0601 _TZE200_kzm5w4iz (contact&vibration); added TS0601 _TZE200_iba1ckek (Tilt Xyz Axis Sensor) (ZG-103Z); added queryAllTuyaDP(); missing [overwrite: true] bug fix;
- * ver 1.3.1 2025-02-19 kkossev - added TS0210 _TZ3000_lqpt3mvr _TZ3000_lzdjjfss _TYZB01_geigpsy4
- * ver 1.4.0 2025-03-01 kkossev - added ShockSensor capability; added shockSensor option (default:enabled)
- * ver 1.4.1 2025-08-30 kkossev - added TS0210 _TZ3210100000_5oy7cysk for tests @masachapa34
- * ver 1.4.2 2026-02-04 kkossev - added TS0210 _TZ32101000000_5oy7cysk (alternative variant); added _TZE200_hggxgsjj _TZE200_yjryxpot _TZE200_afycb3cg (ZG-103Z variants); added Tuya sensitivity setting for some models;
- * ver 1.4.3 2026-03-22 kkossev - _TZ32101000000_5oy7cysk bugfix
- * ver 1.4.4 2026-07-18 kkossev - added HOBEIAN ZG-102ZM vibration sensor support (_TZE200_jfw0a4aa, _TZE200_wzk0x7fq); bugs fixes;
- * ver 1.4.5 2026-07-18 kkossev - added Third Reality 3RDTS01056Z garage door tilt sensor custom contact attribute support;
- * ver 1.4.6 2026-07-31 kkossev - TS0210 IAS sensitivity 0..50; repeated vibration reset timer; tamper and battery-low reporting;
- * 
- *                                TODO: save the configuration commands in a state and send them on device wakes up
- *                                TODO: this driver does not process ZCL battery percentage reports, only voltage reports!
- *                                TODO: bugFix: healthCheck is not started on installed()
- *                                TODO: add powerSource attribute
- *                                TODO: make sensitivity range dependant on the device model
- *                                TODO: minimum time filter : https://community.hubitat.com/t/tuya-vibration-sensor-better-laundry-monitor/113296/9?u=kkossev 
- *                                TODO: add capability.tamperAlert
- *                                TODO: handle tamper: (zoneStatus & 1<<2); handle battery_low: (zoneStatus & 1<<3); TODO: check const sens = {'high': 0, 'medium': 2, 'low': 6}[value];
+ * ver 1.4.6 2026-07-31 kkossev - TS0210 IAS sensitivity 0..50; repeated vibration reset timer; tamper and battery-low reporting
+ * ver 1.4.7 2026-08-01 kkossev - (development version)
+ *
+ * Full version history: see CHANGELOG.md: https://github.com/kkossev/Hubitat/blob/development/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/CHANGELOG.md
+ *
+ * Open work is tracked in TODO.md.
  */
 
-static String version() { "1.4.6" }
-static String timeStamp() { "2026/07/31 9:49 PM" }
+static String version() { "1.4.7" }
+static String timeStamp() { "2026/08/01 12:30 AM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -474,7 +452,6 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
             else if (isTuyaVibrationDoorSensor()) {
                 logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
                 logInfo "TuyaVibrationDoorSensor: contact is ${fncmd == 1 ? 'open' : 'closed'}"
-            // TODO - create a child device?
             }
             else if (isTuyaZG102ZM()) {
                 logDebug "Tuya vibration cmd (ZG-102ZM): dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -1288,7 +1265,6 @@ void sendRttEvent( String value=null) {
 
 String getCron(int timeInSeconds) {
     //schedule("${rnd.nextInt(59)} ${rnd.nextInt(9)}/${intervalMins} * ? * * *", 'ping')
-    // TODO: runEvery1Minute runEvery5Minutes runEvery10Minutes runEvery15Minutes runEvery30Minutes runEvery1Hour runEvery3Hours
     final Random rnd = new Random()
     int minutes = (timeInSeconds / 60 ) as int
     int  hours = (minutes / 60 ) as int
