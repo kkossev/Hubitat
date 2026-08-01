@@ -5,6 +5,48 @@ apply everywhere, so the per-folder guides only have to describe what is unique 
 
 ---
 
+## Principles
+
+Everything below is detail. If a specific rule ever seems not to cover your situation, these five
+do. They exist because this repository has properties most codebases don't: the code runs on other
+people's hardware, there are no automated tests, and a regression reaches real homes.
+
+**1. Understand before you change.** Read the whole driver, not the fragment around the symptom —
+most defects here depend on something far away (a `case` label 900 lines up, a helper whose name
+misdescribes what it matches, a datapoint that means something different on another model). State
+the interpretation you are acting on. If two readings are possible, say so and ask; do not pick one
+silently and build on it.
+
+**2. Make the smallest change that solves the stated problem — and build it the simple way.** Only
+what was asked: no speculative abstraction, no "while I was in there", no refactor bundled into a
+fix. A tightly-scoped diff is what makes the user's hardware test conclusive — if three things
+changed, a failure tells you nothing about which one broke it. Then solve it plainly: the simplest
+construct that works beats a general mechanism you might need later. Elaboration is not free here —
+methods have a hard 64 KB compile limit, the static profile map is already near its cap, and every
+preference or attribute you add is permanent public surface you can never rename (§7, §10).
+
+**3. Leave everything else exactly as it was.** Match the surrounding style even where it is not the
+style you would choose. Preserve public names, established idioms, and deliberate oddities; in this
+codebase renaming things breaks paired devices and scheduled jobs, and "obviously dead" code is
+often load-bearing. Remove only what your own change made dead.
+
+**4. Decide what "done" looks like before you start.** A change is not finished because it compiles.
+State the concrete check — which device, which command, which log line or attribute value — so the
+hub test has a real pass/fail. Verification here is a person with real hardware, so give them
+something specific to look for.
+
+**5. When the answer requires a device, stop and say so.** Plenty of questions here cannot be
+settled by reading code: what a specific manufacturer's firmware actually emits, whether a report
+arrives at all. Guessing produces confident, wrong code in a driver other people install. Label it
+**VERIFY ON DEVICE** or **ASK USER** and hand it back.
+
+> Principles 1–4 are adapted from the four principles in
+> [multica-ai/andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills) (MIT),
+> which are in turn derived from Andrej Karpathy's public observations on LLM coding — not authored
+> or endorsed by him.
+
+---
+
 ## 0. Scope and precedence
 
 Applies to everything in this repository — `Drivers\`, `Libraries\`, `Apps\`, `Documents\`.
