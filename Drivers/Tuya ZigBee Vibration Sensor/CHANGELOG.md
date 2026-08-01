@@ -9,6 +9,25 @@ and this project follows Semantic Versioning where applicable.
 
 Changes for the next release will be documented here.
 
+### Fixed
+
+- Corrected ping RTT calculation to preserve epoch timestamps before subtraction.
+- Cleared stale ping state after command timeouts so late Basic reports are treated as check-ins.
+- Hardened diagnostics for truncated Tuya EF00 frames and undefined debug/device-info values.
+- Restored hub model reporting from the successful `getHubVersion()` path.
+- Excluded the EF00-only `_TZE200_kzm5w4iz` device from IAS sensitivity handling.
+- Replaced undefined battery voltage limits with explicit 2.5–3.0 V constants.
+- Removed unused internal health-check state initialization without changing health-status behavior.
+
+### Developer notes
+
+- Standardized driver-derived RTT and health events on `type: 'digital'` and routed vibration
+  diagnostics through the gated debug logger.
+- Completed focused internal naming, comment, and diagnostic cleanup without changing public
+  commands, attributes, or device-profile routing.
+- Reviewed and retained randomized cron-based health-check scheduling to spread checks across
+  devices.
+
 ## [1.4.6] - 2026-07-31
 
 ### Added

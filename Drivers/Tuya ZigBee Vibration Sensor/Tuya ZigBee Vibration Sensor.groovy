@@ -17,7 +17,7 @@
  *  for the specific language governing permissions and limitations under the License.
  * 
  * ver 1.4.6 2026-07-31 kkossev - TS0210 IAS sensitivity 0..50; repeated vibration reset timer; tamper and battery-low reporting
- * ver 1.4.7 2026-08-01 kkossev - (development version)
+ * ver 1.4.7 2026-08-01 kkossev - (development version) - minor bugs fixes.
  *
  * Full version history: see CHANGELOG.md: https://github.com/kkossev/Hubitat/blob/development/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/CHANGELOG.md
  *
@@ -25,12 +25,16 @@
  */
 
 static String version() { "1.4.7" }
-static String timeStamp() { "2026/08/01 12:30 AM" }
+static String timeStamp() { "2026/08/01 10:51 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import com.hubitat.zigbee.DataType
 import groovy.transform.CompileStatic
+
+@Field static final Boolean _DEBUG = false
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = false
+@Field static final String UNKNOWN = 'unknown'
 
 
 metadata {
@@ -123,7 +127,7 @@ boolean isThirdRealityGarageDoorTiltSensor() {
 }
 
 boolean isTuyaVibrationDoorSensor() {
-    return device.getDataValue("manufacturer") == "_TZE200_kzm5w4iz"    // Tuya TS0601 Vibration and Door Sensor
+    return device?.getDataValue("manufacturer") == "_TZE200_kzm5w4iz"    // Tuya TS0601 Vibration and Door Sensor
 }
 
 boolean isTuyaZG102ZM() {
@@ -157,7 +161,7 @@ boolean supportsTuyaSensitivity() {
 }
 
 boolean supportsIasSensitivity() {
-    return isTuya() && !supportsTuyaSensitivity() && !supportsNumericSensitivity()
+    return isTuya() && !isTuyaVibrationDoorSensor() && !supportsTuyaSensitivity() && !supportsNumericSensitivity()
 }
 
 boolean supportsNumericSensitivity() {
@@ -166,8 +170,10 @@ boolean supportsNumericSensitivity() {
 
 @Field static final Integer COMMAND_TIMEOUT = 10             // timeout time in seconds
 @Field static final Integer VIBRATION_RESET = 3            // timeout time in seconds
-@Field static final Integer MAX_PING_MILISECONDS = 15000     // rtt more than 10 seconds will be ignored
+@Field static final Integer MAX_PING_MILLISECONDS = 15000     // rtt more than 10 seconds will be ignored
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3     // missing 3 checks will set the device healthStatus to offline
+@Field static final BigDecimal MIN_BATTERY_VOLTS = 2.5
+@Field static final BigDecimal MAX_BATTERY_VOLTS = 3.0
 @Field static final int PING_ATTR_ID = 0x01
 
 @Field static final Map HealthcheckMethodOpts = [            // used by healthCheckMethod
@@ -380,7 +386,7 @@ def parse(String description) {
             //log.warn "dataLen=${dataLen}"
             //def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
             if (dataLen <= 5) {
-                logWarn "unprocessed short Tuya command response: dp_id=${descMap?.data[3]} dp=${descMap?.data[2]} fncmd_len=${fncmd_len} data=${descMap?.data})"
+                logWarn "unprocessed short Tuya command response: dataLen=${dataLen} data=${descMap?.data}"
                 return
             }
             boolean isSpammyDeviceProfileDefined = this.respondsTo('isSpammyDeviceProfile') // check if the method exists 05/21/2024
@@ -390,7 +396,7 @@ def parse(String description) {
                     break
                 }
                 int dp = zigbee.convertHexToInt(descMap?.data[2 + i])          // "dp" field describes the action/message of a command frame
-                int dp_id = zigbee.convertHexToInt(descMap?.data[3 + i])       // "dp_identifier" is device dependant
+                int dp_id = zigbee.convertHexToInt(descMap?.data[3 + i])       // "dp_identifier" is device-dependent
                 int fncmd_len = zigbee.convertHexToInt(descMap?.data[5 + i])
                 if (i + 6 + fncmd_len > dataLen) {
                     logWarn "malformed Tuya DP record: index=${i} fncmd_len=${fncmd_len} dataLen=${dataLen} data=${descMap?.data}"
@@ -466,7 +472,7 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
         case 0x02:  // ?
             logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             break
-        case 0x03:  // thitBatteryPercentage  isTuyaVibrationDoorSensor() TS0601 _TZE200_kzm5w4iz
+        case 0x03:  // batteryPercentage  isTuyaVibrationDoorSensor() TS0601 _TZE200_kzm5w4iz
             logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             sendBatteryPercentageEvent(fncmd)
             sendLastBatteryEvent()
@@ -800,7 +806,7 @@ void calibrate(BigDecimal value = null) {
 
 // called when processing Tuya TS0601 model EF00 cluster commands
 void sendVibrationEvent(boolean vibrationActive) {
-    log.trace "Vibration : $vibrationActive"
+    logDebug "Vibration : $vibrationActive"
     Map result = handleVibration(vibrationActive)
     if (result != [:]) {
         sendEvent(result)
@@ -900,8 +906,8 @@ int getSecondsInactive() {
 private parseBatteryVoltage(valueHex) {
 	//logDebug("Battery parse string = ${valueHex}")
 	def rawVolts = Integer.parseInt(valueHex, 16) / 10
-	def minVolts = voltsmin ? voltsmin : 2.5
-	def maxVolts = voltsmax ? voltsmax : 3.0
+	def minVolts = MIN_BATTERY_VOLTS
+	def maxVolts = MAX_BATTERY_VOLTS
 	def pct = (rawVolts - minVolts) / (maxVolts - minVolts)
 	def roundedPct = Math.max(0, Math.min(100, Math.round(pct * 100)))
 	def descText = "Battery level is ${roundedPct}% (${rawVolts} Volts)"
@@ -1053,7 +1059,7 @@ void updated() {
         runIn(vibrationReset ?: 3, resetToVibrationInactive, [overwrite: true])
     }
     if (logEnable == true) {
-        runIn(86400, 'logsOff', [overwrite: true, misfire: 'ignore'])    // turn off debug logging after 30 minutes
+        runIn(86400, 'logsOff', [overwrite: true, misfire: 'ignore'])    // turn off debug logging after 24 hours
         if (settings?.txtEnable) { log.info "${device.displayName} Debug logging will be turned off after 24 hours" }
     }
     else {
@@ -1194,8 +1200,8 @@ void handlePingResponse(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
     state.lastRx['checkInTime'] = now
     if (isPing) {
-        int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: '0').toInteger()
-        if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
+        Long timeRunning = now - ((state.lastTx['pingTime'] ?: 0L) as Long)
+        if (timeRunning > 0 && timeRunning < MAX_PING_MILLISECONDS) {
             state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1
             if (timeRunning < (state.stats['pingsMin'] ?: 999)) { state.stats['pingsMin'] = timeRunning }
             if (timeRunning > (state.stats['pingsMax'] ?: 0))   { state.stats['pingsMax'] = timeRunning }
@@ -1242,6 +1248,7 @@ void unscheduleCommandTimeoutCheck(final Map state) {   // can not be static :(
 }
 
 void deviceCommandTimeout() {
+    state.states['isPing'] = false
     logWarn 'no response received (sleepy device or offline?)'
     sendRttEvent('timeout')
     state.stats['pingsFail'] = (state.stats['pingsFail'] ?: 0) + 1
@@ -1250,16 +1257,16 @@ void deviceCommandTimeout() {
 void sendRttEvent( String value=null) {
     Long now = new Date().getTime()
     if (state.lastTx == null ) { state.lastTx = [:] }
-    int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: now).toInteger()
+    Long timeRunning = now - ((state.lastTx['pingTime'] ?: now) as Long)
     String descriptionText = "Round-trip time is ${timeRunning} ms (min=${state.stats['pingsMin']} max=${state.stats['pingsMax']} average=${state.stats['pingsAvg']})"
     if (value == null) {
         logInfo "${descriptionText}"
-        sendEvent(name: 'rtt', value: timeRunning, descriptionText: descriptionText, unit: 'ms', isDigital: true)
+        sendEvent(name: 'rtt', value: timeRunning, descriptionText: descriptionText, unit: 'ms', type: 'digital')
     }
     else {
         descriptionText = "Round-trip time : ${value}"
         logInfo "${descriptionText}"
-        sendEvent(name: 'rtt', value: value, descriptionText: descriptionText, isDigital: true)
+        sendEvent(name: 'rtt', value: value, descriptionText: descriptionText, type: 'digital')
     }
 }
 
@@ -1358,7 +1365,7 @@ void deviceHealthCheck() {
 
 void sendHealthStatusEvent(final String value) {
     String descriptionText = "healthStatus changed to ${value}"
-    sendEvent(name: 'healthStatus', value: value, descriptionText: descriptionText, isStateChange: true, isDigital: true)
+    sendEvent(name: 'healthStatus', value: value, descriptionText: descriptionText, isStateChange: true, type: 'digital')
     if (value == 'online') {
         logInfo "${descriptionText}"
     }
@@ -1378,6 +1385,7 @@ String getModel() {
     try {
         /* groovylint-disable-next-line UnnecessaryGetter, UnusedVariable */
         String model = getHubVersion() // requires >=2.2.8.141
+        return model
     } catch (ignore) {
         try {
             httpGet("http://${location.hub.localIP}:8080/api/hubitat.xml") { res ->
@@ -1409,8 +1417,8 @@ void resetStats() {
     logDebug 'resetStats...'
     state.stats = [:] ; state.states = [:] ; state.lastRx = [:] ; state.lastTx = [:] ; state.health = [:]
     state.stats['rxCtr'] = 0 ; state.stats['txCtr'] = 0
-    state.states['isDigital'] = false ; state.states['isRefresh'] = false ; state.states['isPing'] = false
-    state.health['offlineCtr'] = 0 ; state.health['checkCtr3'] = 0
+    state.states['isPing'] = false
+    state.health['checkCtr3'] = 0
 }
 
 void initializeVars( boolean fullInit = false ) {
@@ -1458,7 +1466,7 @@ void logsOff() {
 
 void configureReporting() {
     List<String> cmds = []
-    cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)
+    cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)
     if (isTuyaZG102ZM()) {
         if (settings?.sensitivity != null) {
             cmds += setTuyaNumericSensitivity(settings.sensitivity)
