@@ -59,6 +59,31 @@ Reuse the existing event, Tuya, and transport paths when extending behavior:
 | Tuya ZG-102ZM | `_TZE200_jfw0a4aa`, `_TZE200_wzk0x7fq` | EF00 DP 0x01 vibration, DP 0x04 battery, DP 0x06 sensitivity |
 | Tuya ZG-103Z / tilt XYZ | `_TZE200_iba1ckek`, `_TZE200_hggxgsjj`, `_TZE200_yjryxpot`, `_TZE200_afycb3cg`, and the two `_TZ321...` variants | EF00 vibration, tilt, acceleration, and Tuya sensitivity |
 
+Out of scope unless explicitly requested:
+
+- HOBEIAN ZG-228Z alarm/siren.
+- Excellux ZG-102MV contact/vibration multisensor.
+- Excellux ZG-104PLV PIR multisensor.
+- Senoro.Win v2 window sensor.
+- Upstream haptic-feedback false positives.
+
+### Adding support for a new device
+
+For every real pairing of a new model/manufacturer, capture before writing any code:
+
+- exact case-sensitive model and manufacturer;
+- complete Hubitat fingerprint, profile, endpoint, device, input and output clusters;
+- application, stack, and hardware versions when available;
+- raw IAS and EF00 descriptions;
+- behavior before and after Configure, Refresh, and Save Preferences;
+- sensitivity readback/write while the sleepy device is awake;
+- EF00 DP number, datatype, length, raw bytes, and decoded value.
+
+When exact pairing data isn't available yet, a fingerprint may reuse a donor device's known-good
+behavior as a starting point (see `TODO.md` open device-support items for current donor
+mappings); replace the donor fields and remove any `// not tested!` marker only once the
+complete real fingerprint is confirmed.
+
 Detection rules:
 
 - `isTuya()` returns true when the model starts with `T` and manufacturer starts with `_T`; it
@@ -199,7 +224,37 @@ changing preference behavior.
 ## Driver-specific risk boundaries
 
 - Never casually change the long-ID ZG-103Z DP routing.
-- Do not add contact events for `_TZE200_kzm5w4iz` without an explicit design decision.
 - Re-read the complete `processTuyaDP()` switch after any DP change; several branches differ only
   by model guard.
 - Keep all bug, device-support, TS0210 status, and verification records in `TODO.md`.
+- Do not remove DONE, REJECTED, or otherwise fixed/implemented items from `TODO.md` on your own
+  initiative. Clean up or delete resolved TODO items only when the developer explicitly asks for
+  it in that session.
+
+## Regression checklist
+
+Run this for every bug fix or device-support change:
+
+- TS0210 IAS vibration, enrollment, sensitivity, tamper, battery, reset, Configure, and Refresh.
+- `_TZE200_kzm5w4iz` contact event (parent `contact` attribute), DP 3 battery, DP 10 vibration.
+- ZG-102ZM DP 1/4/6 behavior and sensitivity 1..50.
+- ZG-103Z tilt, axes, Tuya sensitivity, and long-ID DP swap.
+- Third Reality IAS/private-cluster vibration and axes.
+- Samsung/Samjin vibration and axes.
+- ShockSensor on/off.
+- Save Preferences while acceleration is active.
+- Battery and `lastBattery`.
+- Health status and ping.
+- Logging behavior and malformed-frame handling.
+
+## Release and documentation policy
+
+After user-confirmed hub testing:
+
+- Update the relevant status in `TODO.md`, including test date, tester, observed reports, and
+  limitations.
+- Do not recreate separate bug or TS0210 work-list files.
+- On explicit release approval only, update the driver version/timestamp/history and synchronize
+  `packageManifest.json` release version, date, and notes.
+- Keep the public acceleration, shock, sensitivity, batteryStatus, tamper, and command names
+  compatible.
