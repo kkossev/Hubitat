@@ -17,7 +17,7 @@
  *  for the specific language governing permissions and limitations under the License.
  * 
  * ver 1.4.6 2026-07-31 kkossev - TS0210 IAS sensitivity 0..50; repeated vibration reset timer; tamper and battery-low reporting
- * ver 1.4.7 2026-08-01 kkossev - (development version) - minor bugs fixes.
+ * ver 1.4.7 2026-08-02 kkossev - (development version) - minor bug fixes; timer-driven vibration reset is now a digital event; exposed contact state for the kzm5w4iz TS0601 door/vibration sensor.
  *
  * Full version history: see CHANGELOG.md: https://github.com/kkossev/Hubitat/blob/development/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/CHANGELOG.md
  *
@@ -25,7 +25,7 @@
  */
 
 static String version() { "1.4.7" }
-static String timeStamp() { "2026/08/01 10:51 PM" }
+static String timeStamp() { "2026/08/02 06:35 AM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -457,7 +457,7 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
             }
             else if (isTuyaVibrationDoorSensor()) {
                 logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
-                logInfo "TuyaVibrationDoorSensor: contact is ${fncmd == 1 ? 'open' : 'closed'}"
+                sendContactEvent(fncmd == 1)
             }
             else if (isTuyaZG102ZM()) {
                 logDebug "Tuya vibration cmd (ZG-102ZM): dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -727,6 +727,17 @@ void sendGarageDoorContactEvent(final boolean isOpen) {
     logInfo descriptionText
 }
 
+void sendContactEvent(final boolean isOpen) {
+    final String contactValue = isOpen ? 'open' : 'closed'
+    if (device.currentValue('contact') == contactValue) {
+        logDebug 'Contact is already ' + contactValue
+        return
+    }
+    final String descriptionText = 'Contact is ' + contactValue
+    sendEvent(name: 'contact', value: contactValue, type: 'physical', descriptionText: descriptionText)
+    logInfo descriptionText
+}
+
 void sendBatteryStatusEvent(final boolean isBatteryLow) {
     final String batteryStatusValue = isBatteryLow ? 'replace' : 'normal'
     if (device.currentValue('batteryStatus') == batteryStatusValue) {
@@ -875,7 +886,7 @@ void setAccelarationInactive() {
     resetToVibrationInactive(true)
 }
 
-void resetToVibrationInactive(boolean isDigital = false) {
+void resetToVibrationInactive(boolean isDigital = true) {
 	if (device.currentState('acceleration')?.value == "active") {
         String type = isDigital ? "digital" : "physical"
 		String descText = "Vibration reset to inactive after ${getSecondsInactive()}s [$type]"

@@ -9,6 +9,12 @@ and this project follows Semantic Versioning where applicable.
 
 Changes for the next release will be documented here.
 
+### Added
+
+- Exposed contact state for the `_TZE200_kzm5w4iz` TS0601 door/vibration sensor via the
+  existing parent `contact` attribute (DP 0x01), reusing the change-only event pattern already
+  used for the Third Reality garage-door contact.
+
 ### Fixed
 
 - Corrected ping RTT calculation to preserve epoch timestamps before subtraction.
@@ -18,6 +24,8 @@ Changes for the next release will be documented here.
 - Excluded the EF00-only `_TZE200_kzm5w4iz` device from IAS sensitivity handling.
 - Replaced undefined battery voltage limits with explicit 2.5–3.0 V constants.
 - Removed unused internal health-check state initialization without changing health-status behavior.
+- Labeled the timer-driven vibration inactivity reset as a `digital` event instead of
+  `physical`, since a hub-timeout-based reset is not a physical device action.
 
 ### Developer notes
 

@@ -111,3 +111,4 @@ Drivers/Misc/tests/Matter Methods Dumper.groovy
 docs/maintainer/
 Drivers/Tuya ZigBee Vibration Sensor/codex_TS0210_fix.md
 Drivers/Tuya ZigBee Vibration Sensor/TS0210_FIXES_PLAN.md
+Drivers/Tuya ZigBee Vibration Sensor/C15-wake-safe-config-writes-plan.md
