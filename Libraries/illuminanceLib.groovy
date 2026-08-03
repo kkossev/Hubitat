@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Illuminance Library', name: 'illuminanceLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/illuminanceLib.groovy', documentationLink: '',
-    version: '3.2.1'
+    version: '3.2.2'
 )
 /*
  *  Zigbee Illuminance Library
@@ -19,13 +19,13 @@ library(
  * ver. 3.0.0  2024-04-06 kkossev  - added illuminanceLib.groovy
  * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment; added capability 'IlluminanceMeasurement'; added illuminanceRefresh()
  * ver. 3.2.1  2024-07-06 kkossev  - added illuminanceCoeff; added luxThreshold and illuminanceCoeff to preferences (if applicable)
+ * ver. 3.2.2  2026-08-03 kkossev  - (BUGS.md B10) illuminanceThreshold UI default corrected from 5 to 10 lx; (BUGS.md A4) a lux threshold of 0 (no filtering) is no longer silently replaced by the default
  *
- *                                   TODO: illum threshold not working!
  *                                   TODO: check illuminanceInitializeVars() and illuminanceProcessTuyaDP() usage
 */
 
-static String illuminanceLibVersion()   { '3.2.1' }
-static String illuminanceLibStamp() { '2024/07/06 1:34 PM' }
+static String illuminanceLibVersion()   { '3.2.2' }
+static String illuminanceLibStamp() { '2026/08/03 9:07 PM' }
 
 metadata {
     capability 'IlluminanceMeasurement'
@@ -34,22 +34,18 @@ metadata {
     preferences {
         if (device) {
             if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.illuminanceThreshold != false) && !(DEVICE?.device?.isDepricated == true)) {
-                input('illuminanceThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: 5)
+                input('illuminanceThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: 10)
                 if (advancedOptions) {
                     input('illuminanceCoeff', 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: 'Illuminance correction coefficient, range (0.10..10.00)', range: '0.10..10.00', defaultValue: 1.00)
+                    input('illuminanceMinReportingTime', 'number', title: '<b>Illuminance Minimum Reporting Time</b>', description: 'Minimum time (seconds) between illuminance events; overrides the shared Minimum Reporting Time for illuminance only', range: '1..3600', defaultValue: DEFAULT_ILLUMINANCE_MIN_REPORTING_TIME)
                 }
             }
-            /*
-            if (device.hasCapability('IlluminanceMeasurement')) {
-                input 'minReportingTime', 'number', title: 'Minimum Reporting Time (sec)', description: 'Minimum time between illuminance reports', defaultValue: 60, required: false
-                input 'maxReportingTime', 'number', title: 'Maximum Reporting Time (sec)', description: 'Maximum time between illuminance reports', defaultValue: 3600, required: false
-            }
-            */
         }
     }
 }
 
 @Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 10
+@Field static final Integer DEFAULT_ILLUMINANCE_MIN_REPORTING_TIME = 10
 
 void standardParseIlluminanceCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
@@ -67,16 +63,24 @@ void handleIlluminanceEvent(int illuminance, boolean isDigital=false) {
     eventMap.type = isDigital ? 'digital' : 'physical'
     eventMap.unit = 'lx'
     eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
-    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now())) / 1000)
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME  // defined in commonLib
-    Integer timeRamaining = (minTime - timeElapsed) as Integer
-    Integer lastIllum = device.currentValue('illuminance') ?: 0
-    Integer delta = Math.abs(lastIllum - illumCorrected)
-    if (delta < ((settings?.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD) as int)) {
-        logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${settings?.illuminanceThreshold} (lastIllum=${lastIllum})"
-        return
+    boolean isRefresh = state.states['isRefresh'] == true
+    if (isRefresh) {
+        eventMap.descriptionText += ' [refresh]'
+        eventMap.isStateChange = true
     }
-    if (timeElapsed >= minTime) {
+    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now())) / 1000)
+    Integer minTime = (settings?.illuminanceMinReportingTime != null ? settings.illuminanceMinReportingTime : (settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME)) as int    // illuminance-specific override takes precedence over the shared minReportingTime
+    Integer timeRamaining = (minTime - timeElapsed) as Integer
+    Integer lastIllum = device.currentValue('illuminance') as Integer    // null when the attribute was never set - the first report must be published to establish the baseline
+    Integer threshold = (settings?.illuminanceThreshold != null ? settings.illuminanceThreshold : DEFAULT_ILLUMINANCE_THRESHOLD) as int    // 0 is a valid threshold, meaning 'no filtering'
+    if (!isRefresh && lastIllum != null) {
+        Integer delta = Math.abs(lastIllum - illumCorrected)
+        if (delta < threshold) {
+            logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${threshold} (lastIllum=${lastIllum}, delta=${delta})"
+            return
+        }
+    }
+    if (isRefresh || timeElapsed >= minTime) {
         logInfo "${eventMap.descriptionText}"
         unschedule('sendDelayedIllumEvent')        //get rid of stale queued reports
         state.lastRx['illumTime'] = now()
@@ -127,14 +131,13 @@ void illuminanceProcessTuyaDP(final Map descMap, int dp, int dp_id, int fncmd) {
 }
 
 void illuminanceInitializeVars( boolean fullInit = false ) {
-    logDebug "customInitializeVars()... fullInit = ${fullInit}"
-    if (device.hasCapability('IlluminanceMeasurement')) {
+    logDebug "illuminanceInitializeVars()... fullInit = ${fullInit}"
+    if (DEVICE?.capabilities?.IlluminanceMeasurement == true) {
         if (fullInit || settings?.minReportingTime == null) { device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number']) } // defined in commonLib
         if (fullInit || settings?.maxReportingTime == null) { device.updateSetting('maxReportingTime', [value:DEFAULT_MAX_REPORTING_TIME, type:'number']) }
-    }
-    if (device.hasCapability('IlluminanceMeasurement')) {
         if (fullInit || settings?.illuminanceThreshold == null) { device.updateSetting('illuminanceThreshold', [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:'number']) }
         if (fullInit || settings?.illuminanceCoeff == null) { device.updateSetting('illuminanceCoeff', [value:1.00, type:'decimal']) }
+        if (fullInit || settings?.illuminanceMinReportingTime == null) { device.updateSetting('illuminanceMinReportingTime', [value:DEFAULT_ILLUMINANCE_MIN_REPORTING_TIME, type:'number']) }
     }
 }
 

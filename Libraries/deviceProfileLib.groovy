@@ -1,7 +1,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/deviceProfileLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-deviceProfileLib',
-    version: '3.5.6'
+    version: '3.5.7'
 )
 /*
  *  Device Profile Library (V3)
@@ -42,6 +42,7 @@ library(
  * ver. 3.5.4  2026-02-04 kkossev  - changed inputIt min param rounding to floor instead of ceil
  * ver. 3.5.5  2026-03-05 kkossev  - added deviceProfilesV3defaults?.defaultCommands
  * ver. 3.5.6  2026-06-04 kkossev  - fixed setPar() invalid virtual enum parameter false error when preference key is passed instead of label
+ * ver. 3.5.7  2026-08-03 kkossev  - (BUGS.md B13) processFoundItem() no longer skips illuminance events based on the raw-DP dedupe, which ignored illuminanceCoeff
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
@@ -53,8 +54,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.5.6' }
-static String deviceProfileLibStamp() { '2026/06/04 5:36 PM' }
+static String deviceProfileLibVersion()   { '3.5.7' }
+static String deviceProfileLibStamp() { '2026/08/03 9:07 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -541,7 +542,7 @@ public boolean setPar(final String parPar=null, final String val=null ) {
         else {
             logInfo "setPar: (2) sending parameter <b>$par</b> (<b>$val</b> (scaledValue=${scaledValue}))"
             sendZigbeeCommands(cmds)
-            return false
+            return true
         }
     }
     else if (dpMap.at != null) {
@@ -848,8 +849,8 @@ public Map inputIt(String paramPar, boolean debug = false) {
         if (debug) { log.warn "inputIt: unsupported type ${input.type} for param '${param}'!" }
         return [:]
     }
-    if (input.defVal != null) {
-        input.defVal = foundMap.defVal
+    if (foundMap.defVal != null) {
+        input.defaultValue = foundMap.defVal
     }
     return input
 }
@@ -914,7 +915,7 @@ public List<String> refreshFromConfigureReadList(List<String> refreshList) {
             k = k.replaceAll('\\[|\\]', '')
             if (k != null) {
                 // check whether the string in the refreshList matches an attribute name in the DEVICE.attributes list
-                Map map = DEVICE.attributes.find { it.name == k }
+                Map map = DEVICE.attributes?.find { it.name == k }
                 if (map != null) {
                     Map mfgCode = map.mfgCode != null ? ['mfgCode':map.mfgCode] : [:]
                     cmds += zigbee.readAttribute(hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[0]), hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[1]), mfgCode, delay = 100)
@@ -939,7 +940,7 @@ public List<String> refreshFromDeviceProfileList() {
             k = k.replaceAll('\\[|\\]', '')
             if (k != null) {
                 // check whether the string in the refreshList matches an attribute name in the DEVICE.attributes list
-                Map map = DEVICE.attributes.find { it.name == k }
+                Map map = DEVICE.attributes?.find { it.name == k }
                 if (map != null) {
                     Map mfgCode = map.mfgCode != null ? ['mfgCode':map.mfgCode] : [:]
                     cmds += zigbee.readAttribute(hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[0]), hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[1]), mfgCode, delay = 100)
@@ -1372,8 +1373,13 @@ private boolean processFoundItem(final Map descMap, final Map foundItem, int val
             }
 
             // patch for inverted motion sensor 2-in-1
-            if (name == 'motion' && is2in1()) {                 // TODO - remove the patch !!
+            if (name == 'motion' && is2in1()) {                 // TODO - remove the patch !
                 logDebug 'patch for inverted motion sensor 2-in-1'
+            // continue ...
+            }
+            // B13: raw-DP dedupe above ignores illuminanceCoeff - let handleIlluminanceEvent() do its own correct-space delta filter
+            else if (name == 'illuminance' || name == 'illuminance_lux') {
+                logDebug "patch for ${name} (B13)"
             // continue ...
             }
 

@@ -65,6 +65,18 @@
       "id": 144,
       "codeType": "library",
       "version": 703
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Libraries/illuminanceLib.groovy",
+      "id": 168,
+      "codeType": "library",
+      "version": 22
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Libraries/deviceProfileLib.groovy",
+      "id": 142,
+      "codeType": "library",
+      "version": 681
     }
   ]
 }
