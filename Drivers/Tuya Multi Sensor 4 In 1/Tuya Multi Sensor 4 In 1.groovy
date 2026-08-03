@@ -1256,7 +1256,7 @@ library( // library marker kkossev.deviceProfileLib, line 1
 */ // library marker kkossev.deviceProfileLib, line 55
 
 static String deviceProfileLibVersion()   { '3.5.7' } // library marker kkossev.deviceProfileLib, line 57
-static String deviceProfileLibStamp() { '2026/08/03 9:07 PM' } // library marker kkossev.deviceProfileLib, line 58
+static String deviceProfileLibStamp() { '2026/08/03 11:41 PM' } // library marker kkossev.deviceProfileLib, line 58
 import groovy.json.* // library marker kkossev.deviceProfileLib, line 59
 import groovy.transform.Field // library marker kkossev.deviceProfileLib, line 60
 import hubitat.zigbee.clusters.iaszone.ZoneStatus // library marker kkossev.deviceProfileLib, line 61
@@ -1537,7 +1537,7 @@ private List<String> zclWriteAttribute(Map attributesMap, int scaledValue) { // 
         map['mfgCode'] = attributesMap.mfgCode ? attributesMap.mfgCode as String : null // library marker kkossev.deviceProfileLib, line 336
         map['ep'] = (attributesMap.ep != null && attributesMap.ep != '') ? hubitat.helper.HexUtils.hexStringToInt(attributesMap.ep) as Integer : null // library marker kkossev.deviceProfileLib, line 337
     } // library marker kkossev.deviceProfileLib, line 338
-    catch (e) { logWarn "setPar: Exception caught while splitting cluser and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val})) :  '${e}' " ; return [] } // library marker kkossev.deviceProfileLib, line 339
+    catch (e) { logWarn "zclWriteAttribute: Exception caught while splitting the cluster and attribute <b>${attributesMap?.at}</b> (scaledValue=${scaledValue}) : '${e}'" ; return [] } // library marker kkossev.deviceProfileLib, line 339
     // dt (data type) is obligatory when writing to a cluster... // library marker kkossev.deviceProfileLib, line 340
     if (attributesMap.rw != null && attributesMap.rw == 'rw' && map.dt == null) { // library marker kkossev.deviceProfileLib, line 341
         map.dt = attributesMap.type in ['number', 'decimal'] ? DataType.INT16 : DataType.ENUM8 // library marker kkossev.deviceProfileLib, line 342
@@ -1681,7 +1681,7 @@ public boolean setPar(final String parPar=null, final String val=null ) { // lib
     String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1] // library marker kkossev.deviceProfileLib, line 480
     String customSetFunction = "customSet${capitalizedFirstChar}" // library marker kkossev.deviceProfileLib, line 481
     if (this.respondsTo(customSetFunction)) { // library marker kkossev.deviceProfileLib, line 482
-        logDebug "setPar: found customSetFunction=${setFunction}, scaledValue=${scaledValue}  (val=${val})" // library marker kkossev.deviceProfileLib, line 483
+        logDebug "setPar: found customSetFunction=${customSetFunction}, scaledValue=${scaledValue}  (val=${val})" // library marker kkossev.deviceProfileLib, line 483
         // execute the customSetFunction // library marker kkossev.deviceProfileLib, line 484
         try { cmds = "$customSetFunction"(scaledValue) } // library marker kkossev.deviceProfileLib, line 485
         catch (e) { logWarn "setPar: Exception caught while processing <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val})) : '${e}'" ; return false } // library marker kkossev.deviceProfileLib, line 486
@@ -1817,7 +1817,7 @@ public boolean sendAttribute(String par=null, val=null ) { // library marker kko
     if (par == null || DEVICE?.preferences == null || DEVICE?.preferences == [:]) { logDebug 'DEVICE.preferences is empty!' ; return false } // library marker kkossev.deviceProfileLib, line 616
 
     Map dpMap = getAttributesMap(par, false)                                   // get the map for the attribute // library marker kkossev.deviceProfileLib, line 618
-    l//log.trace "sendAttribute: dpMap=${dpMap}" // library marker kkossev.deviceProfileLib, line 619
+    //log.trace "sendAttribute: dpMap=${dpMap}" // library marker kkossev.deviceProfileLib, line 619
     if (dpMap == null || dpMap?.isEmpty()) { logWarn "sendAttribute: map not found for parameter <b>${par}</b>"; return false } // library marker kkossev.deviceProfileLib, line 620
     if (val == null) { logWarn "sendAttribute: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return false } // library marker kkossev.deviceProfileLib, line 621
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */ // library marker kkossev.deviceProfileLib, line 622
@@ -2090,14 +2090,14 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
 // called from  initializeVars( fullInit = true) // library marker kkossev.deviceProfileLib, line 889
 public void setDeviceNameAndProfile(String model=null, String manufacturer=null) { // library marker kkossev.deviceProfileLib, line 890
     def (String deviceName, String deviceProfile) = getDeviceNameAndProfile(model, manufacturer) // library marker kkossev.deviceProfileLib, line 891
-    if (deviceProfile == null || deviceProfile == UNKNOWN) { // library marker kkossev.deviceProfileLib, line 892
-        logInfo "unknown model ${deviceModel} manufacturer ${deviceManufacturer}" // library marker kkossev.deviceProfileLib, line 893
-        // don't change the device name when unknown // library marker kkossev.deviceProfileLib, line 894
-        state.deviceProfile = UNKNOWN // library marker kkossev.deviceProfileLib, line 895
-    } // library marker kkossev.deviceProfileLib, line 896
-    String dataValueModel = model != null ? model : device.getDataValue('model') ?: UNKNOWN // library marker kkossev.deviceProfileLib, line 897
-    String dataValueManufacturer  = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN // library marker kkossev.deviceProfileLib, line 898
-    if (deviceName != NULL && deviceName != UNKNOWN) { // library marker kkossev.deviceProfileLib, line 899
+    String dataValueModel = model != null ? model : device.getDataValue('model') ?: UNKNOWN // library marker kkossev.deviceProfileLib, line 892
+    String dataValueManufacturer  = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN // library marker kkossev.deviceProfileLib, line 893
+    if (deviceProfile == null || deviceProfile == UNKNOWN) { // library marker kkossev.deviceProfileLib, line 894
+        logInfo "unknown model ${dataValueModel} manufacturer ${dataValueManufacturer}" // library marker kkossev.deviceProfileLib, line 895
+        // don't change the device name when unknown // library marker kkossev.deviceProfileLib, line 896
+        state.deviceProfile = UNKNOWN // library marker kkossev.deviceProfileLib, line 897
+    } // library marker kkossev.deviceProfileLib, line 898
+    if (deviceName != null && deviceName != UNKNOWN) { // library marker kkossev.deviceProfileLib, line 899
         device.setName(deviceName) // library marker kkossev.deviceProfileLib, line 900
         state.deviceProfile = deviceProfile // library marker kkossev.deviceProfileLib, line 901
         device.updateSetting('forcedProfile', [value:deviceProfilesV3[deviceProfile]?.description, type:'enum']) // library marker kkossev.deviceProfileLib, line 902
@@ -2238,7 +2238,7 @@ public boolean isSpammyDeviceProfile() { // library marker kkossev.deviceProfile
 private List<Object> compareAndConvertStrings(final Map foundItem, String tuyaValue, String hubitatValue) { // library marker kkossev.deviceProfileLib, line 1037
     String convertedValue = tuyaValue // library marker kkossev.deviceProfileLib, line 1038
     boolean isEqual    = ((tuyaValue  as String) == (hubitatValue as String))      // because the events(attributes) are always strings // library marker kkossev.deviceProfileLib, line 1039
-    if (foundItem?.scale != null || foundItem?.scale != 0 || foundItem?.scale != 1) { // library marker kkossev.deviceProfileLib, line 1040
+    if (foundItem?.scale != null && foundItem?.scale != 0 && foundItem?.scale != 1) { // library marker kkossev.deviceProfileLib, line 1040
         logTrace "compareAndConvertStrings: scaling: foundItem.scale=${foundItem.scale} tuyaValue=${tuyaValue} hubitatValue=${hubitatValue}" // library marker kkossev.deviceProfileLib, line 1041
     } // library marker kkossev.deviceProfileLib, line 1042
     return [isEqual, convertedValue] // library marker kkossev.deviceProfileLib, line 1043
@@ -2735,7 +2735,7 @@ public void printPreferences() { // library marker kkossev.deviceProfileLib, lin
 library( // library marker kkossev.commonLib, line 2
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev', // library marker kkossev.commonLib, line 3
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/commonLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-commonLib', // library marker kkossev.commonLib, line 4
-    version: '4.0.4' // library marker kkossev.commonLib, line 5
+    version: '4.0.5' // library marker kkossev.commonLib, line 5
 ) // library marker kkossev.commonLib, line 6
 /* // library marker kkossev.commonLib, line 7
   *  Common ZCL Library // library marker kkossev.commonLib, line 8
@@ -2761,7 +2761,7 @@ library( // library marker kkossev.commonLib, line 2
   * ver. 4.0.2  2025-10-18 kkossev  - added tuyaDelay in sendTuyaCommand() // library marker kkossev.commonLib, line 28
   * ver. 4.0.3  2025-10-18 kkossev  - added ignoreDuplicatedZigbeeMessages setting; DIGITAL_TIMER increased to 5000 ms // library marker kkossev.commonLib, line 29
   * ver. 4.0.4  2026-06-04 kkossev  - added ED00 cluster; // library marker kkossev.commonLib, line 30
-  * ver. 4.0.5  2026-07-09 kkossev  - (dev. branch) bug fixes // library marker kkossev.commonLib, line 31
+  * ver. 4.0.5  2026-08-03 kkossev  - (dev. branch) bug fixes // library marker kkossev.commonLib, line 31
   * // library marker kkossev.commonLib, line 32
   *                                   TODO: change the offline threshold to 2  // library marker kkossev.commonLib, line 33
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?) // library marker kkossev.commonLib, line 34
@@ -2779,7 +2779,7 @@ library( // library marker kkossev.commonLib, line 2
 */ // library marker kkossev.commonLib, line 46
 
 String commonLibVersion() { '4.0.5' } // library marker kkossev.commonLib, line 48
-String commonLibStamp() { '2026/07/09 9:45 AM' } // library marker kkossev.commonLib, line 49
+String commonLibStamp() { '2026/08/03 11:37 PM' } // library marker kkossev.commonLib, line 49
 
 import groovy.transform.Field // library marker kkossev.commonLib, line 51
 import hubitat.device.HubMultiAction // library marker kkossev.commonLib, line 52
@@ -3527,7 +3527,7 @@ public void standardParseTuyaCluster(final Map descMap) { // library marker kkos
         //log.warn "dataLen=${dataLen}" // library marker kkossev.commonLib, line 794
         //def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command // library marker kkossev.commonLib, line 795
         if (dataLen <= 5) { // library marker kkossev.commonLib, line 796
-            logWarn "unprocessed short Tuya command response: dp_id=${descMap?.data[3]} dp=${descMap?.data[2]} fncmd_len=${fncmd_len} data=${descMap?.data})" // library marker kkossev.commonLib, line 797
+            logWarn "unprocessed short Tuya command response: dp_id=${descMap?.data[3]} dp=${descMap?.data[2]} data=${descMap?.data})" // library marker kkossev.commonLib, line 797
             return // library marker kkossev.commonLib, line 798
         } // library marker kkossev.commonLib, line 799
         boolean isSpammyDeviceProfileDefined = this.respondsTo('isSpammyDeviceProfile') // check if the method exists 05/21/2024 // library marker kkossev.commonLib, line 800
@@ -3898,7 +3898,7 @@ void updated() { // library marker kkossev.commonLib, line 1147
         final int interval = (settings.healthCheckInterval as Integer) ?: 0 // library marker kkossev.commonLib, line 1165
         if (interval > 0) { // library marker kkossev.commonLib, line 1166
             //log.trace "healthMethod=${healthMethod} interval=${interval}" // library marker kkossev.commonLib, line 1167
-            log.info "scheduling health check every ${interval} minutes by ${HealthcheckMethodOpts.options[healthCheckMethod as int]} method" // library marker kkossev.commonLib, line 1168
+            log.info "scheduling health check every ${interval} minutes by ${HealthcheckMethodOpts.options[healthMethod]} method" // library marker kkossev.commonLib, line 1168
             scheduleDeviceHealthCheck(interval, healthMethod) // library marker kkossev.commonLib, line 1169
         } // library marker kkossev.commonLib, line 1170
     } // library marker kkossev.commonLib, line 1171
@@ -4805,7 +4805,7 @@ library( // library marker kkossev.illuminanceLib, line 2
 */ // library marker kkossev.illuminanceLib, line 25
 
 static String illuminanceLibVersion()   { '3.2.2' } // library marker kkossev.illuminanceLib, line 27
-static String illuminanceLibStamp() { '2026/08/03 9:07 PM' } // library marker kkossev.illuminanceLib, line 28
+static String illuminanceLibStamp() { '2026/08/03 11:46 PM' } // library marker kkossev.illuminanceLib, line 28
 
 metadata { // library marker kkossev.illuminanceLib, line 30
     capability 'IlluminanceMeasurement' // library marker kkossev.illuminanceLib, line 31
@@ -4813,119 +4813,120 @@ metadata { // library marker kkossev.illuminanceLib, line 30
     // no commands // library marker kkossev.illuminanceLib, line 33
     preferences { // library marker kkossev.illuminanceLib, line 34
         if (device) { // library marker kkossev.illuminanceLib, line 35
-            if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.illuminanceThreshold != false) && !(DEVICE?.device?.isDepricated == true)) { // library marker kkossev.illuminanceLib, line 36
-                input('illuminanceThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: 10) // library marker kkossev.illuminanceLib, line 37
-                if (advancedOptions) { // library marker kkossev.illuminanceLib, line 38
-                    input('illuminanceCoeff', 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: 'Illuminance correction coefficient, range (0.10..10.00)', range: '0.10..10.00', defaultValue: 1.00) // library marker kkossev.illuminanceLib, line 39
-                    input('illuminanceMinReportingTime', 'number', title: '<b>Illuminance Minimum Reporting Time</b>', description: 'Minimum time (seconds) between illuminance events; overrides the shared Minimum Reporting Time for illuminance only', range: '1..3600', defaultValue: DEFAULT_ILLUMINANCE_MIN_REPORTING_TIME) // library marker kkossev.illuminanceLib, line 40
-                } // library marker kkossev.illuminanceLib, line 41
-            } // library marker kkossev.illuminanceLib, line 42
-        } // library marker kkossev.illuminanceLib, line 43
-    } // library marker kkossev.illuminanceLib, line 44
-} // library marker kkossev.illuminanceLib, line 45
+            // note: only 'illuminanceThreshold':false in a device profile 'preferences' map is meaningful here - it hides the input; declaring it as 'true' or omitting the key altogether behave identically // library marker kkossev.illuminanceLib, line 36
+            if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.illuminanceThreshold != false) && !(DEVICE?.device?.isDepricated == true)) { // library marker kkossev.illuminanceLib, line 37
+                input('illuminanceThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: 10) // library marker kkossev.illuminanceLib, line 38
+                if (advancedOptions) { // library marker kkossev.illuminanceLib, line 39
+                    input('illuminanceCoeff', 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: 'Illuminance correction coefficient, range (0.10..10.00)', range: '0.10..10.00', defaultValue: 1.00) // library marker kkossev.illuminanceLib, line 40
+                    input('illuminanceMinReportingTime', 'number', title: '<b>Illuminance Minimum Reporting Time</b>', description: 'Minimum time (seconds) between illuminance events; overrides the shared Minimum Reporting Time for illuminance only', range: '1..3600', defaultValue: DEFAULT_ILLUMINANCE_MIN_REPORTING_TIME) // library marker kkossev.illuminanceLib, line 41
+                } // library marker kkossev.illuminanceLib, line 42
+            } // library marker kkossev.illuminanceLib, line 43
+        } // library marker kkossev.illuminanceLib, line 44
+    } // library marker kkossev.illuminanceLib, line 45
+} // library marker kkossev.illuminanceLib, line 46
 
-@Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 10 // library marker kkossev.illuminanceLib, line 47
-@Field static final Integer DEFAULT_ILLUMINANCE_MIN_REPORTING_TIME = 10 // library marker kkossev.illuminanceLib, line 48
+@Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 10 // library marker kkossev.illuminanceLib, line 48
+@Field static final Integer DEFAULT_ILLUMINANCE_MIN_REPORTING_TIME = 10 // library marker kkossev.illuminanceLib, line 49
 
-void standardParseIlluminanceCluster(final Map descMap) { // library marker kkossev.illuminanceLib, line 50
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.illuminanceLib, line 51
-    final int value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.illuminanceLib, line 52
-    int lux = value > 0 ? Math.round(Math.pow(10, (value / 10000))) : 0 // library marker kkossev.illuminanceLib, line 53
-    handleIlluminanceEvent(lux) // library marker kkossev.illuminanceLib, line 54
-} // library marker kkossev.illuminanceLib, line 55
+void standardParseIlluminanceCluster(final Map descMap) { // library marker kkossev.illuminanceLib, line 51
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.illuminanceLib, line 52
+    final int value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.illuminanceLib, line 53
+    int lux = value > 0 ? Math.round(Math.pow(10, (value / 10000))) : 0 // library marker kkossev.illuminanceLib, line 54
+    handleIlluminanceEvent(lux) // library marker kkossev.illuminanceLib, line 55
+} // library marker kkossev.illuminanceLib, line 56
 
-void handleIlluminanceEvent(int illuminance, boolean isDigital=false) { // library marker kkossev.illuminanceLib, line 57
-    Map eventMap = [:] // library marker kkossev.illuminanceLib, line 58
-    if (state.stats != null) { state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 } else { state.stats = [:] } // library marker kkossev.illuminanceLib, line 59
-    eventMap.name = 'illuminance' // library marker kkossev.illuminanceLib, line 60
-    Integer illumCorrected = Math.round((illuminance * ((settings?.illuminanceCoeff ?: 1.00) as float))) // library marker kkossev.illuminanceLib, line 61
-    eventMap.value  = illumCorrected // library marker kkossev.illuminanceLib, line 62
-    eventMap.type = isDigital ? 'digital' : 'physical' // library marker kkossev.illuminanceLib, line 63
-    eventMap.unit = 'lx' // library marker kkossev.illuminanceLib, line 64
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}" // library marker kkossev.illuminanceLib, line 65
-    boolean isRefresh = state.states['isRefresh'] == true // library marker kkossev.illuminanceLib, line 66
-    if (isRefresh) { // library marker kkossev.illuminanceLib, line 67
-        eventMap.descriptionText += ' [refresh]' // library marker kkossev.illuminanceLib, line 68
-        eventMap.isStateChange = true // library marker kkossev.illuminanceLib, line 69
-    } // library marker kkossev.illuminanceLib, line 70
-    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now())) / 1000) // library marker kkossev.illuminanceLib, line 71
-    Integer minTime = (settings?.illuminanceMinReportingTime != null ? settings.illuminanceMinReportingTime : (settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME)) as int    // illuminance-specific override takes precedence over the shared minReportingTime // library marker kkossev.illuminanceLib, line 72
-    Integer timeRamaining = (minTime - timeElapsed) as Integer // library marker kkossev.illuminanceLib, line 73
-    Integer lastIllum = device.currentValue('illuminance') as Integer    // null when the attribute was never set - the first report must be published to establish the baseline // library marker kkossev.illuminanceLib, line 74
-    Integer threshold = (settings?.illuminanceThreshold != null ? settings.illuminanceThreshold : DEFAULT_ILLUMINANCE_THRESHOLD) as int    // 0 is a valid threshold, meaning 'no filtering' // library marker kkossev.illuminanceLib, line 75
-    if (!isRefresh && lastIllum != null) { // library marker kkossev.illuminanceLib, line 76
-        Integer delta = Math.abs(lastIllum - illumCorrected) // library marker kkossev.illuminanceLib, line 77
-        if (delta < threshold) { // library marker kkossev.illuminanceLib, line 78
-            logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${threshold} (lastIllum=${lastIllum}, delta=${delta})" // library marker kkossev.illuminanceLib, line 79
-            return // library marker kkossev.illuminanceLib, line 80
-        } // library marker kkossev.illuminanceLib, line 81
-    } // library marker kkossev.illuminanceLib, line 82
-    if (isRefresh || timeElapsed >= minTime) { // library marker kkossev.illuminanceLib, line 83
-        logInfo "${eventMap.descriptionText}" // library marker kkossev.illuminanceLib, line 84
-        unschedule('sendDelayedIllumEvent')        //get rid of stale queued reports // library marker kkossev.illuminanceLib, line 85
-        state.lastRx['illumTime'] = now() // library marker kkossev.illuminanceLib, line 86
-        sendEvent(eventMap) // library marker kkossev.illuminanceLib, line 87
-    } // library marker kkossev.illuminanceLib, line 88
-    else {         // queue the event // library marker kkossev.illuminanceLib, line 89
-        eventMap.type = 'delayed' // library marker kkossev.illuminanceLib, line 90
-        logDebug "${device.displayName} delaying ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.illuminanceLib, line 91
-        runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.illuminanceLib, line 92
-    } // library marker kkossev.illuminanceLib, line 93
-} // library marker kkossev.illuminanceLib, line 94
+void handleIlluminanceEvent(int illuminance, boolean isDigital=false) { // library marker kkossev.illuminanceLib, line 58
+    Map eventMap = [:] // library marker kkossev.illuminanceLib, line 59
+    if (state.stats != null) { state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 } else { state.stats = [:] } // library marker kkossev.illuminanceLib, line 60
+    eventMap.name = 'illuminance' // library marker kkossev.illuminanceLib, line 61
+    Integer illumCorrected = Math.round((illuminance * ((settings?.illuminanceCoeff ?: 1.00) as float))) // library marker kkossev.illuminanceLib, line 62
+    eventMap.value  = illumCorrected // library marker kkossev.illuminanceLib, line 63
+    eventMap.type = isDigital ? 'digital' : 'physical' // library marker kkossev.illuminanceLib, line 64
+    eventMap.unit = 'lx' // library marker kkossev.illuminanceLib, line 65
+    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}" // library marker kkossev.illuminanceLib, line 66
+    boolean isRefresh = state.states['isRefresh'] == true // library marker kkossev.illuminanceLib, line 67
+    if (isRefresh) { // library marker kkossev.illuminanceLib, line 68
+        eventMap.descriptionText += ' [refresh]' // library marker kkossev.illuminanceLib, line 69
+        eventMap.isStateChange = true // library marker kkossev.illuminanceLib, line 70
+    } // library marker kkossev.illuminanceLib, line 71
+    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now())) / 1000) // library marker kkossev.illuminanceLib, line 72
+    Integer minTime = (settings?.illuminanceMinReportingTime != null ? settings.illuminanceMinReportingTime : (settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME)) as int    // illuminance-specific override takes precedence over the shared minReportingTime // library marker kkossev.illuminanceLib, line 73
+    Integer timeRamaining = (minTime - timeElapsed) as Integer // library marker kkossev.illuminanceLib, line 74
+    Integer lastIllum = device.currentValue('illuminance') as Integer    // null when the attribute was never set - the first report must be published to establish the baseline // library marker kkossev.illuminanceLib, line 75
+    Integer threshold = (settings?.illuminanceThreshold != null ? settings.illuminanceThreshold : DEFAULT_ILLUMINANCE_THRESHOLD) as int    // 0 is a valid threshold, meaning 'no filtering' // library marker kkossev.illuminanceLib, line 76
+    if (!isRefresh && lastIllum != null) { // library marker kkossev.illuminanceLib, line 77
+        Integer delta = Math.abs(lastIllum - illumCorrected) // library marker kkossev.illuminanceLib, line 78
+        if (delta < threshold) { // library marker kkossev.illuminanceLib, line 79
+            logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${threshold} (lastIllum=${lastIllum}, delta=${delta})" // library marker kkossev.illuminanceLib, line 80
+            return // library marker kkossev.illuminanceLib, line 81
+        } // library marker kkossev.illuminanceLib, line 82
+    } // library marker kkossev.illuminanceLib, line 83
+    if (isRefresh || timeElapsed >= minTime) { // library marker kkossev.illuminanceLib, line 84
+        logInfo "${eventMap.descriptionText}" // library marker kkossev.illuminanceLib, line 85
+        unschedule('sendDelayedIllumEvent')        //get rid of stale queued reports // library marker kkossev.illuminanceLib, line 86
+        state.lastRx['illumTime'] = now() // library marker kkossev.illuminanceLib, line 87
+        sendEvent(eventMap) // library marker kkossev.illuminanceLib, line 88
+    } // library marker kkossev.illuminanceLib, line 89
+    else {         // queue the event // library marker kkossev.illuminanceLib, line 90
+        eventMap.type = 'delayed' // library marker kkossev.illuminanceLib, line 91
+        logDebug "${device.displayName} delaying ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.illuminanceLib, line 92
+        runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.illuminanceLib, line 93
+    } // library marker kkossev.illuminanceLib, line 94
+} // library marker kkossev.illuminanceLib, line 95
 
-/* groovylint-disable-next-line UnusedPrivateMethod */ // library marker kkossev.illuminanceLib, line 96
-private void sendDelayedIllumEvent(Map eventMap) { // library marker kkossev.illuminanceLib, line 97
-    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.illuminanceLib, line 98
-    state.lastRx['illumTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.illuminanceLib, line 99
-    sendEvent(eventMap) // library marker kkossev.illuminanceLib, line 100
-} // library marker kkossev.illuminanceLib, line 101
+/* groovylint-disable-next-line UnusedPrivateMethod */ // library marker kkossev.illuminanceLib, line 97
+private void sendDelayedIllumEvent(Map eventMap) { // library marker kkossev.illuminanceLib, line 98
+    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.illuminanceLib, line 99
+    state.lastRx['illumTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.illuminanceLib, line 100
+    sendEvent(eventMap) // library marker kkossev.illuminanceLib, line 101
+} // library marker kkossev.illuminanceLib, line 102
 
-@Field static final Map tuyaIlluminanceOpts = [0: 'low', 1: 'medium', 2: 'high'] // library marker kkossev.illuminanceLib, line 103
+@Field static final Map tuyaIlluminanceOpts = [0: 'low', 1: 'medium', 2: 'high'] // library marker kkossev.illuminanceLib, line 104
 
-/* groovylint-disable-next-line UnusedMethodParameter */ // library marker kkossev.illuminanceLib, line 105
-void illuminanceProcessTuyaDP(final Map descMap, int dp, int dp_id, int fncmd) { // library marker kkossev.illuminanceLib, line 106
-    switch (dp) { // library marker kkossev.illuminanceLib, line 107
-        case 0x01 : // on/off // library marker kkossev.illuminanceLib, line 108
-            if (DEVICE_TYPE in  ['LightSensor']) { // library marker kkossev.illuminanceLib, line 109
-                logDebug "LightSensor BrightnessLevel = ${tuyaIlluminanceOpts[fncmd as int]} (${fncmd})" // library marker kkossev.illuminanceLib, line 110
-            } // library marker kkossev.illuminanceLib, line 111
-            else { // library marker kkossev.illuminanceLib, line 112
-                sendSwitchEvent(fncmd) // library marker kkossev.illuminanceLib, line 113
-            } // library marker kkossev.illuminanceLib, line 114
-            break // library marker kkossev.illuminanceLib, line 115
-        case 0x02 : // library marker kkossev.illuminanceLib, line 116
-            if (DEVICE_TYPE in  ['LightSensor']) { // library marker kkossev.illuminanceLib, line 117
-                handleIlluminanceEvent(fncmd) // library marker kkossev.illuminanceLib, line 118
-            } // library marker kkossev.illuminanceLib, line 119
-            else { // library marker kkossev.illuminanceLib, line 120
-                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" // library marker kkossev.illuminanceLib, line 121
-            } // library marker kkossev.illuminanceLib, line 122
-            break // library marker kkossev.illuminanceLib, line 123
-        case 0x04 : // battery // library marker kkossev.illuminanceLib, line 124
-            sendBatteryPercentageEvent(fncmd) // library marker kkossev.illuminanceLib, line 125
-            break // library marker kkossev.illuminanceLib, line 126
-        default : // library marker kkossev.illuminanceLib, line 127
-            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" // library marker kkossev.illuminanceLib, line 128
-            break // library marker kkossev.illuminanceLib, line 129
-    } // library marker kkossev.illuminanceLib, line 130
-} // library marker kkossev.illuminanceLib, line 131
+/* groovylint-disable-next-line UnusedMethodParameter */ // library marker kkossev.illuminanceLib, line 106
+void illuminanceProcessTuyaDP(final Map descMap, int dp, int dp_id, int fncmd) { // library marker kkossev.illuminanceLib, line 107
+    switch (dp) { // library marker kkossev.illuminanceLib, line 108
+        case 0x01 : // on/off // library marker kkossev.illuminanceLib, line 109
+            if (DEVICE_TYPE in  ['LightSensor']) { // library marker kkossev.illuminanceLib, line 110
+                logDebug "LightSensor BrightnessLevel = ${tuyaIlluminanceOpts[fncmd as int]} (${fncmd})" // library marker kkossev.illuminanceLib, line 111
+            } // library marker kkossev.illuminanceLib, line 112
+            else { // library marker kkossev.illuminanceLib, line 113
+                sendSwitchEvent(fncmd) // library marker kkossev.illuminanceLib, line 114
+            } // library marker kkossev.illuminanceLib, line 115
+            break // library marker kkossev.illuminanceLib, line 116
+        case 0x02 : // library marker kkossev.illuminanceLib, line 117
+            if (DEVICE_TYPE in  ['LightSensor']) { // library marker kkossev.illuminanceLib, line 118
+                handleIlluminanceEvent(fncmd) // library marker kkossev.illuminanceLib, line 119
+            } // library marker kkossev.illuminanceLib, line 120
+            else { // library marker kkossev.illuminanceLib, line 121
+                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" // library marker kkossev.illuminanceLib, line 122
+            } // library marker kkossev.illuminanceLib, line 123
+            break // library marker kkossev.illuminanceLib, line 124
+        case 0x04 : // battery // library marker kkossev.illuminanceLib, line 125
+            sendBatteryPercentageEvent(fncmd) // library marker kkossev.illuminanceLib, line 126
+            break // library marker kkossev.illuminanceLib, line 127
+        default : // library marker kkossev.illuminanceLib, line 128
+            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" // library marker kkossev.illuminanceLib, line 129
+            break // library marker kkossev.illuminanceLib, line 130
+    } // library marker kkossev.illuminanceLib, line 131
+} // library marker kkossev.illuminanceLib, line 132
 
-void illuminanceInitializeVars( boolean fullInit = false ) { // library marker kkossev.illuminanceLib, line 133
-    logDebug "illuminanceInitializeVars()... fullInit = ${fullInit}" // library marker kkossev.illuminanceLib, line 134
-    if (DEVICE?.capabilities?.IlluminanceMeasurement == true) { // library marker kkossev.illuminanceLib, line 135
-        if (fullInit || settings?.minReportingTime == null) { device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number']) } // defined in commonLib // library marker kkossev.illuminanceLib, line 136
-        if (fullInit || settings?.maxReportingTime == null) { device.updateSetting('maxReportingTime', [value:DEFAULT_MAX_REPORTING_TIME, type:'number']) } // library marker kkossev.illuminanceLib, line 137
-        if (fullInit || settings?.illuminanceThreshold == null) { device.updateSetting('illuminanceThreshold', [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:'number']) } // library marker kkossev.illuminanceLib, line 138
-        if (fullInit || settings?.illuminanceCoeff == null) { device.updateSetting('illuminanceCoeff', [value:1.00, type:'decimal']) } // library marker kkossev.illuminanceLib, line 139
-        if (fullInit || settings?.illuminanceMinReportingTime == null) { device.updateSetting('illuminanceMinReportingTime', [value:DEFAULT_ILLUMINANCE_MIN_REPORTING_TIME, type:'number']) } // library marker kkossev.illuminanceLib, line 140
-    } // library marker kkossev.illuminanceLib, line 141
-} // library marker kkossev.illuminanceLib, line 142
+void illuminanceInitializeVars( boolean fullInit = false ) { // library marker kkossev.illuminanceLib, line 134
+    logDebug "illuminanceInitializeVars()... fullInit = ${fullInit}" // library marker kkossev.illuminanceLib, line 135
+    if (DEVICE?.capabilities?.IlluminanceMeasurement == true) { // library marker kkossev.illuminanceLib, line 136
+        if (fullInit || settings?.minReportingTime == null) { device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number']) } // defined in commonLib // library marker kkossev.illuminanceLib, line 137
+        if (fullInit || settings?.maxReportingTime == null) { device.updateSetting('maxReportingTime', [value:DEFAULT_MAX_REPORTING_TIME, type:'number']) } // library marker kkossev.illuminanceLib, line 138
+        if (fullInit || settings?.illuminanceThreshold == null) { device.updateSetting('illuminanceThreshold', [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:'number']) } // library marker kkossev.illuminanceLib, line 139
+        if (fullInit || settings?.illuminanceCoeff == null) { device.updateSetting('illuminanceCoeff', [value:1.00, type:'decimal']) } // library marker kkossev.illuminanceLib, line 140
+        if (fullInit || settings?.illuminanceMinReportingTime == null) { device.updateSetting('illuminanceMinReportingTime', [value:DEFAULT_ILLUMINANCE_MIN_REPORTING_TIME, type:'number']) } // library marker kkossev.illuminanceLib, line 141
+    } // library marker kkossev.illuminanceLib, line 142
+} // library marker kkossev.illuminanceLib, line 143
 
-List<String> illuminanceRefresh() { // library marker kkossev.illuminanceLib, line 144
-    List<String> cmds = [] // library marker kkossev.illuminanceLib, line 145
-    cmds = zigbee.readAttribute(0x0400, 0x0000, [:], delay = 200) // illuminance // library marker kkossev.illuminanceLib, line 146
-    return cmds // library marker kkossev.illuminanceLib, line 147
-} // library marker kkossev.illuminanceLib, line 148
+List<String> illuminanceRefresh() { // library marker kkossev.illuminanceLib, line 145
+    List<String> cmds = [] // library marker kkossev.illuminanceLib, line 146
+    cmds = zigbee.readAttribute(0x0400, 0x0000, [:], delay = 200) // illuminance // library marker kkossev.illuminanceLib, line 147
+    return cmds // library marker kkossev.illuminanceLib, line 148
+} // library marker kkossev.illuminanceLib, line 149
 
 // ~~~~~ end include (168) kkossev.illuminanceLib ~~~~~
 
@@ -4952,148 +4953,149 @@ library( // library marker kkossev.iasLib, line 2
  * ver. 3.2.0  2024-05-27 kkossev  - added iasLib.groovy // library marker kkossev.iasLib, line 20
  * ver. 3.2.1  2024-07-06 kkossev  - added standardParseIasMessage (debug only); zs null check // library marker kkossev.iasLib, line 21
  * ver. 3.2.2  2024-08-09 kkossev  - zs null check // library marker kkossev.iasLib, line 22
- * // library marker kkossev.iasLib, line 23
- *                                   TODO: // library marker kkossev.iasLib, line 24
-*/ // library marker kkossev.iasLib, line 25
+ * ver. 3.2.3  2026-08-03 kkossev  - minor bug fixes and improvements // library marker kkossev.iasLib, line 23
+ * // library marker kkossev.iasLib, line 24
+ *                                   TODO: // library marker kkossev.iasLib, line 25
+*/ // library marker kkossev.iasLib, line 26
 
-static String iasLibVersion()   { '3.2.2' } // library marker kkossev.iasLib, line 27
-static String iasLibStamp() { '2024/08/09 12:03 PM' } // library marker kkossev.iasLib, line 28
+static String iasLibVersion()   { '3.2.3' } // library marker kkossev.iasLib, line 28
+static String iasLibStamp() { '2026/08/03 11:46 PM' } // library marker kkossev.iasLib, line 29
 
-metadata { // library marker kkossev.iasLib, line 30
-    // no capabilities // library marker kkossev.iasLib, line 31
-    // no attributes // library marker kkossev.iasLib, line 32
-    // no commands // library marker kkossev.iasLib, line 33
-    preferences { // library marker kkossev.iasLib, line 34
-    // no prefrences // library marker kkossev.iasLib, line 35
-    } // library marker kkossev.iasLib, line 36
-} // library marker kkossev.iasLib, line 37
+metadata { // library marker kkossev.iasLib, line 31
+    // no capabilities // library marker kkossev.iasLib, line 32
+    // no attributes // library marker kkossev.iasLib, line 33
+    // no commands // library marker kkossev.iasLib, line 34
+    preferences { // library marker kkossev.iasLib, line 35
+    // no prefrences // library marker kkossev.iasLib, line 36
+    } // library marker kkossev.iasLib, line 37
+} // library marker kkossev.iasLib, line 38
 
-@Field static final Map<Integer, String> IAS_ATTRIBUTES = [ // library marker kkossev.iasLib, line 39
-    //  Zone Information // library marker kkossev.iasLib, line 40
-    0x0000: 'zone state', // library marker kkossev.iasLib, line 41
-    0x0001: 'zone type', // library marker kkossev.iasLib, line 42
-    0x0002: 'zone status', // library marker kkossev.iasLib, line 43
-    //  Zone Settings // library marker kkossev.iasLib, line 44
-    0x0010: 'CIE addr',    // EUI64 // library marker kkossev.iasLib, line 45
-    0x0011: 'Zone Id',     // uint8 // library marker kkossev.iasLib, line 46
-    0x0012: 'Num zone sensitivity levels supported',     // uint8 // library marker kkossev.iasLib, line 47
-    0x0013: 'Current zone sensitivity level',            // uint8 // library marker kkossev.iasLib, line 48
-    0xF001: 'Current zone keep time'                     // uint8 // library marker kkossev.iasLib, line 49
-] // library marker kkossev.iasLib, line 50
+@Field static final Map<Integer, String> IAS_ATTRIBUTES = [ // library marker kkossev.iasLib, line 40
+    //  Zone Information // library marker kkossev.iasLib, line 41
+    0x0000: 'zone state', // library marker kkossev.iasLib, line 42
+    0x0001: 'zone type', // library marker kkossev.iasLib, line 43
+    0x0002: 'zone status', // library marker kkossev.iasLib, line 44
+    //  Zone Settings // library marker kkossev.iasLib, line 45
+    0x0010: 'CIE addr',    // EUI64 // library marker kkossev.iasLib, line 46
+    0x0011: 'Zone Id',     // uint8 // library marker kkossev.iasLib, line 47
+    0x0012: 'Num zone sensitivity levels supported',     // uint8 // library marker kkossev.iasLib, line 48
+    0x0013: 'Current zone sensitivity level',            // uint8 // library marker kkossev.iasLib, line 49
+    0xF001: 'Current zone keep time'                     // uint8 // library marker kkossev.iasLib, line 50
+] // library marker kkossev.iasLib, line 51
 
-@Field static final Map<Integer, String> ZONE_TYPE = [ // library marker kkossev.iasLib, line 52
-    0x0000: 'Standard CIE', // library marker kkossev.iasLib, line 53
-    0x000D: 'Motion Sensor', // library marker kkossev.iasLib, line 54
-    0x0015: 'Contact Switch', // library marker kkossev.iasLib, line 55
-    0x0028: 'Fire Sensor', // library marker kkossev.iasLib, line 56
-    0x002A: 'Water Sensor', // library marker kkossev.iasLib, line 57
-    0x002B: 'Carbon Monoxide Sensor', // library marker kkossev.iasLib, line 58
-    0x002C: 'Personal Emergency Device', // library marker kkossev.iasLib, line 59
-    0x002D: 'Vibration Movement Sensor', // library marker kkossev.iasLib, line 60
-    0x010F: 'Remote Control', // library marker kkossev.iasLib, line 61
-    0x0115: 'Key Fob', // library marker kkossev.iasLib, line 62
-    0x021D: 'Key Pad', // library marker kkossev.iasLib, line 63
-    0x0225: 'Standard Warning Device', // library marker kkossev.iasLib, line 64
-    0x0226: 'Glass Break Sensor', // library marker kkossev.iasLib, line 65
-    0x0229: 'Security Repeater', // library marker kkossev.iasLib, line 66
-    0xFFFF: 'Invalid Zone Type' // library marker kkossev.iasLib, line 67
-] // library marker kkossev.iasLib, line 68
+@Field static final Map<Integer, String> ZONE_TYPE = [ // library marker kkossev.iasLib, line 53
+    0x0000: 'Standard CIE', // library marker kkossev.iasLib, line 54
+    0x000D: 'Motion Sensor', // library marker kkossev.iasLib, line 55
+    0x0015: 'Contact Switch', // library marker kkossev.iasLib, line 56
+    0x0028: 'Fire Sensor', // library marker kkossev.iasLib, line 57
+    0x002A: 'Water Sensor', // library marker kkossev.iasLib, line 58
+    0x002B: 'Carbon Monoxide Sensor', // library marker kkossev.iasLib, line 59
+    0x002C: 'Personal Emergency Device', // library marker kkossev.iasLib, line 60
+    0x002D: 'Vibration Movement Sensor', // library marker kkossev.iasLib, line 61
+    0x010F: 'Remote Control', // library marker kkossev.iasLib, line 62
+    0x0115: 'Key Fob', // library marker kkossev.iasLib, line 63
+    0x021D: 'Key Pad', // library marker kkossev.iasLib, line 64
+    0x0225: 'Standard Warning Device', // library marker kkossev.iasLib, line 65
+    0x0226: 'Glass Break Sensor', // library marker kkossev.iasLib, line 66
+    0x0229: 'Security Repeater', // library marker kkossev.iasLib, line 67
+    0xFFFF: 'Invalid Zone Type' // library marker kkossev.iasLib, line 68
+] // library marker kkossev.iasLib, line 69
 
-@Field static final Map<Integer, String> ZONE_STATE = [ // library marker kkossev.iasLib, line 70
-    0x00: 'Not Enrolled', // library marker kkossev.iasLib, line 71
-    0x01: 'Enrolled' // library marker kkossev.iasLib, line 72
-] // library marker kkossev.iasLib, line 73
+@Field static final Map<Integer, String> ZONE_STATE = [ // library marker kkossev.iasLib, line 71
+    0x00: 'Not Enrolled', // library marker kkossev.iasLib, line 72
+    0x01: 'Enrolled' // library marker kkossev.iasLib, line 73
+] // library marker kkossev.iasLib, line 74
 
-public void standardParseIasMessage(final String description) { // library marker kkossev.iasLib, line 75
-    // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn // library marker kkossev.iasLib, line 76
-    Map zs = zigbee.parseZoneStatusChange(description) // library marker kkossev.iasLib, line 77
-    if (zs == null) { // library marker kkossev.iasLib, line 78
-        logWarn "standardParseIasMessage: zs is null!" // library marker kkossev.iasLib, line 79
-        return // library marker kkossev.iasLib, line 80
-    } // library marker kkossev.iasLib, line 81
-    if (zs.alarm1Set == true) { // library marker kkossev.iasLib, line 82
-        logDebug "standardParseIasMessage: Alarm 1 is set" // library marker kkossev.iasLib, line 83
-        //handleMotion(true) // library marker kkossev.iasLib, line 84
-    } // library marker kkossev.iasLib, line 85
-    else { // library marker kkossev.iasLib, line 86
-        logDebug "standardParseIasMessage: Alarm 1 is cleared" // library marker kkossev.iasLib, line 87
-        //handleMotion(false) // library marker kkossev.iasLib, line 88
-    } // library marker kkossev.iasLib, line 89
-} // library marker kkossev.iasLib, line 90
+public void standardParseIasMessage(final String description) { // library marker kkossev.iasLib, line 76
+    // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn // library marker kkossev.iasLib, line 77
+    Map zs = zigbee.parseZoneStatusChange(description) // library marker kkossev.iasLib, line 78
+    if (zs == null) { // library marker kkossev.iasLib, line 79
+        logWarn "standardParseIasMessage: zs is null!" // library marker kkossev.iasLib, line 80
+        return // library marker kkossev.iasLib, line 81
+    } // library marker kkossev.iasLib, line 82
+    if (zs.alarm1Set == true) { // library marker kkossev.iasLib, line 83
+        logDebug "standardParseIasMessage: Alarm 1 is set" // library marker kkossev.iasLib, line 84
+        //handleMotion(true) // library marker kkossev.iasLib, line 85
+    } // library marker kkossev.iasLib, line 86
+    else { // library marker kkossev.iasLib, line 87
+        logDebug "standardParseIasMessage: Alarm 1 is cleared" // library marker kkossev.iasLib, line 88
+        //handleMotion(false) // library marker kkossev.iasLib, line 89
+    } // library marker kkossev.iasLib, line 90
+} // library marker kkossev.iasLib, line 91
 
-public void standardParseIASCluster(final Map descMap) { // library marker kkossev.iasLib, line 92
-    logDebug "standardParseIASCluster: cluster=${descMap} attrInt=${descMap.attrInt} value=${descMap.value}" // library marker kkossev.iasLib, line 93
-    if (descMap.cluster != '0500') { return } // not IAS cluster // library marker kkossev.iasLib, line 94
-    if (descMap.attrInt == null) { return } // missing attribute // library marker kkossev.iasLib, line 95
-    //String zoneSetting = IAS_ATTRIBUTES[descMap.attrInt] // library marker kkossev.iasLib, line 96
-    if ( IAS_ATTRIBUTES[descMap.attrInt] == null ) { // library marker kkossev.iasLib, line 97
-        logWarn "standardParseIASCluster: Unknown IAS attribute ${descMap?.attrId} (value:${descMap?.value})" // library marker kkossev.iasLib, line 98
-        return // library marker kkossev.iasLib, line 99
-    } // unknown IAS attribute // library marker kkossev.iasLib, line 100
-    /* // library marker kkossev.iasLib, line 101
-    logDebug "standardParseIASCluster: Don't know how to handle IAS attribute 0x${descMap?.attrId} '${zoneSetting}' (value:${descMap?.value})!" // library marker kkossev.iasLib, line 102
-    return // library marker kkossev.iasLib, line 103
-    */ // library marker kkossev.iasLib, line 104
+public void standardParseIASCluster(final Map descMap) { // library marker kkossev.iasLib, line 93
+    logDebug "standardParseIASCluster: cluster=${descMap} attrInt=${descMap.attrInt} value=${descMap.value}" // library marker kkossev.iasLib, line 94
+    if (descMap.cluster != '0500') { return } // not IAS cluster // library marker kkossev.iasLib, line 95
+    if (descMap.attrInt == null) { return } // missing attribute // library marker kkossev.iasLib, line 96
+    //String zoneSetting = IAS_ATTRIBUTES[descMap.attrInt] // library marker kkossev.iasLib, line 97
+    if ( IAS_ATTRIBUTES[descMap.attrInt] == null ) { // library marker kkossev.iasLib, line 98
+        logWarn "standardParseIASCluster: Unknown IAS attribute ${descMap?.attrId} (value:${descMap?.value})" // library marker kkossev.iasLib, line 99
+        return // library marker kkossev.iasLib, line 100
+    } // unknown IAS attribute // library marker kkossev.iasLib, line 101
+    /* // library marker kkossev.iasLib, line 102
+    logDebug "standardParseIASCluster: Don't know how to handle IAS attribute 0x${descMap?.attrId} '${zoneSetting}' (value:${descMap?.value})!" // library marker kkossev.iasLib, line 103
+    return // library marker kkossev.iasLib, line 104
+    */ // library marker kkossev.iasLib, line 105
 
-    String clusterInfo = 'standardParseIASCluster:' // library marker kkossev.iasLib, line 106
+    String clusterInfo = 'standardParseIASCluster:' // library marker kkossev.iasLib, line 107
 
-    if (descMap?.cluster == '0500' && descMap?.command in ['01', '0A']) {    //IAS read attribute response // library marker kkossev.iasLib, line 108
-        logDebug "${standardParseIASCluster} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}" // library marker kkossev.iasLib, line 109
-        if (descMap?.attrId == '0000') { // library marker kkossev.iasLib, line 110
-            int value = Integer.parseInt(descMap?.value, 16) // library marker kkossev.iasLib, line 111
-            String status = "${ZONE_STATE[value]}" // library marker kkossev.iasLib, line 112
-            if (value == 0 ) { status = "<b>${status}</b>" ; logWarn "${clusterInfo} is NOT ENROLLED!" } // library marker kkossev.iasLib, line 113
-            logInfo "${clusterInfo} IAS Zone State report is '${status}' (${value})" // library marker kkossev.iasLib, line 114
-        } // library marker kkossev.iasLib, line 115
-        else if (descMap?.attrId == '0001') { // library marker kkossev.iasLib, line 116
-            int value = Integer.parseInt(descMap?.value, 16) // library marker kkossev.iasLib, line 117
-            logInfo "${clusterInfo} IAS Zone Type report is '${ZONE_TYPE[value]}' (${value})" // library marker kkossev.iasLib, line 118
-        } // library marker kkossev.iasLib, line 119
-        else if (descMap?.attrId == '0002') { // library marker kkossev.iasLib, line 120
-            logInfo "${clusterInfo} IAS Zone status repoted: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}" // library marker kkossev.iasLib, line 121
-        } // library marker kkossev.iasLib, line 122
-        else if (descMap?.attrId == '0010') { // library marker kkossev.iasLib, line 123
-            logInfo "${clusterInfo} IAS Zone Address received (bitmap = ${descMap?.value})" // library marker kkossev.iasLib, line 124
-        } // library marker kkossev.iasLib, line 125
-        else if (descMap?.attrId == '0011') { // library marker kkossev.iasLib, line 126
-            logInfo "${clusterInfo} IAS Zone ID: ${descMap.value}" // library marker kkossev.iasLib, line 127
-        } // library marker kkossev.iasLib, line 128
-        else if (descMap?.attrId == '0012') { // library marker kkossev.iasLib, line 129
-            logInfo "${clusterInfo} IAS Num zone sensitivity levels supported: ${descMap.value}" // library marker kkossev.iasLib, line 130
-        } // library marker kkossev.iasLib, line 131
-        else if (descMap?.attrId == '0013') { // library marker kkossev.iasLib, line 132
-            int value = Integer.parseInt(descMap?.value, 16) // library marker kkossev.iasLib, line 133
-            //logInfo "${clusterInfo} IAS Current Zone Sensitivity Level = ${sensitivityOpts.options[value]} (${value})" // library marker kkossev.iasLib, line 134
-            logInfo "${clusterInfo} IAS Current Zone Sensitivity Level = (${value})" // library marker kkossev.iasLib, line 135
-        // device.updateSetting('settings.sensitivity', [value:value.toString(), type:'enum']) // library marker kkossev.iasLib, line 136
-        } // library marker kkossev.iasLib, line 137
-        else if (descMap?.attrId == 'F001') {    // [raw:7CC50105000801F02000, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:F001, encoding:20, command:0A, value:00, clusterInt:1280, attrInt:61441] // library marker kkossev.iasLib, line 138
-            int value = Integer.parseInt(descMap?.value, 16) // library marker kkossev.iasLib, line 139
-            //String str   = getKeepTimeOpts().options[value] // library marker kkossev.iasLib, line 140
-            //logInfo "${clusterInfo} Current IAS Zone Keep-Time =  ${str} (${value})" // library marker kkossev.iasLib, line 141
-            logInfo "${clusterInfo} Current IAS Zone Keep-Time =  (${value})" // library marker kkossev.iasLib, line 142
-        //device.updateSetting('keepTime', [value: value.toString(), type: 'enum']) // library marker kkossev.iasLib, line 143
-        } // library marker kkossev.iasLib, line 144
-        else { // library marker kkossev.iasLib, line 145
-            logDebug "${clusterInfo} Zone status attribute ${descMap?.attrId}: <b>NOT PROCESSED</b> ${descMap}" // library marker kkossev.iasLib, line 146
-        } // library marker kkossev.iasLib, line 147
-    } // if IAS read attribute response // library marker kkossev.iasLib, line 148
-    else if (descMap?.clusterId == '0500' && descMap?.command == '04') {    //write attribute response (IAS) // library marker kkossev.iasLib, line 149
-        logDebug "${clusterInfo} AS write attribute response is ${descMap?.data[0] == '00' ? 'success' : '<b>FAILURE</b>'}" // library marker kkossev.iasLib, line 150
-    } // library marker kkossev.iasLib, line 151
-    else { // library marker kkossev.iasLib, line 152
-        logDebug "${clusterInfo} <b>NOT PROCESSED</b> ${descMap}" // library marker kkossev.iasLib, line 153
-    } // library marker kkossev.iasLib, line 154
-} // library marker kkossev.iasLib, line 155
+    if (descMap?.cluster == '0500' && descMap?.command in ['01', '0A']) {    //IAS read attribute response // library marker kkossev.iasLib, line 109
+        logDebug "${clusterInfo} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}" // library marker kkossev.iasLib, line 110
+        if (descMap?.attrId == '0000') { // library marker kkossev.iasLib, line 111
+            int value = Integer.parseInt(descMap?.value, 16) // library marker kkossev.iasLib, line 112
+            String status = "${ZONE_STATE[value]}" // library marker kkossev.iasLib, line 113
+            if (value == 0 ) { status = "<b>${status}</b>" ; logWarn "${clusterInfo} is NOT ENROLLED!" } // library marker kkossev.iasLib, line 114
+            logInfo "${clusterInfo} IAS Zone State report is '${status}' (${value})" // library marker kkossev.iasLib, line 115
+        } // library marker kkossev.iasLib, line 116
+        else if (descMap?.attrId == '0001') { // library marker kkossev.iasLib, line 117
+            int value = Integer.parseInt(descMap?.value, 16) // library marker kkossev.iasLib, line 118
+            logInfo "${clusterInfo} IAS Zone Type report is '${ZONE_TYPE[value]}' (${value})" // library marker kkossev.iasLib, line 119
+        } // library marker kkossev.iasLib, line 120
+        else if (descMap?.attrId == '0002') { // library marker kkossev.iasLib, line 121
+            logInfo "${clusterInfo} IAS Zone status repoted: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}" // library marker kkossev.iasLib, line 122
+        } // library marker kkossev.iasLib, line 123
+        else if (descMap?.attrId == '0010') { // library marker kkossev.iasLib, line 124
+            logInfo "${clusterInfo} IAS Zone Address received (bitmap = ${descMap?.value})" // library marker kkossev.iasLib, line 125
+        } // library marker kkossev.iasLib, line 126
+        else if (descMap?.attrId == '0011') { // library marker kkossev.iasLib, line 127
+            logInfo "${clusterInfo} IAS Zone ID: ${descMap.value}" // library marker kkossev.iasLib, line 128
+        } // library marker kkossev.iasLib, line 129
+        else if (descMap?.attrId == '0012') { // library marker kkossev.iasLib, line 130
+            logInfo "${clusterInfo} IAS Num zone sensitivity levels supported: ${descMap.value}" // library marker kkossev.iasLib, line 131
+        } // library marker kkossev.iasLib, line 132
+        else if (descMap?.attrId == '0013') { // library marker kkossev.iasLib, line 133
+            int value = Integer.parseInt(descMap?.value, 16) // library marker kkossev.iasLib, line 134
+            //logInfo "${clusterInfo} IAS Current Zone Sensitivity Level = ${sensitivityOpts.options[value]} (${value})" // library marker kkossev.iasLib, line 135
+            logInfo "${clusterInfo} IAS Current Zone Sensitivity Level = (${value})" // library marker kkossev.iasLib, line 136
+        // device.updateSetting('settings.sensitivity', [value:value.toString(), type:'enum']) // library marker kkossev.iasLib, line 137
+        } // library marker kkossev.iasLib, line 138
+        else if (descMap?.attrId == 'F001') {    // [raw:7CC50105000801F02000, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:F001, encoding:20, command:0A, value:00, clusterInt:1280, attrInt:61441] // library marker kkossev.iasLib, line 139
+            int value = Integer.parseInt(descMap?.value, 16) // library marker kkossev.iasLib, line 140
+            //String str   = getKeepTimeOpts().options[value] // library marker kkossev.iasLib, line 141
+            //logInfo "${clusterInfo} Current IAS Zone Keep-Time =  ${str} (${value})" // library marker kkossev.iasLib, line 142
+            logInfo "${clusterInfo} Current IAS Zone Keep-Time =  (${value})" // library marker kkossev.iasLib, line 143
+        //device.updateSetting('keepTime', [value: value.toString(), type: 'enum']) // library marker kkossev.iasLib, line 144
+        } // library marker kkossev.iasLib, line 145
+        else { // library marker kkossev.iasLib, line 146
+            logDebug "${clusterInfo} Zone status attribute ${descMap?.attrId}: <b>NOT PROCESSED</b> ${descMap}" // library marker kkossev.iasLib, line 147
+        } // library marker kkossev.iasLib, line 148
+    } // if IAS read attribute response // library marker kkossev.iasLib, line 149
+    else if (descMap?.clusterId == '0500' && descMap?.command == '04') {    //write attribute response (IAS) // library marker kkossev.iasLib, line 150
+        logDebug "${clusterInfo} AS write attribute response is ${descMap?.data[0] == '00' ? 'success' : '<b>FAILURE</b>'}" // library marker kkossev.iasLib, line 151
+    } // library marker kkossev.iasLib, line 152
+    else { // library marker kkossev.iasLib, line 153
+        logDebug "${clusterInfo} <b>NOT PROCESSED</b> ${descMap}" // library marker kkossev.iasLib, line 154
+    } // library marker kkossev.iasLib, line 155
+} // library marker kkossev.iasLib, line 156
 
-List<String> refreshAllIas() { // library marker kkossev.iasLib, line 157
-    logDebug 'refreshAllIas()' // library marker kkossev.iasLib, line 158
-    List<String> cmds = [] // library marker kkossev.iasLib, line 159
-    IAS_ATTRIBUTES.each { key, value -> // library marker kkossev.iasLib, line 160
-        cmds += zigbee.readAttribute(0x0500, key, [:], delay = 199) // library marker kkossev.iasLib, line 161
-    } // library marker kkossev.iasLib, line 162
-    return cmds // library marker kkossev.iasLib, line 163
-} // library marker kkossev.iasLib, line 164
+List<String> refreshAllIas() { // library marker kkossev.iasLib, line 158
+    logDebug 'refreshAllIas()' // library marker kkossev.iasLib, line 159
+    List<String> cmds = [] // library marker kkossev.iasLib, line 160
+    IAS_ATTRIBUTES.each { key, value -> // library marker kkossev.iasLib, line 161
+        cmds += zigbee.readAttribute(0x0500, key, [:], delay = 199) // library marker kkossev.iasLib, line 162
+    } // library marker kkossev.iasLib, line 163
+    return cmds // library marker kkossev.iasLib, line 164
+} // library marker kkossev.iasLib, line 165
 
 // ~~~~~ end include (178) kkossev.iasLib ~~~~~
 
