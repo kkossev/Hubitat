@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/commonLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-commonLib',
-    version: '4.0.4'
+    version: '4.0.5'
 )
 /*
   *  Common ZCL Library
@@ -28,7 +28,7 @@ library(
   * ver. 4.0.2  2025-10-18 kkossev  - added tuyaDelay in sendTuyaCommand()
   * ver. 4.0.3  2025-10-18 kkossev  - added ignoreDuplicatedZigbeeMessages setting; DIGITAL_TIMER increased to 5000 ms
   * ver. 4.0.4  2026-06-04 kkossev  - added ED00 cluster;
-  * ver. 4.0.5  2026-07-09 kkossev  - (dev. branch) bug fixes
+  * ver. 4.0.5  2026-08-03 kkossev  - (dev. branch) bug fixes
   *
   *                                   TODO: change the offline threshold to 2 
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
@@ -46,7 +46,7 @@ library(
 */
 
 String commonLibVersion() { '4.0.5' }
-String commonLibStamp() { '2026/07/09 9:45 AM' }
+String commonLibStamp() { '2026/08/03 11:37 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -794,7 +794,7 @@ public void standardParseTuyaCluster(final Map descMap) {
         //log.warn "dataLen=${dataLen}"
         //def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
         if (dataLen <= 5) {
-            logWarn "unprocessed short Tuya command response: dp_id=${descMap?.data[3]} dp=${descMap?.data[2]} fncmd_len=${fncmd_len} data=${descMap?.data})"
+            logWarn "unprocessed short Tuya command response: dp_id=${descMap?.data[3]} dp=${descMap?.data[2]} data=${descMap?.data})"
             return
         }
         boolean isSpammyDeviceProfileDefined = this.respondsTo('isSpammyDeviceProfile') // check if the method exists 05/21/2024
@@ -1165,7 +1165,7 @@ void updated() {
         final int interval = (settings.healthCheckInterval as Integer) ?: 0
         if (interval > 0) {
             //log.trace "healthMethod=${healthMethod} interval=${interval}"
-            log.info "scheduling health check every ${interval} minutes by ${HealthcheckMethodOpts.options[healthCheckMethod as int]} method"
+            log.info "scheduling health check every ${interval} minutes by ${HealthcheckMethodOpts.options[healthMethod]} method"
             scheduleDeviceHealthCheck(interval, healthMethod)
         }
     }

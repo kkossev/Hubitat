@@ -170,7 +170,7 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:25,  name:'battery2',                               type:'number',  rw: 'ro', min:0,     max:100,  defVal:100,  scale:1,  unit:'%',          description:'Remaining battery 2 in %'],
                 [dp:102, name:'reportingTime4in1', dt:'02', tuyaCmd:04, type:'number',  rw: 'rw', min:0, max:240, defVal:10, step:5, scale:1, unit:'minutes', title:'<b>Reporting Interval</b>', description:'Reporting interval in minutes'],
                 [dp:104, name:'tempCalibration',                        type:'decimal', rw: 'ro', min:-2.0,  max:2.0,  defVal:0.0,  scale:10, unit:'deg.',  title:'<b>Temperature Calibration</b>',       description:'Temperature calibration (-2.0...2.0)'],
-                [dp:105, name:'humiCalibration',                        type:'number',  rw: 'ro', min:-15,   max:15,   defVal:0,    scale:1,  unit:'%RH',    title:'<b>Huidity Calibration</b>',     description:'Humidity Calibration'],
+                [dp:105, name:'humiCalibration',                        type:'number',  rw: 'ro', min:-15,   max:15,   defVal:0,    scale:1,  unit:'%RH',    title:'<b>Humidity Calibration</b>',     description:'Humidity Calibration'],
                 [dp:106, name:'illumCalibration',                       type:'number',  rw: 'ro', min:-20, max:20, defVal:0,        scale:1, unit:'Lx', title:'<b>Illuminance Calibration</b>', description:'Illuminance calibration in lux'],
                 [dp:107, name:'temperature',                            type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0,  scale:10, unit:'deg.',       description:'Temperature'],
                 [dp:108, name:'humidity',                               type:'number',  rw: 'ro', min:1,     max:100,  defVal:100,  scale:1,  unit:'%RH',        description:'Humidity'],
@@ -220,15 +220,24 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
     'TS0601_2IN1'  : [      // https://github.com/Koenkk/zigbee-herdsman-converters/blob/bf32ce2b74689328048b407e56ca936dc7a54a0b/src/devices/tuya.ts#L4568
             description   : 'Tuya 2in1 (Motion and Illuminance) sensor',
             models         : ['TS0601'],
-            device        : [type: 'PIR', isIAS:false, powerSource: 'battery', isSleepy:true],
+            device        : [type: 'PIR', isIAS:false, powerSource: 'battery', isSleepy:true, ignoreZclIlluminance:true],    // the lux value is received twice - as Tuya dp:12 AND as a ZCL 0x0400 report; z2m handles these devices as Tuya DP only
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'Battery': true],
-            preferences   : ['motionReset':true, 'invertMotion':true, 'keepTime':'10', 'sensitivity':'9'],
+            preferences   : ['motionReset':true, 'invertMotion':true, 'keepTime':'10', 'sensitivity':'9', 'illuminance_interval':'102'],
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_3towulqd', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // https://www.aliexpress.com/item/1005004095233195.html
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0500,0001,0400', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_3towulqd', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],     // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/934?u=kkossev
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0400', outClusters:'', model:'TS0601', manufacturer:'_TZE200_3towulqd', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],           // newer f/w revision - same clusters as the HOBEIAN ZG-204ZL below, but TS0601/_TZE200_3towulqd identity : https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1187?u=kkossev
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bh3n6gk8', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // https://community.hubitat.com/t/tze200-bh3n6gk8-motion-sensor-not-working/123213?u=kkossev
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_1ibpyhdc', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          //
+                // the six manufacturers below are in the same z2m 'ZG-204ZL' definition (src/devices/tuya.ts) but were never reported on HE - the inClusters/outClusters lists are the family default and are NOT verified on a real device;
+                // if auto-pairing fails for one of them, ask the owner for the 'Device pairing info' and correct the line (the driver still resolves the profile correctly when the driver is selected manually - see getDeviceNameAndProfile())
+                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ttcovulf', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
+                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_gjldowol', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
+                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_jxyhl4eq', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
+                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_qxyh4r7g', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
+                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_na5qlzow', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
+                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_s6hzw8g2', deviceJoinName: 'Nedis ZBSM20WT Motion Sensor (ZG-204ZL)'],                                    // z2m whitelabel 'Nedis ZBSM20WT'; reports illuminance on dp 101 instead of dp 12 - clusters not verified
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,EF00,0001,0400', outClusters:'', model:'ZG-204ZL', manufacturer:'HOBEIAN', deviceJoinName: 'HOBEIAN ZG-204ZL 2 in 1 PIR Motion Detector and Lux sensor'],                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1153?u=kkossev 
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0400', outClusters:'', model:'ZG-204ZL', manufacturer:'HOBEIAN', deviceJoinName: 'HOBEIAN ZG-204ZL 2 in 1 PIR Motion Detector and Lux sensor']                       // https://github.com/JohanBendz/com.tuya.zigbee/issues/1267
             ],
@@ -238,7 +247,8 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:9,   name:'sensitivity',              type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'0 - low', 1:'1 - medium', 2:'2 - high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
                 [dp:10,  name:'keepTime',                 type:'enum',   rw: 'rw', min:0, max:3,    defVal:'0',  unit:'seconds',    map:[0:'10 seconds', 1:'30 seconds', 2:'60 seconds', 3:'120 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)'],
                 [dp:12,  name:'illuminance',              type:'number', rw: 'ro', min:0, max:1000, defVal:0,    scale:1,  unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance'],
-                [dp:102, name:'illuminance_interval',     type:'number', rw: 'rw', min:1, max:720,  defVal:1,    scale:1,  unit:'minutes',  title:'<b>Illuminance Interval</b>',     description:'Brightness acquisition interval (update at the time motion is activated)'],
+                [dp:101, name:'illuminance',              type:'number', rw: 'ro', min:0, max:1000, defVal:0,    scale:1,  unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance (_TZE200_s6hzw8g2 / Nedis ZBSM20WT reports lux on dp 101 instead of dp 12)'],
+                [dp:102, name:'illuminance_interval',     type:'number', rw: 'rw', min:1, max:720,  defVal:1,    scale:1,  unit:'minutes',  title:'<b>Illuminance Interval</b>',     description:'Brightness acquisition interval. Factory default is 1 minute - <b>increase</b> it to reduce the number of lux reports. Written only while the PIR is awake, so trigger a motion when saving.'],
 
             ],
             configuration : ['battery': false]
@@ -761,7 +771,7 @@ public void customParseIasMessage(final String description) {
 }
 
 void customParseOccupancyCluster(final Map descMap) {
-    //final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "customParseOccupancyCluster: zigbee received cluster 0x0406 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
     if (result == false) {
@@ -842,22 +852,15 @@ void localProcessTuyaDP(final Map descMap, final int dp, final int dp_id, final 
             break
         case 0x68 :     // (104)
             // 4in1  0x68 temperature compensation
-            int val = fncmd
-            // for negative values produce complimentary hex (equivalent to negative values)
-            if (val > 4294967295) { val = val - 4294967295 }
-            logInfo "(DP=0x68) unexpected : 4-in-1 temperature calibration is ${val / 10.0}"
+            logInfo "(DP=0x68) unexpected : 4-in-1 temperature calibration is ${fncmd / 10.0}"
             break
         case 0x69 :    // (105)
             // 4in1 0x69 humidity calibration (compensation)
-            int val = fncmd
-            if (val > 4294967295) val = val - 4294967295
-            logInfo "(DP=0x69) unexpected : 4-in-1 humidity calibration is ${val}"
+            logInfo "(DP=0x69) unexpected : 4-in-1 humidity calibration is ${fncmd}"
             break
         case 0x6A : // (106)
             // 4in1 0x6a lux calibration (compensation)
-            int val = fncmd
-            if (val > 4294967295) { val = val - 4294967295 }
-            logInfo "(DP=0x69) unexpected : 4-in-1 lux calibration is ${val}"
+            logInfo "(DP=0x6A) unexpected : 4-in-1 lux calibration is ${fncmd}"
             break
         default :
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -922,7 +925,6 @@ List<String> customRefresh() {
 
 void customUpdated() {
     logDebug "customUpdated()"
-    List<String> cmds = []
     if ('DistanceMeasurement' in DEVICE?.capabilities) {
         if (settings?.ignoreDistance == true) {
             device.deleteCurrentState('distance')
@@ -963,8 +965,7 @@ void customUpdated() {
 
 
     // Itterates through all settings
-    cmds += updateAllPreferences()  // defined in deviceProfileLib
-    sendZigbeeCommands(cmds)
+    updateAllPreferences()  // defined in deviceProfileLib - it is void and sends its own Zigbee commands via setPar()
 
     if (DEVICE?.preferences?.refreshOnSave == true) {
         setRefreshRequest() 
@@ -1087,10 +1088,14 @@ void customInitEvents(final boolean fullInit=false) {
 
 void customParseIlluminanceCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    if (DEVICE?.device?.ignoreIAS == true) { 
+    if (DEVICE?.device?.ignoreIAS == true) {
         logDebug "customCustomParseIlluminanceCluster: ignoring IAS reporting device"
-        return 
+        return
     }    // ignore IAS devices
+    if (DEVICE?.device?.ignoreZclIlluminance == true) {
+        logDebug "customParseIlluminanceCluster: this profile receives illuminance over a Tuya DP - ignoring the duplicated ZCL 0x0400 report"
+        return
+    }    // the device reports the same lux value twice - once as a Tuya DP and once as a ZCL 0x0400 attribute report
     standardParseIlluminanceCluster(descMap)  // illuminance.lib
 }
 

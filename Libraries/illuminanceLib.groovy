@@ -25,7 +25,7 @@ library(
 */
 
 static String illuminanceLibVersion()   { '3.2.2' }
-static String illuminanceLibStamp() { '2026/08/03 9:07 PM' }
+static String illuminanceLibStamp() { '2026/08/03 11:46 PM' }
 
 metadata {
     capability 'IlluminanceMeasurement'
@@ -33,6 +33,7 @@ metadata {
     // no commands
     preferences {
         if (device) {
+            // note: only 'illuminanceThreshold':false in a device profile 'preferences' map is meaningful here - it hides the input; declaring it as 'true' or omitting the key altogether behave identically
             if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.illuminanceThreshold != false) && !(DEVICE?.device?.isDepricated == true)) {
                 input('illuminanceThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: 10)
                 if (advancedOptions) {

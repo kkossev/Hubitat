@@ -55,7 +55,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.5.7' }
-static String deviceProfileLibStamp() { '2026/08/03 9:07 PM' }
+static String deviceProfileLibStamp() { '2026/08/03 11:41 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -336,7 +336,7 @@ private List<String> zclWriteAttribute(Map attributesMap, int scaledValue) {
         map['mfgCode'] = attributesMap.mfgCode ? attributesMap.mfgCode as String : null
         map['ep'] = (attributesMap.ep != null && attributesMap.ep != '') ? hubitat.helper.HexUtils.hexStringToInt(attributesMap.ep) as Integer : null
     }
-    catch (e) { logWarn "setPar: Exception caught while splitting cluser and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val})) :  '${e}' " ; return [] }
+    catch (e) { logWarn "zclWriteAttribute: Exception caught while splitting the cluster and attribute <b>${attributesMap?.at}</b> (scaledValue=${scaledValue}) : '${e}'" ; return [] }
     // dt (data type) is obligatory when writing to a cluster...
     if (attributesMap.rw != null && attributesMap.rw == 'rw' && map.dt == null) {
         map.dt = attributesMap.type in ['number', 'decimal'] ? DataType.INT16 : DataType.ENUM8
@@ -480,7 +480,7 @@ public boolean setPar(final String parPar=null, final String val=null ) {
     String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1]
     String customSetFunction = "customSet${capitalizedFirstChar}"
     if (this.respondsTo(customSetFunction)) {
-        logDebug "setPar: found customSetFunction=${setFunction}, scaledValue=${scaledValue}  (val=${val})"
+        logDebug "setPar: found customSetFunction=${customSetFunction}, scaledValue=${scaledValue}  (val=${val})"
         // execute the customSetFunction
         try { cmds = "$customSetFunction"(scaledValue) }
         catch (e) { logWarn "setPar: Exception caught while processing <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val})) : '${e}'" ; return false }
@@ -616,7 +616,7 @@ public boolean sendAttribute(String par=null, val=null ) {
     if (par == null || DEVICE?.preferences == null || DEVICE?.preferences == [:]) { logDebug 'DEVICE.preferences is empty!' ; return false }
 
     Map dpMap = getAttributesMap(par, false)                                   // get the map for the attribute
-    l//log.trace "sendAttribute: dpMap=${dpMap}"
+    //log.trace "sendAttribute: dpMap=${dpMap}"
     if (dpMap == null || dpMap?.isEmpty()) { logWarn "sendAttribute: map not found for parameter <b>${par}</b>"; return false }
     if (val == null) { logWarn "sendAttribute: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return false }
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
@@ -889,14 +889,14 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
 // called from  initializeVars( fullInit = true)
 public void setDeviceNameAndProfile(String model=null, String manufacturer=null) {
     def (String deviceName, String deviceProfile) = getDeviceNameAndProfile(model, manufacturer)
+    String dataValueModel = model != null ? model : device.getDataValue('model') ?: UNKNOWN
+    String dataValueManufacturer  = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
     if (deviceProfile == null || deviceProfile == UNKNOWN) {
-        logInfo "unknown model ${deviceModel} manufacturer ${deviceManufacturer}"
+        logInfo "unknown model ${dataValueModel} manufacturer ${dataValueManufacturer}"
         // don't change the device name when unknown
         state.deviceProfile = UNKNOWN
     }
-    String dataValueModel = model != null ? model : device.getDataValue('model') ?: UNKNOWN
-    String dataValueManufacturer  = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
-    if (deviceName != NULL && deviceName != UNKNOWN) {
+    if (deviceName != null && deviceName != UNKNOWN) {
         device.setName(deviceName)
         state.deviceProfile = deviceProfile
         device.updateSetting('forcedProfile', [value:deviceProfilesV3[deviceProfile]?.description, type:'enum'])
@@ -1037,7 +1037,7 @@ public boolean isSpammyDeviceProfile() {
 private List<Object> compareAndConvertStrings(final Map foundItem, String tuyaValue, String hubitatValue) {
     String convertedValue = tuyaValue
     boolean isEqual    = ((tuyaValue  as String) == (hubitatValue as String))      // because the events(attributes) are always strings
-    if (foundItem?.scale != null || foundItem?.scale != 0 || foundItem?.scale != 1) {
+    if (foundItem?.scale != null && foundItem?.scale != 0 && foundItem?.scale != 1) {
         logTrace "compareAndConvertStrings: scaling: foundItem.scale=${foundItem.scale} tuyaValue=${tuyaValue} hubitatValue=${hubitatValue}"
     }
     return [isEqual, convertedValue]

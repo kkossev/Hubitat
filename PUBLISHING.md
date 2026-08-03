@@ -49,7 +49,41 @@ repositories and branches.
 | Experimental build | feature or fix branch |
 | Reproducible historical version | immutable version tag |
 
+## HPM manifest version policy
+
+A merge into `development` publishes the code. It does **not** publish an update
+to Hubitat Package Manager users. These are two separate acts:
+
+| Act | Effect | Frequency |
+| --- | --- | --- |
+| Merge into `development` | The new code is live at the raw URLs. Users can take it by installing manually or by running an HPM **Repair**. | Every completed change |
+| Raise `version` in a package manifest | HPM offers the update to every installed user, pulling whatever is on `development` at that moment. | Rare — major bug fixes only |
+
+The package manifest version is raised **deliberately and rarely**, and only the
+author decides when. Reasons:
+
+- The author does not own every supported device and cannot test every change on
+  real hardware. A manifest bump pushes code to every user of the package,
+  including owners of devices that were never tested against it.
+- Manifest `location` URLs point at `development`, so a bump is a full public
+  release of the current branch state, not of some separately vetted build.
+- If the installed version works for most users, there is no reason to update
+  them.
+
+Users who want a newer build are advised to update the driver manually from the
+raw `development` URL, or to run an HPM **Repair**.
+
+**A manifest version that trails the driver version is the normal, intended
+state.** It is not a defect, must never be filed as one, and must never be
+"fixed" on an agent's initiative. A user reporting that HPM still offers an older
+version is describing expected behaviour; the answer is "update manually or run
+HPM Repair", not "the manifest is broken".
+
 ## Publishing a driver or app
+
+The steps below describe a full publication *including* an HPM release. When the
+change is only being merged to `development` — the common case — skip step 6 and
+leave the manifest untouched.
 
 Before merging into `development`:
 
@@ -58,7 +92,9 @@ Before merging into `development`:
 3. Regenerate distributed `*_lib_included.groovy` files.
 4. Update the driver or app version.
 5. Update the release date and release notes.
-6. Update every associated package manifest.
+6. Update every associated package manifest — **only when this publication is
+   intended as an HPM release.** See *HPM manifest version policy*. Otherwise
+   leave the manifest version, date, and release notes unchanged.
 7. Include required child drivers and dependencies.
 8. Confirm that all internal manifest and executable URLs use `development`.
 9. Confirm that every referenced file exists.
@@ -119,14 +155,18 @@ Every publication must keep these synchronized:
 
 - Driver or app version
 - Generated driver version
-- Package manifest version
-- Release date and release notes
 - Required child drivers and libraries
 - Manifest and executable locations
 - Top-level catalog entry
 
+An **HPM release** must additionally synchronize:
+
+- Package manifest version
+- Release date and release notes
+
 A publication is incomplete when any of these describes an older or different
-release.
+release. A trailing **package manifest version is exempt** — it is governed by
+*HPM manifest version policy* above and is expected to lag between HPM releases.
 
 ## Emergency fixes
 
