@@ -17,7 +17,7 @@ It consolidates:
 - Hubitat community post 696 and its three screenshots;
 - the current Hubitat driver implementation;
 - current and historical Zigbee2MQTT code, issues, pull requests and discussions;
-- ZHA, Homey, SmartThings and Domoticz implementations;
+- ZHA, Homey, SmartThings and Domoticz implementations, plus exact-device SmartThings Community feedback;
 - all evidence found about temperature/humidity report intervals, deltas and sensitivity.
 
 ## Executive conclusion
@@ -25,6 +25,8 @@ It consolidates:
 There is no confirmed way to configure temperature or humidity reporting sensitivity on the exact `_TZ3000_qaaysllp` LCZ030.
 
 The strongest available evidence shows that standard ZCL Configure Reporting requests for temperature, humidity, illuminance and battery fail or are ignored. The device appears to apply a firmware-controlled temperature threshold of approximately 1.0–1.1 °C. Humidity usually updates more often. Zigbee temperature reports correlate with changes on the physical LCD, which points to device firmware rather than Hubitat or Zigbee2MQTT filtering.
+
+One SmartThings tester reported quick status changes after a community driver explicitly configured hidden endpoint 2. That report confirms functional endpoint-2 integration, but it included no Configure Reporting response, readback, selected delta, reporting period or long-term event history. It therefore does not establish that the firmware applies configurable reporting values.
 
 The current Hubitat driver correctly sends the Tuya Basic-cluster activation sequence, but has three LCZ030-specific problems:
 
@@ -93,7 +95,7 @@ Sources:
 - [Homey LCZ030 driver](https://github.com/JohanBendz/com.tuya.zigbee/blob/SDK3/drivers/lcdtemphumidluxsensor/device.js)
 - [Homey issue #240](https://github.com/JohanBendz/com.tuya.zigbee/issues/240)
 
-### SmartThings community driver — Implemented unverified
+### SmartThings community driver — Integration reported working; reporting controls unverified
 
 One SmartThings Edge community driver special-cases `_TZ3000_qaaysllp` and sends endpoint-2 Configure Reporting commands. It offers:
 
@@ -102,16 +104,57 @@ One SmartThings Edge community driver special-cases `_TZ3000_qaaysllp` and sends
 - humidity maximum interval: 5–240 minutes;
 - humidity reportable change: 1–10 %RH.
 
-However, the code does not validate the Configure Reporting response or read the configuration back. No matching issue, discussion or device log was found confirming that LCZ030 accepts or applies these values. This is evidence that someone attempted the standard ZCL approach, not evidence that the device supports it.
+However, the code does not validate the Configure Reporting response or read the configuration back. SmartThings Community feedback confirms that the revised driver could make an exact LCZ030 report measurements after explicit endpoint-2 configuration, but no post or device log confirms that LCZ030 accepts or applies the selected delta and maximum-interval values. This is evidence that the standard ZCL approach was attempted, not evidence that its reporting controls work.
 
 Sources:
 
-- [SmartThings endpoint-2 configuration commands](https://github.com/Mariano-Github/Edge-Drivers-Beta/blob/main/zigbee-temp-humidity-child-thermostat-edge/zigbee-driver/src/init.lua#L115-L138)
-- [SmartThings reporting preferences](https://github.com/Mariano-Github/Edge-Drivers-Beta/blob/main/zigbee-temp-humidity-child-thermostat-edge/zigbee-driver/profiles/temp-humidity-illumin-battery.yml)
+- [SmartThings endpoint-2 configuration commands](https://github.com/Mariano-Github/Edge-Drivers-Beta/blob/bdf24246fd24563e6e35ea2cb8b2f14f9c8584ed/zigbee-temp-humidity-child-thermostat-edge/zigbee-driver/src/init.lua#L101-L203)
+- [SmartThings reporting preferences](https://github.com/Mariano-Github/Edge-Drivers-Beta/blob/bdf24246fd24563e6e35ea2cb8b2f14f9c8584ed/zigbee-temp-humidity-child-thermostat-edge/zigbee-driver/profiles/temp-humidity-illumin-battery.yml#L87-L122)
+
+#### SmartThings Edge code audit — Confirmed transmission; acceptance unverified
+
+The current implementation was inspected at repository commit `bdf24246fd24563e6e35ea2cb8b2f14f9c8584ed`. It is not a dedicated LCZ030 subdriver. The exact fingerprint is embedded in the generic `Zigbee Temp Sensor and Child Thermostat Mc` package under `zigbee-temp-humidity-child-thermostat-edge/zigbee-driver` and selects the `temp-humid-illumin-battery` profile.
+
+Sources: [driver directory](https://github.com/Mariano-Github/Edge-Drivers-Beta/tree/bdf24246fd24563e6e35ea2cb8b2f14f9c8584ed/zigbee-temp-humidity-child-thermostat-edge/zigbee-driver), [exact fingerprint](https://github.com/Mariano-Github/Edge-Drivers-Beta/blob/bdf24246fd24563e6e35ea2cb8b2f14f9c8584ed/zigbee-temp-humidity-child-thermostat-edge/zigbee-driver/fingerprints.yml#L183-L187).
+
+During initialization, the driver sends a Basic-cluster read for attributes `0x0004`, `0x0000`, `0x0001`, `0x0005`, `0x0007` and `0xFFFE`. This is the same activation pattern called “Tuya black magic” in the Hubitat code and closely matches Zigbee2MQTT's accepted activation fix. Source: [SmartThings initialization](https://github.com/Mariano-Github/Edge-Drivers-Beta/blob/bdf24246fd24563e6e35ea2cb8b2f14f9c8584ed/zigbee-temp-humidity-child-thermostat-edge/zigbee-driver/src/init.lua#L781-L790).
+
+For `_TZ3000_qaaysllp`, `do_configure()` explicitly binds and configures the hidden endpoint-2 temperature and humidity clusters:
+
+| Measurement | Endpoint | Minimum interval | Maximum interval | Reportable change |
+|---|---:|---:|---:|---:|
+| Temperature | 2 | fixed 30 s | preference × 60; default 5 min | preference × 100; default 0.1 °C → raw 10 |
+| Humidity | 2 | fixed 60 s | preference × 60; default 10 min | preference × 100; default 1% RH → raw 100 |
+
+The same generic configuration pass also attempts endpoint-1 illuminance reporting and standard battery reporting. Generic attribute handlers parse incoming temperature, humidity and illuminance reports regardless of the source endpoint.
+
+The audit found these limitations and defects:
+
+1. **No success validation.** The driver does not handle or store the Configure Reporting response, issue Read Reporting Configuration, or compare returned values with the requested values. Its registered Zigbee handlers cover measurement attributes, not reporting-configuration responses.
+2. **Provisioning is declared unconditionally.** `do_configure()` marks the device `PROVISIONED` immediately after transmitting the commands, without waiting for an acknowledgement or readback. Source: [unconditional provisioning transition](https://github.com/Mariano-Github/Edge-Drivers-Beta/blob/bdf24246fd24563e6e35ea2cb8b2f14f9c8584ed/zigbee-temp-humidity-child-thermostat-edge/zigbee-driver/src/init.lua#L189-L203).
+3. **The successful forum test does not isolate Configure Reporting.** The activation read and endpoint-2 bindings are sufficient to enable the device's native firmware reports. The tester's success can therefore be explained even if the following Configure Reporting commands failed or were ignored.
+4. **Preference writes are not wake-safe.** Changed settings are transmitted immediately. There is no driver-level sleepy-device queue, retry on the next packet, acknowledgement check or readback.
+5. **Only one changed preference category is processed per save.** `do_preferences()` iterates preferences using unordered `pairs()` and executes `break` after handling the first recognized category. Changing temperature and humidity settings in the same save sends only whichever category is encountered first. Changing both settings within one category is covered because that command uses both current values. Source: [SmartThings preference handler](https://github.com/Mariano-Github/Edge-Drivers-Beta/blob/bdf24246fd24563e6e35ea2cb8b2f14f9c8584ed/zigbee-temp-humidity-child-thermostat-edge/zigbee-driver/src/init.lua#L206-L255).
+6. **“Report Interval” means ZCL maximum interval.** It is not a guaranteed sampling or periodic-reporting interval; the label can overstate what the command requests even on a compliant device.
+7. **No fallback polling or alarm support.** There is no LCZ030-specific endpoint-2 read/poll path and no parser or writer for the device's `0xE002` alarm attributes.
+
+The SmartThings code therefore confirms the correct activation sequence, hidden endpoint and binding destination. It does not prove that the LCZ030 firmware accepts smaller deltas or shorter maximum intervals.
 
 Another SmartThings implementation labels its LCZ030 profile `pending`, sends the Tuya magic packet and uses generic standard clusters. That repository also contains no confirmation that configurable deltas work.
 
 Source: [pending SmartThings LCZ030 definition](https://github.com/wonjj6768/smartthings-zigbee-edge-drivers/blob/main/source/src/devices/zcl/sensors.lua#L200-L207)
+
+#### Exact-device SmartThings Community feedback — Reported
+
+The SmartThings forum contains three discussion sequences for the exact `(TS0201, _TZ3000_qaaysllp)` fingerprint:
+
+- In 2022, a fingerprint-only driver exposed illuminance but temperature and humidity did not update. The device appeared with an error indicator and “Unable to know the status of the device.” The driver author then stated that the available driver could not handle the non-standard measurement path. Sources: [initial request and endpoint-1 fingerprint](https://community.smartthings.com/t/post-requests-for-zigbee-edge-drivers-here-community-created/262081/694), [failed temperature/humidity test](https://community.smartthings.com/t/post-requests-for-zigbee-edge-drivers-here-community-created/262081/699), [driver-author response](https://community.smartthings.com/t/post-requests-for-zigbee-edge-drivers-here-community-created/262081/700).
+- In October 2023, another user supplied the same endpoint-1 clusters: `0000,0001,0400,E002`. The driver author described the device as non-standard because the advertised descriptor lacks temperature and humidity clusters and initially recommended replacing it for direct SmartThings use. Sources: [repeated exact-device request](https://community.smartthings.com/t/edge-driver-mc-zigbee-switch-mc-zigbee-switch-power-mc-zigbee-multi-switch-and-child-mc/236953/1207), [initial assessment](https://community.smartthings.com/t/edge-driver-mc-zigbee-switch-mc-zigbee-switch-power-mc-zigbee-multi-switch-and-child-mc/236953/1208).
+- In December 2023, the driver author identified the hidden endpoint 2 and produced a driver version that configured its temperature and humidity clusters during pairing. The instructions required installing the updated driver first, deleting the device and then pairing it again rather than merely switching drivers. Sources: [endpoint-2 diagnosis](https://community.smartthings.com/t/edge-driver-mc-zigbee-drivers-for-motion-open-close-moisture-smoke-co-sensors-and-others-devices/231689/4148), [endpoint-2 test driver and re-pair instructions](https://community.smartthings.com/t/edge-driver-mc-zigbee-drivers-for-motion-open-close-moisture-smoke-co-sensors-and-others-devices/231689/4149).
+
+The tester then reported working temperature, humidity, illuminance and battery values and said that status changes appeared to update quickly despite the device's reputation for infrequent reports. The attached screenshot was downloaded and inspected: SmartThings showed `62.1 °F`, `41.0%`, `54 lx` and `80%` battery, while the physical LCD showed approximately `62 °F`, `41%` and `54 lx`. The tester also reported that rechargeable AA batteries made the LCD battery icon inaccurate, while the SmartThings battery value better matched expectations. Source: [positive report and inspected screenshot](https://community.smartthings.com/t/edge-driver-mc-zigbee-drivers-for-motion-open-close-moisture-smoke-co-sensors-and-others-devices/231689/4150).
+
+This evidence is **Reported**, not **Confirmed**: it comes from one short-term tester and one measurement snapshot. There is no raw Zigbee event history, Configure Reporting response, Read Reporting Configuration result, selected delta/interval or comparison proving that the configured reporting preferences changed device behavior. It strengthens the evidence for endpoint-2 setup during pairing but leaves configurable sensitivity and reporting periods **Implemented unverified**.
 
 ### Domoticz / Zigbee4Domoticz — Confirmed polling workaround
 
@@ -324,7 +367,9 @@ Each change should be made and hub-tested separately. No version or timestamp bu
 - Basic `0xFFFE` activation: **Confirmed**
 - Firmware-controlled approximately 1 °C temperature step: **Reported by multiple users; consistent with forum screenshots**
 - Configurable LCZ030 temperature/humidity delta: **Unsupported or ignored in available exact-device tests**
-- Standard Configure Reporting in the SmartThings community driver: **Implemented unverified**
+- SmartThings endpoint-2 integration: **Reported working by one exact-device tester**
+- Standard Configure Reporting in the SmartThings community driver: **Implemented unverified; no response/readback or selected-setting proof, and provisioning is marked complete after transmission only**
+- SmartThings multi-category preference update: **Confirmed code bug; only one changed measurement category is sent per save**
 - Five-minute endpoint-2 polling: **Implemented by Domoticz; verify on Hubitat hardware**
 - Hubitat EF00 configuration for LCZ030: **Confirmed bug**
 - Hubitat E002 support: **Missing**
