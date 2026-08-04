@@ -86,7 +86,7 @@
 */
 
 @Field static final String VERSION = '2.1.3'
-@Field static final String TIME_STAMP = '2026/08/04 4:22 PM'
+@Field static final String TIME_STAMP = '2026/08/04 6:58 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -141,6 +141,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0400,0001,0500', outClusters:'0019,000A', model:'TS0222', manufacturer:'_TYZB01_4mdqxxnn', deviceJoinName: 'Tuya Illuminance Sensor TS0222_2'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,0400,0500,0000', outClusters:'0003,0019,000A', model:'TS0222', manufacturer:'_TZ3000_hy6ncvmw', deviceJoinName: 'Tuya Smart Indoor Luminance Sensor'    // https://community.hubitat.com/t/zigbee-lux-sensor-driver/159598?u=kkossev https://www.amazon.co.uk/Luminance-Detection-0-10000-Operated-Brightness/dp/B0FD9GYYKZ
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0400,0001,0500', outClusters:'0019,000A', model:'TS0222', manufacturer:'_TZ3000_lfa05ajd', deviceJoinName: 'Zemismart ZXZTH'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0402,0405,EEFF', outClusters:'0003,0019', model:'TS0201', manufacturer:'_TZ3000_lfa05ajd', deviceJoinName: 'Zemismart ZXZTH'    // real cluster signature per ZHA quirks (zhaquirks/tuya/ts0201.py) and blakadder device DB; old TS0222 fingerprint above kept, unconfirmed which one (if either) matches real hardware
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,0400,0000', outClusters:'0019,000A', model:'TS0222', manufacturer:'_TZ3000_kky16aay', deviceJoinName: 'Soil Temperature and Humidity Meter QT-075/THE01860'  // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/532?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_pisltm67', deviceJoinName: 'AUBESS Light Sensor S-LUX-ZB'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TYST11_pisltm67', deviceJoinName: 'AUBESS Light Sensor S-LUX-ZB'
@@ -185,7 +186,6 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_cirvgep4', deviceJoinName: 'Tuya Temperature Humidity LCD Display with a Clock'         // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/308?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_cirvgep4', deviceJoinName: 'Tuya Temperature Humidity LCD Display with a Clock'         // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/589?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ysm4dsb1', deviceJoinName: 'Tuya Temperature Humidity'                                  // not tested ! https://github.com/Koenkk/zigbee2mqtt/issues/20815
-        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE0204_yjjdcqsq', deviceJoinName: 'Tuya Temperature Humidity'                                  // not tested !https://github.com/Koenkk/zigbee2mqtt/issues/20235
         // kk
         //
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_whkgqxse', deviceJoinName: 'Tuya Zigbee Temperature Humidity Sensor With Backlight'    // https://www.aliexpress.com/item/1005003980647546.html
@@ -287,10 +287,10 @@ metadata {
 @Field static Map configParams = [
         // temperatureOffset and humidityOffset moved outside of the configParams 11/23/2024
         2: [input: [name: 'temperatureSensitivity', type: 'decimal', title: '<b>Temperature Sensitivity</b>', description: 'Temperature change for reporting, ' + '\u00B0' + 'C', defaultValue: 0.5, range: '0..5',
-                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2', 'TS0601_Tuya_3']]],
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2']]],
 
         3: [input: [name: 'humiditySensitivity', type: 'number', title: '<b>Humidity Sensitivity</b>', description: 'Humidity change for reporting, %', defaultValue: 5, range: '1..10',
-                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2', 'TS0601_Tuya_3']]],
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2']]],
 
         4: [input: [name: 'illuminanceSensitivity', type: 'number', title: '<b>Illuminance Sensitivity</b>', description: 'Illuminance change for reporting, %', defaultValue: 12, range: '10..100',                // TS0222 "MOES ZSS-ZK-THL"
                    limit:['TS0222']]],
@@ -348,6 +348,7 @@ metadata {
     '_TZE204_utkemkbs'  : 'TS0601_Tuya',         // added v1.9.0
     '_TZE284_utkemkbs'  : 'TS0601_Tuya',         // added v1.9.0
     '_TZE284_qyflbnbj'  : 'TS0601_Tuya',         // added v1.9.0
+    '_TZE200_ysm4dsb1'  : 'TS0601_Tuya',         // RSH-HS06, confirmed via zigbee-herdsman-converters: dp1 temp /10, dp2 humidity raw, dp4 battery, dp9 temp unit https://github.com/Koenkk/zigbee2mqtt/issues/20815
     '_TZE284_yjjdcqsq'  : 'TS0601_Tuya_2',       // added v1.9.0 (follow yjjdcqsq family)
     '_TZE284_upagmta9'  : 'TS0601_Tuya_2',       // added v1.9.0 (follow upagmta9 family)
     '_TZE284_hodyryli'  : 'TS0601_ZTH03PRO',     // ZY-ZTH03PRO with external probe temperature
@@ -455,28 +456,6 @@ metadata {
 
 ]
 
-@Field static final Map deviceProfilesV3 = [
-    'SONOFF_TEMP_HUMI'  : [
-            models        : ['TH01', 'SNZB-02D', 'SNZB-02P'],
-            manufacturers : ['eWeLink',  'SONOFF'],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0402,0405,0001', outClusters:'0003', model:'TH01', manufacturer:'eWeLink', deviceJoinName: 'Sonoff Temperature and Humidity Sensor SNZB-02'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0402,0405,0001', outClusters:'0003', model:'TH01', manufacturer:'SONOFF', deviceJoinName: 'Sonoff Temperature and Humidity Sensor SNZB-02'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0402,0405,FC57,FC11', outClusters:'0019', model:'SNZB-02D', manufacturer:'eWeLink', deviceJoinName: 'Sonoff Temperature and Humidity Sensor SNZB-02D'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0402,0405,FC57,FC11', outClusters:'0019', model:'SNZB-02D', manufacturer:'SONOFF', deviceJoinName: 'Sonoff Temperature and Humidity Sensor SNZB-02D'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0402,0405,FC57,FC11', outClusters:'0019', model:'SNZB-02P', manufacturer:'eWeLink', deviceJoinName: 'Sonoff Temperature and Humidity Sensor SNZB-02P'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0402,0405,FC57,FC11', outClusters:'0019', model:'SNZB-02P', manufacturer:'SONOFF', deviceJoinName: 'Sonoff Temperature and Humidity Sensor SNZB-02P']
-            ],
-            deviceJoinName: 'Sonoff Temperature and Humidity Sensor',
-            capabilities  : ['battery': true],
-            attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery'],
-            configuration : ['battery': false],
-            preferences   : [
-                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
-            ]
-    ]
-]
-
 def isConfigurableSleepyDevice()  { getModelGroup() in ['Zigbee NON-Tuya', 'TS0201_TH'] }
 
 @Field static final Integer MaxRetries = 3
@@ -486,7 +465,6 @@ def isConfigurableSleepyDevice()  { getModelGroup() in ['Zigbee NON-Tuya', 'TS02
 @Field static final Integer REFRESH_TIMER = 3000
 @Field static final Integer COMMAND_TIMEOUT = 10
 @Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
-@Field static String UNKNOWN = 'UNKNOWN'
 
 @Field static final Integer DS18B20_MAX_RELAYS = 4
 @Field static final Map<String, Integer> DS18B20_RELAY_COUNT_BY_MANUFACTURER = [
@@ -1505,15 +1483,6 @@ private void sendDelayedEventHumi(Map map) {
     sendEvent(map)
 }
 
-def switchEvent( value ) {
-    def map = [:]
-    map.name = 'switch'
-    map.value = value
-    map.descriptionText = "${device.displayName} switch is ${value}"
-    if (settings?.txtEnable) { log.info "${map.descriptionText }" }
-    sendEvent(map)
-}
-
 def motionEvent( value ) {
     def map = [:]
     map.name = 'motion'
@@ -1598,6 +1567,11 @@ def updated() {
         Integer intValue = safeToInt(settings?.illuminanceSensitivity, 12)
         if (settings?.logEnable) { log.trace "${device.displayName} setting illuminanceSensitivity to ${intValue} %" }
         cmds += zigbee.writeAttribute(0x0400, 0xF001, DataType.UINT8, intValue, [:], 200)
+    }
+    if (getModelGroup() in ['TS0601_Tuya', 'TS0601_Tuya_2']) {
+        Integer intValue = safeToInt(settings?.humiditySensitivity, 5)
+        if (settings?.logEnable) { log.trace "${device.displayName} setting humiditySensitivity to ${intValue} %" }
+        cmds += sendTuyaCommand('14', DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
     }
     if (getModelGroup() in ['TS0601_Haozee']) {
         Integer intValue = safeToInt(settings?.humiditySensitivity, 5)
@@ -2256,16 +2230,6 @@ def logWarn(msg) {
     if (settings?.logEnable) {
         log.warn "${device.displayName} " + msg
     }
-}
-
-private String swapEndianHex(String hex, int width) {
-    if (hex == null) { return '0000' }
-    def normalized = hex.replaceAll('0x', '').padLeft(width, '0')
-    def pairs = []
-    for (int i = 0; i < normalized.length(); i += 2) {
-        pairs.add(normalized.substring(i, Math.min(i + 2, normalized.length())))
-    }
-    return pairs.reverse().join(' ').toUpperCase()
 }
 
 def updateInfo(msg= ' ') {

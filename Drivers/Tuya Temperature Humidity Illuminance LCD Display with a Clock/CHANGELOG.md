@@ -60,6 +60,23 @@ Changes for the next release will be documented here.
   line), `ThidReality` → `ThirdReality` (ThirdReality `deviceJoinName`s), `unparesed` →
   `unparsed` (log line), and the Humidity Alarm preference description, which incorrectly read
   "Temperature Alarm".
+- `_TZE200_ysm4dsb1` now auto-detects as `TS0601_Tuya` instead of falling through to `UNKNOWN`,
+  confirmed against upstream `zigbee-herdsman-converters` (z2m model `RSH-HS06`).
+- Removed a mistyped `_TZE0204_yjjdcqsq` fingerprint — no such manufacturer exists upstream; the
+  real device (`_TZE204_yjjdcqsq`) was already fingerprinted and mapped to `TS0601_Tuya_2`.
+- Humidity Sensitivity preference now actually takes effect for `TS0601_Tuya`/`TS0601_Tuya_2`
+  devices (Tuya DP `0x14` write was previously sent only to `TS0601_Haozee`, even though the
+  preference was shown for all three groups). `TS0601_Tuya_3` no longer shows the Temperature/
+  Humidity Sensitivity preferences at all — checked against z2m, its only member has no confirmed
+  support for either.
+
+### Added
+
+- A second fingerprint for the Zemismart ZXZTH (`_TZ3000_lfa05ajd`), matching the real cluster
+  signature confirmed against ZHA quirks and blakadder's device database (`0402`/`0405`
+  temperature/humidity clusters, model `TS0201`) — the original fingerprint declared unrelated
+  illuminance/IAS-zone clusters and likely never matched real hardware. Both fingerprints are kept
+  since it's unconfirmed which one (if either) the real device pairs with.
 
 ### Changed
 
@@ -73,6 +90,10 @@ Changes for the next release will be documented here.
 - Duplicate, byte-identical `_TZE284_myd45weu` "Soil Sensor II" fingerprint line.
 - Dead `// TODO - write attribute 0xF001, cluster 0x400` stub, mistakenly gated on
   `TS0601_Haozee` — which has no `0x0400` cluster and could never have used it.
+- Dead `deviceProfilesV3` / `SONOFF_TEMP_HUMI` stub — an unreferenced draft from an abandoned V3
+  migration attempt, never wired into any code path.
+- Dead code with no callers/references: `switchEvent()`, `swapEndianHex()`, and the
+  `@Field static String UNKNOWN` constant (the code used the literal `'UNKNOWN'` everywhere anyway).
 
 ## [2.1.2] - 2026-04-22
 
