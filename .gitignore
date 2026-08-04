@@ -106,9 +106,13 @@ Drivers/Tuya Zigbee Valve/TODO.md
 Drivers/Tuya ZigBee Vibration Sensor/TODO.md
 Drivers/Misc/tests/HUBITAT_MATTER_API.md
 Drivers/Misc/tests/Matter Methods Dumper.groovy
-# Maintainer-only docs that belong to no single driver — never published.
-# One directory rule, so anything added here is ignored automatically.
-docs/maintainer/
+# Maintainer docs are private by default. Narrow exceptions publish reviewed files.
+docs/maintainer/*
+!docs/maintainer/Drivers/
+docs/maintainer/Drivers/*
+!docs/maintainer/Drivers/Tuya Temperature Humidity Illuminance LCD Display with a Clock/
+docs/maintainer/Drivers/Tuya Temperature Humidity Illuminance LCD Display with a Clock/*
+!docs/maintainer/Drivers/Tuya Temperature Humidity Illuminance LCD Display with a Clock/LCZ030_GITHUB_RESEARCH.md
 Drivers/Tuya ZigBee Vibration Sensor/codex_TS0210_fix.md
 Drivers/Tuya ZigBee Vibration Sensor/TS0210_FIXES_PLAN.md
 Drivers/Tuya ZigBee Vibration Sensor/C15-wake-safe-config-writes-plan.md

@@ -133,8 +133,34 @@ those folders operates on the nested repo, not on `kkossev/Hubitat`. Check `git 
 ├─ Documents\                 external Zigbee spec links
 ├─ Drivers\<Driver Name>\
 ├─ Libraries\                 22 shared Groovy libraries (V3/V4 drivers only)
-└─ docs\maintainer\           maintainer working notes — local only, never published
+└─ docs\maintainer\           maintainer research and analysis — mixed publication status
 ```
+
+### The `docs\maintainer` structure
+
+`docs\maintainer` holds research, investigations, plans and other maintainer-facing material that
+does not belong in a driver's runtime or distribution folder. Driver-specific material mirrors the
+source tree and uses the exact same driver-folder name:
+
+```
+docs\maintainer\
+├─ <repository-wide maintainer documents>.md
+└─ Drivers\
+   └─ <Driver Name>\
+      └─ <driver-specific maintainer documents>.md
+```
+
+- Not every driver has a maintainer folder; create one only when a driver-specific document belongs
+  there.
+- The canonical per-folder files (`AGENTS.md`, `BUGS.md`, `TODO.md`, `DEVICES.md`, README and release
+  files) remain beside the driver under `Drivers\<Driver Name>\`.
+- Some maintainer documents are published on GitHub and some are intentionally local-only. Do not
+  infer publication status from the file's location.
+- Publication is **per document**, not per directory. Maintainer documents are ignored by default.
+  A reviewed document intended for GitHub must be explicitly unignored with a narrow `.gitignore`
+  exception; never expose the whole `docs\maintainer` tree to publish one file.
+- Before publishing, apply §9's GitHub-facing rules: English, and no absolute local paths, private
+  addresses, device ids or personal data.
 
 ### The per-folder document set
 
