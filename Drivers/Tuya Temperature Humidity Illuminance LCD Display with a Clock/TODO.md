@@ -1,24 +1,32 @@
-# Forum-Derived TODO — Tuya Temperature Humidity Illuminance LCD Display with a Clock
+# Consolidated TODO — Tuya Temperature Humidity Illuminance LCD Display with a Clock
 
-Analysis date: 2026-07-11  
+Analysis date: 2026-07-11 (forum backlog); bug backlog merged 2026-08-04  
 Forum cutoff: 2026-06-06, post 693  
 Topic: https://community.hubitat.com/t/-/88093  
 Coverage: complete Discourse stream — 677 visible posts; highest visible post number 693
 
-This backlog records actionable work extracted from the complete community topic and compared with
-the current v2.1.2 driver, its release history, and `BUGS.md`. Deleted forum posts account for the
-difference between the visible-post count and highest post number.
+This is the single consolidated backlog for this driver. It combines the forum-derived
+device-support/feature backlog with the reviewed bug list. **`BUGS.md` was merged into this file
+and deleted on 2026-08-04 — do not recreate it; add new findings here instead.** Resolved bugs were
+removed from the list; their full history lives in `CHANGELOG.md` and `AGENTS.md`'s referenced git
+history. Deleted forum posts account for the difference between the visible-post count and highest
+post number.
 
-Status legend:
+Status legend (forum backlog):
 
 - `OPEN` — requested or reported and not implemented/resolved.
 - `NEEDS_EVIDENCE` — requires a textual fingerprint, logs, or hardware confirmation.
-- `BUGS` — overlaps the confirmed static-review backlog in `BUGS.md`.
+- `BUGS` — overlaps the bug backlog in Part 2 below.
 - `RESOLVED` — implemented or confirmed working later in the topic.
 - `OUT_OF_SCOPE` — belongs to another device class or project.
 - `DEVICE_LIMITATION` — cannot be implemented using known device/firmware behavior.
 
-## Open work
+Status legend (bug backlog, Part 2):
+
+- `[ ]` open. `[?]` needs verification/user decision first. `[x]` items are removed once fixed and
+  confirmed — see `CHANGELOG.md` instead.
+
+## Part 1 — Forum-derived backlog
 
 ### 1. [ ] `OPEN` — Support TS0601 `_TZE284_hdml1aav` five-in-one soil sensor
 
@@ -106,7 +114,7 @@ Known data:
 
 Implementation direction:
 
-- Cross-reference the invalid-humidity handling findings in `BUGS.md`; do not create a competing
+- Cross-reference the invalid-humidity handling findings in Part 2 below; do not create a competing
   global fix.
 - Scope any workaround to `_TZ3210_ncw88jfq` unless logs prove other manufacturers behave the same.
 - Ignore values above 100% for this device instead of clamping them to 100%.
@@ -221,4 +229,48 @@ https://community.hubitat.com/t/-/88093/40.
 Devices that do not contain a Zigbee radio cannot use this driver. Misleading marketplace listings
 and Tuya Cloud alternatives are discussed at https://community.hubitat.com/t/-/88093/46 and
 https://community.hubitat.com/t/-/88093/60.
+
+---
+
+## Part 2 — Bug backlog
+
+Merged from `BUGS.md` on 2026-08-04 (deleted; do not recreate). Read `AGENTS.md` first — it explains
+the model-group architecture, the DP map, and driver conventions. Ground rules carried over: fix one
+item at a time in the order the user picks; the driver is uploaded to the dev hub and tested after
+each fix; do not bump `VERSION`/`TIME_STAMP` or add header changelog lines unless told to; do not
+change `ASK USER` items without an explicit answer. As of this merge, items A1–A2, B1–B8, C1–C7,
+C10, C12 from the original list are fixed and confirmed (see `CHANGELOG.md`); only the three below
+remain open.
+
+### `[?]` `alarmTempPar` / `alarmHumidityPar` are dead preferences — **ASK USER**
+
+`configParams` entries 13/14 have fully commented-out `limit` lists (never shown to any model group)
+and are never read in `updated()` or `processTuyaDP()`. Their `initializeVars()` defaults also use
+option **labels** (e.g. `'Below min temp'`) instead of keys — harmless while the preference stays
+hidden, but the same landmine class as the fixed A2 bug if the `limit` list is ever re-enabled
+without also fixing the defaults.
+
+These are disabled LCZ030/Haozee alarm experiments — ask the user whether to delete them outright or
+leave them as-is with an explanatory comment; do not re-enable the `limit` lists as a "fix."
+
+### `[ ]` `isPendingConfig()` never settles for non-sleepy devices
+
+For every model group *except* the `isConfigurableSleepyDevice()` set (`Zigbee NON-Tuya`,
+`TS0201_TH`), `tempCfgOK`/`humiCfgOK` never flip to `true`, so `isPendingConfig()` stays `true`
+forever and every received packet calls `ConfigurationStateMachine()`, which immediately returns
+after a JSON parse for non-configurable devices. Cheap per call, but wasteful across the packet
+volume of ~25 supported model groups.
+
+Fix direction: guard the `ConfigurationStateMachine()` call site with `isConfigurableSleepyDevice()`,
+or set both `...CfgOK = true` in `resetStats()` for non-sleepy groups.
+
+### `[ ]` Release hygiene — `readme.md` revision history is stale
+
+`readme.md`'s revision history ends at 1.8.1 and the supported-models table lacks everything added
+since. Update at the next release point, not as a standalone commit.
+
+The `packageManifest.json` **2.0.1** vs driver **2.1.3** gap is **deliberate, not a defect** — see
+root `PUBLISHING.md` §*HPM manifest version policy*. kkossev raises the HPM manifest rarely, only
+for major fixes, and tells users to update manually or run HPM **Repair**. Never file or "fix" a
+manifest lag as a bug.
 
