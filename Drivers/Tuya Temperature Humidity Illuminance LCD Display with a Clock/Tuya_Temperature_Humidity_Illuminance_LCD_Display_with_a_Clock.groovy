@@ -78,7 +78,7 @@
  * ver. 2.1.0  2026-03-31 kkossev - added TS0601 _TZE284_hodyryli Tuya Temperature Humidity Sensor with External Probe into a new 'TS0601_ZTH03PRO' group, using child device for the probe @njanda
  * ver. 2.1.1  2026-04-19 kkossev - added support for four switch child devices for _TZ3218_ya5d6wth @pauljneil2 ; added TS0601 _TZE284_9ern5sfh @rlynch into a new group TS0601_Tuya_3; bug fixes
  * ver. 2.1.2  2026-04-22 kkossev - added COOLO CS-201Z _TZE200_npj9bug3 _TZE200_wrmhp6b3 into new 'TS0601_Soil_Coolo' group; added soilMoisture attribute
- * ver. 2.2.0  2026-08-04 kkossev - (dev. branch) bug fixes; TS0201_LCZ030 (_TZ3000_qaaysllp) - removed wrong EF00 DP 09/0A/0B transmissions (device has no EF00 cluster); added Temperature/Humidity Decimal Places preferences (community request #695)
+ * ver. 2.2.0  2026-08-05 kkossev - (dev. branch) bug fixes; TS0201_LCZ030 (_TZ3000_qaaysllp) - removed wrong EF00 DP 09/0A/0B transmissions (device has no EF00 cluster); added Temperature/Humidity Decimal Places preferences (community request #695)
  *                                  added corrected fingerprint and moved _TZ3000_utwgoauk ("SNZB-02" Tuya clone) from TS0201 to Zigbee NON-Tuya group (community report #694)
  *                                  added new 'TS0601_Illum_TH' group and fingerprint for _TZE204_rbbx5mfq; fixed DP 0x02/0x06/0x07 illuminance/temperature/humidity mismatch (community request #691); corrected _TZE200_rbbx5mfq from TS0601_Tuya
  *                                  added new 'TS0601_Soil_5IN1' group and fingerprints for _TZE284_hdml1aav / _TZE2841000000_hdml1aav (Excellux ZS-300TF); added soilFertilityValue/waterWarning/soilFertilityWarning attributes (community request #687)
@@ -86,7 +86,7 @@
 */
 
 @Field static final String VERSION = '2.2.0'
-@Field static final String TIME_STAMP = '2026/08/04 10:02 PM'
+@Field static final String TIME_STAMP = '2026/08/05 11:28 PM'
 
 import groovy.json.*
 import groovy.transform.Field
