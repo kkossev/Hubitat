@@ -58,13 +58,13 @@
       "filepath": "/c:/work/Hubitat/Libraries/deviceProfileLibV4.groovy",
       "id": 197,
       "codeType": "library",
-      "version": 199
+      "version": 201
     },
     {
       "filepath": "/c:/work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 703
+      "version": 716
     },
     {
       "filepath": "/c:/work/Hubitat/Libraries/illuminanceLib.groovy",
@@ -76,7 +76,7 @@
       "filepath": "/c:/work/Hubitat/Libraries/deviceProfileLib.groovy",
       "id": 142,
       "codeType": "library",
-      "version": 681
+      "version": 685
     },
     {
       "filepath": "/C:/work/Hubitat/Libraries/commonLib.groovy",
@@ -95,6 +95,12 @@
       "id": 178,
       "codeType": "library",
       "version": 36
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Libraries/motionLib.groovy",
+      "id": 180,
+      "codeType": "library",
+      "version": 16
     }
   ]
 }

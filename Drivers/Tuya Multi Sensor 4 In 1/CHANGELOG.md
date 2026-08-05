@@ -38,8 +38,64 @@ is explicitly requested, not a cut/released version with its own `[Unreleased]` 
   datapoint map exists for this device, so only DP 1 (motion, the Tuya convention default) is
   mapped; `queryAllTuyaDP` runs on refresh to help identify the remaining DPs from a real device
   log. See TODO.md I.4.
+- Four diagnostic attributes — `unknown_3`, `unknown_80`, `unknown_101` and `unknown_102` — carrying
+  the PGST datapoints that are received but not yet decoded. They are declared for the whole driver
+  but only ever populated by the `TS0601_PGST_PIR_SIREN` profile, so no other device shows them.
 
 ### Changed
+
+- `TS0601_PGST_PIR_SIREN` extended from the first real device log (`@calinatl`, 2026-08-05).
+  DP 1 = motion is now **confirmed**, not a guess. DP 9 (sensitivity, 0–2) and DP 10 (keep time,
+  0–3) are mapped as writable preferences on the strength of the Tuya convention and the values the
+  device reported; DP 3, 80, 101 and 102 are mapped read-only to the `unknown_*` attributes. DP 80
+  is in `spammyDPsToNotTrace` because the device repeats it, unchanged, every 3.4 seconds.
+  The siren datapoint is still unidentified — DP 102 (boolean) is the leading candidate.
+- **Reset Motion to Inactive** now defaults to *on* for `TS0601_PGST_PIR_SIREN` only. No motion
+  inactive report was seen in that device's first log, so without the software reset the sensor
+  would stay active indefinitely. Every other profile keeps the `false` default.
+- The **Motion Reset Timer** description now states that the value must be set *longer* than the
+  sensor's own Keep Time. A shorter software timeout resets motion while the sensor still considers
+  it active, and the sensor's real "inactive" report is then discarded as a duplicate. The default
+  is unchanged at 60 seconds, which matches the most common hardware keep time in this driver.
+- The **Reset Motion to Inactive** description now says *for which* sensors `false` is the right
+  value — those that report motion inactive on their own — rather than recommending it flatly.
+- The administrative commands list moved off the **Configure** command onto a new **Device
+  Utilities** command. `Configure` is once again a plain button that only ever configures the
+  device; *** LOAD ALL DEFAULTS *** and the *Delete All …* actions now live under Device Utilities.
+  Running Device Utilities without choosing anything prints the list of available commands instead
+  of doing something.
+
+  The reason is not cosmetic. `configure` was declared twice — as the Configuration capability's
+  no-argument command and as an ENUM-parameter command — so which of the two methods ran depended on
+  whether the platform happened to supply an argument. That implicit dispatch is what allowed a
+  single metadata attribute to turn an ordinary click into a full wipe (see below).
+
+  Anywhere that used to say "select *** LOAD ALL DEFAULTS *** from the Configure dropdown" now means
+  the **Device Utilities** dropdown.
+- The **Configure** button now carries a warning that it cannot configure battery-powered "sleepy"
+  devices, and that the way to configure one is to pair it again without deleting it first. The
+  **Ping** icon changed from a satellite dish to antenna bars, which reads as a reachability check.
+- **Send Command** and **Set Par** now document themselves: their help text says the valid names
+  come from the active device profile, and that leaving the name empty lists them in the log. Set
+  Par additionally notes that leaving the value empty reports the allowed range for that parameter,
+  and that the value is written to the device rather than only stored. All of that behaviour already
+  existed but nothing mentioned it.
+- The **Device Profile** preference now explains what a profile is and that it is normally matched
+  automatically, and carries the step that was missing: after forcing a profile by hand you have to
+  pair the device again, without deleting it, or the new configuration never reaches a battery-
+  powered sensor. Its title is prefixed with ⚠️.
+- New **Load All Defaults** button — a one-click shortcut for the Device Utilities entry everyone is
+  told to run after switching drivers. It is destructive and has no confirmation step, so its help
+  text spells out that preferences, states, scheduled jobs and child devices are all deleted.
+- Do **not** add `defaultValue` to an ENUM command parameter. It was tried on the **Configure**
+  command to preselect *** LOAD ALL DEFAULTS ***, and the platform behaves in the worst possible
+  way: the dropdown still displays `- No selection -`, but pressing Run with nothing selected
+  submits the `defaultValue` anyway. On a C-8 Pro running 2.5.1.143 that silently wiped a device's
+  settings, states and child devices. The attribute has been removed and a warning comment left in
+  its place.
+- The two blank separator rows are gone from the **Configure** command list. Selecting one had never
+  worked: `configure()` invokes the mapped function with no arguments, while `configureHelp()`
+  requires one, so it only ever threw into the surrounding try/catch.
 
 - `TS0601_2IN1` devices now ignore the duplicated ZCL 0x0400 illuminance report and use the Tuya
   datapoint only, via a new `ignoreZclIlluminance` device-profile property. These sensors transmit
@@ -59,14 +115,33 @@ is explicitly requested, not a cut/released version with its own `[Unreleased]` 
 - Corrected the `(DP=0x69)` label on the 4-in-1 lux calibration datapoint, which is 0x6A.
 - Corrected an always-true condition in `compareAndConvertStrings()` (trace output only).
 - Corrected the "Huidity Calibration" title typo.
+- The **Reset Motion to Inactive** preference is visible again for `SONOFF_MOTION_IAS`, which had it
+  in the legacy 1.x driver but lost it in V3, and is now also offered for `RH3040_TUYATEC`, which
+  never had it. Both are IAS PIRs with a roughly 60-second hardware re-trigger period, and they were
+  the only two motion profiles that hid the toggle. The default is unchanged — off — so nothing
+  happens until an owner turns it on.
+- The **Motion Reset Timer** input was gated on `settings?.motionReset?.value`, reading a `.value`
+  property that a Groovy `Boolean` does not have — the same setting is read as plain
+  `settings?.motionReset` by the code that actually schedules the reset. Had that expression ever
+  resolved to null, the timer input would have disappeared from the page while the software reset
+  kept running off the stored value, with no way to see or change it. Both places now read the
+  setting the same way.
+- `NullPointerException: Cannot get property 'isDepricated' on null object` in
+  `localProcessTuyaDP()` when datapoint 0x65 arrives on a device whose profile did not resolve.
+  `DEVICE?.device.isDepricated` guarded only the first dereference; `DEVICE` itself is `null`
+  whenever `state.deviceProfile` is `UNKNOWN`, and the datapoint was then dropped entirely.
 - `customParseOccupancyCluster()` failed to publish on the hub ("current scope already contains a
   variable of the name value") because two `else if` branches each redeclared a local `value` that
   was already declared earlier in the method. Renamed the two inner locals.
 
 ### Developer notes
 
-- Library changes in this release: `commonLib`, `deviceProfileLib`, `iasLib` and `illuminanceLib`.
-  All are log-string or dead-code changes; no code path is altered.
+- Library changes in this release: `commonLib`, `deviceProfileLib`, `iasLib`, `illuminanceLib` and
+  `motionLib` (3.2.3) and `commonLib` (**4.1.0** — the minor bump reflects the `configure` /
+  `deviceUtilities` command split, which changes the device page of every driver that embeds it).
+  The rest are log-string changes except the `motionLib` preference-visibility fix above. Both
+  libraries also reach the **Tuya Zigbee mmWave Sensor** driver, whose bundle needs regenerating for
+  any of it to take effect there.
 - Removed dead `if (val > 4294967295)` guards from the 4-in-1 calibration datapoints — an `int`
   cannot exceed 2³¹−1 and the constant is off by one.
 - Replaced a bare `NULL` identifier and a stray `l` statement that had only ever worked because the

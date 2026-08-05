@@ -35,7 +35,7 @@
  * ver. 3.5.5  2025-10-20 kkossev  - added IMOU Motion Sensor ZP1 model:'ZP2-EN', manufacturer:'MultIR'
  * ver. 3.5.6  2026-06-04 kkossev  - added TS0601 _TZE284_gnpflcoq 4-in-1 mmWave Radar Sensor profile 'TS0601_TZE284_4IN1'
  * ver. 3.5.7  2026-07-31 kkossev  - added HOBEIAN ZG-204ZX fingerprint to 'TS0601_TZE284_4IN1'
- * ver. 3.6.0  2026-08-05 kkossev  - (dev. branch) bug fixes; TS0202_MOTION_SWITCH (Linkoze LKMSZ001) dp:102 now maps to illumState (dark/light) instead of a fake lux value; added PGST TS0601 _TZE284_zmgahdog PIR+siren combo (motion-only) profile 'TS0601_PGST_PIR_SIREN'
+ * ver. 3.6.0  2026-08-05 kkossev  - (dev. branch) bug fixes; TS0202_MOTION_SWITCH (Linkoze LKMSZ001) dp:102 now maps to illumState (dark/light) instead of a fake lux value; added PGST TS0601 _TZE284_zmgahdog PIR+siren combo (motion-only) profile 'TS0601_PGST_PIR_SIREN'; TS0601_PGST_PIR_SIREN dp:1 motion confirmed, added dp:3/9/10/80/101/102 (sensitivity, keepTime and 4 diagnostic unknown_x attributes); fixed a NullPointerException in localProcessTuyaDP() dp 0x65 when the device profile is UNKNOWN; 'Reset Motion to Inactive' is shown again for RH3040_TUYATEC and SONOFF_MOTION_IAS (still defaulting to false); sendCommand() and setPar() now explain that leaving the name empty lists the valid names in the log
  *
  *                                   TODO: show Temperature Offset and Humidity Offset only when the device profile supports TemperatureMeasurement and RelativeHumidityMeasurement capabilities
  *                                   TODO: check why no preferences : updateAllPreferences: no preferences defined for device profile SIHAS_USM-300Z_4_IN_1
@@ -43,11 +43,11 @@
  */
 
 static String version() { "3.6.0" }
-static String timeStamp() {"2026/08/05 8:15 AM"}
+static String timeStamp() {"2026/08/05 11:12 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
-@Field static final Boolean DEFAULT_DEBUG_LOGGING = false    // disable it for the production release !
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for the production release !
 
 
 import groovy.transform.Field
@@ -95,17 +95,22 @@ metadata {
         attribute 'reportingTime4in1', 'number'
         attribute 'ledEnable', 'enum', ['disabled', 'enabled']
         attribute 'WARNING', 'string'
+        // diagnostic attributes - PGST _TZE284_zmgahdog PIR+siren, DPs seen in the logs but not decoded yet
+        attribute 'unknown_3', 'number'             // Tuya DP 3 (0x03)
+        attribute 'unknown_80', 'number'            // Tuya DP 80 (0x50)
+        attribute 'unknown_101', 'number'           // Tuya DP 101 (0x65)
+        attribute 'unknown_102', 'number'           // Tuya DP 102 (0x66) - siren switch candidate
 
         // command 'setMotion' is defined in motionLib
         // version 3.3.0
         command 'sendCommand', [
-            [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
-            [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
+            [name:'command', type: 'STRING', description: '▶️ Run one of the commands supported by this device profile • Leave empty to list the valid names in the log', constraints: ['STRING']],
+            [name:'val',     type: 'STRING', description: 'Optional value, needed only by some commands', constraints: ['STRING']]
         ]
         command 'setPar', [
-                [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
-                [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
-        ]       
+                [name:'par', type: 'STRING', description: '🎛️ Set a device profile preference and write it to the device • Leave empty to list the valid parameter names in the log', constraints: ['STRING']],
+                [name:'val', type: 'STRING', description: 'Leave empty to see the allowed range or values for that parameter', constraints: ['STRING']]
+        ]
 
         // itterate through all the figerprints and add them on the fly
         deviceProfilesV3.each { profileName, profileMap ->
@@ -275,20 +280,27 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             refresh:        ['queryAllTuyaDP'],
     ],
 
-    // https://community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739 - no public DP map exists (z2m issue closed 'not planned'); motion DP is a guess, siren intentionally unsupported
+    // https://community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739 - no public DP map exists (z2m issue closed 'not planned'); dp:1 motion confirmed from @calinatl log 2026-08-05, siren DP still unknown
     'TS0601_PGST_PIR_SIREN' : [
             description   : 'PGST Zigbee PIR Motion Sensor (siren not supported)',
             models        : ['TS0601'],
-            device        : [type: 'PIR', isIAS:false, powerSource: 'battery', isSleepy:true],
+            device        : [type: 'PIR', isIAS:false, powerSource: 'battery', isSleepy:true],    // powerSource/isSleepy NOT confirmed - the device reports dp:80 every ~3.4 seconds, which is not sleepy behaviour; waiting for @calinatl to confirm battery vs USB
             capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : ['motionReset':true],
-            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize'],
+            preferences   : ['motionReset':true, 'sensitivity':'9', 'keepTime':'10'],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_zmgahdog', deviceJoinName: 'PGST Zigbee PIR Motion Sensor Alarm (siren not supported)'],   // https://community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739 - cluster list not verified on a real device, see TODO.md
             ],
             tuyaDPs:        [
-                [dp:1,   name:'motion',   type:'enum',   rw: 'ro', min:0, max:1, defVal:'0', scale:1,  map:[0:'inactive', 1:'active'], description:'Motion (DP number unconfirmed - dp:1 is the Tuya convention default, verify against a real device log)'],
+                [dp:1,   name:'motion',      type:'enum',   rw: 'ro', min:0, max:1, defVal:'0', scale:1,  map:[0:'inactive', 1:'active'], description:'Motion (confirmed from the @calinatl log 2026-08-05)'],
+                [dp:3,   name:'unknown_3',   type:'number', rw: 'ro', scale:1, unit:'',   description:'Unknown Tuya DP 3 (0x03) - enum, reported 0 at pairing'],
+                [dp:9,   name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2, defVal:'2', dt:'04', tuyaCmd:04, unit:'', map:[0:'0 - low', 1:'1 - medium', 2:'2 - high'], title:'<b>Sensitivity</b>', description:'PIR sensor sensitivity (Tuya convention, NOT confirmed on this model)'],
+                [dp:10,  name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:3, defVal:'0', dt:'04', tuyaCmd:04, unit:'seconds', map:[0:'10 seconds', 1:'30 seconds', 2:'60 seconds', 3:'120 seconds'], title:'<b>Keep Time</b>', description:'PIR keep time in seconds (Tuya convention, NOT confirmed on this model)'],
+                [dp:80,  name:'unknown_80',  type:'number', rw: 'ro', scale:1, unit:'',   description:'Unknown Tuya DP 80 (0x50) - constant value 80, repeated every ~3.4 seconds'],
+                [dp:101, name:'unknown_101', type:'number', rw: 'ro', scale:1, unit:'',   description:'Unknown Tuya DP 101 (0x65)'],
+                [dp:102, name:'unknown_102', type:'number', rw: 'ro', scale:1, unit:'',   description:'Unknown Tuya DP 102 (0x66) - bool, siren switch candidate'],
             ],
+            spammyDPsToNotTrace : [80],
             refresh:        ['queryAllTuyaDP'],
     ],
 
@@ -297,7 +309,7 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             models        : ['RH3040'],
             device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],
             capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : ['motionReset':false, 'keepTime':false, 'sensitivity':false],
+            preferences   : ['motionReset':true, 'keepTime':false, 'sensitivity':false],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500', model:'RH3040', manufacturer:'TUYATEC-53o41joc', deviceJoinName: 'TUYATEC RH3040 Motion Sensor'],                                            // KK - 60 seconds reset period
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500', model:'RH3040', manufacturer:'TUYATEC-b5g40alm', deviceJoinName: 'TUYATEC RH3040 Motion Sensor'],
@@ -439,7 +451,7 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             models        : ['SNZB-03', 'MS01', 'msO1', 'SQ510A', 'RHK09', '66666'],
             device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],   // very sleepy !!
             capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : ['motionReset':false/*, 'keepTime':false, 'sensitivity':false*/],   // just enable or disable showing the motionReset preference, no link to  tuyaDPs or attributes map!
+            preferences   : ['motionReset':true/*, 'keepTime':false, 'sensitivity':false*/],   // just enable or disable showing the motionReset preference, no link to  tuyaDPs or attributes map!
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'SNZB-03', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],        // SNZB-O3 OUVOPO Wireless Motion Sensor (2023)
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0020', outClusters:'0003', model:'SNZB-03', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],   // 
@@ -859,7 +871,7 @@ void localProcessTuyaDP(final Map descMap, final int dp, final int dp_id, final 
             break
         case 0x65 :    // (101)
             //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
-            if (DEVICE?.device.isDepricated == true) {
+            if (DEVICE?.device?.isDepricated == true) {      // safe navigation on 'device' too - DEVICE is null when the device profile was not resolved (UNKNOWN)
                 logDebug '(DP=0x65) unexpected : ignored depricated device 0x65 event'
             }
             else {
@@ -1090,6 +1102,10 @@ void customInitializeVars(final boolean fullInit=false) {
     if (fullInit == true || state.motionStarted == null) { state.motionStarted = unix2formattedDate(now()) }
     // overwrite the default value of the invertMotion setting if the device is 2in1
     if (fullInit == true || settings.invertMotion == null) device.updateSetting('invertMotion', is2in1() ? true : false)
+    // overwrite the default value of the motionReset setting for the PGST PIR+siren combo - no 'motion inactive' report was seen in the first device log, so the software reset is on by default
+    if (getDeviceProfile() == 'TS0601_PGST_PIR_SIREN') {
+        if (fullInit == true || settings.motionReset == null) device.updateSetting('motionReset', true)
+    }
     if (fullInit == true || settings.allStatusTextEnable == null) device.updateSetting('allStatusTextEnable', false)
 }
 

@@ -114,21 +114,49 @@ Get one HOBEIAN owner to confirm illuminance still works.
 `state.lastRx['illumDpTime']` when a Tuya illuminance DP arrives and skip the ZCL copy only when
 that stamp is recent. Self-tuning and correct for every variant.
 
-### I.4 `[ ]` OPEN — TS0601 `_TZE284_zmgahdog` PGST PIR+siren combo, motion-only support added, DPs unconfirmed
+### I.4 `[ ]` OPEN — TS0601 `_TZE284_zmgahdog` PGST PIR+siren combo, motion confirmed, remaining DPs unidentified
 
-Skeleton profile `TS0601_PGST_PIR_SIREN` added with a `dp:1` motion guess and `queryAllTuyaDP` on
-refresh; no public DP map exists anywhere (the z2m new-device-support issue for this exact
-manufacturer ID was closed "not planned", no external converter or ZHA quirk was ever published).
-The fingerprint's `inClusters` list is also a best-effort guess built from cluster *names* in the z2m
-issue (no hex IDs were given) — a wrong list only blocks automatic pairing, not manual profile
-selection.
+Profile `TS0601_PGST_PIR_SIREN`. No public DP map exists anywhere (the z2m new-device-support issue
+for this exact manufacturer ID was closed "not planned", no external converter or ZHA quirk was ever
+published), so everything is derived from `@calinatl`'s logs.
 
-Needs a debug log from `@calinatl` after pairing + hitting Refresh to confirm the motion DP number
-and to identify the real battery/tamper/sensitivity DPs for a follow-up commit. **Siren is explicitly
-out of scope** — the user's own use case is motion-only, siren to be driven independently by Hubitat
-automation.
+**First device log received 2026-08-05.** DP 1 = motion is **confirmed** (`dp=1 value=1` arrived at
+the same instant as the motion event). Seven datapoints in total were observed:
+
+| DP | hex | Tuya type | value | status |
+|----|-----|-----------|-------|--------|
+| 1 | 0x01 | enum | 1 on motion | motion — confirmed |
+| 3 | 0x03 | enum | 0 | unknown, mapped to `unknown_3` |
+| 9 | 0x09 | enum | 2 | sensitivity, mapped `rw` on the Tuya convention — unconfirmed |
+| 10 | 0x0A | enum | 0 | keep time, mapped `rw` on the Tuya convention — unconfirmed |
+| 80 | 0x50 | enum | 80, constant, every ~3.4 s | unknown, mapped to `unknown_80`, in `spammyDPsToNotTrace` |
+| 101 | 0x65 | enum | 0 | unknown, mapped to `unknown_101` |
+| 102 | 0x66 | bool | 0 | unknown, mapped to `unknown_102` — **leading siren-switch candidate** |
+
+No battery datapoint (4 or 25) was seen at all, so the `Battery` capability is still unbacked, and
+the ~3.4 s report cadence contradicts `powerSource: 'battery', isSleepy: true` — left unchanged
+pending confirmation of how the device is powered.
+
+The fingerprint's `inClusters` list is still a best-effort guess built from cluster *names* in the
+z2m issue (no hex IDs were given) — a wrong list only blocks automatic pairing, not manual profile
+selection. The device's own "Data" section has been requested.
+
+**Siren remains out of scope** as a driver feature — the user's own use case is motion-only — but
+identifying its datapoint is worth doing so the reports stop landing in `unknown_*`.
+
+Note on that log: the profile had **not** been applied on `@calinatl`'s hub. `DEVICE` was `null`
+(hence the `isDepricated` NPE, now fixed) and even DP 1 fell through to the legacy
+`localProcessTuyaDP()` path. Either the hub was not yet running 3.6.0, or `state.deviceProfile` was
+stuck at `UNKNOWN` — see B10 below.
 
 - Post: [community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739](https://community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739)
+- Reply posted 2026-08-05 asking `@calinatl` to update, Load All Defaults, enable debug, re-pair
+  without deleting, and post the logs:
+  [post #15](https://community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739/15?u=kkossev).
+  Answered.
+- Second reply drafted 2026-08-05: verify `state.deviceProfile`, post the device "Data" section,
+  toggle the siren from the Tuya app and change sensitivity / alarm duration one at a time to
+  identify the siren DP, report whether DP 80 ever stops, and confirm battery vs USB power.
 
 ### I.5 `[ ]` OPEN — revisit short-range TS0202/MOES motion detection report
 
@@ -432,6 +460,23 @@ profile uses it, but it is a landmine for reuse. Fix, or rename to `divideBy10Le
 
 `updateAttr('all', attrStr)` runs before the `length() > 64` check, producing two events. Move the
 length check before the first `updateAttr`.
+
+#### B10 — OPEN (documented, deliberately not fixed) — a device profile stuck at `UNKNOWN` never re-resolves
+
+`deviceProfileInitializeVars()` in `deviceProfileLib` calls `setDeviceNameAndProfile()` only when
+`state.deviceProfile == null`. Once it has been set to the string `UNKNOWN` — which is what happens
+when a device pairs against a driver version that does not yet contain its profile — it stays
+`UNKNOWN` forever, even across an `initializeVars(fullInit = true)`. Adding the profile in a later
+release then appears to do nothing: `DEVICE` resolves to `null`, every datapoint reports
+`NOT PROCESSED from deviceProfile`, and preferences for the profile never appear.
+
+Seen in the wild on 2026-08-05 with `_TZE284_zmgahdog` (see I.4). The workaround is
+`*** LOAD ALL DEFAULTS ***` from the **Device Utilities** command, which clears state entirely and
+forces re-resolution.
+
+The one-line fix would be `if (fullInit == true || state.deviceProfile == null || state.deviceProfile == UNKNOWN)`,
+but it lives in a shared library and would reach every driver that embeds it, so it is recorded here
+rather than applied. Revisit when the next library-wide change is being made anyway.
 
 ### Considered and rejected — do not re-open
 

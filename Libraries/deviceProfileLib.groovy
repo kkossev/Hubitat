@@ -55,7 +55,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.5.7' }
-static String deviceProfileLibStamp() { '2026/08/03 11:41 PM' }
+static String deviceProfileLibStamp() { '2026/08/05 11:12 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -70,17 +70,17 @@ metadata {
     /*
     // copy the following commands to the main driver, if needed
     command 'sendCommand', [
-        [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
-        [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
+        [name:'command', type: 'STRING', description: '▶️ Run one of the commands supported by this device profile • Leave empty to list the valid names in the log', constraints: ['STRING']],
+        [name:'val',     type: 'STRING', description: 'Optional value, needed only by some commands', constraints: ['STRING']]
     ]
     command 'setPar', [
-            [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
-            [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
+            [name:'par', type: 'STRING', description: '🎛️ Set a device profile preference and write it to the device • Leave empty to list the valid parameter names in the log', constraints: ['STRING']],
+            [name:'val', type: 'STRING', description: 'Leave empty to see the allowed range or values for that parameter', constraints: ['STRING']]
     ]
     */
     preferences {
         if (device) {
-            input(name: 'forcedProfile', type: 'enum', title: '<b>Device Profile</b>', description: 'Manually change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!',  options: getDeviceProfilesMap())
+            input(name: 'forcedProfile', type: 'enum', title: '<b>⚠️ Device Profile</b>', description: 'Which set of datapoints, attributes and preferences this driver uses for your device. Matched automatically from the model and manufacturer when the device is paired.<br>Change it manually only if your device was not recognized - the wrong profile stops it working correctly.<br>After changing the profile, pair the device again to your hub, without deleting it! Otherwise the new configuration may never reach a battery-powered sleepy device.',  options: getDeviceProfilesMap())
             // itterate over DEVICE.preferences map and inputIt all
             if (DEVICE != null && DEVICE?.preferences != null && DEVICE?.preferences != [:] && DEVICE?.device?.isDepricated != true) {
                 (DEVICE?.preferences).each { key, value ->
