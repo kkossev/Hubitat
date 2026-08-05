@@ -32,6 +32,7 @@ device-limitation findings are retained in the final audit section.
 
 ### 2. [ ] Add Sercomm SZ-ESW02 / SZ-ESW02N-CZ3 support with the correct power scaling
 
+- GitHub issue: https://github.com/kkossev/Hubitat/issues/123.
 - Reporter: @Rxich, [fingerprint and inaccurate-reading report](https://community.hubitat.com/t/-/86465/653),
   [follow-up](https://community.hubitat.com/t/-/86465/655). The maintainer explicitly registered
   this as a support issue in [post 654](https://community.hubitat.com/t/-/86465/654).
@@ -48,6 +49,7 @@ device-limitation findings are retained in the final audit section.
 
 ### 3. [ ] Add Zemismart SPM01 variant `_TZE284_iwn0gpzz`
 
+- GitHub issue: https://github.com/kkossev/Hubitat/issues/128.
 - Reporter: @gmanor77, [request](https://community.hubitat.com/t/-/86465/656); maintainer accepted it
   in principle but deferred it in [post 657](https://community.hubitat.com/t/-/86465/657).
 - Known pair: model `TS0601`, manufacturer `_TZE284_iwn0gpzz`.

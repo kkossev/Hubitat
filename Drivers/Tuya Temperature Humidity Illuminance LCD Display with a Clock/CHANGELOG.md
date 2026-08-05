@@ -86,7 +86,11 @@ is explicitly requested, not a cut/released version with its own `[Unreleased]` 
   label `'Celsius'`, fixing a `NumberFormatException` in `updated()` on any `TS0201_TH` device that
   never manually set the preference — which silently aborted all reporting configuration (temp,
   humidity, battery) for that device. The read is also now defensive (`safeToInt`) against devices
-  already carrying the bad value.
+  already carrying the bad value. Also resolves the `NumberFormatException` reported by Rxich on
+  [GitHub issue #67](https://github.com/kkossev/Hubitat/issues/67) /
+  [the soil-tester thread](https://community.hubitat.com/t/driver-for-tuya-soil-tester-sensor/156528/4)
+  after manually forcing Model Group to `TS0201_TH` — unconfirmed by the reporter, but same root
+  cause.
 - `initialize()` no longer runs the full preference/state wipe twice — it called
   `initializeVars(fullInit = true)` itself and then again via `installed()`.
 - Corrected a stale comment ("turn off debug logging after 30 minutes") that didn't match the

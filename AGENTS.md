@@ -555,10 +555,18 @@ Rules that apply to every document here:
 
 ### `CHANGELOG.md`
 
-Keep a Changelog: newest version first, an `## [Unreleased]` section on top, dated version headings,
-the standard `Added` / `Changed` / `Fixed` categories, user-facing summaries first and one
-`Developer notes` block per version. Record notable completed changes only — open work belongs in
-`TODO.md` and full history in git. Never paste a complete diff.
+Keep a Changelog: newest version first, dated version headings, the standard `Added` / `Changed` /
+`Fixed` categories, user-facing summaries first and one `Developer notes` block per version. Record
+notable completed changes only — open work belongs in `TODO.md` and full history in git. Never
+paste a complete diff.
+
+**Never head the top section `## [Unreleased]`.** Per §2 rule 4 / §5, a version number is the
+*current development bucket* until the user explicitly bumps it — it is never "cut" or "released"
+just because it has a dated heading. So the top section's heading is always `## [current version] -
+YYYY-MM-DD`, matching whatever `version()` / `VERSION` / the header's latest `ver.` line says right
+now, with a one-line note that this stays the working section until a bump is requested. New
+work goes into that section's existing `Added`/`Changed`/`Fixed` lists; only start a new heading
+above it once the user has actually bumped the version.
 
 ### `DEVICES.md`
 

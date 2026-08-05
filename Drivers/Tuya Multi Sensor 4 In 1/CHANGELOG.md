@@ -15,9 +15,10 @@ Several entries change **shared libraries** in `C:\work\Hubitat\Libraries\`. Tho
 driver that embeds them, not only this one, and take effect for users only after each affected
 driver's bundle is regenerated.
 
-## [Unreleased]
+## [3.6.0] - 2026-08-05
 
-Changes for the next release will be documented here.
+This is the current development version — all work stays under this heading until a version bump
+is explicitly requested, not a cut/released version with its own `[Unreleased]` above it.
 
 ### Added
 
@@ -32,6 +33,11 @@ Changes for the next release will be documented here.
   `_TZE200_jxyhl4eq`, `_TZE200_qxyh4r7g`, `_TZE200_na5qlzow` and `_TZE200_s6hzw8g2`
   (Nedis ZBSM20WT).
 - Datapoint 101 as an illuminance source, used by `_TZE200_s6hzw8g2` instead of DP 12.
+- New device profile `TS0601_PGST_PIR_SIREN` for the PGST Zigbee PIR+siren combo sensor
+  (`_TZE284_zmgahdog`, `TS0601`). Motion-only — siren is intentionally unsupported. No public
+  datapoint map exists for this device, so only DP 1 (motion, the Tuya convention default) is
+  mapped; `queryAllTuyaDP` runs on refresh to help identify the remaining DPs from a real device
+  log. See TODO.md I.4.
 
 ### Changed
 
@@ -53,6 +59,9 @@ Changes for the next release will be documented here.
 - Corrected the `(DP=0x69)` label on the 4-in-1 lux calibration datapoint, which is 0x6A.
 - Corrected an always-true condition in `compareAndConvertStrings()` (trace output only).
 - Corrected the "Huidity Calibration" title typo.
+- `customParseOccupancyCluster()` failed to publish on the hub ("current scope already contains a
+  variable of the name value") because two `else if` branches each redeclared a local `value` that
+  was already declared earlier in the method. Renamed the two inner locals.
 
 ### Developer notes
 

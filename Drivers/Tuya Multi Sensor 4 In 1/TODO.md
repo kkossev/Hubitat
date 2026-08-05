@@ -114,7 +114,23 @@ Get one HOBEIAN owner to confirm illuminance still works.
 `state.lastRx['illumDpTime']` when a Tuya illuminance DP arrives and skip the ZCL copy only when
 that stamp is recent. Self-tuning and correct for every variant.
 
-### I.4 `[ ]` OPEN — revisit short-range TS0202/MOES motion detection report
+### I.4 `[ ]` OPEN — TS0601 `_TZE284_zmgahdog` PGST PIR+siren combo, motion-only support added, DPs unconfirmed
+
+Skeleton profile `TS0601_PGST_PIR_SIREN` added with a `dp:1` motion guess and `queryAllTuyaDP` on
+refresh; no public DP map exists anywhere (the z2m new-device-support issue for this exact
+manufacturer ID was closed "not planned", no external converter or ZHA quirk was ever published).
+The fingerprint's `inClusters` list is also a best-effort guess built from cluster *names* in the z2m
+issue (no hex IDs were given) — a wrong list only blocks automatic pairing, not manual profile
+selection.
+
+Needs a debug log from `@calinatl` after pairing + hitting Refresh to confirm the motion DP number
+and to identify the real battery/tamper/sensitivity DPs for a follow-up commit. **Siren is explicitly
+out of scope** — the user's own use case is motion-only, siren to be driven independently by Hubitat
+automation.
+
+- Post: [community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739](https://community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739)
+
+### I.5 `[ ]` OPEN — revisit short-range TS0202/MOES motion detection report
 
 Determine whether the "must be ridiculously close" behaviour is configurable sensitivity, incorrect
 profile selection, placement, or device firmware — not automatically a driver defect.
@@ -194,6 +210,11 @@ de-duplicate queued writes; do not replay stale profile commands.
   a second one.
 
 #### II.2.2 `[ ]` OPEN — SONOFF motion sensor reports voltage but not battery percentage
+
+GitHub issue: https://github.com/kkossev/Hubitat/issues/75 ("eWeLink ms01 (Sonoff) is battery level
+is incorrect") — likely the same underlying `SONOFF_MOTION_IAS` battery-reporting gap: the `ms01`/
+`msO1`/`MS01` fingerprints (this driver's `SONOFF_MOTION_IAS` profile) are the exact model strings
+named in that issue. Confirm on the reporter's device before assuming full overlap.
 
 Investigate reporting/binding for `SONOFF_MOTION_IAS`; users currently may need to re-pair near the
 hub before two-hour battery reporting starts.

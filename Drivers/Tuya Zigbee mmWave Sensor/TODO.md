@@ -34,6 +34,7 @@ Known open sub-issues from the thread testing:
 - Posts: [#371](https://community.hubitat.com/t/-/137410/371)–[#431](https://community.hubitat.com/t/-/137410/431) (andrea.veroni, njanda)
 
 ### 1.2 `[ ]` iHseno battery radar TS0601 `_TZE284_debczeci` — finish and promote the profile
+GitHub issue: https://github.com/kkossev/Hubitat/issues/45.
 kkossev posted a custom profile in-thread ([#446](https://community.hubitat.com/t/-/137410/446), covers `_TZE204_debczeci`,
 `_TZE284_debczeci`, `_TZE284_1lvln0x6`) and promised to move it into the standard JSON once
 confirmed working ([#451](https://community.hubitat.com/t/-/137410/451)). Testing stalled: motion works, but `radarSensitivity` and
@@ -55,6 +56,20 @@ in the coming days" ([#426](https://community.hubitat.com/t/-/137410/426), 2025-
 JSON nor the custom HOBEIAN JSON (verified absent). Same user also reported open issues while
 running it on the HOBEIAN custom profile: `powerSource` shows battery though USB-powered,
 humidity not usable by other apps, detection distance not settable ([#424](https://community.hubitat.com/t/-/137410/424), rfg81).
+
+### 1.6 `[ ]` Tuya Smart Human Presence Sensor TS0601 `_TZE204_eaulras5` — dual motion/presence radar
+GitHub issue: https://github.com/kkossev/Hubitat/issues/47. Forum thread:
+https://community.hubitat.com/t/tuya-smart-human-presence-sensor-detect-human-motion-detector-zigbee-ts0601-tze204-eaulras5/145464.
+kkossev indicated in-thread the device could be added to this driver; not present in
+`deviceProfilesV4_mmWave.json` (verified absent). Reporter got some functionality working via a
+manually-forced profile, with `fadingTime`/sensitivity tuning needed for stationary-person presence
+— worth confirming which existing profile they used before writing a dedicated one.
+
+### 1.7 `[ ]` Add ThirdReality R1 mmWave sensor
+GitHub issue: https://github.com/kkossev/Hubitat/issues/70. Forum thread:
+https://community.hubitat.com/t/re-support-for-new-third-reality-r1-mmwave-sensor/159974. Not in
+`deviceProfilesV4_mmWave.json` (verified absent) — no known fingerprint or DP map captured yet;
+needs a textual fingerprint and DP log before a profile can be written.
 
 ### 1.5 `[ ]` HOBEIAN CK-BL702-MWS-01(7016) family — profile + `humanMotionState` enum extension
 - Mains 24 GHz variant (lpakula, [#311](https://community.hubitat.com/t/-/137410/311)–[#328](https://community.hubitat.com/t/-/137410/328)): works when forced to
@@ -113,6 +128,7 @@ DP dump; possibly a firmware variant using a different illuminance DP or the ZCL
 cluster path.
 
 ### 2.7 `[ ]` Reset `distance` to 0 when motion goes inactive (FP1E-style)
+GitHub issue: https://github.com/kkossev/Hubitat/issues/133.
 "Is there a way for the TS0225 to reset to 0 targetDistance after idle/inactive like the
 FP1E?" ([#474](https://community.hubitat.com/t/-/137410/474), nckepa, 2026-02-10 — unanswered). Most radars stop sending distance when
 idle, so the last value stays stale on dashboards. Could be a small generic option in
@@ -192,6 +208,7 @@ enforcement mechanism for AGENTS.md golden rule 6.
   OPTIMIZATION_PLAN appendix #19 (the rename proposal itself is folded into item 1.1 here).
 - HPM still serving 3.5.1 → deliberate: the author keeps 4.x manual-update/Repair-only until
   it leaves beta (thread top post, updated 2025-11-24). Becomes a release task, not a bug.
+  Tracked on GitHub as issue #114 (open, intentionally deferred — not a code gap).
 - humanMotionState missing `large` value, duplicated lux preferences → fixed 3.3.3.
 - `_TZE204_qasjif9e` inverted motion after V4 migration → fixed in JSON 4.0.8 ([#409](https://community.hubitat.com/t/-/137410/409)).
 - YA4FT0W4 missing `preProc` in V4 JSON ([#459](https://community.hubitat.com/t/-/137410/459)–[#461](https://community.hubitat.com/t/-/137410/461) lukaszbet) → merged (verified

@@ -136,6 +136,8 @@ values with no "invalid humidity" warnings, including under bright light.
 
 ### 3. [ ] `OPEN` / `BUGS` — Suppress false 100% humidity from `_TZ3210_ncw88jfq`
 
+GitHub issue: https://github.com/kkossev/Hubitat/issues/130.
+
 **User-visible problem:** three TS0201 `_TZ3210_ncw88jfq` sensors reportedly send an hourly humidity
 sample in hundredths while ordinary samples use tenths. The driver interprets the hourly sample as
 greater than 100% and clamps it to 100%, generating a false humidity event.
@@ -223,9 +225,35 @@ Verification needed from the poster: re-pair (or Configure), confirm `state.mode
 `Zigbee NON-Tuya`, and confirm over a few days whether the connectivity dropouts stop. If they
 don't, revert the `Zigbee NON-Tuya` reclassification — it's a plausible but unproven hypothesis.
 
+### 6. `[?]` `OPEN` — HaiHao HZ-SL03 soil sensor: humidity not reporting, battery misread
+
+GitHub issue: https://github.com/kkossev/Hubitat/issues/149.
+
+**Requested outcome:** humidity should report a value (currently stays `null`); battery percentage
+shouldn't read a stale/low value on fresh batteries.
+
+Known data (from the reporter, no textual Zigbee fingerprint available yet — HE Maker API doesn't
+expose it):
+
+- Model `HZ-SL03`, manufacturer "Shenzhen HaiHao Electronic Co., LTD" — same company as the already
+  supported Haozee SGS01/HZ-SL05 family (`TS0601_Haozee` group).
+- Temperature, illuminance, and battery report; humidity never does — consistent with this being an
+  unrecognized manufacturer falling into `UNKNOWN`/a mismatched model group whose humidity DP isn't
+  the generic `0x02`.
+- Battery briefly read 33% (state 0/Low) on fresh batteries, then jumped to 100% after `initialize()`
+  — possibly a stale-DP-on-first-report issue rather than a scaling bug; compare against the
+  known `TS0601_Soil_NEO`/`Coolo` battery-state pattern (0/1/2 → 33/66/100%) once a fingerprint exists.
+
+Implementation direction:
+
+- Request the textual fingerprint (Hubitat Device Data page: model/manufacturer/inClusters/
+  outClusters), since screenshots aren't sufficient (see the `NEEDS_EVIDENCE` convention below).
+- Once known, map to the closest existing soil/Haozee model group (likely `TS0601_Soil` or a
+  `TS0601_Haozee` variant) rather than guessing a new group without a confirmed DP map.
+
 ## Reports needing more evidence
 
-### 6. [ ] `NEEDS_EVIDENCE` — TS0201 battery value remains stale after replacement
+### 7. [ ] `NEEDS_EVIDENCE` — TS0201 battery value remains stale after replacement
 
 Evidence: https://community.hubitat.com/t/-/88093/659 through
 https://community.hubitat.com/t/-/88093/661
@@ -241,14 +269,14 @@ Request before opening a code change:
 - Results after waking, re-pairing without deletion, and waiting for the documented periodic report.
 - Measured battery voltage, if available.
 
-### 7. [ ] `NEEDS_EVIDENCE` — Previously working unidentified temperature sensor stopped reporting
+### 8. [ ] `NEEDS_EVIDENCE` — Previously working unidentified temperature sensor stopped reporting
 
 Evidence: https://community.hubitat.com/t/-/88093/667
 
 The identifying data exists only in screenshots and no follow-up was posted. Request the complete
 fingerprint as text, current driver version/model group, pairing logs, and ordinary receive logs.
 
-### 8. [ ] `NEEDS_EVIDENCE` — Validate `_TZE284_rqcuwlsa` ZDO responder experiment
+### 9. [ ] `NEEDS_EVIDENCE` — Validate `_TZE284_rqcuwlsa` ZDO responder experiment
 
 Evidence:
 
@@ -264,6 +292,27 @@ normally a platform responsibility, and the available evidence does not show tha
 responses caused the later success.
 
 ## Already resolved, declined, or outside this backlog
+
+### `RESOLVED` — `_TZE204_m9dzckna` SNT857Z temperature sensor
+
+GitHub issue: https://github.com/kkossev/Hubitat/issues/69 (still open on GitHub; candidate to close).
+Forum thread: https://community.hubitat.com/t/rule-for-temperature-monitoring-and-swithching/160162.
+User couldn't get a TS0601 temperature sensor working with Hubitat's built-in drivers ("Tuya TS0601
+devices will not function with the generic built-in drivers, as they use Tuya-specific Zigbee
+commands"). Resolved by selecting this driver with **Model Group** forced to `TS0601_Tuya` in
+preferences — no fingerprint/code change needed, the existing generic EF00 fallback already covers
+this device's temperature/humidity DPs.
+
+### `RESOLVED` — HOBEIAN ZG-303Z soil tester `NumberFormatException` when forced to `TS0201_TH`
+
+GitHub issue: https://github.com/kkossev/Hubitat/issues/67. Forum thread (separate from the main
+88093 thread): https://community.hubitat.com/t/driver-for-tuya-soil-tester-sensor/156528. Device
+support itself (`_TZE284_33bwcga2`, native group `TS0601_Soil_II`) was already added in v1.9.0
+(2025-08-31) — the only unresolved part was user Rxich's `NumberFormatException:
+For input string: "Celsius"` after manually setting Model Group to `TS0201_TH`. Same root cause as
+the `temperatureUnit` default-seeding bug fixed 2026-08-04 (see `CHANGELOG.md` `[2.2.0]`) — resolved
+as a side effect, not verified by the reporter. Issue #67 remains open on GitHub; consider closing
+or commenting once verified.
 
 ### `RESOLVED` — Configurable temperature/humidity decimal places
 

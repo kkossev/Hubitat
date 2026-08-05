@@ -35,15 +35,15 @@
  * ver. 3.5.5  2025-10-20 kkossev  - added IMOU Motion Sensor ZP1 model:'ZP2-EN', manufacturer:'MultIR'
  * ver. 3.5.6  2026-06-04 kkossev  - added TS0601 _TZE284_gnpflcoq 4-in-1 mmWave Radar Sensor profile 'TS0601_TZE284_4IN1'
  * ver. 3.5.7  2026-07-31 kkossev  - added HOBEIAN ZG-204ZX fingerprint to 'TS0601_TZE284_4IN1'
- * ver. 3.5.8  2026-08-03 kkossev  - (dev. branch) bug fixes; TS0202_MOTION_SWITCH (Linkoze LKMSZ001) dp:102 now maps to illumState (dark/light) instead of a fake lux value
+ * ver. 3.6.0  2026-08-05 kkossev  - (dev. branch) bug fixes; TS0202_MOTION_SWITCH (Linkoze LKMSZ001) dp:102 now maps to illumState (dark/light) instead of a fake lux value; added PGST TS0601 _TZE284_zmgahdog PIR+siren combo (motion-only) profile 'TS0601_PGST_PIR_SIREN'
  *
  *                                   TODO: show Temperature Offset and Humidity Offset only when the device profile supports TemperatureMeasurement and RelativeHumidityMeasurement capabilities
  *                                   TODO: check why no preferences : updateAllPreferences: no preferences defined for device profile SIHAS_USM-300Z_4_IN_1
  *                                   TODO: update documentation : https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1 
  */
 
-static String version() { "3.5.8" }
-static String timeStamp() {"2026/08/03 9:07 PM"}
+static String version() { "3.6.0" }
+static String timeStamp() {"2026/08/05 8:15 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -271,6 +271,23 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:1,   name:'motion',                   type:'enum',   rw: 'ro', min:0, max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'Motion'],
                 [dp:4,   name:'battery',                  type:'number', rw: 'ro', min:0, max:100,  defVal:100,  scale:1,  unit:'%',        title:'<b>Battery level</b>',              description:'Battery level'],
                 [dp:101, name:'illuminance',              type:'number', rw: 'ro', min:0, max:1000, defVal:0,    scale:1,  unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance'],
+            ],
+            refresh:        ['queryAllTuyaDP'],
+    ],
+
+    // https://community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739 - no public DP map exists (z2m issue closed 'not planned'); motion DP is a guess, siren intentionally unsupported
+    'TS0601_PGST_PIR_SIREN' : [
+            description   : 'PGST Zigbee PIR Motion Sensor (siren not supported)',
+            models        : ['TS0601'],
+            device        : [type: 'PIR', isIAS:false, powerSource: 'battery', isSleepy:true],
+            capabilities  : ['MotionSensor': true, 'Battery': true],
+            preferences   : ['motionReset':true],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_zmgahdog', deviceJoinName: 'PGST Zigbee PIR Motion Sensor Alarm (siren not supported)'],   // https://community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739 - cluster list not verified on a real device, see TODO.md
+            ],
+            tuyaDPs:        [
+                [dp:1,   name:'motion',   type:'enum',   rw: 'ro', min:0, max:1, defVal:'0', scale:1,  map:[0:'inactive', 1:'active'], description:'Motion (DP number unconfirmed - dp:1 is the Tuya convention default, verify against a real device log)'],
             ],
             refresh:        ['queryAllTuyaDP'],
     ],
@@ -781,14 +798,14 @@ void customParseOccupancyCluster(final Map descMap) {
         }
         // TODO - should be processed in the processClusterAttributeFromDeviceProfile method!
         else if (descMap.attrId == '0020') {    // OWON and SONOFF
-            int value = zigbee.convertHexToInt(descMap.value)
-            sendEvent('name': 'fadingTime', 'value': value, 'unit': 'seconds', 'type': 'physical', 'descriptionText': "fading time is ${value} seconds")
-            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (fadingTime) value is ${value} (0x${descMap.value} seconds)"
+            int fadingTimeValue = zigbee.convertHexToInt(descMap.value)
+            sendEvent('name': 'fadingTime', 'value': fadingTimeValue, 'unit': 'seconds', 'type': 'physical', 'descriptionText': "fading time is ${fadingTimeValue} seconds")
+            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (fadingTime) value is ${fadingTimeValue} (0x${descMap.value} seconds)"
         }
         else if (descMap.attrId == '0022') {
-            int value = zigbee.convertHexToInt(descMap.value)
-            sendEvent('name': 'radarSensitivity', 'value': value, 'unit': '', 'type': 'physical', 'descriptionText': "radar sensitivity is ${value}")
-            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (radarSensitivity) value is ${value} (0x${descMap.value})"
+            int radarSensitivityValue = zigbee.convertHexToInt(descMap.value)
+            sendEvent('name': 'radarSensitivity', 'value': radarSensitivityValue, 'unit': '', 'type': 'physical', 'descriptionText': "radar sensitivity is ${radarSensitivityValue}")
+            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (radarSensitivity) value is ${radarSensitivityValue} (0x${descMap.value})"
         }
         else {
             logDebug "UNPROCESSED Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${descMap.value} (0x${descMap.value})"
