@@ -38,7 +38,7 @@ deviceType = "WaterFlowMeter"
 metadata {
     definition (
         name: 'Tuya Ultrasonic Water Flow Meter',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Ultrasonic%20Water%20Flow%20Meter/Tuya_Ultrasonic_Water_Flow_Meter_lib_included.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Ultrasonic%20Water%20Flow%20Meter/Tuya%20Ultrasonic%20Water%20Flow%20Meter.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         capability 'Sensor'
