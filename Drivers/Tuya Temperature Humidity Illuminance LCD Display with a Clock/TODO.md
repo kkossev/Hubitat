@@ -221,9 +221,20 @@ Fix applied (2026-08-04, pending poster confirmation):
   for the reported dropouts, inferred from cluster-pattern analogy — **not confirmed by testing this
   specific device.**
 
-Verification needed from the poster: re-pair (or Configure), confirm `state.modelGroup` shows
-`Zigbee NON-Tuya`, and confirm over a few days whether the connectivity dropouts stop. If they
-don't, revert the `Zigbee NON-Tuya` reclassification — it's a plausible but unproven hypothesis.
+Follow-up (2026-08-06, post #704): poster removed and re-paired the device on the corrected driver;
+HE did **not** auto-select any driver at all (Type stayed "Device"), and the join log shows
+`inClusters:"0000,0003,0001,0020,0402,0405"` — clusters `0001`/`0003` swapped versus the fingerprint
+added on 2026-08-04 (`0000,0001,0003,0020,0402,0405`). Hubitat's built-in-driver-selection fingerprint
+match is order-sensitive on `inClusters`, so the existing fingerprint silently never matched this
+unit. Added a **third** fingerprint with the exact order from this log, kept the other two as-is
+(other units of the same clone may report yet another order). This explains why the driver was never
+selected in the first place — the sleepy-device reporting-config hypothesis from 2026-08-04 is still
+unverified since the driver was never actually running on this device.
+
+Verification needed from the poster: re-pair once more with the updated driver, confirm this driver
+is now auto-selected (or select it manually and confirm `state.modelGroup` shows `Zigbee NON-Tuya`),
+and confirm over a few days whether the connectivity dropouts stop. If they don't, revert the
+`Zigbee NON-Tuya` reclassification — it's a plausible but unproven hypothesis.
 
 ### 6. `[?]` `OPEN` — HaiHao HZ-SL03 soil sensor: humidity not reporting, battery misread
 

@@ -82,11 +82,12 @@
  *                                  added corrected fingerprint and moved _TZ3000_utwgoauk ("SNZB-02" Tuya clone) from TS0201 to Zigbee NON-Tuya group (community report #694)
  *                                  added new 'TS0601_Illum_TH' group and fingerprint for _TZE204_rbbx5mfq; fixed DP 0x02/0x06/0x07 illuminance/temperature/humidity mismatch (community request #691); corrected _TZE200_rbbx5mfq from TS0601_Tuya
  *                                  added new 'TS0601_Soil_5IN1' group and fingerprints for _TZE284_hdml1aav / _TZE2841000000_hdml1aav (Excellux ZS-300TF); added soilFertilityValue/waterWarning/soilFertilityWarning attributes (community request #687)
+ *                                  added a second _TZ3000_utwgoauk ("SNZB-02" clone) fingerprint with the inClusters in the order actually announced by calinatl's unit - fingerprint matching is order-sensitive (community report #704)
  *
 */
 
 @Field static final String VERSION = '2.2.0'
-@Field static final String TIME_STAMP = '2026/08/05 11:28 PM'
+@Field static final String TIME_STAMP = '2026/08/06 12:22 AM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -204,6 +205,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,0000', outClusters:'0003,0019,000A', model:'TS0201', manufacturer:'_TZ3000_rdhukkmi', deviceJoinName: 'Tuya Temperature Humidity sensor'                // https://community.hubitat.com/t/tuya-humidity-temperature-sensor/76635/55?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,0000', outClusters:'0003,0019,000A', model:'TS0201', manufacturer:'_TZ3000_utwgoauk', deviceJoinName: 'Tuya Temperature Humidity sensor'                // https://community.hubitat.com/t/humidity-sensor-usb-powered-zigbee/127569/14?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0402,0405', outClusters:'0019', model:'SNZB-02', manufacturer:'_TZ3000_utwgoauk', deviceJoinName: 'Tuya Temperature Humidity sensor (SNZB-02 clone)'    // real device signature; https://community.hubitat.com/t/-/88093/694?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0001,0020,0402,0405', outClusters:'0019', model:'SNZB-02', manufacturer:'_TZ3000_utwgoauk', deviceJoinName: 'Tuya Temperature Humidity sensor (SNZB-02 clone)'    // inClusters order differs on this unit, fingerprint match is order-sensitive; https://community.hubitat.com/t/-/88093/704?u=kkossev
         //
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0402,0405', outClusters:'0003,0402,0405', model:'RH3052', manufacturer:'TUYATEC-gqhxixyk', deviceJoinName: 'TUYATEC RH3052 Motion Sensor'                    // https://community.hubitat.com/t/moes-zigbee-3-0-temp-humidity-sensor-driver/112318?u=kkossev
         //
