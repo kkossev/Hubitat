@@ -23,7 +23,7 @@
  */
 
 static String version() { '3.4.0' }
-static String timeStamp() { '2026/08/06 12:03 AM' }
+static String timeStamp() { '2026/08/06 12:15 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -38,7 +38,7 @@ deviceType = "WaterFlowMeter"
 metadata {
     definition (
         name: 'Tuya Ultrasonic Water Flow Meter',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Ultrasonic%20Water%20Flow%20Meter/Tuya%20Ultrasonic%20Water%20Flow%20Meter.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Ultrasonic%20Water%20Flow%20Meter/Tuya_Ultrasonic_Water_Flow_Meter_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         capability 'Sensor'
