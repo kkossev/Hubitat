@@ -108,7 +108,7 @@ illuminance report for the whole profile. If a HOBEIAN unit turns out to report 
 
 Considered unlikely — z2m handles the entire family DP-only with no upstream reports of missing
 lux, and the `_TZE200_3towulqd` units demonstrably speak EF00 even without advertising the cluster.
-Get one HOBEIAN owner to confirm illuminance still works.
+Outstanding: confirmation from a real HOBEIAN unit that illuminance still works.
 
 **Rollback if it breaks:** replace the static flag with runtime detection — stamp
 `state.lastRx['illumDpTime']` when a Tuya illuminance DP arrives and skip the ZCL copy only when
@@ -120,7 +120,7 @@ Profile `TS0601_PGST_PIR_SIREN`. No public DP map exists anywhere (the z2m new-d
 for this exact manufacturer ID was closed "not planned", no external converter or ZHA quirk was ever
 published), so everything is derived from `@calinatl`'s logs.
 
-**First device log received 2026-08-05.** DP 1 = motion is **confirmed** (`dp=1 value=1` arrived at
+**First device log analysed 2026-08-05.** DP 1 = motion is **confirmed** (`dp=1 value=1` arrived at
 the same instant as the motion event). Seven datapoints in total were observed:
 
 | DP | hex | Tuya type | value | status |
@@ -131,32 +131,33 @@ the same instant as the motion event). Seven datapoints in total were observed:
 | 10 | 0x0A | enum | 0 | keep time, mapped `rw` on the Tuya convention — unconfirmed |
 | 80 | 0x50 | enum | 80, constant, every ~3.4 s | unknown, mapped to `unknown_80`, in `spammyDPsToNotTrace` |
 | 101 | 0x65 | enum | 0 | unknown, mapped to `unknown_101` |
-| 102 | 0x66 | bool | 0 | unknown, mapped to `unknown_102` — **leading siren-switch candidate** |
+| 102 | 0x66 | bool | 0 | unknown, mapped to `unknown_102` |
 
 No battery datapoint (4 or 25) was seen at all, so the `Battery` capability is still unbacked, and
 the ~3.4 s report cadence contradicts `powerSource: 'battery', isSleepy: true` — left unchanged
-pending confirmation of how the device is powered.
+pending confirmation of how the device is powered. The evidence conflicts: the topic's opening post
+describes the unit as USB powered with a backup battery, while the z2m issue describes a 3.7 V
+300 mAh cell.
 
-The fingerprint's `inClusters` list is still a best-effort guess built from cluster *names* in the
-z2m issue (no hex IDs were given) — a wrong list only blocks automatic pairing, not manual profile
-selection. The device's own "Data" section has been requested.
+The fingerprint's `inClusters` list is still a best-effort guess, and it is probably wrong. The z2m
+issue does publish numeric cluster IDs, which were missed when the profile was written: input
+`4, 5, 61184, 0, 60672` and output `25, 10`, i.e. `inClusters:'0004,0005,EF00,0000,ED00'` and
+`outClusters:'0019,000A'`. The line currently in the driver has a spurious `0003` and is missing
+`ED00`. Correct it once a real device's "Data" section confirms — one third-party report is thin
+evidence, and a wrong list only blocks automatic pairing, not manual profile selection.
 
-**Siren remains out of scope** as a driver feature — the user's own use case is motion-only — but
-identifying its datapoint is worth doing so the reports stop landing in `unknown_*`.
+**The siren is out of scope, permanently.** This driver supports the device as a motion sensor only.
+Do not add siren control, and do not open work to identify the siren datapoint. DP 102 stays mapped
+read-only as `unknown_102`. Do not re-file this.
 
-Note on that log: the profile had **not** been applied on `@calinatl`'s hub. `DEVICE` was `null`
+Note on that log: the profile had **not** been applied on the reporting hub. `DEVICE` was `null`
 (hence the `isDepricated` NPE, now fixed) and even DP 1 fell through to the legacy
 `localProcessTuyaDP()` path. Either the hub was not yet running 3.6.0, or `state.deviceProfile` was
 stuck at `UNKNOWN` — see B10 below.
 
 - Post: [community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739](https://community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739)
-- Reply posted 2026-08-05 asking `@calinatl` to update, Load All Defaults, enable debug, re-pair
-  without deleting, and post the logs:
-  [post #15](https://community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739/15?u=kkossev).
-  Answered.
-- Second reply drafted 2026-08-05: verify `state.deviceProfile`, post the device "Data" section,
-  toggle the siren from the Tuya app and change sensitivity / alarm duration one at a time to
-  identify the siren DP, report whether DP 80 ever stops, and confirm battery vs USB power.
+- z2m new-device-support issue: [#29737](https://github.com/Koenkk/zigbee2mqtt/issues/29737) —
+  closed "not planned", no DP map, but it carries the cluster IDs noted above.
 
 ### I.5 `[ ]` OPEN — revisit short-range TS0202/MOES motion detection report
 
