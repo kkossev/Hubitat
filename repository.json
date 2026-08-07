@@ -380,6 +380,17 @@
         "Multi Sensors",
         "Temperature & Humidity"
        ]
+    },
+    {
+      "id": "6a58241e-1634-455d-94ca-10f6393a75db",
+      "name": "Tuya Zigbee Switch",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Switch/packageManifest.json",
+      "description": "Tuya Zigbee Switch, relay and plug driver (Tuya TS0601, Sonoff ZBMINI-L/L2/R2, ZBMicro, IKEA, Lidl, LEDVANCE) for Hubitat Elevation hub",
+      "tags": [
+        "Lights & Switches",
+        "Zigbee"
+      ]
     }
   ]
 }
