@@ -101,6 +101,12 @@
       "id": 180,
       "codeType": "library",
       "version": 16
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Libraries/groupsLib.groovy",
+      "id": 169,
+      "codeType": "library",
+      "version": 11
     }
   ]
 }

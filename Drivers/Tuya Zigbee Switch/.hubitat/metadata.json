@@ -5,6 +5,12 @@
       "id": 2589,
       "codeType": "driver",
       "version": 289
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Drivers/Tuya Zigbee Switch/Tuya_Zigbee_Switch.groovy",
+      "id": 2589,
+      "codeType": "driver",
+      "version": 305
     }
   ]
 }
