@@ -1,0 +1,17 @@
+{
+  "packageName": "Tuya Zigbee Switch",
+  "author": "Krassimir Kossev",
+  "version": "3.5.1",
+  "minimumHEVersion": "2.3.7",
+  "dateReleased": "2026-08-07",
+  "releaseNotes": "3.5.1  2026-08-07 - fixed push(buttonNumber) MissingMethodException; customUpdated() no longer logs a spurious 'no commands to send' warning; logEnable defaults to false on Initialize/Load All Defaults; toggle() detects the Tuya switch DP structurally; aligned with commonLib 4.1.0\n3.5.0  2025-09-15 - aligned with commonLib 4.0.0\n3.4.0  2025-04-08 - urgent fix for java.lang.CloneNotSupportedException under HE 2.4.1.155\n3.3.2  2025-03-29 - added updateFirmware() and toggle() commands; added delayedPowerOnState/delayedPowerOnTime; fixed ZCL Default Response for ZBMINIR2 Detach Relay Mode\n3.3.1  2025-03-13 - added activeEndpoints() (test mode); added PushableButton for ZBMINIR2; ZBMINIR2 Detach Relay Mode sends ZCL Default Response\n3.3.0  2025-03-10 - added health check via device ping; added SONOFF ZBMINIR2 and ZBMINI-L support",
+  "drivers": [
+    {
+      "id": "fcf96cb9-c2ee-451f-a81c-ae16f41059d7",
+      "name": "Tuya Zigbee Switch",
+      "namespace": "kkossev",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Switch/Tuya_Zigbee_Switch_lib_included.groovy",
+      "required": true
+    }
+  ]
+}

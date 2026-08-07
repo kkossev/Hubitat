@@ -7,7 +7,7 @@ library(
     name: 'groupsLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/groupsLib.groovy',
-    version: '3.0.1',
+    version: '3.0.2',
     documentationLink: ''
 )
 /*
@@ -24,19 +24,20 @@ library(
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added groupsLib.groovy
  * ver. 3.0.1  2024-04-14 kkossev  - groupsInitializeVars() groupsRefresh()
+ * ver. 3.0.2  2026-08-07 kkossev  - updated Zigbee Groups command descriptions
  *
  *                                   TODO:
 */
 
-static String groupsLibVersion()   { '3.0.1' }
-static String groupsLibStamp() { '2024/04/15 7:09 AM' }
+static String groupsLibVersion()   { '3.0.2' }
+static String groupsLibStamp() { '2026/08/07 8:51 PM' }
 
 metadata {
     // no capabilities
     // no attributes
     command 'zigbeeGroups', [
-        [name:'command', type: 'ENUM',   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
-        [name:'value',   type: 'STRING', description: 'Group number', constraints: ['STRING']]
+        [name:'command', type: 'ENUM',   description: '👥 Manage Zigbee group membership', constraints: ZigbeeGroupsOpts.options.values() as List<String>],
+        [name:'value',   type: 'STRING', description: 'Group ID (1-65527) • Required when adding, viewing, or removing one group', constraints: ['STRING']]
     ]
 
     preferences {

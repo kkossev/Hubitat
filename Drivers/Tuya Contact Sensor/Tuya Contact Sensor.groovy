@@ -31,6 +31,7 @@
  * ver. 1.2.7  2025-02-03 kkossev  - Xfinity/Visonic MCT-350 Zigbee Contact Sensor fingerprint typo fix - tnx @thanhvle-94
  * ver. 1.2.8  2025-10-20 kkossev  - added IMOU Door and Window Sensor ZD1 ( MultIR ZD2-EN )
  * ver. 1.3.0  2026-05-12 kkossev  - added TS0601 _TZE200_seq9cm6u/_TZE204_seq9cm6u pressure strip as contact sensor;
+ * ver. 1.3.1  2026-07-18 kkossev  - bugfix: restored getModelGroup() deviceProfile selection (removed the pressure-strip test hardcode); added 3RDREALITY_TILT_BATT device profile for the 3RDTS01056Z garage door tilt sensor;
  *
  *                                   TODO: handle the case when 'lastBattery' is missing.
  *                                   TODO: filter duplicated open/close messages when 'Poll Contact Status' option is enabled
@@ -42,8 +43,8 @@
  *                                   TODO: refactor - use libraries !
  */
 
-static String version() { '1.3.0' }
-static String timeStamp() { '2026/05/12 12:45 AM' }
+static String version() { '1.3.1' }
+static String timeStamp() { '2026/07/18 11:33 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -85,6 +86,7 @@ metadata {
         attribute 'healthStatus', 'enum', ['offline', 'online', 'unknown']
         attribute 'batteryVoltage', 'number'
         attribute 'lastBattery', 'date'         // last battery event time - added in 1.2.0 05/22/2024
+        attribute 'batteryStatus', 'enum', ['normal', 'replace']    // ThirdReality tilt sensor IAS battery_low bit - added in 1.3.1
         attribute 'workState', 'enum', ['presence', 'none', 'presence_5min', 'presence_30min', 'none_5min', 'none_30min']
         attribute 'rawPressure', 'number'
 
@@ -130,7 +132,11 @@ metadata {
                 input name: 'pressureDelay', type: 'number', title: '<b>Pressure Delay</b>', description: 'Delay before reporting closed (pressure detected), seconds', defaultValue: 10, range: '0..3600'
                 input name: 'pressureReportingInterval', type: 'number', title: '<b>Pressure Reporting Interval</b>', description: 'How often the device reports raw pressure, seconds', defaultValue: 60, range: '0..3600'
                 input name: 'sendRawPressure', type: 'bool', title: '<b>Send Raw Pressure Events</b>', description: 'Enable rawPressure attribute events', defaultValue: true
-                input name: 'pressureThreshold', type: 'number', title: '<b>Raw Pressure Threshold</b>', description: 'Minimum change in raw pressure value to trigger an event', defaultValue: 1, range: '0..9999'
+                input name: 'pressureThreshold', type: 'number', title: '<b>Raw Pressure Threshold</b>', description: 'Minimum change in raw pressure value to trigger an event', defaultValue: 5, range: '0..9999'
+            }
+            else if (isThirdRealityGarageDoorTiltSensor()) {
+                input name: 'garageDoorOpenDelay', type: 'number', title: '<b>Garage Door Open Delay</b>, seconds', description: 'Delay before the open state is reported, 0..3600 seconds (write-only attribute 0xFF01:0x0000).<br>Requires firmware 1.00.36 or newer', range: '0..3600'
+                input name: 'calibrate', type: 'bool', title: '<b>Calibrate</b>', description: 'Trigger the z-axis calibration when Save Preferences is clicked.<br>Run it with the garage door fully closed; this switch resets automatically. Requires firmware 1.00.36 or newer', defaultValue: false
             }
         }
         input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', defaultValue: false)
@@ -265,6 +271,18 @@ metadata {
         preferences   : ['minReportingTime': true],
         batteries     : '2xAAA'
     ],
+    '3RDREALITY_TILT_BATT' : [
+        model         : '3RDTS01056Z',
+        manufacturers : ['Third Reality, Inc'],
+        deviceJoinName: 'Third Reality Tilt Sensor',
+        inClusters    : '0000,0001,0500,FFF1',
+        outClusters   : '0019',
+        capabilities  : ['contactSensor': true, 'battery': true],
+        configuration : ['battery': false],                     // the device rejects battery reporting configuration - reads only
+        attributes    : ['healthStatus', 'batteryStatus'],
+        preferences   : ['garageDoorOpenDelay': true, 'calibrate': true],
+        batteries     : '2xAAA'
+    ],
     'XFINITY_VISONIC_CONTACT_BATT' : [
         model         : 'URC4460BC0-X-R',
         manufacturers : ['Universal Electronics Inc'],
@@ -313,14 +331,15 @@ metadata {
         batteries     : 'unknown'
     ]
 ]
-//String getModelGroup()          { return (state.deviceProfile as String) ?: 'UNKNOWN' }
-String getModelGroup()          { return 'TS0601_PRESSURE_CONTACT_BATT' }   // for tests
+String getModelGroup()          { return (state.deviceProfile as String) ?: 'UNKNOWN' }
 boolean isConfigurable(String model)   { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
 boolean isConfigurable()        { String model = getModelGroup(); return isConfigurable(model) }
 boolean isBatteryConfigurable() { deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true }
 boolean hasIlliminance()        { deviceProfiles[getModelGroup()]?.capabilities?.IlluminanceMeasurement?.value == true }
 boolean hasTamper()             { deviceProfiles[getModelGroup()]?.capabilities?.tamperAlert?.value == true }
 boolean isSleepyDevice()        { deviceProfiles[getModelGroup()]?.configuration?.sleepyDevice == true }
+// data-value based on purpose (not model-group), so it works even before initialize() has stored state.deviceProfile
+boolean isThirdRealityGarageDoorTiltSensor() { return device?.getDataValue('model') == '3RDTS01056Z' && device?.getDataValue('manufacturer') == 'Third Reality, Inc' }
 
 @Field static final Integer MaxRetries = 3
 @Field static final Integer ConfigTimer = 15
@@ -338,7 +357,7 @@ private static int getTUYA_STATUS_SEARCH() { 0x06 }
 private static int getTUYA_TIME_SYNCHRONISATION() { 0x24 }
 
 // tuya DP type
-private static String getDP_TYPE_RAW() { '01' }    // [ bytes ]
+private static String getDP_TYPE_RAW() { '00' }    // [ bytes ]
 private static String getDP_TYPE_BOOL() { '01' }    // [ 0/1 ]
 private static String getDP_TYPE_VALUE() { '02' }    // [ 4 byte value ]
 private static String getDP_TYPE_STRING() { '03' }    // [ N byte string ]
@@ -402,18 +421,13 @@ def parse(String description) {
             }
             else if (descMap?.attrId == '0013') {
                 // [raw:7CC50105000813002002, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:0013, encoding:20, command:0A, value:02, clusterInt:1280, attrInt:19]
-                def value = Integer.parseInt(descMap?.value, 16)
-                def str = getSensitivityString(value)
-                if (settings?.txtEnable) { log.info "${device.displayName} Current Zone Sensitivity Level = ${str} (${value})" }
-                device.updateSetting('sensitivity', [value: str, type: 'enum'])
+                // this driver has no sensitivity preference - log the raw value only (A1 fix 2026-07-18)
+                if (settings?.logEnable) { log.debug "${device.displayName} IAS attr 0x${descMap.attrId} (Current Zone Sensitivity Level) value=${descMap.value} (ignored)" }
             }
             else if (descMap?.attrId == 'F001') {
                 // [raw:7CC50105000801F02000, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:F001, encoding:20, command:0A, value:00, clusterInt:1280, attrInt:61441]
-                def value = Integer.parseInt(descMap?.value, 16)
-                def str = getKeepTimeString(value)
-                if (settings?.txtEnable) { log.info "${device.displayName} Current Zone Keep-Time =  ${str} (${value})" }
-                //log.trace "str = ${str}"
-                device.updateSetting('keepTime', [value: str, type: 'enum'])
+                // this driver has no keepTime preference - log the raw value only (A1 fix 2026-07-18)
+                if (settings?.logEnable) { log.debug "${device.displayName} IAS attr 0x${descMap.attrId} (keep time) value=${descMap.value} (ignored)" }
             }
             else {
                 if (settings?.logEnable) { log.warn "${device.displayName} Zone status: NOT PROCESSED ${descMap}" }
@@ -539,7 +553,7 @@ void parseZHAcommand(Map descMap) {
             String status = descMap.data[2] ?: ''
             String attrId = (descMap.data[1] ?: '') + (descMap.data[0] ?: '')
             if (status == '86') {
-                if (logEnable == true) { log.warn "${device.displayName} Read attribute response: unsupported Attributte ${attrId} cluster ${clusterId}" }
+                if (logEnable == true) { log.warn "${device.displayName} Read attribute response: unsupported Attributte ${attrId} cluster ${descMap.clusterId}" }
             }
             else {
                 if (logEnable == true) { log.debug "${device.displayName} Read attribute response: status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}" }
@@ -723,7 +737,12 @@ def processTuyaDP(descMap, dp, dp_id, fncmd) {
             break
         case 0x09: // sensitivity setting (_TZE200_seq9cm6u / _TZE204_seq9cm6u) - config value echoed back by device
             String sensitivityStr = ['low', 'middle', 'high'].getAt(fncmd) ?: "unknown(${fncmd})"
-            logDebug "(dp=$dp) sensitivity config echo = ${sensitivityStr} (${fncmd})"
+            String expected09 = (settings?.pressureSensitivity ?: pressureSensitivityOptions.defaultValue) as String
+            if (sensitivityStr == expected09) {
+                logDebug "(dp=$dp) sensitivity config echo = ${sensitivityStr} (${fncmd}) (matches setting)"
+            } else {
+                log.warn "${device.displayName} sensitivity echo mismatch: got ${sensitivityStr} (${fncmd}), expected ${expected09}"
+            }
             break
         case 0x0C : // (12) - raw pressure for TS0601_PRESSURE_CONTACT_BATT; illuminance for others
             if (getModelGroup() == 'TS0601_PRESSURE_CONTACT_BATT') {
@@ -817,11 +836,25 @@ void parseIasMessage(String description) {
         if (hasTamper() == true) {
             tamperEvent(zs.tamperSet == true ? 1 : 0)
         }
+        if (isThirdRealityGarageDoorTiltSensor()) {
+            sendBatteryStatusEvent(zs.batterySet == true)
+        }
     }
     catch (e) {
         log.error "${device.displayName} This driver requires HE version 2.2.7 (May 2021) or newer!"
         return
     }
+}
+
+void sendBatteryStatusEvent(final boolean isBatteryLow) {
+    final String batteryStatusValue = isBatteryLow ? 'replace' : 'normal'
+    if (device.currentValue('batteryStatus') == batteryStatusValue) {
+        logDebug "batteryStatus is already ${batteryStatusValue}"
+        return
+    }
+    final String descriptionText = "batteryStatus is ${batteryStatusValue}"
+    sendEvent(name: 'batteryStatus', value: batteryStatusValue, type: 'physical', descriptionText: descriptionText)
+    logInfo descriptionText
 }
 
 void setOpen() {
@@ -842,7 +875,7 @@ void sendContactEvent(contactActive, isDigital = false) {
     Map statsMap = stringToJsonMap(state.stats)
     Map lastTxMap = stringToJsonMap(state.lastTx)
     // if contact is changed and contactPoll time is less than 10 seconds ago, increment the stats.outOfSync counter
-    if (setting?.pollContactStatus == true) {
+    if (settings?.pollContactStatus == true) {
         if (newValue != currentValue && isDigital == false) {
             int timeElapsed = Math.round((now() - (lastTxMap['contactPoll'] ?: now())) / 1)
             logDebug "sendContactEvent: contact status changed from ${currentValue} to ${newValue} timeElapsed = ${timeElapsed} ms"
@@ -1008,7 +1041,9 @@ void sendAndClearPendingCmds(String reason = 'wake') {
 List<String> sendPressureSensorConfigCmds() {
     List<String> cmds = []
     Map<String, Integer> sensitivityMap = ['low': 0, 'middle': 1, 'high': 2]
-    int sensitivityValue          = sensitivityMap[settings?.pressureSensitivity ?: pressureSensitivityOptions.defaultValue] ?: 1
+    // do not use the elvis operator here - 'low' maps to 0, which is falsey in Groovy (BUGS.md B3)
+    Integer sensitivityValue      = sensitivityMap[settings?.pressureSensitivity ?: pressureSensitivityOptions.defaultValue]
+    if (sensitivityValue == null) { sensitivityValue = 1 }
     int noPressureDelayValue      = safeToInt(settings?.noPressureDelay, 10)
     int pressureDelayValue        = safeToInt(settings?.pressureDelay, 10)
     int reportingIntervalValue    = safeToInt(settings?.pressureReportingInterval, 60)
@@ -1118,6 +1153,23 @@ void updated() {
         int pressureDelayValue     = safeToInt(settings?.pressureDelay, 10)
         int reportingIntervalValue = safeToInt(settings?.pressureReportingInterval, 60)
         logInfo "Pressure sensor config: sensitivity=${settings?.pressureSensitivity}, noPressureDelay=${noPressureDelayValue}s, pressureDelay=${pressureDelayValue}s, reportingInterval=${reportingIntervalValue}s"
+    }
+
+    if (isThirdRealityGarageDoorTiltSensor()) {
+        ArrayList<String> tiltCmds = []
+        if (settings?.garageDoorOpenDelay != null) {
+            int openDelay = safeToInt(settings.garageDoorOpenDelay, 0)
+            logInfo "writing Garage Door Open Delay ${openDelay}s to 0xFF01:0x0000"
+            tiltCmds += zigbee.writeAttribute(0xFF01, 0x0000, DataType.UINT16, openDelay, [mfgCode: 0x1407], delay = 200)
+        }
+        if (settings?.calibrate == true) {
+            device.updateSetting('calibrate', [value: 'false', type: 'bool'])   // one-shot: always reset back to false
+            logInfo 'calibrate: triggering the z-axis calibration (writing 1 to 0xFF01:0x0003)'
+            tiltCmds += zigbee.writeAttribute(0xFF01, 0x0003, DataType.UINT8, 1, [mfgCode: 0x1407], delay = 200)
+        }
+        if (tiltCmds != []) {
+            sendZigbeeCommands(tiltCmds)    // sent immediately - the tilt sensor answers direct writes; not using the sleepy pending-cmds path
+        }
     }
 
     state.lastTx = mapToJsonString(lastTxMap)
@@ -1321,11 +1373,11 @@ void setDeviceName() {
         // don't change the device name when unknown
         state.deviceProfile = 'UNKNOWN'
     }
-    if (deviceName != NULL && deviceName != '') {
+    if (deviceName != null && deviceName != '') {
         device.setName(deviceName)
-        logInfo { "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} deviceName was set to ${deviceName}" }
+        logInfo "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} deviceName was set to ${deviceName}"
     } else {
-        logWarn { "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} was not found!" }
+        logWarn "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} was not found!"
     }
 }
 

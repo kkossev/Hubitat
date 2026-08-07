@@ -5,6 +5,12 @@
       "id": 1221,
       "codeType": "driver",
       "version": 307
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Drivers/Tuya ZigBee Vibration Sensor/Tuya ZigBee Vibration Sensor.groovy",
+      "id": 1221,
+      "codeType": "driver",
+      "version": 337
     }
   ]
 }

@@ -20,12 +20,13 @@ library(
  * ver. 3.2.0  2024-05-27 kkossev  - added iasLib.groovy
  * ver. 3.2.1  2024-07-06 kkossev  - added standardParseIasMessage (debug only); zs null check
  * ver. 3.2.2  2024-08-09 kkossev  - zs null check
+ * ver. 3.2.3  2026-08-03 kkossev  - minor bug fixes and improvements
  *
  *                                   TODO:
 */
 
-static String iasLibVersion()   { '3.2.2' }
-static String iasLibStamp() { '2024/08/09 12:03 PM' }
+static String iasLibVersion()   { '3.2.3' }
+static String iasLibStamp() { '2026/08/03 11:46 PM' }
 
 metadata {
     // no capabilities
@@ -106,7 +107,7 @@ public void standardParseIASCluster(final Map descMap) {
     String clusterInfo = 'standardParseIASCluster:'
 
     if (descMap?.cluster == '0500' && descMap?.command in ['01', '0A']) {    //IAS read attribute response
-        logDebug "${standardParseIASCluster} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
+        logDebug "${clusterInfo} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
         if (descMap?.attrId == '0000') {
             int value = Integer.parseInt(descMap?.value, 16)
             String status = "${ZONE_STATE[value]}"

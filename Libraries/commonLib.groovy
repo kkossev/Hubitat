@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/commonLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-commonLib',
-    version: '4.0.4'
+    version: '4.1.0'
 )
 /*
   *  Common ZCL Library
@@ -28,7 +28,8 @@ library(
   * ver. 4.0.2  2025-10-18 kkossev  - added tuyaDelay in sendTuyaCommand()
   * ver. 4.0.3  2025-10-18 kkossev  - added ignoreDuplicatedZigbeeMessages setting; DIGITAL_TIMER increased to 5000 ms
   * ver. 4.0.4  2026-06-04 kkossev  - added ED00 cluster;
-  * ver. 4.0.5  2026-07-09 kkossev  - (dev. branch) bug fixes
+  * ver. 4.0.5  2026-08-03 kkossev  - bug fixes
+  * ver. 4.1.0  2026-08-05 kkossev  - (dev. branch) the administrative commands drop-down moved from configure(par) to the new deviceUtilities(par) command, so that configure() is again a plain Configuration capability button; removed the two separator entries from ConfigureOpts; configureHelp() is callable again and shows the command list and a '_status_' event when nothing was selected; do not use 'defaultValue' in a command parameter - it does not preselect the drop-down, but it IS submitted when Run is pressed without a selection!; configure() now shows a 'sleepy devices can not be configured' warning text; ping() icon changed to the antenna bars; added a one-click 'loadAllDefaults' command button
   *
   *                                   TODO: change the offline threshold to 2 
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
@@ -45,8 +46,8 @@ library(
   *
 */
 
-String commonLibVersion() { '4.0.5' }
-String commonLibStamp() { '2026/07/09 9:45 AM' }
+String commonLibVersion() { '4.1.0' }
+String commonLibStamp() { '2026/08/05 11:18 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -81,8 +82,13 @@ metadata {
         attribute '_status_', 'string'
 
         // common commands for all device types
-        command 'configure', [[name:'⚙️ Advanced administrative and diagnostic commands • Use only when troubleshooting or reconfiguring the device', type: 'ENUM', constraints: ConfigureOpts.keySet() as List<String>]]
-        command 'ping', [[name:'📡 Test device connectivity and measure response time • Updates the RTT attribute with round-trip time in milliseconds']]
+        // 'configure' below carries a description-only parameter map (NO 'type' key!), exactly like ping and refresh - it just renders the help text under the button and submits nothing.
+        // NEVER give it a typed parameter: an ENUM here used to shadow the no-argument configure() of capability 'Configuration', making the dispatch depend on whether the platform happened to supply a value.
+        command 'configure', [[name:"✋ This button can not configure battery-powered 'sleepy' devices. Pair the device again to your hub, without deleting it!"]]
+        command 'deviceUtilities', [[name:'⚙️ Advanced administrative and diagnostic commands • Use only when troubleshooting or reconfiguring the device', type: 'ENUM', constraints: ConfigureOpts.keySet() as List<String>]]    // do NOT add a 'defaultValue' here! The drop-down still displays '- No selection -', but the platform submits the defaultValue when Run is pressed - i.e. an un-selected Run silently executed 'LOAD ALL DEFAULTS' (tested on C-8 Pro 2.5.1.143)
+        // one-click shortcut for the most used deviceUtilities entry. Description-only parameter map again - NEVER give loadAllDefaults a typed parameter: deviceUtilities dispatches it as "$func"() with no arguments, so an un-selected Run would hit the no-argument overload and wipe the device immediately.
+        command 'loadAllDefaults', [[name:'⚠️ Erases all preferences, states, scheduled jobs and child devices, then reloads the driver defaults • Use after switching drivers, or when the device was not recognised by an older version']]
+        command 'ping', [[name:'📶 Test device connectivity and measure response time • Updates the RTT attribute with round-trip time in milliseconds']]
         command 'refresh', [[name:"🔄 Query the device for current state and update the attributes. • ⚠️ Battery-powered 'sleepy' devices may not respond!"]]
 
         // trap for Hubitat F2 bug
@@ -129,13 +135,11 @@ metadata {
     '*** LOAD ALL DEFAULTS ***'  : [key:0, function: 'loadAllDefaults'],
     'Configure the device'       : [key:2, function: 'configureNow'],
     'Reset Statistics'           : [key:9, function: 'resetStatistics'],
-    '           --            '  : [key:3, function: 'configureHelp'],
     'Delete All Preferences'     : [key:4, function: 'deleteAllSettings'],
     'Delete All Current States'  : [key:5, function: 'deleteAllCurrentStates'],
     'Delete All Scheduled Jobs'  : [key:6, function: 'deleteAllScheduledJobs'],
     'Delete All State Variables' : [key:7, function: 'deleteAllStates'],
-    'Delete All Child Devices'   : [key:8, function: 'deleteAllChildDevices'],
-    '           -             '  : [key:1, function: 'configureHelp']
+    'Delete All Child Devices'   : [key:8, function: 'deleteAllChildDevices']
 ]
 
 public boolean isVirtual() { device.controllerType == null || device.controllerType == '' }
@@ -794,7 +798,7 @@ public void standardParseTuyaCluster(final Map descMap) {
         //log.warn "dataLen=${dataLen}"
         //def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
         if (dataLen <= 5) {
-            logWarn "unprocessed short Tuya command response: dp_id=${descMap?.data[3]} dp=${descMap?.data[2]} fncmd_len=${fncmd_len} data=${descMap?.data})"
+            logWarn "unprocessed short Tuya command response: dp_id=${descMap?.data[3]} dp=${descMap?.data[2]} data=${descMap?.data})"
             return
         }
         boolean isSpammyDeviceProfileDefined = this.respondsTo('isSpammyDeviceProfile') // check if the method exists 05/21/2024
@@ -1165,7 +1169,7 @@ void updated() {
         final int interval = (settings.healthCheckInterval as Integer) ?: 0
         if (interval > 0) {
             //log.trace "healthMethod=${healthMethod} interval=${interval}"
-            log.info "scheduling health check every ${interval} minutes by ${HealthcheckMethodOpts.options[healthCheckMethod as int]} method"
+            log.info "scheduling health check every ${interval} minutes by ${HealthcheckMethodOpts.options[healthMethod]} method"
             scheduleDeviceHealthCheck(interval, healthMethod)
         }
     }
@@ -1189,10 +1193,11 @@ private void traceOff() {
     device.updateSetting('traceEnable', [value: 'false', type: 'bool'])
 }
 
-public void configure(String command) {
-    logInfo "configure(${command})..."
-    if (!(command in (ConfigureOpts.keySet() as List))) {
-        logWarn "configure: command <b>${command}</b> must be one of these : ${ConfigureOpts.keySet() as List}"
+// the administrative / diagnostic commands drop-down list. Deliberately NOT named 'configure' - overloading the Configuration capability command made the dispatch depend on whether the platform happens to supply an argument
+public void deviceUtilities(String command = null) {
+    logInfo "deviceUtilities(${command})..."
+    if (command == null || !(command in (ConfigureOpts.keySet() as List))) {
+        configureHelp(command)      // nothing was selected, or the value is not one of ours - show the help and do nothing else
         return
     }
     //
@@ -1209,8 +1214,9 @@ public void configure(String command) {
 }
 
 /* groovylint-disable-next-line UnusedMethodParameter */
-void configureHelp(final String val) {
-    if (settings?.txtEnable) { log.warn "${device.displayName} configureHelp: select one of the commands in this list!" }
+void configureHelp(final String val = null) {
+    logInfo "select one of the commands from the list: ${ConfigureOpts.keySet() as List}"
+    sendInfoEvent('Please select a command from the drop-down list')      // short _status_ event, auto-cleared after INFO_AUTO_CLEAR_PERIOD
 }
 
 public void loadAllDefaults() {

@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Motion Library', name: 'motionLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/motionLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-motionLib',
-    version: '3.2.1'
+    version: '3.2.3'
 )
 /*  Zigbee Motion Library
  *
@@ -10,24 +10,25 @@ library(
  *
  * ver. 3.2.0  2024-07-06 kkossev  - added motionLib.groovy; added [digital] [physical] to the descriptionText
  * ver. 3.2.1  2025-03-24 kkossev  - documentation
- * ver. 3.2.2  2025-10-12 kkossev  - (dev.branch) setMotion help text improved
+ * ver. 3.2.2  2025-10-12 kkossev  - setMotion help text improved
+ * ver. 3.2.3  2026-08-05 kkossev  - (dev.branch) motionResetTimer description warns that the value must be longer than the device Keep Time; motionReset recommendation text now says for which sensors 'false' is the right value; bug fix: the Motion Reset Timer input visibility check used '.value' on a Boolean setting; setMotion() icon changed to the walking figure
  *
  *                                   TODO:
 */
 
-static String motionLibVersion()   { '3.2.2' }
-static String motionLibStamp() { '2025/10/12 7:25 PM' }
+static String motionLibVersion()   { '3.2.3' }
+static String motionLibStamp() { '2026/08/05 10:50 PM' }
 
 metadata {
     capability 'MotionSensor'
     // no custom attributes
-    command 'setMotion', [[name: 'setMotion', type: 'ENUM', constraints: ['No selection', 'active', 'inactive'], description: '🧪 Force motion state to active or inactive for testing purposes']]
+    command 'setMotion', [[name: 'setMotion', type: 'ENUM', constraints: ['No selection', 'active', 'inactive'], description: '🚶 Force motion state to active or inactive for testing purposes']]    // keep our own 'No selection' first - it is the only harmless value the user can explicitly pick; setMotion() has no no-arg overload, so an un-selected Run has nothing safe to dispatch to
     preferences {
         if (device) {
             if (('motionReset' in DEVICE?.preferences) && (DEVICE?.preferences.motionReset == true)) {
-                input(name: 'motionReset', type: 'bool', title: '<b>Reset Motion to Inactive</b>', description: 'Software Reset Motion to Inactive after timeout. Recommended value is <b>false</b>', defaultValue: false)
-                if (settings?.motionReset?.value == true) {
-                    input('motionResetTimer', 'number', title: '<b>Motion Reset Timer</b>', description: 'After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds', range: '0..7200', defaultValue: 60)
+                input(name: 'motionReset', type: 'bool', title: '<b>Reset Motion to Inactive</b>', description: 'Software Reset Motion to Inactive after timeout. Recommended value is <b>false</b> for sensors that report motion inactive on their own', defaultValue: false)
+                if (settings?.motionReset == true) {     // must match the guard in handleMotion() - '.value' on a Boolean is not valid Groovy and would hide this input while the software reset kept running
+                    input('motionResetTimer', 'number', title: '<b>Motion Reset Timer</b>', description: 'After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds. Set this <b>longer</b> than the device Keep Time, otherwise the motion is reset while the sensor still considers it active.', range: '0..7200', defaultValue: 60)
                 }
             }
             if (advancedOptions == true) {

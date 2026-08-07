@@ -5,6 +5,12 @@
       "codeType": "driver",
       "id": 3298,
       "version": 4
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Drivers/Tuya Ultrasonic Water Flow Meter/Tuya Ultrasonic Water Flow Meter.groovy",
+      "id": 3298,
+      "codeType": "driver",
+      "version": 6
     }
   ]
 }

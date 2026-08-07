@@ -31,17 +31,19 @@
  * ver. 3.3.1  2025-03-13 kkossev  - added activeEndpoints() command in test mode; sending ZCL Default Response in ZBMINIR2 Detach Relay Mode; added PushableButton capability for ZBMINIR2;
  * ver. 3.3.2  2025-03-29 kkossev  - fixed ZCL Default Response in ZBMINIR2 Detach Relay Mode; added updateFirmware() command; added toggle() command; added delayedPowerOnState and delayedPowerOnTime preferences
  * ver. 3.4.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException in HE platform update 2.4.1.155
- * ver. 3.5.0  2025-09-15 kkossev  - (dev. branch) commonLib 4.0.0 allignment;
+ * ver. 3.5.0  2025-09-15 kkossev  - commonLib 4.0.0 allignment;
+ * ver. 3.5.1  2026-08-07 kkossev  - (dev. branch) commonLib 4.1.0 allignment; minor bug fixes
  *
  *                                   TODO: initialize 'switch' to unknown
  *                                   TODO: add 'allStatus' attribute
  *                                   TODO: add Info dummy preference w/ link to Hubitat forum page
  */
 
-static String version() { '3.5.0' }
-static String timeStamp() { '2025/09/15 8:05 PM' }
+static String version() { '3.5.1' }
+static String timeStamp() { '2026/08/07 9:50 PM' }
 
 @Field static final Boolean _DEBUG = false
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = false
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -79,15 +81,15 @@ metadata {
         attribute 'delayedPowerOnTime', 'number'
         attribute 'switchActions', 'enum', ['On', 'Off', 'Toggle']
 
-        command 'toggle'
-        command 'updateFirmware'
+        command 'toggle', ['🔄 Toggle the switch state • Uses a Zigbee Toggle command for ZCL devices and software on/off control for TS0601 devices']
+        command 'updateFirmware', ['⬆️ Request a Hubitat Zigbee firmware update for non-Tuya devices • Check Hub live logs for progress']
         command 'sendCommand', [
-            [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
-            [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
+            [name:'command', type: 'STRING', description: '▶️ Run one of the commands supported by this device profile • Leave empty to list the valid names in the log', constraints: ['STRING']],
+            [name:'val',     type: 'STRING', description: 'Optional value, needed only by some commands', constraints: ['STRING']]
         ]
         command 'setPar', [
-                [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
-                [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
+                [name:'par', type: 'STRING', description: '🎛️ Set a device profile preference and write it to the device • Leave empty to list the valid parameter names in the log', constraints: ['STRING']],
+                [name:'val', type: 'STRING', description: 'Leave empty to see the allowed range or values for that parameter', constraints: ['STRING']]
         ]
         if (_DEBUG) {
             command 'activeEndpoints', []
@@ -108,7 +110,7 @@ metadata {
 
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables command logging.'
-        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: 'Turns on debug logging for 24 hours.'
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: false, description: 'Turns on debug logging for 24 hours.'
         //
         //input(name: "deviceNetworkId", type: "enum", title: "Router Device", description: "<small>Select a mains-powered device that you want to put in pairing mode.</small>", options: [ "0000":"👑 Hubitat Hub" ] + getDevices(), required: true)
 
@@ -310,7 +312,6 @@ boolean isZBMINIL2()   { return (device?.getDataValue('model') ?: 'n/a') in ['ZB
 
 void customUpdated() {
     logDebug "customUpdated()"
-    List<String> cmds = []
 
     if (settings?.forcedProfile != null) {
         if (this.respondsTo('getProfileKey') == false) {
@@ -332,8 +333,7 @@ void customUpdated() {
         logDebug "forcedProfile is not set"
     }
     // Itterates through all settings
-    cmds += updateAllPreferences()  // defined in deviceProfileLib
-    sendZigbeeCommands(cmds)
+    updateAllPreferences()  // defined in deviceProfileLib; sends its own commands
     runIn(2, 'refresh')
 }
 
@@ -350,7 +350,7 @@ List<String> customRefresh() {
     return cmds
 }
 
-void customPush() {    //pushableButton capability
+void customPush(def requestedButtonNumber = 0) {    //pushableButton capability
     Integer buttonNumber = 1
     logDebug "push button $buttonNumber"
     sendButtonEvent(buttonNumber as int, 'pushed', isDigital = false)    // defined in buttonLib
@@ -407,6 +407,7 @@ List<String> customConfigureDevice() {
     }
     int intMinTime = safeToInt(1)
     int intMaxTime = safeToInt(7200)
+    int delta = 0
     if ('0x0006' in DEVICE?.configuration) {
         if (DEVICE?.configuration['0x0006']['bind'] == true) {
             cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", 'delay 229', ]
@@ -511,10 +512,12 @@ void parseSimpleDescriptorResponse(Map descMap) {
     if (logEnable == true) { log.info "${device.displayName} Endpoint: ${descMap.data[5]} Application Device:${descMap.data[9]}${descMap.data[8]}, Application Version:${descMap.data[10]}" }
     int inputClusterCount = hubitat.helper.HexUtils.hexStringToInt(descMap.data[11])
     String inputClusterList = ''
-    for (int i in 1..inputClusterCount) {
-        inputClusterList += descMap.data[13 + (i - 1) * 2] + descMap.data[12 + (i - 1) * 2 ] + ','
+    if (inputClusterCount >= 1) {
+        for (int i in 1..inputClusterCount) {
+            inputClusterList += descMap.data[13 + (i - 1) * 2] + descMap.data[12 + (i - 1) * 2 ] + ','
+        }
+        inputClusterList = inputClusterList.substring(0, inputClusterList.length() - 1)
     }
-    inputClusterList = inputClusterList.substring(0, inputClusterList.length() - 1)
     if (logEnable == true) { log.info "${device.displayName} Input Cluster Count: ${inputClusterCount} Input Cluster List : ${inputClusterList}" }
     if (getDataValue('inClusters') != inputClusterList)  {
         if (logEnable == true) { log.warn "${device.displayName} inClusters=${getDataValue('inClusters')} differs from inputClusterList:${inputClusterList} - will be updated!" }
@@ -538,14 +541,19 @@ void parseSimpleDescriptorResponse(Map descMap) {
 }
 
 void updateFirmware() {
-    sendInfoEvent("updateFirmware: check 'Hub' live logs...")
+    if (isTuya()) {
+        logWarn 'Update Zigbee Firmware command is not supported for Tuya devices'
+        return
+    }
+    logInfo 'Requesting Zigbee OTA firmware update...'
     sendZigbeeCommands(zigbee.updateFirmware())
 }
 
 
 void toggle() {
     logDebug "toggling switch.."
-    if (device.getDataValue('model') != "TS0601") {
+    Map switchMap = this.respondsTo(getDEVICE) ? getAttributesMap('switch') : null
+    if (switchMap == null || switchMap == [:]) {
         sendZigbeeCommands(zigbee.command(0x0006,0x02))
     }
     else {
@@ -561,7 +569,6 @@ void toggle() {
 
 void testDetachRelayMode() {
     logDebug "testDetachRelayMode()"
-    List<String> cmds = []
     // cmds += ["he raw ${device.deviceNetworkId} 1 1 0xFC11 {0A 01 0B 0A 00}"] // ZCL Default Response
     parse('catchall: 0104 0006 01 01 0040 00 464B 01 00 0000 02 00')
 }

@@ -1,26 +1,36 @@
-# Forum-Derived TODO — Tuya Temperature Humidity Illuminance LCD Display with a Clock
+# Consolidated TODO — Tuya Temperature Humidity Illuminance LCD Display with a Clock
 
-Analysis date: 2026-07-11  
-Forum cutoff: 2026-06-06, post 693  
+Analysis date: 2026-07-11 (forum backlog, posts through 693); bug backlog merged 2026-08-04;
+posts 694-695 individually analyzed 2026-08-04  
+Forum cutoff: 2026-06-06, post 693 (full-thread sweep); 694-695 added ad hoc, not a resweep  
 Topic: https://community.hubitat.com/t/-/88093  
-Coverage: complete Discourse stream — 677 visible posts; highest visible post number 693
+Coverage: complete Discourse stream through post 693 — 677 visible posts; highest visible post
+number 693 at that time
 
-This backlog records actionable work extracted from the complete community topic and compared with
-the current v2.1.2 driver, its release history, and `BUGS.md`. Deleted forum posts account for the
-difference between the visible-post count and highest post number.
+This is the single consolidated backlog for this driver. It combines the forum-derived
+device-support/feature backlog with the reviewed bug list. **`BUGS.md` was merged into this file
+and deleted on 2026-08-04 — do not recreate it; add new findings here instead.** Resolved bugs were
+removed from the list; their full history lives in `CHANGELOG.md` and `AGENTS.md`'s referenced git
+history. Deleted forum posts account for the difference between the visible-post count and highest
+post number.
 
-Status legend:
+Status legend (forum backlog):
 
 - `OPEN` — requested or reported and not implemented/resolved.
 - `NEEDS_EVIDENCE` — requires a textual fingerprint, logs, or hardware confirmation.
-- `BUGS` — overlaps the confirmed static-review backlog in `BUGS.md`.
+- `BUGS` — overlaps the bug backlog in Part 2 below.
 - `RESOLVED` — implemented or confirmed working later in the topic.
 - `OUT_OF_SCOPE` — belongs to another device class or project.
 - `DEVICE_LIMITATION` — cannot be implemented using known device/firmware behavior.
 
-## Open work
+Status legend (bug backlog, Part 2):
 
-### 1. [ ] `OPEN` — Support TS0601 `_TZE284_hdml1aav` five-in-one soil sensor
+- `[ ]` open. `[?]` needs verification/user decision first. `[x]` items are removed once fixed and
+  confirmed — see `CHANGELOG.md` instead.
+
+## Part 1 — Forum-derived backlog
+
+### 1. `[?]` `OPEN` — TS0601 `_TZE284_hdml1aav` five-in-one soil sensor — fix applied, pending hub confirmation
 
 **Requested outcome:** expose all reported measurements — soil moisture, temperature, humidity,
 illuminance, and fertility — without causing the sensor to stop reporting.
@@ -32,24 +42,48 @@ Evidence:
   differences: https://community.hubitat.com/t/-/88093/688
 - Unresolved follow-up: https://community.hubitat.com/t/-/88093/689
 
-Known data:
+Identity and DP mapping (2026-08-04, confirmed via the poster's own screenshots — including a raw
+"Tuya Dp Log" from their ChatGPT-generated driver — plus `zigbee-herdsman-converters`):
 
-- Model: `TS0601`
-- Manufacturer: `_TZE284_hdml1aav`
-- Forcing `TS0601_Soil_NEO` exposes only temperature, humidity, and illuminance.
-- A custom Zigbee2MQTT-derived driver exposed more values but reportedly stopped receiving data
-  after several minutes.
+- Model `TS0601`, manufacturer `_TZE284_hdml1aav` (z2m also lists `_TZE2841000000_hdml1aav`, an
+  alternate manufacturer-ID encoding for the same device — added too).
+- z2m model `ZS-300TF` (vendor Excellux, "Soil fertility sensor"). Confirmed DP map: DP 3 =
+  soil_moisture (raw), DP 5 = temperature (÷10), DP 15 = battery (raw), DP 101 = humidity (raw),
+  DP 102 = illuminance (raw), DP 103 = report_period (raw, writable), DP 104-107 = four calibration
+  offsets (soil/humidity/illuminance raw, temperature ÷10), DP 110 = soil_warning (raw, meaning
+  unclear), DP 111 = water_warning (enum none/alarm), DP 112 = soil_fertility (raw, µS/cm),
+  DP 113-115 = fertility calibration/thresholds (writable), DP 116 = soil_fertility_warning (enum
+  none/low/high). Every DP with an observed value in the raw log matched this table exactly.
+- Forcing `TS0601_Soil_NEO` only worked by accident for temperature/humidity/illuminance — its DP 3
+  means *humidity* for that group, not soil moisture, which is why fertility/moisture were missing.
 
-Required investigation:
+Fix applied (2026-08-04): new model group `TS0601_Soil_5IN1`, fingerprint + `Models` entries for
+both manufacturer IDs, and DP routing for the 5 core measurements plus the two warning enums:
+- `soilMoisture` (existing `number` attribute, reused — already used by `TS0601_Soil_Coolo`)
+- New `soilFertilityValue` (`number`, µS/cm) — **could not reuse** the existing `soilFertility`
+  attribute, already declared `enum` (6 qualitative values) for `TS0601_Soil_NEO`; a real type
+  conflict, not just a naming choice.
+- New `waterWarning` (`enum`: none/alarm) and `soilFertilityWarning` (`enum`: none/low/high).
+- Temperature/humidity/illuminance/battery reuse existing generic event functions.
 
-- Capture complete Tuya DP logs while independently changing each of the five measurements.
-- Record each DP number, datatype, scaling, and raw value range.
-- Compare the map with `TS0601_Soil_NEO`; create a separate model group if any meaning differs.
-- Add both the metadata fingerprint and the `Models` map entry.
-- Identify any initialization command responsible for reporting stopping.
-- Look for writable reporting-frequency DPs and verify them on real hardware.
+Deliberately deferred (no forum evidence anyone needs them, and this session's convention is to
+not guess at untested DP *writes*):
+- `report_period` (DP 103) — logged only; not read back or written. Could be the fix for "stops
+  reporting after several minutes" if it's a device-side sampling interval, but unconfirmed.
+- The four calibration offsets (DP 104-107) and three fertility-threshold DPs (113-115) — not
+  implemented at all (no preferences, no read handling beyond generic default).
+- `soil_warning` (DP 110) — logged only; z2m doesn't clarify its meaning either.
 
-### 2. [ ] `NEEDS_EVIDENCE` — Add Jost's unknown three-DP T/H/illuminance sensor
+**Reporting-dropout root cause still open** — this is a pure Tuya EF00 DP device (no ZCL reporting
+cluster involved), so this driver's `isConfigurableSleepyDevice()` mechanism doesn't apply here and
+wouldn't be the fix. Likely either device-side power-saving behavior or a bug specific to the
+poster's own unofficial driver — not confidently diagnosed. Needs the poster to test with the
+corrected mapping and report whether dropouts persist.
+
+Verification needed from the poster: confirm all 5 core measurements plus both warnings report
+plausible values, and monitor whether reporting still stops after several minutes.
+
+### 2. `[?]` `OPEN` — Jost's `_TZE204_rbbx5mfq` three-DP T/H/illuminance sensor — fix applied, pending hub confirmation
 
 **Requested outcome:** correctly expose illuminance, temperature, and humidity and, if supported by
 the firmware, reduce the sensor's excessive Zigbee reporting frequency.
@@ -62,28 +96,47 @@ Evidence:
 - Reporter produced a private modification but reporting-rate configuration remains unresolved:
   https://community.hubitat.com/t/-/88093/693
 
-Observed mapping from the report:
+Identity and DP mapping (2026-08-04, confirmed via Device Data screenshot + `zigbee-herdsman-converters`):
 
-- DP 2: illuminance
-- DP 6: temperature
-- DP 7: humidity
-- Current generic processing applies the wrong mapping/scaling.
+- Manufacturer `_TZE204_rbbx5mfq`, model `TS0601`. z2m model
+  `TS0601_illuminance_temperature_humidity_sensor_2`: DP 2 = illuminance (raw, no division), DP 6 =
+  temperature (÷10), DP 7 = humidity (÷10) — matches the reporter's trace log exactly.
+- Root cause confirmed by code review, not just inferred: the generic/`UNKNOWN` fallback's DP `0x02`
+  case treats DP 2 as **humidity** (correct for most Tuya EF00 models, wrong here — DP 2 is
+  illuminance for this device), which is why displayed humidity tracked the illuminance value and
+  spiked past 100% under bright light. DP `0x06`/`0x07` were *unconditionally* log-only for every
+  model group (no `temperatureEvent()`/`humidityEvent()` call at all), so this device's real
+  temperature/humidity were silently discarded regardless of group.
 
-Evidence still required:
+Fix applied (2026-08-04): new model group `TS0601_Illum_TH`, fingerprint + `Models` entry for
+`_TZE204_rbbx5mfq`, and `TS0601_Illum_TH`-gated branches added to DP `0x02`/`0x06`/`0x07` routing
+them to illuminance/temperature/humidity respectively. Also corrected the *sibling* manufacturer
+`_TZE200_rbbx5mfq` (added speculatively in v1.9.0 as `TS0601_Tuya`, unverified) — z2m lists it under
+the identical device definition, so it was moved to `TS0601_Illum_TH` too; no separate fingerprint
+was added for it since one already existed.
 
-- Obtain the fingerprint as text: model, manufacturer, endpoint, application version, device ID,
-  in-clusters, and out-clusters. The identifier is currently present only in a screenshot.
-- Capture full raw Tuya messages to confirm DP datatypes, signedness, and scaling.
-- Determine whether the high report rate is controlled by writable DPs. Event throttling in the
-  driver does not reduce Zigbee network traffic.
+Still open:
 
-Implementation direction after evidence is supplied:
+- **Cluster list unconfirmed** — the reporter's Device Data screenshot didn't show
+  `inClusters`/`outClusters`; the fingerprint uses this driver's standard TS0601-EF00 template as a
+  best guess (`0004,0005,EF00,0000` / `0019,000A`), marked `// not tested !`. Wrong clusters only
+  block automatic driver *selection*, not the DP fix itself.
+- **Reporting-rate reduction** (post #693) — whether report frequency is controlled by a writable
+  DP is still unconfirmed; event throttling in this driver doesn't reduce Zigbee network traffic.
+- **Related, unconfirmed suspicion found in passing**: `_TZE200_vzqtvljm`, added in the same v1.9.0
+  batch with the same "(Illuminance + TH)" note, also maps to `TS0601_Tuya`. z2m lists it under a
+  *different* device (`TS0601_illuminance_temperature_humidity_sensor_1`, legacy converter: DP 3 =
+  battery, DP 7 = illuminance raw, DP 8 = temperature ÷10, DP 9 = humidity **raw, not ÷10**) — a
+  third, distinct DP layout from both `TS0601_Tuya` and the new `TS0601_Illum_TH` group. Not touched
+  — no forum report or user complaint for this manufacturer, so left alone pending actual evidence
+  rather than fixed speculatively.
 
-- Add an exact fingerprint and `Models` entry.
-- Use a distinct model group rather than altering generic DP meanings for existing devices.
-- Expose only capabilities the device actually implements.
+Verification needed from the poster: confirm illuminance/temperature/humidity all report plausible
+values with no "invalid humidity" warnings, including under bright light.
 
 ### 3. [ ] `OPEN` / `BUGS` — Suppress false 100% humidity from `_TZ3210_ncw88jfq`
+
+GitHub issue: https://github.com/kkossev/Hubitat/issues/130.
 
 **User-visible problem:** three TS0201 `_TZ3210_ncw88jfq` sensors reportedly send an hourly humidity
 sample in hundredths while ordinary samples use tenths. The driver interprets the hourly sample as
@@ -106,7 +159,7 @@ Known data:
 
 Implementation direction:
 
-- Cross-reference the invalid-humidity handling findings in `BUGS.md`; do not create a competing
+- Cross-reference the invalid-humidity handling findings in Part 2 below; do not create a competing
   global fix.
 - Scope any workaround to `_TZ3210_ncw88jfq` unless logs prove other manufacturers behave the same.
 - Ignore values above 100% for this device instead of clamping them to 100%.
@@ -139,9 +192,79 @@ Implementation direction:
   misleading warning.
 - Verify that refreshing either parent or child does not disturb normal probe reports.
 
+### 5. `[?]` `OPEN` — `_TZ3000_utwgoauk` ("SNZB-02" Tuya clone) falling off the network
+
+**User-visible problem:** poster calinatl reports a small USB/battery-powered temperature/humidity
+sensor "keeps falling off the network," paired with this driver in Auto Detect mode.
+
+Evidence:
+
+- Report with two screenshots (Hubitat Device Data panel + product photo):
+  https://community.hubitat.com/t/-/88093/694
+
+Known data (from the Device Data screenshot — authoritative, read from the paired device):
+
+- Manufacturer: `_TZ3000_utwgoauk`, reports **model `SNZB-02`** (not `TS0201`) — a cheap clone
+  spoofing the popular genuine Sonoff model string.
+- Real clusters: `inClusters:'0000,0003,0001,0020,0402,0405'`, `outClusters:'0019'` — notably
+  includes Poll Control (`0020`), absent from this driver's pre-existing fingerprint for this
+  manufacturer.
+
+Fix applied (2026-08-04, pending poster confirmation):
+
+- Added a second, corrected fingerprint for `_TZ3000_utwgoauk` matching the real signature
+  (`model:'SNZB-02'`), alongside the existing one rather than replacing it.
+- Reclassified `Models['_TZ3000_utwgoauk']` from `TS0201` to `Zigbee NON-Tuya` — genuine Sonoff
+  SNZB-02D/02P (which also carry cluster `0020`) are the only devices in this exact cluster
+  configuration mapped to a group that runs the sleepy-device Configure Reporting state machine;
+  plain `TS0201` never attempts any reporting configuration at all. This is the primary hypothesis
+  for the reported dropouts, inferred from cluster-pattern analogy — **not confirmed by testing this
+  specific device.**
+
+Follow-up (2026-08-06, post #704): poster removed and re-paired the device on the corrected driver;
+HE did **not** auto-select any driver at all (Type stayed "Device"), and the join log shows
+`inClusters:"0000,0003,0001,0020,0402,0405"` — clusters `0001`/`0003` swapped versus the fingerprint
+added on 2026-08-04 (`0000,0001,0003,0020,0402,0405`). Hubitat's built-in-driver-selection fingerprint
+match is order-sensitive on `inClusters`, so the existing fingerprint silently never matched this
+unit. Added a **third** fingerprint with the exact order from this log, kept the other two as-is
+(other units of the same clone may report yet another order). This explains why the driver was never
+selected in the first place — the sleepy-device reporting-config hypothesis from 2026-08-04 is still
+unverified since the driver was never actually running on this device.
+
+Verification needed from the poster: re-pair once more with the updated driver, confirm this driver
+is now auto-selected (or select it manually and confirm `state.modelGroup` shows `Zigbee NON-Tuya`),
+and confirm over a few days whether the connectivity dropouts stop. If they don't, revert the
+`Zigbee NON-Tuya` reclassification — it's a plausible but unproven hypothesis.
+
+### 6. `[?]` `OPEN` — HaiHao HZ-SL03 soil sensor: humidity not reporting, battery misread
+
+GitHub issue: https://github.com/kkossev/Hubitat/issues/149.
+
+**Requested outcome:** humidity should report a value (currently stays `null`); battery percentage
+shouldn't read a stale/low value on fresh batteries.
+
+Known data (from the reporter, no textual Zigbee fingerprint available yet — HE Maker API doesn't
+expose it):
+
+- Model `HZ-SL03`, manufacturer "Shenzhen HaiHao Electronic Co., LTD" — same company as the already
+  supported Haozee SGS01/HZ-SL05 family (`TS0601_Haozee` group).
+- Temperature, illuminance, and battery report; humidity never does — consistent with this being an
+  unrecognized manufacturer falling into `UNKNOWN`/a mismatched model group whose humidity DP isn't
+  the generic `0x02`.
+- Battery briefly read 33% (state 0/Low) on fresh batteries, then jumped to 100% after `initialize()`
+  — possibly a stale-DP-on-first-report issue rather than a scaling bug; compare against the
+  known `TS0601_Soil_NEO`/`Coolo` battery-state pattern (0/1/2 → 33/66/100%) once a fingerprint exists.
+
+Implementation direction:
+
+- Request the textual fingerprint (Hubitat Device Data page: model/manufacturer/inClusters/
+  outClusters), since screenshots aren't sufficient (see the `NEEDS_EVIDENCE` convention below).
+- Once known, map to the closest existing soil/Haozee model group (likely `TS0601_Soil` or a
+  `TS0601_Haozee` variant) rather than guessing a new group without a confirmed DP map.
+
 ## Reports needing more evidence
 
-### 5. [ ] `NEEDS_EVIDENCE` — TS0201 battery value remains stale after replacement
+### 7. [ ] `NEEDS_EVIDENCE` — TS0201 battery value remains stale after replacement
 
 Evidence: https://community.hubitat.com/t/-/88093/659 through
 https://community.hubitat.com/t/-/88093/661
@@ -157,14 +280,14 @@ Request before opening a code change:
 - Results after waking, re-pairing without deletion, and waiting for the documented periodic report.
 - Measured battery voltage, if available.
 
-### 6. [ ] `NEEDS_EVIDENCE` — Previously working unidentified temperature sensor stopped reporting
+### 8. [ ] `NEEDS_EVIDENCE` — Previously working unidentified temperature sensor stopped reporting
 
 Evidence: https://community.hubitat.com/t/-/88093/667
 
 The identifying data exists only in screenshots and no follow-up was posted. Request the complete
 fingerprint as text, current driver version/model group, pairing logs, and ordinary receive logs.
 
-### 7. [ ] `NEEDS_EVIDENCE` — Validate `_TZE284_rqcuwlsa` ZDO responder experiment
+### 9. [ ] `NEEDS_EVIDENCE` — Validate `_TZE284_rqcuwlsa` ZDO responder experiment
 
 Evidence:
 
@@ -180,6 +303,33 @@ normally a platform responsibility, and the available evidence does not show tha
 responses caused the later success.
 
 ## Already resolved, declined, or outside this backlog
+
+### `RESOLVED` — `_TZE204_m9dzckna` SNT857Z temperature sensor
+
+GitHub issue: https://github.com/kkossev/Hubitat/issues/69 (still open on GitHub; candidate to close).
+Forum thread: https://community.hubitat.com/t/rule-for-temperature-monitoring-and-swithching/160162.
+User couldn't get a TS0601 temperature sensor working with Hubitat's built-in drivers ("Tuya TS0601
+devices will not function with the generic built-in drivers, as they use Tuya-specific Zigbee
+commands"). Resolved by selecting this driver with **Model Group** forced to `TS0601_Tuya` in
+preferences — no fingerprint/code change needed, the existing generic EF00 fallback already covers
+this device's temperature/humidity DPs.
+
+### `RESOLVED` — HOBEIAN ZG-303Z soil tester `NumberFormatException` when forced to `TS0201_TH`
+
+GitHub issue: https://github.com/kkossev/Hubitat/issues/67. Forum thread (separate from the main
+88093 thread): https://community.hubitat.com/t/driver-for-tuya-soil-tester-sensor/156528. Device
+support itself (`_TZE284_33bwcga2`, native group `TS0601_Soil_II`) was already added in v1.9.0
+(2025-08-31) — the only unresolved part was user Rxich's `NumberFormatException:
+For input string: "Celsius"` after manually setting Model Group to `TS0201_TH`. Same root cause as
+the `temperatureUnit` default-seeding bug fixed 2026-08-04 (see `CHANGELOG.md` `[2.2.0]`) — resolved
+as a side effect, not verified by the reporter. Issue #67 remains open on GitHub; consider closing
+or commenting once verified.
+
+### `RESOLVED` — Configurable temperature/humidity decimal places
+
+Requested at https://community.hubitat.com/t/-/88093/695 (show `37` instead of `37.4`). Added
+**Temperature Decimal Places** (0/1/2, default 1) and **Humidity Decimal Places** (0/1, default 0)
+preferences on 2026-08-04 — see `CHANGELOG.md` `[Unreleased]`.
 
 ### `RESOLVED` — `_TZE284_hodyryli` external probe support
 
@@ -221,4 +371,52 @@ https://community.hubitat.com/t/-/88093/40.
 Devices that do not contain a Zigbee radio cannot use this driver. Misleading marketplace listings
 and Tuya Cloud alternatives are discussed at https://community.hubitat.com/t/-/88093/46 and
 https://community.hubitat.com/t/-/88093/60.
+
+---
+
+## Part 2 — Bug backlog
+
+Merged from `BUGS.md` on 2026-08-04 (deleted; do not recreate). Read `AGENTS.md` first — it explains
+the model-group architecture, the DP map, and driver conventions. Ground rules carried over: fix one
+item at a time in the order the user picks; the driver is uploaded to the dev hub and tested after
+each fix; do not bump `VERSION`/`TIME_STAMP` or add header changelog lines unless told to; do not
+change `ASK USER` items without an explicit answer. As of this merge, items A1–A2, B1–B8, C1–C7,
+C10, C12 from the original list are fixed and confirmed (see `CHANGELOG.md`); only the three below
+remain open.
+
+### `[?]` `alarmTempPar` / `alarmHumidityPar` are dead preferences — **ASK USER**
+
+`configParams` entries 13/14 have fully commented-out `limit` lists (never shown to any model group)
+and are never read in `updated()` or `processTuyaDP()`. Their `initializeVars()` defaults also use
+option **labels** (e.g. `'Below min temp'`) instead of keys — harmless while the preference stays
+hidden, but the same landmine class as the fixed A2 bug if the `limit` list is ever re-enabled
+without also fixing the defaults.
+
+These are disabled LCZ030/Haozee alarm experiments — ask the user whether to delete them outright or
+leave them as-is with an explanatory comment; do not re-enable the `limit` lists as a "fix."
+
+### `[ ]` `isPendingConfig()` never settles for non-sleepy devices
+
+For every model group *except* the `isConfigurableSleepyDevice()` set (`Zigbee NON-Tuya`,
+`TS0201_TH`), `tempCfgOK`/`humiCfgOK` never flip to `true`, so `isPendingConfig()` stays `true`
+forever and every received packet calls `ConfigurationStateMachine()`, which immediately returns
+after a JSON parse for non-configurable devices. Cheap per call, but wasteful across the packet
+volume of ~25 supported model groups.
+
+Fix direction: guard the `ConfigurationStateMachine()` call site with `isConfigurableSleepyDevice()`,
+or set both `...CfgOK = true` in `resetStats()` for non-sleepy groups.
+
+### `[ ]` Release hygiene — `readme.md` revision history is stale
+
+`readme.md`'s revision history ends at 1.8.1 and the supported-models table lacks everything added
+since. Update at the next release point, not as a standalone commit.
+
+- Specific gap carried over from the driver's own header TODO: update the GitHub wiki/documentation
+  for TS000F `_TZ3218_7fiyo3kv` (MHCOZY switch with temp sensor, `DS18B20` group, added v1.6.2) —
+  never documented externally.
+
+The `packageManifest.json` **2.0.1** vs driver **2.2.0** gap is **deliberate, not a defect** — see
+root `PUBLISHING.md` §*HPM manifest version policy*. kkossev raises the HPM manifest rarely, only
+for major fixes, and tells users to update manually or run HPM **Repair**. Never file or "fix" a
+manifest lag as a bug.
 

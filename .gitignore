@@ -58,48 +58,59 @@ Drivers/Tuya Zigbee mmWave Sensor/customDeviceProfiles/new 7.txt
 Drivers/Tuya Zigbee mmWave Sensor/customDeviceProfiles/TS0044 SPAM.txt
 Drivers/Tuya Zigbee mmWave Sensor/Tuya_Zigbee_mmWave_Sensor_IMPROVEMENT_PLAN.md
 Drivers/Tuya Zigbee mmWave Sensor/Tuya_Zigbee_mmWave_Sensor_ORIENTATION.md
-Drivers/Tuya Zigbee mmWave Sensor/CLAUDE.md
-Drivers/Tuya Multi Sensor 4 In 1/CLAUDE.md
+Drivers/Tuya Zigbee mmWave Sensor/AGENTS.md
+Drivers/Tuya Multi Sensor 4 In 1/AGENTS.md
 Drivers/Ikea Matter/BUGS.md
-Drivers/Ikea Matter/CLAUDE.md
+Drivers/Ikea Matter/AGENTS.md
 Drivers/Aqara P1 Motion Sensor/BUGS.md
-Drivers/Aqara P1 Motion Sensor/CLAUDE.md
+Drivers/Aqara P1 Motion Sensor/AGENTS.md
 Drivers/Tuya Contact Sensor/BUGS.md
-Drivers/Tuya Contact Sensor/CLAUDE.md
-Drivers/Tuya TS004F/CLAUDE.md
+Drivers/Tuya Contact Sensor/AGENTS.md
+Drivers/Tuya TS004F/AGENTS.md
 Drivers/Tuya Zigbee Metering Plug/BUGS.md
-Drivers/Tuya Zigbee Metering Plug/CLAUDE.md
+Drivers/Tuya Zigbee Metering Plug/AGENTS.md
 Drivers/Tuya Zigbee Valve/BUGS_CODEX.md
 Drivers/Tuya Zigbee Valve/CODEX.md
 Drivers/Tuya ZigBee Vibration Sensor/BUGS_CODEX.md
 Drivers/Tuya ZigBee Vibration Sensor/CODEX.md
 Drivers/Tuya Multi Sensor 4 In 1/BUGS.md
 Drivers/Tuya NEO Coolcam Zigbee Water Leak Sensor/BUGS.md
-Drivers/Tuya NEO Coolcam Zigbee Water Leak Sensor/CLAUDE.md
+Drivers/Tuya NEO Coolcam Zigbee Water Leak Sensor/AGENTS.md
 Drivers/Tuya TS004F/BUGS.md
 Drivers/Tuya Temperature Humidity Illuminance LCD Display with a Clock/BUGS.md
-Drivers/Tuya Temperature Humidity Illuminance LCD Display with a Clock/CLAUDE.md
+Drivers/Tuya Temperature Humidity Illuminance LCD Display with a Clock/AGENTS.md
 Drivers/Tuya Temperature Humidity Illuminance LCD Display with a Clock/REFACTORING-3.0.0.md
 Drivers/Tuya ZigBee Vibration Sensor/BUGS.md
-Drivers/Tuya ZigBee Vibration Sensor/CLAUDE.md
 Drivers/Zigbee TRV/BUGS.md
-Drivers/Zigbee TRV/CLAUDE.md
+Drivers/Zigbee TRV/AGENTS.md
 Drivers/Tuya Zigbee mmWave Sensor/TUYA_MMWAVE_PROFILE_DETECTION_FIX_PLAN.md
 Drivers/Tuya Zigbee mmWave Sensor/Tuya_Zigbee_mmWave_Sensor_OPTIMIZATION_PLAN.md
 Libraries/BUGS.md
-Libraries/CLAUDE.md
+Libraries/AGENTS.md
 Libraries/deviceProfileLibV4-OPTIMIZATION.md
 Drivers/Tuya Zigbee Valve/SONOFF_SWV_ZF2_SUPPORT_TODO.md
 Drivers/Tuya Zigbee Valve/ZDO_WARNING_TODO.md
 Drivers/Tuya_Zigbee_Smoke_Detector/BUGS.md
-Drivers/Tuya_Zigbee_Smoke_Detector/CLAUDE.md
+Drivers/Tuya_Zigbee_Smoke_Detector/AGENTS.md
 Drivers/Aqara E1 Thermostat/BUGS.md
-Drivers/Aqara E1 Thermostat/CLAUDE.md
+Drivers/Aqara E1 Thermostat/AGENTS.md
 Drivers/Tuya Smart Siren Zigbee/BUGS.md
-Drivers/Tuya Smart Siren Zigbee/CLAUDE.md
+Drivers/Tuya Smart Siren Zigbee/AGENTS.md
 Drivers/Tuya Zigbee Switch/BUGS.md
-Drivers/Tuya Zigbee Switch/CLAUDE.md
+Drivers/Tuya Zigbee Switch/AGENTS.md
 Drivers/Tuya Zigbee Valve/BUGS.md
-Drivers/Tuya Zigbee Valve/CLAUDE.md
+Drivers/Tuya Zigbee Valve/AGENTS.md
 Drivers/Tuya Zigbee Valve/SONOFF_SWV_ZF2_BDWILSON_MERGE_PLAN.md
 Drivers/Tuya Zigbee Valve/DEVICES.md
+Drivers/Tuya Zigbee Valve/TODO.md
+Drivers/Tuya ZigBee Vibration Sensor/TODO.md
+Drivers/Misc/tests/HUBITAT_MATTER_API.md
+Drivers/Misc/tests/Matter Methods Dumper.groovy
+# Maintainer docs are private by default. Narrow exceptions publish reviewed files.
+docs/maintainer/*
+Drivers/*/docs/maintainer/*
+!Drivers/Tuya Temperature Humidity Illuminance LCD Display with a Clock/docs/maintainer/LCZ030_GITHUB_RESEARCH.md
+Drivers/Tuya ZigBee Vibration Sensor/codex_TS0210_fix.md
+Drivers/Tuya ZigBee Vibration Sensor/TS0210_FIXES_PLAN.md
+Drivers/Tuya ZigBee Vibration Sensor/C15-wake-safe-config-writes-plan.md
+Drivers/Tuya Multi Sensor 4 In 1/ILLUMINANCE_FIXES_PROMPT.md

@@ -5,6 +5,12 @@
       "id": 840,
       "codeType": "driver",
       "version": 2055
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Drivers/Tuya Zigbee Metering Plug/Tuya Zigbee Metering Plug",
+      "id": 840,
+      "codeType": "driver",
+      "version": 2057
     }
   ]
 }

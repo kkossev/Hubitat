@@ -70,7 +70,7 @@
  * ver. 1.9.2  2025-09-27 kkossev - temperature and humidity offset bug fix; invalid humidity values are corrected to 0% or 100% instead of ignored
  * ver. 1.9.3  2025-11-10 kkossev - added humidity processing for DS18B20 group devices (0x67 DP)
  * ver. 2.0.0  2025-11-30 kkossev - added child switch device support for DS18B20 group devices (relay control via DP 1); added cluster 0x0006 (On/Off) parsing for DS18B20 relay state reporting
- *                                  addedadd NEO NAS-STH02B2 electrical conductivity/fertility/temperature/humidity sensor TS0601 _TZE284_rqcuwlsa
+ *                                  added NEO NAS-STH02B2 electrical conductivity/fertility/temperature/humidity sensor TS0601 _TZE284_rqcuwlsa
  *                                  added soilEC and soilFertility attributes; soilFertility enum values: 'normal', 'lower', 'low', 'middle', 'high', 'higher'  
  *                                  Added ZDO 0x0000 Network Address Response and 0x0002 Node Descriptor Response handlers in an attempt to fix TS0601 _TZE284_rqcuwlsa device disconnections; Rate limiting: only respond if more than 10 seconds have passed since last response
  * ver. 2.0.1  2025-12-22 kkossev - fixed temperatureSensitivity preferece being reset to zero bug; added respondToZdoRequests preference (default: false); added TS0222 _TZ3000_hy6ncvmw illuminance only sensor
@@ -78,20 +78,23 @@
  * ver. 2.1.0  2026-03-31 kkossev - added TS0601 _TZE284_hodyryli Tuya Temperature Humidity Sensor with External Probe into a new 'TS0601_ZTH03PRO' group, using child device for the probe @njanda
  * ver. 2.1.1  2026-04-19 kkossev - added support for four switch child devices for _TZ3218_ya5d6wth @pauljneil2 ; added TS0601 _TZE284_9ern5sfh @rlynch into a new group TS0601_Tuya_3; bug fixes
  * ver. 2.1.2  2026-04-22 kkossev - added COOLO CS-201Z _TZE200_npj9bug3 _TZE200_wrmhp6b3 into new 'TS0601_Soil_Coolo' group; added soilMoisture attribute
+ * ver. 2.2.0  2026-08-05 kkossev - (dev. branch) bug fixes; TS0201_LCZ030 (_TZ3000_qaaysllp) - removed wrong EF00 DP 09/0A/0B transmissions (device has no EF00 cluster); added Temperature/Humidity Decimal Places preferences (community request #695)
+ *                                  added corrected fingerprint and moved _TZ3000_utwgoauk ("SNZB-02" Tuya clone) from TS0201 to Zigbee NON-Tuya group (community report #694)
+ *                                  added new 'TS0601_Illum_TH' group and fingerprint for _TZE204_rbbx5mfq; fixed DP 0x02/0x06/0x07 illuminance/temperature/humidity mismatch (community request #691); corrected _TZE200_rbbx5mfq from TS0601_Tuya
+ *                                  added new 'TS0601_Soil_5IN1' group and fingerprints for _TZE284_hdml1aav / _TZE2841000000_hdml1aav (Excellux ZS-300TF); added soilFertilityValue/waterWarning/soilFertilityWarning attributes (community request #687)
+ *                                  added a second _TZ3000_utwgoauk ("SNZB-02" clone) fingerprint with the inClusters in the order actually announced by calinatl's unit - fingerprint matching is order-sensitive (community report #704)
  *
- *                                  TODO: update GitHub documentation  _TZ3218_7fiyo3kv
- *                                  TODO: https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/636?u=kkossev
- *                                  TODO: response to ZDO command: cluster=0002 command=00
 */
 
-@Field static final String VERSION = '2.1.2'
-@Field static final String TIME_STAMP = '2026/04/22 12:00 PM'
+@Field static final String VERSION = '2.2.0'
+@Field static final String TIME_STAMP = '2026/08/06 12:22 AM'
 
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import hubitat.device.HubAction
 import hubitat.device.Protocol
+import java.math.RoundingMode
 
 @Field static final Boolean _DEBUG = false
 
@@ -124,7 +127,10 @@ metadata {
         attribute 'rtt', 'number'
         attribute 'soilEC', 'number'
         attribute 'soilFertility', 'enum', ['normal', 'lower', 'low', 'middle', 'high', 'higher']
+        attribute 'soilFertilityValue', 'number'
+        attribute 'soilFertilityWarning', 'enum', ['none', 'low', 'high']
         attribute 'soilMoisture', 'number'
+        attribute 'waterWarning', 'enum', ['none', 'alarm']
 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_lve3dvpy', deviceJoinName: 'Tuya Temperature Humidity Illuminance LCD Display with a Clock'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_c7emyjom', deviceJoinName: 'Tuya Temperature Humidity Illuminance LCD Display with a Clock'
@@ -140,6 +146,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0400,0001,0500', outClusters:'0019,000A', model:'TS0222', manufacturer:'_TYZB01_4mdqxxnn', deviceJoinName: 'Tuya Illuminance Sensor TS0222_2'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,0400,0500,0000', outClusters:'0003,0019,000A', model:'TS0222', manufacturer:'_TZ3000_hy6ncvmw', deviceJoinName: 'Tuya Smart Indoor Luminance Sensor'    // https://community.hubitat.com/t/zigbee-lux-sensor-driver/159598?u=kkossev https://www.amazon.co.uk/Luminance-Detection-0-10000-Operated-Brightness/dp/B0FD9GYYKZ
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0400,0001,0500', outClusters:'0019,000A', model:'TS0222', manufacturer:'_TZ3000_lfa05ajd', deviceJoinName: 'Zemismart ZXZTH'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0402,0405,EEFF', outClusters:'0003,0019', model:'TS0201', manufacturer:'_TZ3000_lfa05ajd', deviceJoinName: 'Zemismart ZXZTH'    // real cluster signature per ZHA quirks (zhaquirks/tuya/ts0201.py) and blakadder device DB; old TS0222 fingerprint above kept, unconfirmed which one (if either) matches real hardware
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,0400,0000', outClusters:'0019,000A', model:'TS0222', manufacturer:'_TZ3000_kky16aay', deviceJoinName: 'Soil Temperature and Humidity Meter QT-075/THE01860'  // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/532?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_pisltm67', deviceJoinName: 'AUBESS Light Sensor S-LUX-ZB'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TYST11_pisltm67', deviceJoinName: 'AUBESS Light Sensor S-LUX-ZB'
@@ -158,18 +165,16 @@ metadata {
 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_myd45weu', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          //
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_myd45weu', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          // https://www.aliexpress.com/item/1005004979025740.html
-        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_myd45weu', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          // TODO - check the fingrprint !
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_myd45weu', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          // TODO - check the fingerprint !
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ga1maeof', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          // https://www.aliexpress.com/item/1005004979025740.html
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_oitavov2', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/598?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_2se8efxh', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/598?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_aao3yzhs", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_sgabhwa6", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'   // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/538?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_nhgdf6qr", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'   // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/538?u=kkossev
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_myd45weu", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'   // TODO - check the fingrprint !
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_myd45weu", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'   // TODO - check the fingrprint !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_33bwcga2", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'   // https://community.hubitat.com/t/driver-for-tuya-soil-tester-sensor/156528?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_rqcuwlsa", deviceJoinName: 'NEO Soil Moisture Temperature EC Sensor'
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_ap9owrsa", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'   // TODO - check the fingrprint !
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000,ED00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE284_ap9owrsa", controllerType: "ZGB",  deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor II'   // TODO - check the fingerprint !
 
         // model: 'ZG-227ZL',
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0004,0005,0402,0405,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_qoy0ekbd', deviceJoinName: 'Tuya Temperature Humidity LCD Display'      // not tested
@@ -186,7 +191,6 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_cirvgep4', deviceJoinName: 'Tuya Temperature Humidity LCD Display with a Clock'         // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/308?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_cirvgep4', deviceJoinName: 'Tuya Temperature Humidity LCD Display with a Clock'         // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/589?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ysm4dsb1', deviceJoinName: 'Tuya Temperature Humidity'                                  // not tested ! https://github.com/Koenkk/zigbee2mqtt/issues/20815
-        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE0204_yjjdcqsq', deviceJoinName: 'Tuya Temperature Humidity'                                  // not tested !https://github.com/Koenkk/zigbee2mqtt/issues/20235
         // kk
         //
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_whkgqxse', deviceJoinName: 'Tuya Zigbee Temperature Humidity Sensor With Backlight'    // https://www.aliexpress.com/item/1005003980647546.html
@@ -200,6 +204,8 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,0000', outClusters:'0003,0019,000A', model:'TS0201', manufacturer:'_TZ3000_8ybe88nf', deviceJoinName: 'Tuya Temperature Humidity sensor'                // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/262?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,0000', outClusters:'0003,0019,000A', model:'TS0201', manufacturer:'_TZ3000_rdhukkmi', deviceJoinName: 'Tuya Temperature Humidity sensor'                // https://community.hubitat.com/t/tuya-humidity-temperature-sensor/76635/55?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,0000', outClusters:'0003,0019,000A', model:'TS0201', manufacturer:'_TZ3000_utwgoauk', deviceJoinName: 'Tuya Temperature Humidity sensor'                // https://community.hubitat.com/t/humidity-sensor-usb-powered-zigbee/127569/14?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0402,0405', outClusters:'0019', model:'SNZB-02', manufacturer:'_TZ3000_utwgoauk', deviceJoinName: 'Tuya Temperature Humidity sensor (SNZB-02 clone)'    // real device signature; https://community.hubitat.com/t/-/88093/694?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0001,0020,0402,0405', outClusters:'0019', model:'SNZB-02', manufacturer:'_TZ3000_utwgoauk', deviceJoinName: 'Tuya Temperature Humidity sensor (SNZB-02 clone)'    // inClusters order differs on this unit, fingerprint match is order-sensitive; https://community.hubitat.com/t/-/88093/704?u=kkossev
         //
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0402,0405', outClusters:'0003,0402,0405', model:'RH3052', manufacturer:'TUYATEC-gqhxixyk', deviceJoinName: 'TUYATEC RH3052 Motion Sensor'                    // https://community.hubitat.com/t/moes-zigbee-3-0-temp-humidity-sensor-driver/112318?u=kkossev
         //
@@ -213,8 +219,8 @@ metadata {
         //
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0400,0402,0405,0B05,FCC0', outClusters:'0019', model:'TS0222', manufacturer:'_TYZB01_fi5yftwv', deviceJoinName: 'Konke THI Sensor KK-ES-J01W'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_vvmbj46n', deviceJoinName: 'Tuya Zigbee Temperature Humidity Sensor With Backlight'     // TODO - configuration options!  +onEventSetTime // https://github.com/Koenkk/zigbee2mqtt/issues/19731
-        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0402,0405', outClusters:'0019', model:'3RTHS0224Z', manufacturer:'Third Reality', controllerType: 'ZGB', deviceJoinName: 'ThidReality Temperature Humidity Sensor'
-        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0402,0405', outClusters:'0019', model:'3RTHS24BZ', manufacturer:'Third Reality, Inc', controllerType: 'ZGB', deviceJoinName: 'ThidReality Temperature Humidity Sensor'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0402,0405', outClusters:'0019', model:'3RTHS0224Z', manufacturer:'Third Reality', controllerType: 'ZGB', deviceJoinName: 'ThirdReality Temperature Humidity Sensor'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0402,0405', outClusters:'0019', model:'3RTHS24BZ', manufacturer:'Third Reality, Inc', controllerType: 'ZGB', deviceJoinName: 'ThirdReality Temperature Humidity Sensor'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,E001,E000,EF00', outClusters:'000A,0019', model:'TS000F', manufacturer:'_TZ3218_7fiyo3kv', deviceJoinName: 'MHCOZY switch with temp sensor'         // https://community.hubitat.com/t/mycozy-switch-with-temp-sensor-driver/139715?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,E001,E000,EF00', outClusters:'000A,0019', model:'TS000F', manufacturer:'_TZ3218_ya5d6wth', deviceJoinName: 'MHCOZY switch with temp sensor'         // https://community.hubitat.com/t/mhcozy-switch-with-temp-sensor-driver/139715/31?u=kkossev
         //
@@ -260,6 +266,11 @@ metadata {
     // COOLO Soil Moisture Sensor
     fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_npj9bug3', deviceJoinName: 'COOLO CS-201Z Soil Moisture Sensor'
     fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_wrmhp6b3', deviceJoinName: 'COOLO CS-201Z Soil Moisture Sensor'
+    // Illuminance/Temperature/Humidity sensor (dp2=illuminance, dp6=temperature, dp7=humidity) - cluster list unconfirmed, not visible in the reporter's screenshot - https://community.hubitat.com/t/-/88093/691
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_rbbx5mfq', deviceJoinName: 'Tuya Illuminance Temperature Humidity sensor'    // not tested !
+    // 5-in-1 Soil Tester (soil moisture/fertility/temp/humidity/illuminance) - Excellux ZS-300TF - cluster list unconfirmed, not visible in the reporter's screenshot - https://community.hubitat.com/t/-/88093/687
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_hdml1aav', deviceJoinName: 'Tuya 5 in 1 Soil Tester'    // not tested !
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE2841000000_hdml1aav', deviceJoinName: 'Tuya 5 in 1 Soil Tester'    // not tested !
     }
 
     preferences {
@@ -267,9 +278,13 @@ metadata {
         input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: 'Debug information, useful for troubleshooting. <br>The recommended value is <b>disabled</b>.', defaultValue: true)
         input(name: 'temperatureOffset', type: 'decimal', title: '<b>Temperature offset</b>', description: 'Select how many degrees to adjust the temperature.', defaultValue: 0.0, range: '-100..100')
         input(name: 'humidityOffset', type: 'decimal', title: '<b>Humidity offset</b>', description: 'Enter a percentage to adjust the humidity.', defaultValue: 0.0, range: '-100..100')
+        input(name: 'temperatureDecimalPlaces', type: 'enum', title: '<b>Temperature Decimal Places</b>', description: 'Number of decimal digits shown for temperature readings.', defaultValue: 1,
+             options: [0:'0  (e.g. 21)', 1:'1  (e.g. 21.4)', 2:'2  (e.g. 21.35)'])
+        input(name: 'humidityDecimalPlaces', type: 'enum', title: '<b>Humidity Decimal Places</b>', description: 'Number of decimal digits shown for humidity readings.', defaultValue: 0,
+             options: [0:'0  (e.g. 45)', 1:'1  (e.g. 45.3)'])
         input(name: 'modelGroupPreference', type: 'enum', title: '<b>Model Group</b>', description:'The recommended setting is <b>Auto detect</b>.', defaultValue: 0, options:
              ['Auto detect':'Auto detect', 'TS0601_Tuya':'TS0601_Tuya', 'TS0601_Tuya_2':'TS0601_Tuya_2', 'TS0601_Tuya_3':'TS0601_Tuya_3', 'TS0601_ZTH03PRO':'TS0601_ZTH03PRO', 'TS0601_Haozee':'TS0601_Haozee', 'TS0601_AUBESS':'TS0601_AUBESS', 'TS0601_AVATTO_Ink':'TS0601_AVATTO_Ink', 'TS0201':'TS0201', 'TS0222':'TS0222', 'TS0201_LCZ030': 'TS0201_LCZ030',
-                'TS0222_2':'TS0222_2', 'TS0222_Soil':'TS0222_Soil', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', 'TS0601_Soil_II':'TS0601_Soil_II', 'TS0601_Soil_NEO':'TS0601_Soil_NEO', 'TS0601_Soil_Coolo':'TS0601_Soil_Coolo', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
+                'TS0222_2':'TS0222_2', 'TS0222_Soil':'TS0222_Soil', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', 'TS0601_Soil_II':'TS0601_Soil_II', 'TS0601_Soil_NEO':'TS0601_Soil_NEO', 'TS0601_Soil_Coolo':'TS0601_Soil_Coolo', 'TS0601_Soil_5IN1':'TS0601_Soil_5IN1', 'TS0601_Illum_TH':'TS0601_Illum_TH', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON', 'DS18B20':'DS18B20'])
         input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', description: 'May not be supported by all devices!', defaultValue: false)
         if (advancedOptions == true) {
             if (isConfigurableSleepyDevice()) {
@@ -288,19 +303,19 @@ metadata {
 @Field static Map configParams = [
         // temperatureOffset and humidityOffset moved outside of the configParams 11/23/2024
         2: [input: [name: 'temperatureSensitivity', type: 'decimal', title: '<b>Temperature Sensitivity</b>', description: 'Temperature change for reporting, ' + '\u00B0' + 'C', defaultValue: 0.5, range: '0..5',
-                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2', 'TS0601_Tuya_3']]],
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2']]],
 
         3: [input: [name: 'humiditySensitivity', type: 'number', title: '<b>Humidity Sensitivity</b>', description: 'Humidity change for reporting, %', defaultValue: 5, range: '1..10',
-                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2', 'TS0601_Tuya_3']]],
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2']]],
 
         4: [input: [name: 'illuminanceSensitivity', type: 'number', title: '<b>Illuminance Sensitivity</b>', description: 'Illuminance change for reporting, %', defaultValue: 12, range: '10..100',                // TS0222 "MOES ZSS-ZK-THL"
                    limit:['TS0222']]],
 
         5: [input: [name: 'minTempAlarmPar', type: 'decimal', title: '<b>Minimum Temperature Alarm</b>', description: 'Minimum Temperature Alarm, C', defaultValue: 0.0, range: '-20..60',
-                   limit:['TS0601_Tuya', /*'TS0601_Haozee',*/ 'TS0201_LCZ030']]],
+                   limit:['TS0601_Tuya', /*'TS0601_Haozee',*/]]],
 
         6: [input: [name: 'maxTempAlarmPar', type: 'decimal', title: '<b>Maximum Temperature Alarm</b>', description: 'Maximum Temperature Alarm, C', defaultValue: 39.0, range: '-20..60',
-                   limit:['TS0601_Tuya', /*'TS0601_Haozee',*/ 'TS0201_LCZ030']]],
+                   limit:['TS0601_Tuya', /*'TS0601_Haozee',*/]]],
 
         7: [input: [name: 'minHumidityAlarmPar', type: 'number', title: '<b>Minimal Humidity Alarm</b>', description: 'Minimum Humidity Alarm, %', defaultValue: 20, range: '0..100',           // 'TS0601_Haozee' only!
                    limit:[/*'TS0601_Haozee',*/ /*'TS0201_LCZ030'*/]]],
@@ -323,7 +338,7 @@ metadata {
        13: [input: [name: 'alarmTempPar', type: 'enum', title: '<b>Temperature Alarm</b>', description:'Temperature Alarm', defaultValue: 0, options: [0:'Below min temp', 1:'Over max temp', 2:'off'],
                    limit:[/*'TS0201_LCZ030'*/]]],
 
-       14: [input: [name: 'alarmHumidityPar', type: 'enum', title: '<b>Humidity Alarm</b>', description:'Temperature Alarm', defaultValue: 0, options: [0:'Below min hum.', 1:'Over max hum', 2:'off'],
+       14: [input: [name: 'alarmHumidityPar', type: 'enum', title: '<b>Humidity Alarm</b>', description:'Humidity Alarm', defaultValue: 0, options: [0:'Below min hum.', 1:'Over max hum', 2:'off'],
                    limit:[/*'TS0201_LCZ030'*/]]],
        // 'TS0201_TH' : cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)
        15: [input: [name: 'temperatureUnit', type: 'enum', title: '<b>Temperature Unit</b>', description:'Temperature Unit', defaultValue: 0, options: [0:'Celsius', 1:'Fahrenheit'],
@@ -344,11 +359,12 @@ metadata {
     '_TZE200_w6n8jeuu'  : 'TS0601_Tuya',         // added v1.9.0
     '_TZE200_s1xgth2u'  : 'TS0601_Tuya',         // added v1.9.0
     '_TZE200_vzqtvljm'  : 'TS0601_Tuya',         // added v1.9.0 (Illuminance + TH)
-    '_TZE200_rbbx5mfq'  : 'TS0601_Tuya',         // added v1.9.0 (Illuminance + TH)
+    '_TZE200_rbbx5mfq'  : 'TS0601_Illum_TH',     // corrected 2026-08-04: was 'TS0601_Tuya' (unverified guess from v1.9.0); z2m confirms same device as _TZE204_rbbx5mfq (dp2/6/7 illuminance/temp/humidity)
     '_TZE200_utkemkbs'  : 'TS0601_Tuya',         // added v1.9.0
     '_TZE204_utkemkbs'  : 'TS0601_Tuya',         // added v1.9.0
     '_TZE284_utkemkbs'  : 'TS0601_Tuya',         // added v1.9.0
     '_TZE284_qyflbnbj'  : 'TS0601_Tuya',         // added v1.9.0
+    '_TZE200_ysm4dsb1'  : 'TS0601_Tuya',         // RSH-HS06, confirmed via zigbee-herdsman-converters: dp1 temp /10, dp2 humidity raw, dp4 battery, dp9 temp unit https://github.com/Koenkk/zigbee2mqtt/issues/20815
     '_TZE284_yjjdcqsq'  : 'TS0601_Tuya_2',       // added v1.9.0 (follow yjjdcqsq family)
     '_TZE284_upagmta9'  : 'TS0601_Tuya_2',       // added v1.9.0 (follow upagmta9 family)
     '_TZE284_hodyryli'  : 'TS0601_ZTH03PRO',     // ZY-ZTH03PRO with external probe temperature
@@ -379,6 +395,7 @@ metadata {
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       //
 
     '_TZE200_pisltm67'  : 'TS0601_AUBESS',       // illuminance only sensor
+    '_TYST11_pisltm67'  : 'TS0601_AUBESS',       // illuminance only sensor
 
     '_TZE204_s139roas'  : 'TS0601_AVATTO_Ink',   // AVATTO Ink Display   https://github.com/Koenkk/zigbee-herdsman-converters/blob/a32df6625f31f9e2d9cc6305971b6f5b022cd166/src/devices/avatto.ts#L10-L31
 
@@ -398,7 +415,7 @@ metadata {
     '_TZ3000_dowj6gyi'  : 'TS0201',             // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/512?u=kkossev
     '_TZ3000_8ybe88nf'  : 'TS0201',
     '_TZ3000_rdhukkmi'  : 'TS0201',
-    '_TZ3000_utwgoauk'  : 'TS0201',
+    '_TZ3000_utwgoauk'  : 'Zigbee NON-Tuya',    // reports model 'SNZB-02'; has Poll Control cluster 0x0020 like genuine SNZB-02D/02P - needs sleepy-device reporting config, unlike plain TS0201 // https://community.hubitat.com/t/-/88093/694?u=kkossev
     '_TZ3210_alxkwn0h'  : 'TS0201',             // added v1.9.0
     '_TZ3000_0s1izerx'  : 'TS0201',             // added v1.9.0
     '_TZ3000_v1w2k9dd'  : 'TS0201',             // added v1.9.0
@@ -441,6 +458,9 @@ metadata {
     '_TZE284_ap9owrsa'  : 'TS0601_Soil_II',     // Soil monitoring sensor II
     '_TZE200_npj9bug3'  : 'TS0601_Soil_Coolo',  // COOLO CS-201Z Soil moisture sensor
     '_TZE200_wrmhp6b3'  : 'TS0601_Soil_Coolo',  // COOLO CS-201Z Soil moisture sensor
+    '_TZE204_rbbx5mfq'  : 'TS0601_Illum_TH',    // confirmed via zigbee-herdsman-converters dp2=illuminance(raw) dp6=temp(/10) dp7=humidity(/10) - https://community.hubitat.com/t/-/88093/691
+    '_TZE284_hdml1aav'  : 'TS0601_Soil_5IN1',   // Excellux ZS-300TF 5-in-1 soil tester, confirmed via zigbee-herdsman-converters - https://community.hubitat.com/t/-/88093/687
+    '_TZE2841000000_hdml1aav' : 'TS0601_Soil_5IN1', // alternate manufacturer ID encoding, same z2m device entry
     'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D, SNZB-02P
     'SONOFF'            : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D, SNZB-02P
     'ShinaSystem'       : 'Zigbee NON-Tuya',    // USM-300Z
@@ -455,28 +475,6 @@ metadata {
 
 ]
 
-@Field static final Map deviceProfilesV3 = [
-    'SONOFF_TEMP_HUMI'  : [
-            models        : ['TH01', 'SNZB-02D', 'SNZB-02P'],
-            manufacturers : ['eWeLink',  'SONOFF'],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0402,0405,0001', outClusters:'0003', model:'TH01', manufacturer:'eWeLink', deviceJoinName: 'Sonoff Temperature and Humidity Sensor SNZB-02'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0402,0405,0001', outClusters:'0003', model:'TH01', manufacturer:'SONOFF', deviceJoinName: 'Sonoff Temperature and Humidity Sensor SNZB-02'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0402,0405,FC57,FC11', outClusters:'0019', model:'SNZB-02D', manufacturer:'eWeLink', deviceJoinName: 'Sonoff Temperature and Humidity Sensor SNZB-02D'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0402,0405,FC57,FC11', outClusters:'0019', model:'SNZB-02D', manufacturer:'SONOFF', deviceJoinName: 'Sonoff Temperature and Humidity Sensor SNZB-02D'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0402,0405,FC57,FC11', outClusters:'0019', model:'SNZB-02P', manufacturer:'eWeLink', deviceJoinName: 'Sonoff Temperature and Humidity Sensor SNZB-02P'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0402,0405,FC57,FC11', outClusters:'0019', model:'SNZB-02P', manufacturer:'SONOFF', deviceJoinName: 'Sonoff Temperature and Humidity Sensor SNZB-02P']
-            ],
-            deviceJoinName: 'Sonoff Temperature and Humidity Sensor',
-            capabilities  : ['battery': true],
-            attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery'],
-            configuration : ['battery': false],
-            preferences   : [
-                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'Select Power-On Behaviour', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
-            ]
-    ]
-]
-
 def isConfigurableSleepyDevice()  { getModelGroup() in ['Zigbee NON-Tuya', 'TS0201_TH'] }
 
 @Field static final Integer MaxRetries = 3
@@ -486,7 +484,6 @@ def isConfigurableSleepyDevice()  { getModelGroup() in ['Zigbee NON-Tuya', 'TS02
 @Field static final Integer REFRESH_TIMER = 3000
 @Field static final Integer COMMAND_TIMEOUT = 10
 @Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
-@Field static String UNKNOWN = 'UNKNOWN'
 
 @Field static final Integer DS18B20_MAX_RELAYS = 4
 @Field static final Map<String, Integer> DS18B20_RELAY_COUNT_BY_MANUFACTURER = [
@@ -525,10 +522,10 @@ def parse(String description) {
             if (descMap.attrInt == 0x0021) {
                 getBatteryPercentageResult(Integer.parseInt(descMap.value, 16))
             } else if (descMap.attrInt == 0x0020) {
-                getBatteryVoltageResult(Integer.parseInt(descMap.value, 16))
+                sendBatteryVoltageEvent(Integer.parseInt(descMap.value, 16))
             }
             else {
-                log.warn "unparesed attrint $descMap.attrInt"
+                log.warn "unparsed attrint $descMap.attrInt"
             }
         }
         else if (descMap.cluster == '0400' && descMap.attrId == '0000') {
@@ -588,9 +585,9 @@ def parse(String description) {
         else if (descMap.cluster == '0000' && descMap.attrId == '0001') {    // ping
             // descMap = [raw:0D310100000A01002004, dni:0D31, endpoint:01, cluster:0000, size:0A, attrId:0001, encoding:20, command:01, value:04, clusterInt:0, attrInt:1]
             logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap?.value})"
-            def now = new Date().getTime()
+            long now = new Date().getTime()
             Map lastTxMap = stringToJsonMap(state.lastTx)
-            def timeRunning = now.toInteger() - (lastTxMap.pingTime ?: '0').toInteger()
+            long timeRunning = now - safeToLong(lastTxMap.pingTime, 0L)
             if (timeRunning < MAX_PING_MILISECONDS && timeRunning > 0) {
                 sendRttEvent()
             }
@@ -647,7 +644,7 @@ def parseZHAcommand( Map descMap) {
             def status = descMap.data[2]
             def attrId = descMap.data[1] + descMap.data[0]
             if (status == '86') {
-                if (logEnable) { log.warn "${device.displayName} Read attribute response: unsupported Attributte ${attrId} cluster ${clusterId}" }
+                if (logEnable) { log.warn "${device.displayName} Read attribute response: unsupported Attributte ${attrId} cluster ${descMap.clusterId}" }
             }
             else {
                 if (logEnable) { log.debug "${device.displayName} Read attribute response: status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}" }
@@ -798,7 +795,6 @@ def parseZDOcommand( Map descMap ) {
             break
         case '8004' : // simple descriptor response
             if (logEnable) { log.info "${device.displayName} Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}" }
-            parseSimpleDescriptorResponse( descMap )
             break
         case '8005' : // endpoint response
             if (logEnable) { log.info "${device.displayName} Received endpoint response: cluster: ${descMap.clusterId} (endpoint response) endpointCount = ${ descMap.data[4]}  endpointList = ${descMap.data[5]}" }
@@ -895,7 +891,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             }
             break
         case 0x02 : // humidity % for most of the Tuya EF00 models; 'TS0601_Contact'illuminance; 'TS0601_Contact'0 battery %
-            if (getModelGroup() == 'TS0601_AUBESS') {
+            if (getModelGroup() in ['TS0601_AUBESS', 'TS0601_Illum_TH']) {
                 illuminanceEventLux( safeToInt( fncmd ) )
             }
             else if (getModelGroup() == 'TS0601_Contact') {
@@ -911,7 +907,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             }
             break
         case 0x03 : // humidity or  illuminance or battery state
-            if (getModelGroup() in ['TS0601_Soil_Coolo']) {
+            if (getModelGroup() in ['TS0601_Soil_Coolo', 'TS0601_Soil_5IN1']) {
                 sendEvent(name: 'soilMoisture', value: fncmd, unit: '%', descriptionText: "Soil moisture is ${fncmd}%")
                 if (settings?.txtEnable) { log.info "${device.displayName} Soil moisture is ${fncmd}%" }
             }
@@ -951,7 +947,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             if (getModelGroup() in ['TS0601_Soil']) {
                 temperatureEvent( fncmd )
             }
-            else if (getModelGroup() in ['TS0601_Soil_II', 'TS0601_Soil_NEO', 'TS0601_Soil_Coolo']) {
+            else if (getModelGroup() in ['TS0601_Soil_II', 'TS0601_Soil_NEO', 'TS0601_Soil_Coolo', 'TS0601_Soil_5IN1']) {
                 temperatureEvent( fncmd / 10.0 )
             }
             else {
@@ -959,10 +955,20 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             }
             break
         case 0x06 :
-            logInfo "TS0601_AVATTO_Ink sampling temperature (seconds) is ${fncmd}"
+            if (getModelGroup() == 'TS0601_Illum_TH') {
+                temperatureEvent( fncmd / 10.0 )
+            }
+            else {
+                logInfo "TS0601_AVATTO_Ink sampling temperature (seconds) is ${fncmd}"
+            }
             break
         case 0x07 :
-            logInfo "TS0601_AVATTO_Ink sampling humidity (seconds) is ${fncmd}"
+            if (getModelGroup() == 'TS0601_Illum_TH') {
+                humidityEvent( fncmd / 10.0 )
+            }
+            else {
+                logInfo "TS0601_AVATTO_Ink sampling humidity (seconds) is ${fncmd}"
+            }
             break
         case 0x09 : // temp. scale  1=Fahrenheit 0=Celsius (TS0601 Tuya and Haoze) TS0601_Tuya does not change the symbol on the LCD !    // including 'TS0601_Tuya_2' and TS0601_AVATTO_Ink (_TZE204_s139roas)
             logInfo "${device.displayName} Temperature scale reported by device is: ${fncmd == 1 ? 'Fahrenheit' : 'Celsius' }"       // {'celsius' : new Enum(0), 'fahrenheit' : new Enum(1)}
@@ -1019,8 +1025,8 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 }
             }
             break
-        case 0x0F : // (15) humidity Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared    (Haozee only?)
-            if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II', 'TS0601_Soil_Coolo']) {
+        case 0x0F : // (15) humidity Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared    (Haozee only?)  / battery for TS0601_Soil_5IN1
+            if (getModelGroup() in ['TS0601_Soil', 'TS0601_Soil_II', 'TS0601_Soil_Coolo', 'TS0601_Soil_5IN1']) {
                 getBatteryPercentageResult(fncmd * 2)
             }
             else {
@@ -1106,12 +1112,17 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
             else if (getModelGroup() in ['TS0201_TH']) {
                 logInfo "${device.displayName} Temperature scale reported by device is: ${fncmd == 1 ? 'Fahrenheit' : 'Celsius' }"
             }
+            else if (getModelGroup() == 'TS0601_Contact') {
+                illuminanceEventLux( safeToInt( fncmd ) )  // _TZE200_pay2byax, _TZE200_nvups4nh
+            }
+            else if (getModelGroup() == 'TS0601_Soil_5IN1') {
+                humidityEvent( fncmd )
+            }
             else {
                 if (settings?.logEnable) { log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" }
             }
-            illuminanceEventLux( safeToInt( fncmd ) )  // _TZE200_pay2byax
             break
-        case 0x66 : // (102) humidity alarm for Soil_NEO / soil_calibration for Soil_Coolo
+        case 0x66 : // (102) humidity alarm for Soil_NEO / soil_calibration for Soil_Coolo / illuminance for Soil_5IN1
             if (getModelGroup() in ['TS0601_Soil_Coolo']) {
                 logDebug "TS0601_Soil_Coolo soil_calibration (0x66) = ${fncmd}"
             }
@@ -1125,16 +1136,22 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 }
                 temperatureEvent( fncmd / 10.0 )
             }
+            else if (getModelGroup() == 'TS0601_Soil_5IN1') {
+                illuminanceEventLux( safeToInt( fncmd ) )
+            }
             else {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             }
             break
-        case 0x67 : // (103) max temperature alarm for Soil_NEO
+        case 0x67 : // (103) max temperature alarm for Soil_NEO / report_period for Soil_5IN1 (deferred - read only)
             if (getModelGroup() == 'TS0601_Soil_NEO') {
                 if (settings?.logEnable) { log.info "${device.displayName} Max temperature alarm set to ${fncmd / 10.0}°C" }
             }
             else if (getModelGroup() in ['DS18B20']) {
                 humidityEvent( fncmd )
+            }
+            else if (getModelGroup() == 'TS0601_Soil_5IN1') {
+                logInfo "reporting period is ${fncmd} seconds"
             }
             else {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -1200,28 +1217,50 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             }
             break
-        case 0x6E : // (110) temperature Fahrenheit for Soil_NEO / soil_warning for Soil_Coolo
+        case 0x6E : // (110) temperature Fahrenheit for Soil_NEO / soil_warning for Soil_Coolo and Soil_5IN1 (meaning unclear, log only)
             if (getModelGroup() in ['TS0601_Soil_Coolo']) {
                 logDebug "TS0601_Soil_Coolo soil_warning (0x6E) = ${fncmd}"
             }
             else if (getModelGroup() == 'TS0601_Soil_NEO') {
                 logDebug "Temperature (F): ${fncmd / 10.0}°F"
             }
+            else if (getModelGroup() == 'TS0601_Soil_5IN1') {
+                logInfo "soil_warning is ${fncmd}"
+            }
             else {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             }
             break
-        case 0x6F : // (111) temperature_sampling - TS0601_Soil_Coolo
+        case 0x6F : // (111) temperature_sampling - TS0601_Soil_Coolo / water_warning - TS0601_Soil_5IN1
             if (getModelGroup() in ['TS0601_Soil_Coolo']) {
                 logDebug "TS0601_Soil_Coolo temperature_sampling (0x6F) = ${fncmd}"
             }
+            else if (getModelGroup() == 'TS0601_Soil_5IN1') {
+                String warning = ['none', 'alarm'][fncmd] ?: 'unknown'
+                sendEvent(name: 'waterWarning', value: warning, descriptionText: "Water warning is ${warning}")
+                if (settings?.txtEnable) { log.info "${device.displayName} Water warning is ${warning}" }
+            }
             else {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             }
             break
-        case 0x70 : // (112) soil_sampling - TS0601_Soil_Coolo
+        case 0x70 : // (112) soil_sampling - TS0601_Soil_Coolo / soil_fertility (µS/cm) - TS0601_Soil_5IN1
             if (getModelGroup() in ['TS0601_Soil_Coolo']) {
                 logDebug "TS0601_Soil_Coolo soil_sampling (0x70) = ${fncmd}"
+            }
+            else if (getModelGroup() == 'TS0601_Soil_5IN1') {
+                sendEvent(name: 'soilFertilityValue', value: fncmd, unit: 'µS/cm', descriptionText: "Soil fertility is ${fncmd} µS/cm")
+                if (settings?.txtEnable) { log.info "${device.displayName} Soil fertility is ${fncmd} µS/cm" }
+            }
+            else {
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            break
+        case 0x74 : // (116) soil_fertility_warning - TS0601_Soil_5IN1
+            if (getModelGroup() == 'TS0601_Soil_5IN1') {
+                String warning = ['none', 'low', 'high'][fncmd] ?: 'unknown'
+                sendEvent(name: 'soilFertilityWarning', value: warning, descriptionText: "Soil fertility warning is ${warning}")
+                if (settings?.txtEnable) { log.info "${device.displayName} Soil fertility warning is ${warning}" }
             }
             else {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -1435,10 +1474,12 @@ def temperatureEvent( temperaturePar, isDigital=false ) {
         map.unit = '\u00B0' + 'C'
     }
     def tempCorrected = temperature + safeToDouble(settings?.temperatureOffset)
-    map.value  =  Math.round((tempCorrected - 0.05) * 10) / 10
+    Integer tempDecimals = safeToInt(settings?.temperatureDecimalPlaces, 1)
+    BigDecimal roundedTemp = roundToDecimals(tempCorrected as BigDecimal, tempDecimals)
+    map.value = tempDecimals == 0 ? roundedTemp.intValue() : roundedTemp
     map.type = isDigital == true ? 'digital' : 'physical'
     map.isStateChange = true
-    map.descriptionText = "${map.name} is ${tempCorrected} ${map.unit}"
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     Map lastRxMap = stringToJsonMap(state.lastRx)
     def timeElapsed = Math.round((now() - lastRxMap['tempTime']) / 1000)
     Integer timeRamaining = (minReportingTimeTemp - timeElapsed) as Integer
@@ -1474,12 +1515,14 @@ def humidityEvent( humidity, isDigital=false ) {
         logWarn "correcting invalid humidity ${humidity} (${humidityAsDouble}) to 0%"
         humidityAsDouble = 0.0
     }
-    map.value = Math.round(humidityAsDouble)
+    Integer humiDecimals = safeToInt(settings?.humidityDecimalPlaces, 0)
+    BigDecimal roundedHumi = roundToDecimals(humidityAsDouble as BigDecimal, humiDecimals)
+    map.value = humiDecimals == 0 ? roundedHumi.intValue() : roundedHumi
     map.name = 'humidity'
     map.unit = '% RH'
     map.type = isDigital == true ? 'digital' : 'physical'
     map.isStateChange = true
-    map.descriptionText = "${map.name} is ${humidityAsDouble.round(1)} ${map.unit}"
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     Map lastRxMap = stringToJsonMap(state.lastRx)
     def timeElapsed = Math.round((now() - lastRxMap['humiTime']) / 1000)
     Integer timeRamaining = (minReportingTimeHumidity - timeElapsed) as Integer
@@ -1501,15 +1544,6 @@ private void sendDelayedEventHumi(Map map) {
     if (settings?.txtEnable) { log.info "${device.displayName} ${map.descriptionText} (${map.type})" }
     //state.lastHumi = now()
     Map lastRxMap = stringToJsonMap(state.lastRx); try { lastRxMap['humiTime'] = now() } catch (e) { lastRxMap['humiTime'] = now() - (minReportingTimeHumidity * 2000) }; state.lastRx = mapToJsonString(lastRxMap)
-    sendEvent(map)
-}
-
-def switchEvent( value ) {
-    def map = [:]
-    map.name = 'switch'
-    map.value = value
-    map.descriptionText = "${device.displayName} switch is ${value}"
-    if (settings?.txtEnable) { log.info "${map.descriptionText }" }
     sendEvent(map)
 }
 
@@ -1556,7 +1590,7 @@ def updated() {
     logInfo "Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> modelGroupPreference = <b>${modelGroupPreference}</b> (${getModelGroup()})"
     logInfo "Debug logging is ${logEnable}; Description text logging is ${txtEnable}"
     if (logEnable) {
-        runIn(86400, 'logsOff', [overwrite: true, misfire: 'ignore'])    // turn off debug logging after 30 minutes
+        runIn(86400, 'logsOff', [overwrite: true, misfire: 'ignore'])    // turn off debug logging after 24 hours
         logInfo 'Debug logging will be turned off after 24 hours'
     }
     else {
@@ -1570,7 +1604,7 @@ def updated() {
         cmds += sendTuyaCommand('13', DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
     }
 
-    if (getModelGroup() in ['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_LCZ030', 'TS0601_Tuya_2']) {
+    if (getModelGroup() in ['TS0601_Tuya', 'TS0601_Haozee', 'TS0601_Tuya_2']) {
         if (location.temperatureScale == 'C') {    // Celsius
             cmds += sendTuyaCommand('09', DP_TYPE_ENUM, '00')
             if (settings?.logEnable) { log.trace "${device.displayName} setting temperature scale to Celsius: ${cmds}" }
@@ -1584,7 +1618,7 @@ def updated() {
         }
     }
 
-    if (getModelGroup() in ['TS0601_Tuya', 'TS0201_LCZ030']) {
+    if (getModelGroup() in ['TS0601_Tuya']) {
         fncmd = (safeToDouble( maxTempAlarmPar ) * 10) as int
         if (settings?.logEnable) { log.trace "${device.displayName} setting maxTempAlarm to ${fncmd / 10.0 as double} C" }
         cmds += sendTuyaCommand('0A', DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
@@ -1592,6 +1626,16 @@ def updated() {
         fncmd = (safeToDouble( minTempAlarmPar ) * 10) as int
         if (settings?.logEnable) { log.trace "${device.displayName} setting minTempAlarm to ${fncmd / 10.0 as double} C" }
         cmds += sendTuyaCommand('0B', DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
+    }
+    if (getModelGroup() in ['TS0222']) {
+        Integer intValue = safeToInt(settings?.illuminanceSensitivity, 12)
+        if (settings?.logEnable) { log.trace "${device.displayName} setting illuminanceSensitivity to ${intValue} %" }
+        cmds += zigbee.writeAttribute(0x0400, 0xF001, DataType.UINT8, intValue, [:], 200)
+    }
+    if (getModelGroup() in ['TS0601_Tuya', 'TS0601_Tuya_2']) {
+        Integer intValue = safeToInt(settings?.humiditySensitivity, 5)
+        if (settings?.logEnable) { log.trace "${device.displayName} setting humiditySensitivity to ${intValue} %" }
+        cmds += sendTuyaCommand('14', DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
     }
     if (getModelGroup() in ['TS0601_Haozee']) {
         Integer intValue = safeToInt(settings?.humiditySensitivity, 5)
@@ -1614,10 +1658,6 @@ def updated() {
         if (settings?.logEnable) { log.trace "${device.displayName} changing minHumidityAlarm to= ${fncmd}" }
         cmds += sendTuyaCommand("0D", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
         */
-    }
-    /* groovylint-disable-next-line EmptyIfStatement */
-    if (getModelGroup() in ['TS0601_Haozee']) {
-    // TODO - write attribute 0xF001, cluster 0x400
     }
     if (getModelGroup() in ['OWON']) {
         cmds += initializeDevice()
@@ -1666,7 +1706,7 @@ def updated() {
             cmds += zigbee.writeAttribute(0xE002, 0xE00B, 0x30, 0x01, [value: temperatureScale], 266)
 			*/        	
             if (settings?.logEnable) { log.trace "temperatureScale = ${settings?.temperatureUnit}" }
-            int temperatureScale = (settings?.temperatureUnit ?: 0) as int
+            int temperatureScale = safeToInt(settings?.temperatureUnit, 0)
             // https://github.com/zigpy/zha-device-handlers/issues/3097#issuecomment-2060104995
             //     CELSIUS = 0x00     FAHRENHEIT = 0x01 TuyaMCUCluster attribute: 101 (0x65)
             if (temperatureScale == 0) {
@@ -1834,9 +1874,9 @@ def ping() {
 }
 
 def sendRttEvent() {
-    def now = new Date().getTime()
+    long now = new Date().getTime()
     Map lastTxMap = stringToJsonMap(state.lastTx)
-    def timeRunning = now.toInteger() - (lastTxMap.pingTime ?: '0').toInteger()
+    long timeRunning = now - safeToLong(lastTxMap.pingTime, 0L)
     def descriptionText = "Round-trip time is ${timeRunning} (ms)"
     logInfo "${descriptionText}"
     sendEvent(name: 'rtt', value: timeRunning, descriptionText: descriptionText, unit: 'ms', isDigital: true)
@@ -2030,6 +2070,8 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
     if (fullInit == true || settings?.temperatureOffset == null) { device.updateSetting('temperatureOffset', [value:0.0, type:'decimal']) }
     if (fullInit == true || settings?.humidityOffset == null) { device.updateSetting('humidityOffset', [value:0.0, type:'decimal']) }
+    if (fullInit == true || settings?.temperatureDecimalPlaces == null) { device.updateSetting('temperatureDecimalPlaces', [value:'1', type:'enum']) }
+    if (fullInit == true || settings?.humidityDecimalPlaces == null) { device.updateSetting('humidityDecimalPlaces', [value:'0', type:'enum']) }
     if (fullInit == true || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', false) }
     if (fullInit == true || settings?.temperatureSensitivity == null) { device.updateSetting('temperatureSensitivity', [value:0.5, type:'decimal']) }
     if (fullInit == true || settings?.humiditySensitivity == null) { device.updateSetting('humiditySensitivity', [value:5, type:'number']) }
@@ -2044,7 +2086,7 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings?.maxReportingTimeHumidity == null) { device.updateSetting('maxReportingTimeHumidity',  [value:3600, type:'number']) }
     if (fullInit == true || settings?.alarmTempPar == null) { device.updateSetting('alarmTempPar', [value:'Below min temp', type:'enum']) }
     if (fullInit == true || settings?.alarmHumidityPar == null) { device.updateSetting('alarmHumidityPar', [value:'Below min hum.', type:'enum']) }
-    if (fullInit == true || settings?.temperatureUnit == null) { device.updateSetting('temperatureUnit', [value:'Celsius', type:'enum']) }
+    if (fullInit == true || settings?.temperatureUnit == null) { device.updateSetting('temperatureUnit', [value:'0', type:'enum']) }
     if (fullInit == true || settings?.respondToZdoRequests == null) { device.updateSetting('respondToZdoRequests', false) }
     //
     if (fullInit == true || state.notPresentCounter == null) { state.notPresentCounter = 0 }
@@ -2103,7 +2145,6 @@ def configure() {
 def initialize() {
     log.info "${device.displayName} Initialize()..."
     unschedule()
-    initializeVars(fullInit = true)
     installed()
     configure()
     runIn( 3, logInitializeRezults)
@@ -2159,8 +2200,7 @@ def getBatteryPercentageResult(rawValuePar) {
     sendEvent(result)
 }
 
-private Map getBatteryVoltageResult(rawValue) {
-    logDebug "getBatteryVoltageResult: volts = ${(double)rawValue / 10.0}"
+private void sendBatteryVoltageEvent(rawValue) {
     Map statsMap = stringToJsonMap(state.stats); try { statsMap['battCtr']++ } catch (e) { statsMap['battCtr'] = 1 }; state.stats = mapToJsonString(statsMap)
     def linkText = getLinkText(device)
 
@@ -2168,6 +2208,7 @@ private Map getBatteryVoltageResult(rawValue) {
 
     def volts = rawValue / 10
     if (rawValue != 0 && rawValue != 255) {
+        logDebug "sendBatteryVoltageEvent: volts = ${(double)rawValue / 10.0}"
         def minVolts = 2.1
         def maxVolts = 3.0
         def pct = (volts - minVolts) / (maxVolts - minVolts)
@@ -2231,8 +2272,16 @@ Integer safeToInt(val, Integer defaultVal=0) {
     return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
 }
 
+Long safeToLong(val, Long defaultVal=0L) {
+    return "${val}"?.isLong() ? "${val}".toLong() : defaultVal
+}
+
 Double safeToDouble(val, Double defaultVal=0.0) {
     return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
+}
+
+BigDecimal roundToDecimals(BigDecimal value, int decimals) {
+    return value.setScale(decimals, RoundingMode.HALF_UP)
 }
 
 def logDebug(msg) {
@@ -2251,16 +2300,6 @@ def logWarn(msg) {
     if (settings?.logEnable) {
         log.warn "${device.displayName} " + msg
     }
-}
-
-private String swapEndianHex(String hex, int width) {
-    if (hex == null) { return '0000' }
-    def normalized = hex.replaceAll('0x', '').padLeft(width, '0')
-    def pairs = []
-    for (int i = 0; i < normalized.length(); i += 2) {
-        pairs.add(normalized.substring(i, Math.min(i + 2, normalized.length())))
-    }
-    return pairs.reverse().join(' ').toUpperCase()
 }
 
 def updateInfo(msg= ' ') {
@@ -2283,6 +2322,4 @@ def test( String description) {
     parse( description)
 
 }
-
-// https://github.com/dresden-elektronik/deconz-rest-plugin/issues/5483
 

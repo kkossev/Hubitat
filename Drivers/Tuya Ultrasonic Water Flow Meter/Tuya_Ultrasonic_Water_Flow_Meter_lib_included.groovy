@@ -1,9 +1,8 @@
-/* groovylint-disable NglParseError, ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnusedImport, VariableName */
-/**
- *  Tuya Multi Sensor 4 In 1 driver for Hubitat
+/* groovylint-disable NglParseError, ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnusedImport, VariableName *//**
+ *  Tuya Ultrasonic Water Flow Meter - driver for Hubitat Elevation
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
- *  https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441
+ *  https://community.hubitat.com/t/tuya-smart-zigbee-ultrasonic-water-meters/142433
  *
  * 	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * 	in compliance with the License. You may obtain a copy of the License at:
@@ -14,824 +13,179 @@
  * 	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  * 	for the specific language governing permissions and limitations under the License.
  *
- * This driver is inspired by @w35l3y work on Tuya device driver (Edge project).
- * For a big portions of code all credits go to Jonathan Bradshaw.
+ * ver. 3.3.0  2024-08-03 kkossev  - first dummy version
+ * ver. 3.4.0  2026-08-05 kkossev  - added _TZE284_ajlu4cud (meter, no valve) and _TZE284_vuwtqx0t; split into two device profiles;
+ *                                   fixed the dp scaling and types; valve open()/close() (dp13); fault bitmap, meter id and the
+ *                                   8-byte consumption blobs are decoded from the raw payload; volumeUnit preference (m3 / L)
  *
- * ver. 3.2.0  2024-05-26 kkossev  - first version, based on the mmWave radar driver code : depricated Linptech; added TS0202 add _TYZB01_vwqnz1sn; 
- * ver. 3.2.1  2024-05-31 kkossev  - commonLib ver 3.2.1 allignment; tested 2In1 _TZE200_3towulqd ; new device profile group 'RH3040_TUYATEC'; SiHAS; 
- * ver. 3.2.2  2024-07-05 kkossev  - created motionLib; restored 'all' attribute
- * ver. 3.2.3  2024-07-27 kkossev  - added Sonoff SNZB-03P
- * ver. 3.3.0  2024-08-30 kkossev  - main branch release.
- * ver. 3.3.1  2024-10-26 kkossev  - added TS0601 _TZE200_f1pvdgoh into a new device profile group 'TS0601_2IN1_MYQ_ZMS03'
- * ver. 3.3.2  2024-11-30 kkossev  - added Azoula Zigbee 4 in 1 Multi Sensor model:'HK-SENSOR-4IN1-A', manufacturer:'Sunricher' into SIHAS group
- * ver. 3.3.3  2025-01-29 kkossev  - TS0601 _TZE200_ppuj1vem moved to 'TS0601_2IN1_MYQ_ZMS03' deviceProfile @ltdonjohnson
- * ver. 3.4.0  2025-03-03 kkossev  - added customConfigureDevice(); SNZB-03 configuration bug fixes;  added SNZB-03P device profile;
- * ver. 3.4.1  2025-03-29 kkossev  - added custom configuration function for Espressif @ilkeraktuna
- * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
- * ver. 3.5.1  2025-04-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences range patch/workaround.
- * ver. 3.5.2  2025-07-14 kkossev  - bug fix: 'sendDelayedBatteryEvent' exception
- * ver. 3.5.3  2025-09-15 kkossev  - alligned with commonLib 4.0.0
- * ver. 3.5.4  2025-10-03 kkossev  - added model:'ZG-204ZL' (note the 'ZL' sufix!), manufacturer:'HOBEIAN' 2-in-1 sensor into TS0601_2IN1' device profile group
- * ver. 3.5.5  2025-10-20 kkossev  - added IMOU Motion Sensor ZP1 model:'ZP2-EN', manufacturer:'MultIR'
- * ver. 3.5.6  2026-06-04 kkossev  - added TS0601 _TZE284_gnpflcoq 4-in-1 mmWave Radar Sensor profile 'TS0601_TZE284_4IN1'
- * ver. 3.5.7  2026-07-31 kkossev  - added HOBEIAN ZG-204ZX fingerprint to 'TS0601_TZE284_4IN1'
- * ver. 3.6.0  2026-08-05 kkossev  - (dev. branch) bug fixes; TS0202_MOTION_SWITCH (Linkoze LKMSZ001) dp:102 now maps to illumState (dark/light) instead of a fake lux value; added PGST TS0601 _TZE284_zmgahdog PIR+siren combo (motion-only) profile 'TS0601_PGST_PIR_SIREN'; TS0601_PGST_PIR_SIREN dp:1 motion confirmed, added dp:3/9/10/80/101/102 (sensitivity, keepTime and 4 diagnostic unknown_x attributes); fixed a NullPointerException in localProcessTuyaDP() dp 0x65 when the device profile is UNKNOWN; 'Reset Motion to Inactive' is shown again for RH3040_TUYATEC and SONOFF_MOTION_IAS (still defaulting to false); sendCommand() and setPar() now explain that leaving the name empty lists the valid names in the log
- *
- *                                   TODO: show Temperature Offset and Humidity Offset only when the device profile supports TemperatureMeasurement and RelativeHumidityMeasurement capabilities
- *                                   TODO: check why no preferences : updateAllPreferences: no preferences defined for device profile SIHAS_USM-300Z_4_IN_1
- *                                   TODO: update documentation : https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1 
+ *                                   TODO: decode the frozen-date stamp in the first 4 bytes of dp2/dp3
+ *                                   TODO: confirm the dp15 function on the _TZE200_vuwtqx0t meters
  */
 
-static String version() { "3.6.0" }
-static String timeStamp() {"2026/08/05 11:12 PM"}
+static String version() { '3.4.0' }
+static String timeStamp() { '2026/08/06 12:15 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
-@Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for the production release !
-
-
-import groovy.transform.Field
-import hubitat.device.HubMultiAction
-import hubitat.device.Protocol
-import hubitat.helper.HexUtils
-import hubitat.zigbee.zcl.DataType
-import java.util.concurrent.ConcurrentHashMap
-import groovy.json.JsonOutput
-import groovy.transform.CompileStatic
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = true  // disable it for production
 
 
 
 
-
-
-
-
-
-
-deviceType = "MultiSensor4in1"
-@Field static final String DEVICE_TYPE = "MultiSensor4in1"
+deviceType = "WaterFlowMeter"
+@Field static final String DEVICE_TYPE = "WaterFlowMeter"
 
 metadata {
     definition (
-        name: 'Tuya Multi Sensor 4 In 1',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy',
+        name: 'Tuya Ultrasonic Water Flow Meter',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Ultrasonic%20Water%20Flow%20Meter/Tuya_Ultrasonic_Water_Flow_Meter_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
+        capability 'Sensor'
+        capability 'Actuator'
+        capability 'Refresh'
+        capability 'Battery'                    // battery (%)
+        capability 'TemperatureMeasurement'     // temperature (C)
+        capability 'PowerSource'                // powerSource
+        capability 'Valve'                      // valve : open, closed  + open() / close()   (dp13, meters with a valve only)
+        capability 'LiquidFlowRate'             // rate  : LPM
+        capability 'HealthCheck'                // healthStatus
 
-        capability 'MotionSensor'
-        //capability 'TamperAlert'
+        attribute 'healthStatus', 'enum', ['offline', 'online']
+        attribute 'rtt', 'number'
+        attribute 'batteryVoltage', 'number'                                                    // dp26
+        attribute 'waterConsumed', 'number'                                                     // dp1  - total water consumed
+        attribute 'monthConsumption', 'number'                                                  // dp2  - month consumption
+        attribute 'dailyConsumption', 'number'                                                  // dp3  - daily consumption
+        attribute 'reverseWaterConsumed', 'number'                                              // dp18 - reverse water consumption
+        attribute 'instantaneousFlowRate', 'number'                                             // dp21 - instantaneous flow rate (L/h)
+        attribute 'reportPeriod', 'enum', ['1h', '2h', '3h', '4h', '6h', '8h', '12h', '24h']    // dp4
+        attribute 'autoClean', 'enum', ['off', 'on']                                            // dp14 - meters with a valve only
+        attribute 'faults', 'string'                                                            // dp5  - decoded fault bitmap
+        attribute 'meterId', 'string'                                                           // dp16 - meter identification number
+        attribute 'monthAndDailyFrozenSet', 'number'                                            // dp6
 
-        attribute 'all', 'string'                   // all attributes in one string
-        attribute 'distance', 'number'              // Tuya Radar, obsolete
-        attribute 'unacknowledgedTime', 'number'    // AIR models
-        attribute 'keepTime', 'enum', ['5 seconds', '10 seconds', '15 seconds','30 seconds', '45 seconds','60 seconds', '120 seconds'] 
-        attribute 'motionDetectionDistance', 'decimal'  // changed 05/11/2024 - was 'number'
-
-        attribute 'sensitivity', 'number'
-        attribute 'fadingTime', 'decimal'
-        attribute 'humanMotionState', 'enum', ['none', 'moving', 'small_move', 'stationary', 'static', 'presence', 'peaceful', 'large_move']    // in use by the obsolete radars
-        attribute 'illumState', 'enum', ['dark', 'light', 'unknown']
-        attribute 'ledIndicator', 'number'
-        attribute 'reportingTime4in1', 'number'
-        attribute 'ledEnable', 'enum', ['disabled', 'enabled']
-        attribute 'WARNING', 'string'
-        // diagnostic attributes - PGST _TZE284_zmgahdog PIR+siren, DPs seen in the logs but not decoded yet
-        attribute 'unknown_3', 'number'             // Tuya DP 3 (0x03)
-        attribute 'unknown_80', 'number'            // Tuya DP 80 (0x50)
-        attribute 'unknown_101', 'number'           // Tuya DP 101 (0x65)
-        attribute 'unknown_102', 'number'           // Tuya DP 102 (0x66) - siren switch candidate
-
-        // command 'setMotion' is defined in motionLib
-        // version 3.3.0
-        command 'sendCommand', [
-            [name:'command', type: 'STRING', description: '▶️ Run one of the commands supported by this device profile • Leave empty to list the valid names in the log', constraints: ['STRING']],
-            [name:'val',     type: 'STRING', description: 'Optional value, needed only by some commands', constraints: ['STRING']]
-        ]
-        command 'setPar', [
-                [name:'par', type: 'STRING', description: '🎛️ Set a device profile preference and write it to the device • Leave empty to list the valid parameter names in the log', constraints: ['STRING']],
-                [name:'val', type: 'STRING', description: 'Leave empty to see the allowed range or values for that parameter', constraints: ['STRING']]
-        ]
+       // no commands
+       if (_DEBUG) {
+            command 'tuyaDataQuery'
+        }
 
         // itterate through all the figerprints and add them on the fly
         deviceProfilesV3.each { profileName, profileMap ->
             if (profileMap.fingerprints != null) {
-                if (profileMap.device?.isDepricated != true) {
-                    profileMap.fingerprints.each {
-                        fingerprint it
-                    }
-                }
+                profileMap.fingerprints.each {
+                    fingerprint it
+               }
             }
-        }        
+        }
     }
 
     preferences {
         if (device) {
-            if (DEVICE?.device?.isDepricated == true) {
-                input(name: 'depricated',  type: 'hidden', title: "$ttStyleStr<a href='https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1' target='_blank'><b>This is the right driver</b><br> for use with <b>${state.deviceProfile}</b> device!<br><br><i>Please change the driver to 'Tuya Zigbee mmWave Sensor' as per the instructions in this link!</i></a>")
-            }
-            else {
-                input(name: 'info',    type: 'hidden', title: "<a href='https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1' target='_blank'><i>For more info, click on this link to visit the WiKi page</i></a>")
-            }
+            // input(name: 'info',    type: 'hidden', title: "<a href='https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1' target='_blank'><i>For more info, click on this link to visit the WiKi page</i></a>")
         }
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: 'Enables events logging.'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_DEBUG_LOGGING, description: 'Turns on debug logging for 24 hours.'
-        if (device) {
-            if (('DistanceMeasurement' in DEVICE?.capabilities)) {  // keep it because of the depricated mmWave sensors
-                input(name: 'ignoreDistance', type: 'bool', title: '<b>Ignore distance reports</b>', description: 'If not used, ignore the distance reports received every 1 second!', defaultValue: true)
-            }
-        }
-        input(name: 'allStatusTextEnable', type:  'bool', title: "<b>Enable 'all' Status Attribute Creation?</b>",  description: 'Status attribute for Devices/Rooms', defaultValue: false)
         // the rest of the preferences are inputIt from the deviceProfileLib and from the included libraries
+        if (device) {
+            input name: 'volumeUnit', type: 'enum', title: '<b>Water Volume Unit</b>', options: VolumeUnitOpts.options, defaultValue: VolumeUnitOpts.defaultValue, required: true, description: 'The meter always sends liters - this is the unit the consumption attributes are reported in.'
+            input name: 'pollingInterval', type: 'enum', title: '<b>Polling Interval</b>', options: PollingIntervalOpts.options, defaultValue: PollingIntervalOpts.defaultValue, required: true, description: 'Changes how often the hub will poll the meter. Battery meters transmit on their own report period - polling is normally not needed.'
+        }
     }
 }
 
 @Field static String ttStyleStr = '<style>.tTip {display:inline-block;border-bottom: 1px dotted black;}.tTip .tTipText {display:none;border-radius: 6px;padding: 5px 0;position: absolute;z-index: 1;}.tTip:hover .tTipText {display:inline-block;background-color:red;color:red;}</style>'
 
-boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
-//boolean is2in1() { return getDeviceProfile().contains('TS0601_2IN1') } defined in the deviceProfileLib, because of a patch!
-
-
-// based on 'Tuya Multi Sensor 4 In 1' version '1.9.0' '2024/05/06 10:39 AM' 
-@Field static final Map deviceProfilesV3 = [
-    // is4in1() // tested _TZ3210_zmy9hjay - OK
-    'TS0202_4IN1'  : [
-            description   : 'Tuya 4in1 (motion/temp/humi/lux) sensor',
-            models        : ['TS0202'],         // model: 'ZB003-X'  vendor: 'Fantem'
-            device        : [type: 'PIR', isIAS:true, powerSource: 'dc', isSleepy:false],    // check powerSource
-            capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'IlluminanceMeasurement': true, 'tamper': true, 'Battery': true],
-            preferences   : ['motionReset':true, 'illuminanceThreshold':true, 'reportingTime4in1':'102', 'ledEnable':'111', 'keepTime':'0x0500:0xF001', 'sensitivity':'0x0500:0x0013'],
-            commands      : ['reportingTime4in1':'reportingTime4in1', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences', 'printFingerprints':'printFingerprints', 'printPreferences':'printPreferences'],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,EF00', outClusters:'0019,000A', model:'TS0202',  manufacturer:'_TZ3210_zmy9hjay', deviceJoinName: 'Tuya TS0202 Multi Sensor 4 In 1'],        // pairing: double click!
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,EF00', outClusters:'0019,000A', model:'5j6ifxj', manufacturer:'_TYST11_i5j6ifxj', deviceJoinName: 'Tuya TS0202 Multi Sensor 4 In 1'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,EF00', outClusters:'0019,000A', model:'hfcudw5', manufacturer:'_TYST11_7hfcudw5', deviceJoinName: 'Tuya TS0202 Multi Sensor 4 In 1'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,EF00', outClusters:'0019,000A', model:'TS0202',  manufacturer:'_TZ3210_rxqls8v0', deviceJoinName: 'Tuya TS0202 Multi Sensor 4 In 1'],        // not tested
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,EF00', outClusters:'0019,000A', model:'TS0202',  manufacturer:'_TZ3210_wuhzzfqg', deviceJoinName: 'Tuya TS0202 Multi Sensor 4 In 1'],        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/282?u=kkossev
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,EF00', outClusters:'0019,000A', model:'TS0202',  manufacturer:'_TZ3210_0aqbrnts', deviceJoinName: 'Tuya TS0202 Multi Sensor 4 In 1 is-thpl-zb']
-            ],
-            tuyaDPs:        [
-                [dp:1,   name:'motion',                                 type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'Motion'],
-                [dp:5,   name:'tamper',                                 type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'clear', 1:'detected'] ,   unit:'',  description:'Tamper detection'],
-                [dp:25,  name:'battery2',                               type:'number',  rw: 'ro', min:0,     max:100,  defVal:100,  scale:1,  unit:'%',          description:'Remaining battery 2 in %'],
-                [dp:102, name:'reportingTime4in1', dt:'02', tuyaCmd:04, type:'number',  rw: 'rw', min:0, max:240, defVal:10, step:5, scale:1, unit:'minutes', title:'<b>Reporting Interval</b>', description:'Reporting interval in minutes'],
-                [dp:104, name:'tempCalibration',                        type:'decimal', rw: 'ro', min:-2.0,  max:2.0,  defVal:0.0,  scale:10, unit:'deg.',  title:'<b>Temperature Calibration</b>',       description:'Temperature calibration (-2.0...2.0)'],
-                [dp:105, name:'humiCalibration',                        type:'number',  rw: 'ro', min:-15,   max:15,   defVal:0,    scale:1,  unit:'%RH',    title:'<b>Humidity Calibration</b>',     description:'Humidity Calibration'],
-                [dp:106, name:'illumCalibration',                       type:'number',  rw: 'ro', min:-20, max:20, defVal:0,        scale:1, unit:'Lx', title:'<b>Illuminance Calibration</b>', description:'Illuminance calibration in lux'],
-                [dp:107, name:'temperature',                            type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0,  scale:10, unit:'deg.',       description:'Temperature'],
-                [dp:108, name:'humidity',                               type:'number',  rw: 'ro', min:1,     max:100,  defVal:100,  scale:1,  unit:'%RH',        description:'Humidity'],
-                [dp:109, name:'pirSensorEnable',                        type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'1',  scale:1,  map:[0:'disabled', 1:'enabled'] ,   unit:'', title:'<b>MoPIR Sensor Enable</b>',  description:'Enable PIR sensor'],
-                [dp:110, name:'battery',                                type:'number',  rw: 'ro', min:0,     max:100,  defVal:100,  scale:1,  unit:'%',          description:'Battery level'],
-                [dp:111, name:'ledEnable',       dt:'01', tuyaCmd:04,   type:'enum',    rw: 'rw', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'disabled', 1:'enabled'] ,   unit:'', title:'<b>LED Enable</b>',  description:'Enable LED'],
-                [dp:112, name:'reportingEnable',                        type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'disabled', 1:'enabled'] ,   unit:'', title:'<b>Reporting Enable</b>',  description:'Enable reporting'],
-            ],
-            attributes:       [
-                [at:'0x0500:0x0013',  name:'sensitivity', type:'enum',    rw: 'rw', min:0,     max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
-                [at:'0x0500:0xF001',  name:'keepTime',    type:'enum',    rw: 'rw', min:0,     max:5,    defVal:'0',  unit:'seconds',    map:[0:'0 seconds', 1:'30 seconds', 2:'60 seconds', 3:'120 seconds', 4:'240 seconds', 5:'480 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)']
-            ],
-            refresh:        ['refreshAllIas','sensitivity', 'keepTime', 'refreshFantem'],
-            configuration : ['battery': false],
-    ],
-
-    // tested TS0601  _TZE200_7hfcudw5 - OK
-    'TS0601_3IN1'  : [                                // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN
-            description   : 'Tuya 3in1 (Motion/Temp/Humi) sensor',
-            models        : ['TS0601'],
-            device        : [type: 'PIR', powerSource: 'dc', isSleepy: false],    //  powerSource changes batt/DC dynamically!
-            capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'tamper': true, 'Battery': true],
-            preferences   : ['motionReset':true],
-            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_7hfcudw5', deviceJoinName: 'Tuya NAS-PD07 Multi Sensor 3 In 1'],
-            ],
-            tuyaDPs:        [
-                [dp:101, name:'motion',          type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'], description:'Motion'],
-                [dp:102, name:'battery', preProc:'tuyaToBatteryLevel', type:'number',  rw: 'ro', min:0,     max:100,  defVal:100,  scale:1,  unit:'%',          description:'Battery level'],
-                [dp:103, name:'tamper',          type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'clear', 1:'detected'] ,   unit:'',  description:'Tamper detection'],
-                [dp:104, name:'temperature',     type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0,  scale:10, unit:'deg.',       description:'Temperature'],
-                [dp:105, name:'humidity',        type:'number',  rw: 'ro', min:1,     max:100,  defVal:100,  scale:1,  unit:'%RH',        description:'Humidity'],
-                [dp:106, name:'tempScale',       type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'Celsius', 1:'Fahrenheit'] ,   unit:'',  description:'Temperature scale'],
-                [dp:107, name:'minTemp',         type:'number',  rw: 'ro', min:-20,   max:80,   defVal:0,    scale:1,  unit:'deg.',       description:'Minimal temperature'],
-                [dp:108, name:'maxTemp',         type:'number',  rw: 'ro', min:-20,   max:80,   defVal:0,    scale:1,  unit:'deg.',       description:'Maximal temperature'],
-                [dp:109, name:'minHumidity',     type:'number',  rw: 'ro', min:0,     max:100,  defVal:0,    scale:1,  unit:'%RH',        description:'Minimal humidity'],
-                [dp:110, name:'maxHumidity',     type:'number',  rw: 'ro', min:0,     max:100,  defVal:0,    scale:1,  unit:'%RH',        description:'Maximal humidity'],
-                [dp:111, name:'tempAlarm',       type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'Temperature alarm'],
-                [dp:112, name:'humidityAlarm',   type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'Humidity alarm'],
-                [dp:113, name:'alarmType',       type:'enum',    rw: 'ro', min:0,     max:1 ,   defVal:'0',  scale:1,  map:[0:'type0', 1:'type1'] ,   unit:'',  description:'Alarm type'],
-            ],
-            configuration : ['battery': false]
-    ],
-
-    // is2in1() // tested  _TZE200_3towulqd - OK (w/ patch!)
-    'TS0601_2IN1'  : [      // https://github.com/Koenkk/zigbee-herdsman-converters/blob/bf32ce2b74689328048b407e56ca936dc7a54a0b/src/devices/tuya.ts#L4568
-            description   : 'Tuya 2in1 (Motion and Illuminance) sensor',
-            models         : ['TS0601'],
-            device        : [type: 'PIR', isIAS:false, powerSource: 'battery', isSleepy:true, ignoreZclIlluminance:true],    // the lux value is received twice - as Tuya dp:12 AND as a ZCL 0x0400 report; z2m handles these devices as Tuya DP only
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'Battery': true],
-            preferences   : ['motionReset':true, 'invertMotion':true, 'keepTime':'10', 'sensitivity':'9', 'illuminance_interval':'102'],
-            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_3towulqd', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // https://www.aliexpress.com/item/1005004095233195.html
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0500,0001,0400', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_3towulqd', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],     // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/934?u=kkossev
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0400', outClusters:'', model:'TS0601', manufacturer:'_TZE200_3towulqd', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],           // newer f/w revision - same clusters as the HOBEIAN ZG-204ZL below, but TS0601/_TZE200_3towulqd identity : https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1187?u=kkossev
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bh3n6gk8', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // https://community.hubitat.com/t/tze200-bh3n6gk8-motion-sensor-not-working/123213?u=kkossev
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_1ibpyhdc', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          //
-                // the six manufacturers below are in the same z2m 'ZG-204ZL' definition (src/devices/tuya.ts) but were never reported on HE - the inClusters/outClusters lists are the family default and are NOT verified on a real device;
-                // if auto-pairing fails for one of them, ask the owner for the 'Device pairing info' and correct the line (the driver still resolves the profile correctly when the driver is selected manually - see getDeviceNameAndProfile())
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ttcovulf', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_gjldowol', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_jxyhl4eq', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_qxyh4r7g', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_na5qlzow', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_s6hzw8g2', deviceJoinName: 'Nedis ZBSM20WT Motion Sensor (ZG-204ZL)'],                                    // z2m whitelabel 'Nedis ZBSM20WT'; reports illuminance on dp 101 instead of dp 12 - clusters not verified
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,EF00,0001,0400', outClusters:'', model:'ZG-204ZL', manufacturer:'HOBEIAN', deviceJoinName: 'HOBEIAN ZG-204ZL 2 in 1 PIR Motion Detector and Lux sensor'],                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1153?u=kkossev 
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0400', outClusters:'', model:'ZG-204ZL', manufacturer:'HOBEIAN', deviceJoinName: 'HOBEIAN ZG-204ZL 2 in 1 PIR Motion Detector and Lux sensor']                       // https://github.com/JohanBendz/com.tuya.zigbee/issues/1267
-            ],
-            tuyaDPs:        [
-                [dp:1,   name:'motion', /*preProc:'invert',*/ type:'enum',   rw: 'ro', min:0, max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'Motion'],
-                [dp:4,   name:'battery',                  type:'number', rw: 'ro', min:0, max:100,  defVal:100,  scale:1,  unit:'%',          title:'<b>Battery level</b>',              description:'Battery level'],
-                [dp:9,   name:'sensitivity',              type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'0 - low', 1:'1 - medium', 2:'2 - high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
-                [dp:10,  name:'keepTime',                 type:'enum',   rw: 'rw', min:0, max:3,    defVal:'0',  unit:'seconds',    map:[0:'10 seconds', 1:'30 seconds', 2:'60 seconds', 3:'120 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)'],
-                [dp:12,  name:'illuminance',              type:'number', rw: 'ro', min:0, max:1000, defVal:0,    scale:1,  unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance'],
-                [dp:101, name:'illuminance',              type:'number', rw: 'ro', min:0, max:1000, defVal:0,    scale:1,  unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance (_TZE200_s6hzw8g2 / Nedis ZBSM20WT reports lux on dp 101 instead of dp 12)'],
-                [dp:102, name:'illuminance_interval',     type:'number', rw: 'rw', min:1, max:720,  defVal:1,    scale:1,  unit:'minutes',  title:'<b>Illuminance Interval</b>',     description:'Brightness acquisition interval. Factory default is 1 minute - <b>increase</b> it to reduce the number of lux reports. Written only while the PIR is awake, so trigger a motion when saving.'],
-
-            ],
-            configuration : ['battery': false]
-    ],
-
-    // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1080?u=kkossev
-    'TS0601_2IN1_MYQ_ZMS03'  : [      //https://github.com/protyposis/zigbee-herdsman-converters/blob/c9b8f3172cb11ea0ca36440f8956eda582182df7/src/devices/tuya.ts#L4750
-            description   : 'Tuya 2in1 (Motion and Illuminance) MYQ_ZMS03 sensor',
-            models         : ['TS0601'],
-            device        : [type: 'PIR', isIAS:false, powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'Battery': true],
-            preferences   : ['motionReset':true, 'invertMotion':true],
-            commands      : ['resetStats':'resetStats', 'refresh':'refresh'],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_f1pvdgoh', deviceJoinName: 'Tuya MYQ_ZMS03 Multi Sensor 2 in 1'],          // https://s.click.aliexpress.com/e/_DdNVVZx 
-                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ppuj1vem', deviceJoinName: 'Treatlife human presence sensor 2 in 1']        // https://github.com/benedicttobias/zigbee-herdsman-converters/blob/ddaad14c80cadb2bff8d314ed8128139958ee02a/src/devices/tuya.ts#L12117-L12133
-                //  ^^^^  this return the opposite value. presence is 'false' when motion is detected!
-            ],
-            tuyaDPs:        [
-                [dp:1,   name:'motion',                   type:'enum',   rw: 'ro', min:0, max:1 ,   defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'] ,   unit:'',  description:'Motion'],
-                [dp:4,   name:'battery',                  type:'number', rw: 'ro', min:0, max:100,  defVal:100,  scale:1,  unit:'%',        title:'<b>Battery level</b>',              description:'Battery level'],
-                [dp:101, name:'illuminance',              type:'number', rw: 'ro', min:0, max:1000, defVal:0,    scale:1,  unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance'],
-            ],
-            refresh:        ['queryAllTuyaDP'],
-    ],
-
-    // https://community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739 - no public DP map exists (z2m issue closed 'not planned'); dp:1 motion confirmed from @calinatl log 2026-08-05, siren DP still unknown
-    'TS0601_PGST_PIR_SIREN' : [
-            description   : 'PGST Zigbee PIR Motion Sensor (siren not supported)',
-            models        : ['TS0601'],
-            device        : [type: 'PIR', isIAS:false, powerSource: 'battery', isSleepy:true],    // powerSource/isSleepy NOT confirmed - the device reports dp:80 every ~3.4 seconds, which is not sleepy behaviour; waiting for @calinatl to confirm battery vs USB
-            capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : ['motionReset':true, 'sensitivity':'9', 'keepTime':'10'],
-            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults'],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_zmgahdog', deviceJoinName: 'PGST Zigbee PIR Motion Sensor Alarm (siren not supported)'],   // https://community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739 - cluster list not verified on a real device, see TODO.md
-            ],
-            tuyaDPs:        [
-                [dp:1,   name:'motion',      type:'enum',   rw: 'ro', min:0, max:1, defVal:'0', scale:1,  map:[0:'inactive', 1:'active'], description:'Motion (confirmed from the @calinatl log 2026-08-05)'],
-                [dp:3,   name:'unknown_3',   type:'number', rw: 'ro', scale:1, unit:'',   description:'Unknown Tuya DP 3 (0x03) - enum, reported 0 at pairing'],
-                [dp:9,   name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2, defVal:'2', dt:'04', tuyaCmd:04, unit:'', map:[0:'0 - low', 1:'1 - medium', 2:'2 - high'], title:'<b>Sensitivity</b>', description:'PIR sensor sensitivity (Tuya convention, NOT confirmed on this model)'],
-                [dp:10,  name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:3, defVal:'0', dt:'04', tuyaCmd:04, unit:'seconds', map:[0:'10 seconds', 1:'30 seconds', 2:'60 seconds', 3:'120 seconds'], title:'<b>Keep Time</b>', description:'PIR keep time in seconds (Tuya convention, NOT confirmed on this model)'],
-                [dp:80,  name:'unknown_80',  type:'number', rw: 'ro', scale:1, unit:'',   description:'Unknown Tuya DP 80 (0x50) - constant value 80, repeated every ~3.4 seconds'],
-                [dp:101, name:'unknown_101', type:'number', rw: 'ro', scale:1, unit:'',   description:'Unknown Tuya DP 101 (0x65)'],
-                [dp:102, name:'unknown_102', type:'number', rw: 'ro', scale:1, unit:'',   description:'Unknown Tuya DP 102 (0x66) - bool, siren switch candidate'],
-            ],
-            spammyDPsToNotTrace : [80],
-            refresh:        ['queryAllTuyaDP'],
-    ],
-
-    'RH3040_TUYATEC'   : [ // testing TUYATEC-53o41joc   // non-configurable
-            description   : 'TuyaTec RH3040 Motion sensor (IAS)',
-            models        : ['RH3040'],
-            device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],
-            capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : ['motionReset':true, 'keepTime':false, 'sensitivity':false],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500', model:'RH3040', manufacturer:'TUYATEC-53o41joc', deviceJoinName: 'TUYATEC RH3040 Motion Sensor'],                                            // KK - 60 seconds reset period
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500', model:'RH3040', manufacturer:'TUYATEC-b5g40alm', deviceJoinName: 'TUYATEC RH3040 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500', model:'RH3040', manufacturer:'TUYATEC-deetibst', deviceJoinName: 'TUYATEC RH3040 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500', model:'RH3040', manufacturer:'TUYATEC-bd5faf9p', deviceJoinName: 'Nedis/Samotech RH3040 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500', model:'RH3040', manufacturer:'TUYATEC-zn9wyqtr', deviceJoinName: 'Samotech RH3040 Motion Sensor'],                                           // vendor: 'Samotech', model: 'SM301Z'
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500', model:'RH3040', manufacturer:'TUYATEC-b3ov3nor', deviceJoinName: 'Zemismart RH3040 Motion Sensor'],                                          // vendor: 'Nedis', model: 'ZBSM10WT'
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500', model:'RH3040', manufacturer:'TUYATEC-2gn2zf9e', deviceJoinName: 'TUYATEC RH3040 Motion Sensor']
-            ],
-            deviceJoinName: 'TuyaTec RH3040 Motion sensor (IAS)',
-            configuration : ['battery': false]
-    ],
-
-    'TS0202_MOTION_IAS'   : [ // non-configurable
-            description   : 'Tuya TS0202 Motion sensor (IAS)',
-            models        : ['TS0202', 'RH3040'],
-            device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],
-            capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : ['motionReset':true, 'keepTime':false, 'sensitivity':false],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0001,0500', outClusters:'0000,0003,0001,0500', model:'TS0202', manufacturer:'_TYZB01_dl7cejts', deviceJoinName: 'Tuya TS0202 Motion Sensor'],             // KK model: 'ZM-RT201'// 5 seconds (!) reset period for testing
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_mmtwjmaq', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_otvn3lne', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TYZB01_jytabjkb', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TYZB01_ef5xlc9q', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TYZB01_vwqnz1sn', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TYZB01_2b8f6cio', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TYZB01_vwqnz1sn', deviceJoinName: 'Tuya TS0202 Motion Sensor'],            // https://community.hubitat.com/t/moes-tuya-motion-sensor-distance-issue-ts0202-have-to-be-ridiculously-close-to-detect-movement/109917/8?u=kkossev
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZE200_bq5c8xfe', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TYZB01_qjqgmqxr', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TYZB01_zwvaj5wy', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_bsvqrxru', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TYZB01_tv3wxhcz', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TYZB01_hqbdru35', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_tiwq83wk', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_ykwcwxmz', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_hgu1dlak', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_hktqahrq', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_jmrgyl7o', deviceJoinName: 'Tuya TS0202 Motion Sensor'],            // not tested! //https://zigbee.blakadder.com/Luminea_ZX-5311.html
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'WHD02',  manufacturer:'_TZ3000_kmh5qpmb', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_kmh5qpmb', deviceJoinName: 'Tuya TS0202 Motion Sensor'],             // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1059?u=kkossev
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3040_usvkzkyn', deviceJoinName: 'Tuya TS0202 Motion Sensor'],            // not tested // https://www.amazon.ae/Rechargeable-Detector-Security-Devices-Required/dp/B0BKKJ48QH
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500,0B05', outClusters:'0019', model:'TY0202', manufacturer:'_TZ1800_fcdjzz3s', deviceJoinName: 'Lidl TY0202 Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500,0B05,FCC0', outClusters:'0019,FCC0', model:'TY0202', manufacturer:'_TZ3000_4ggd8ezp', deviceJoinName: 'Bond motion sensor ZX-BS-J11W'],        // https://community.hubitat.com/t/what-driver-to-use-for-this-motion-sensor-zx-bs-j11w-or-ty0202/103953/4
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0003,0004,0500,0000', outClusters:'0004,0006,1000,0019,000A', model:'TS0202', manufacturer:'_TZ3040_bb6xaihh', deviceJoinName: 'Tuya TS0202 Motion Sensor'],  // https://github.com/Koenkk/zigbee2mqtt/issues/17364
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0003,0004,0500,0000', outClusters:'0004,0006,1000,0019,000A', model:'TS0202', manufacturer:'_TZ3040_wqmtjsyk', deviceJoinName: 'Tuya TS0202 Motion Sensor'],  // not tested
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0003,0004,0500,0000', outClusters:'0004,0006,1000,0019,000A', model:'TS0202', manufacturer:'_TZ3000_h4wnrtck', deviceJoinName: 'Tuya TS0202 Motion Sensor']   // not tested
-            ],
-            configuration : ['battery': false]
-    ],
-
-    'TS0202_MOTION_IAS_CONFIGURABLE'   : [
-            description   : 'Tuya TS0202 Motion sensor (IAS) configurable',
-            models        : ['TS0202'],
-            device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],
-            capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : ['motionReset':true, 'keepTime':'0x0500:0xF001', 'sensitivity':'0x0500:0x0013'],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_mcxw5ehu', deviceJoinName: 'Tuya TS0202 ZM-35H-Q Motion Sensor'],    // TODO: PIR sensor sensitivity and PIR keep time in seconds ['30', '60', '120']
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_msl6wxk9', deviceJoinName: 'Tuya TS0202 ZM-35H-Q Motion Sensor'],    // TODO: fz.ZM35HQ_attr ['30', '60', '120']
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3040_msl6wxk9', deviceJoinName: 'Tuya TS0202 ZM-35H-Q Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3040_fwxuzcf4', deviceJoinName: 'Tuya TS0202 ZM-35H-Q Motion Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_6ygjfyll', deviceJoinName: 'Tuya TS0202 Motion Sensor'],            // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/289?u=kkossev
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3040_6ygjfyll', deviceJoinName: 'Tuya TS0202 Motion Sensor'],            // https://community.hubitat.com/t/tuya-motion-sensor-driver/72000/54?u=kkossev
-
-            ],
-            attributes:       [
-                [at:'0x0500:0x0013', name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
-                [at:'0x0500:0xF001', name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:2,    defVal:'0',  unit:'seconds',    map:[0:'30 seconds', 1:'60 seconds', 2:'120 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)'],
-            ],
-            configuration : ['battery': false]
-    ],
-
-    // isMotionSwitch()
-    'TS0202_MOTION_SWITCH': [
-            description   : 'Tuya Motion Sensor and Scene Switch',
-            models        : ['TS0202'],
-            device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],
-            capabilities  : ['MotionSensor':true, 'switch':true, 'Battery':true],
-            preferences   : ['motionReset':true, 'keepTime':false, 'sensitivity':false],    // keepTime is hardcoded 60 seconds, no sensitivity configuration
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,EF00,0000', outClusters:'0019,000A', model:'TS0202', manufacturer:'_TZ3210_cwamkvua', deviceJoinName: 'Tuya Motion Sensor and Scene Switch']  // vendor: 'Linkoze', model: 'LKMSZ001'
-
-            ],
-            tuyaDPs:        [
-                [dp:101, name:'pushed',         type:'enum',   rw: 'ro', min:0, max:2, defVal:'0',   scale:1,    map:[0:'pushed', 1:'doubleTapped', 2:'held'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
-                [dp:102, name:'illumState',     type:'enum',   rw: 'ro', min:0, max:1, defVal:0,     scale:1,    map:[0:'dark', 1:'light'],   unit:'',       title:'<b>Illuminance State</b>',     description:'Illuminance State'],
-
-            ],
-            configuration : ['battery': false]
-    ],
-
-    'TS0601_PIR_PRESENCE'   : [ // isBlackPIRsensor()       // https://github.com/zigpy/zha-device-handlers/issues/1618
-            description   : 'Tuya PIR Human Motion Sensor (Black)',
-            models        : ['TS0601'],
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : ['fadingTime':'102', 'distance':'105'],
-            commands      : ['resetStats':'resetStats', 'resetPreferencesToDefaults':'resetPreferencesToDefaults'],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_9qayzqa8', deviceJoinName: 'Smart PIR Human Motion Sensor (Black)']    // https://www.aliexpress.com/item/1005004296422003.html
-            ],
-            tuyaDPs:        [                                           // TODO - defaults !!
-                [dp:102, name:'fadingTime',          type:'number',  rw: 'rw', min:24,  max:300 ,  defVal:24,        scale:1,    unit:'seconds',      title:'<b>Fading time</b>',   description:'Fading(Induction) time'],
-                [dp:105, name:'distance',      type:'enum',    rw: 'rw', min:0,   max:9 ,    defVal:'6',       scale:1,    map:[0:'0.5 m', 1:'1.0 m', 2:'1.5 m', 3:'2.0 m', 4:'2.5 m', 5:'3.0 m', 6:'3.5 m', 7:'4.0 m', 8:'4.5 m', 9:'5.0 m'] ,   unit:'meters',     title:'<b>Target Distance</b>', description:'Target Distance'],
-                [dp:119, name:'motion',              type:'enum',    rw: 'ro', min:0,   max:1 ,    defVal:'0',       scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
-                [dp:141, name:'humanMotionState',    type:'enum',    rw: 'ro', min:0,   max:4 ,    defVal:'0',       scale:1,    map:[0:'none', 1:'presence', 2:'peaceful', 3:'small_move', 4:'large_move'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
-            ],
-            configuration : ['battery': false]
-    ],
-
-    'TS0601_PIR_AIR'      : [    // isHumanPresenceSensorAIR()  - Human presence sensor AIR (PIR sensor!) - o_sensitivity, v_sensitivity, led_status, vacancy_delay, light_on_luminance_prefer, light_off_luminance_prefer, mode, luminance_level, reference_luminance, vacant_confirm_time
-            description   : 'Tuya PIR Human Motion Sensor AIR',
-            models        : ['TS0601'],
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'Battery': true],                // TODO - check if battery powered?
-            preferences   : ['vacancyDelay':'103', 'ledStatusAIR':'110', 'detectionMode':'104', 'vSensitivity':'101', 'oSensitivity':'102', 'lightOnLuminance':'107', 'lightOffLuminance':'108' ],
-            commands      : ['resetStats':'resetStats'],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_auin8mzr', deviceJoinName: 'Tuya PIR Human Motion Sensor AIR']        // Tuya LY-TAD-K616S-ZB
-            ],
-            tuyaDPs:        [                                           // TODO - defaults !!
-                [dp:101, name:'vSensitivity',        type:'enum',    rw: 'rw', min:0,   max:2,     defVal:'0', scale:1,    map:[0:'Speed Priority', 1:'Standard', 2:'Accuracy Priority'] ,   unit:'-',     title:'<b>vSensitivity options</b>', description:'V-Sensitivity mode'],
-                [dp:102, name:'oSensitivity',        type:'enum',    rw: 'rw', min:0,   max:2,     defVal:'0', scale:1,    map:[0:'Sensitive', 1:'Normal', 2:'Cautious'] ,   unit:'',     title:'<b>oSensitivity options</b>', description:'O-Sensitivity mode'],
-                [dp:103, name:'vacancyDelay',        type:'number',  rw: 'rw', min:0,   max:1000,  defVal:10,  scale:1,    unit:'seconds',        title:'<b>Vacancy Delay</b>',          description:'Vacancy Delay'],
-                [dp:104, name:'detectionMode',       type:'enum',    rw: 'rw', min:0,   max:3 ,    defVal:'0', scale:1,    map:[0:'General Model', 1:'Temporary Stay', 2:'Basic Detecton', 3:'PIR Sensor Test'] ,   unit:'',     title:'<b>Detection Mode</b>', description:'Detection Mode'],
-                [dp:105, name:'unacknowledgedTime',  type:'number',  rw: 'ro', min:0,   max:9 ,    defVal:7,   scale:1,    unit:'seconds',         description:'unacknowledgedTime'],
-                [dp:106, name:'illuminance',         type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>illuminance</b>',                description:'illuminance'],
-                [dp:107, name:'lightOnLuminance',    type:'number',  rw: 'rw', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>lightOnLuminance</b>',                description:'lightOnLuminance'],        // Ligter, Medium, ... ?// TODO =- check range 0 - 10000 ?
-                [dp:108, name:'lightOffLuminance',   type:'number',  rw: 'rw', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>lightOffLuminance</b>',                description:'lightOffLuminance'],
-                [dp:109, name:'luminanceLevel',      type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>luminanceLevel</b>',                description:'luminanceLevel'],            // Ligter, Medium, ... ?
-                [dp:110, name:'ledStatusAIR',        type:'enum',    rw: 'rw', min:0,   max:2 ,    defVal:'0', scale:1,    map:[0: 'Switch On', 1:'Switch Off', 2: 'Default'] ,   unit:'',     title:'<b>LED status</b>', description:'Led status switch'],
-            ],
-            configuration : ['battery': false]
-    ],
-
-    'SONOFF_MOTION_IAS'   : [
-            description   : 'Sonoff/eWeLink Motion sensor',
-            models        : ['SNZB-03', 'MS01', 'msO1', 'SQ510A', 'RHK09', '66666'],
-            device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],   // very sleepy !!
-            capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : ['motionReset':true/*, 'keepTime':false, 'sensitivity':false*/],   // just enable or disable showing the motionReset preference, no link to  tuyaDPs or attributes map!
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'SNZB-03', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],        // SNZB-O3 OUVOPO Wireless Motion Sensor (2023)
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0020', outClusters:'0003', model:'SNZB-03', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],   // 
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'RHK09', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],          //
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0020', outClusters:'0003', model:'RHK09', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],     // 
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'SQ510A', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],          //
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0020', outClusters:'0003', model:'SQ510A', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],     // 
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'ms01', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],           // for testL 60 seconds re-triggering period!
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'msO1', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],           // second variant
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'MS01', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],           // third variant
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'66666', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],          // fourth variant
-            ],
-            refresh       : [ 'batteryRefresh'],
-            configuration : [
-                '0x0001':['bind':true,  'voltageReporting':[3600, 7200, 0x02], 'batteryReporting':[3600, 7200, 0x02] ],
-                '0x0500':['bind':false, 'sensitivity':false, 'keepTime':false],       // TODO - use in update function
-            ],  // battery percentage, min 3600, max 7200, UINT8, delta 2
-    ],
-
-    'SONOFF_SNZB_03P'   : [     // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/sonoff.ts#L1131-L1157
-            description   : 'Sonoff SNZB-03P Motion sensor',        // https://community.hubitat.com/t/new-sonoff-snzb-03p-motion-sensors-not-detecting/141138/17?u=kkossev
-            models        : ['SNZB-03P'],                           // https://community.hubitat.com/t/sonoff-ewelink-snzb-03p-motion-sensor-doesnt-reporting-battery-level/150726/3?u=kkossev 
-            device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],
-            capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : ['motionReset':true, 'sensitivity':false, 'keepTime':'0x0406:0x0020', 'refreshOnSave':true],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0406,0500,FC57', outClusters:'0003,0019', model:'SNZB-03P', manufacturer:'eWeLink', deviceJoinName: 'SONOFF SNZB-03P Motion Sensor']         // https://community.hubitat.com/t/new-sonoff-snzb-03p-motion-sensors-not-detecting/141138?u=kkossev
-            ],
-            attributes:       [
-                [at:'0x0406:0x0020', name:'keepTime',       type:'enum',    dt: '0x21', rw: 'rw', min:5,  max:60,  defVal:'30', scale:1,  unit:'seconds', map:[5:'5 seconds', 10:'10 seconds', 15:'15 seconds', 30:'30 seconds', 45:'45 seconds', 60:'60 seconds'], title:'<b>Fading Time</b>',   description:'<i>Fading time in seconds</i>'],
-                [at:'0xFC11:0x2001', name:'illumState',     type:'enum',    dt: '0x20', mfgCode: '0x1286', rw: 'ro', min:0,  max:2,   defVal:2, scale:1,  unit:'',   map:[0:'dark', 1:'light', 2:'unknown'], title:'<b>Illuminance State</b>',   description:'<i>Illuminance State</i>']      // manufacturerCode: 0x1286
-            ],
-            refresh       : [ 'batteryRefresh', 'keepTime', 'illumState'],
-            configuration : [
-                '0x0001':['bind':true,  'voltageReporting':[3600, 7200, 0x02], 'batteryReporting':[3600, 7200, 0x02] ],
-                '0x0500':['bind':false, 'sensitivity':false, 'keepTime':false],       // TODO - use in update function
-            ],
-    ],
-
-    // isSiHAS() and Sunricher
-    'SIHAS_USM-300Z_4_IN_1' : [
-            description   : 'SiHAS USM-300Z 4-in-1',
-            models        : ['ShinaSystem'],
-            device        : [type: 'PIR', powerSource: 'battery', isIAS:false, isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'IlluminanceMeasurement': true, 'Battery': true],
-            preferences   : [:],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0400,0003,0406,0402,0001,0405,0500', outClusters:'0004,0003,0019', model:'USM-300Z', manufacturer:'ShinaSystem', deviceJoinName: 'SiHAS MultiPurpose Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0009,0400,0402,0405,0406,0500', outClusters:'0019', model:'HK-SENSOR-4IN1-A', manufacturer:'Sunricher', deviceJoinName: 'Azoula Zigbee 4 in 1 Multi Sensor']     // https://community.hubitat.com/t/what-driver-for-this-4-1/145847?u=kkossev
-            ],
-            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
-            //tuyaDPs       : [:],
-            attributes    : [
-                [at:'0x0406:0x0000', name:'motion',        type:'enum',   rw: 'ro', min:0,   max:1,    defVal:'0',   scale:1,    map:[0:'inactive', 1:'active'], title:'<b>Presence</b>', description:'Presence state']
-            ],
-            refresh       : [ 'batteryRefresh', 'illuminanceRefresh', 'temperatureRefresh', 'humidityRefresh', 'motion'],
-            //configuration : ["0x0406":"bind"]     // TODO !!
-            configuration : [:],
-    ],
-
-    'ESRESSIF_PIR_TEMP' : [
-            description   : 'Espressif motion and temp sensor',
-            models        : ['ZigbeeOccupancyPIRSensor'],
-            device        : [type: 'PIR', powerSource: 'dc', isIAS:false, isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'Battery': false],
-            preferences   : [:],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'0A', inClusters:'0000,0003,0406', outClusters:'0019,000A', model:'ZigbeeOccupancyPIRSensor', manufacturer:'Espressif', deviceJoinName: 'Espressif ZigbeeOccupancyPIRSensor'],
-                //                    endpoint 0B: inClusters: 0000,0003,0402,000A, outClusters: 0003,000A
-            ],
-            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults'],
-            attributes    : [
-                [at:'0x0406:0x0000', name:'motion',        type:'enum',   rw: 'ro', min:0,   max:1,    defVal:'0',   scale:1,    map:[0:'inactive', 1:'active'], title:'<b>Motion</b>'],
-                [at:'0x0402:0x0000', name:'temperature',   type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0,  scale:10, unit:'deg.',       description:'Temperature']
-            ],
-            refresh       : ['motion', 'temperatureRefresh'],
-            configuration : ['custom':'configureEspressif'],
-    ],
-
-    'IMOU_MOTION_ZP1'   : [
-            description   : 'IMOU Motion Sensor ZP1',
-            models        : ['ZP2-EN', 'ZP1-EN'],
-            device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],
-            capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': false, 'RelativeHumidityMeasurement': false, 'IlluminanceMeasurement': false, 'Battery': true],
-            preferences   : ['motionReset':true, /*'keepTime':'0x0500:0xF001', 'sensitivity':'0x0500:0x0013'*/],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500,0B05', outClusters:'0003', model:'ZP2-EN', manufacturer:'MultIR', deviceJoinName: 'IMOU Motion Sensor ZP1'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500,0B05', outClusters:'0003', model:'ZP1-EN', manufacturer:'MultIR', deviceJoinName: 'IMOU Motion Sensor ZP1']
-            ],
-            attributes:       [/*
-                [at:'0x0500:0x0013', name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
-                [at:'0x0500:0xF001', name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:2,    defVal:'0',  unit:'seconds',    map:[0:'30 seconds', 1:'60 seconds', 2:'120 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)'],
-                */
-            ],
-            configuration : ['battery': false]
-            // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/imou.ts 
-    ],
-
-    'NONTUYA_MOTION_IAS'   : [
-            description   : 'Other OEM Motion sensors (IAS)',
-            models        : ['MOT003', 'XXX'],
-            device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],
-            capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : ['motionReset':true, 'keepTime':'0x0500:0xF001', 'sensitivity':'0x0500:0x0013'],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0400,0402,0500', outClusters:'0019', model:'MOT003', manufacturer:'HiveHome.com', deviceJoinName: 'Hive Motion Sensor']         // https://community.hubitat.com/t/hive-motion-sensors-can-we-get-custom-driver-sorted/108177?u=kkossev
-            ],
-            attributes:       [
-                [at:'0x0500:0x0013', name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
-                [at:'0x0500:0xF001', name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:2,    defVal:'0',  unit:'seconds',    map:[0:'30 seconds', 1:'60 seconds', 2:'120 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)'],
-            ],
-            configuration : ['battery': false]
-    ],
-
-    'TS0601_TZE284_4IN1'   : [    // https://github.com/Koenkk/zigbee-herdsman-converters - _TZE284_gnpflcoq 4-in-1 mmWave Radar Sensor
-            description   : 'Tuya 4-in-1 mmWave Radar Sensor (_TZE284_gnpflcoq)',
-            models        : ['TS0601'],
-            device        : [type: 'radar', isIAS:false, powerSource: 'battery', isSleepy:true],
-            capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'IlluminanceMeasurement': true, 'Battery': true],
-            preferences   : ['radarSensitivity':'2', 'pirSensitivity':'9', 'pirDelay':'12', 'detectionRange':'13'],
-            commands      : ['resetStats':'resetStats', 'resetPreferencesToDefaults':'resetPreferencesToDefaults'],
-            fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_gnpflcoq', deviceJoinName: 'Tuya TS0601 4-in-1 mmWave Radar Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,EF00,0402,0405,0001,0400', outClusters:'0003', model:'ZG-204ZX', manufacturer:'HOBEIAN', controllerType:'ZGB', deviceJoinName: 'HOBEIAN ZG-204ZX 4-in-1 mmWave Presence Sensor']
-            ],
-            tuyaDPs:        [
-                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', min:0,   max:1,    defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'],              unit:'',        title:'<b>Presence</b>',             description:'Presence detection (mmWave radar)'],
-                [dp:2,   name:'radarSensitivity',   type:'number',  rw: 'rw', min:0,   max:10,   defVal:5,    scale:1,  unit:'',                                     dt:'02', tuyaCmd:04, title:'<b>Radar Sensitivity</b>',   description:'Radar sensitivity (0=lowest, 10=highest)'],
-                [dp:4,   name:'battery',             type:'number',  rw: 'ro', min:0,   max:100,  defVal:100,  scale:1,  unit:'%',                                    title:'<b>Battery level</b>',          description:'Battery level'],
-                [dp:7,   name:'temperature',         type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0, scale:10, unit:'deg.',                               title:'<b>Temperature</b>',            description:'Temperature'],
-                [dp:8,   name:'humidity',            type:'number',  rw: 'ro', min:0,   max:100,  defVal:50,   scale:1,  unit:'%RH',                                  title:'<b>Humidity</b>',               description:'Relative humidity'],
-                [dp:9,   name:'pirSensitivity',      type:'enum',    rw: 'rw', min:0,   max:2,    defVal:'1',  scale:1,  map:[0:'low', 1:'middle', 2:'high'],          unit:'',   dt:'01', tuyaCmd:04, title:'<b>PIR Sensitivity</b>',       description:'PIR sensitivity level'],
-                [dp:11,  name:'illuminance',         type:'number',  rw: 'ro', min:0,   max:100000, defVal:0,  scale:1,  unit:'lx',                                   title:'<b>Illuminance</b>',            description:'Illuminance'],
-                [dp:12,  name:'pirDelay',            type:'number',  rw: 'rw', min:10,  max:180,  defVal:30,   scale:1,  unit:'seconds',                              dt:'02', tuyaCmd:04, title:'<b>PIR Delay</b>',           description:'Time before presence resets after last motion (seconds)'],
-                [dp:13,  name:'detectionRange',      type:'number',  rw: 'rw', min:1,   max:10,   defVal:5,    scale:1,  unit:'m',                                    dt:'02', tuyaCmd:04, title:'<b>Detection Range</b>',     description:'Radar detection range (meters)'],
-            ],
-            configuration : ['battery': false]
-    ],
-
-    '---'   : [
-            description   : '--------------------------------------',
-            models        : [],
-            fingerprints  : [],
-    ],
-
-// ------------------------------------------- mmWave Radars - OBSOLETE ! => use the mmWave driver instead! ------------------------------------------------//
-
-    'TS0601_TUYA_RADAR'   : [ 
-            description   : 'Tuya Human Presence mmWave Radar ZY-M100', models : ['TS0601'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
-            fingerprints  : [
-                [manufacturer:'_TZE200_ztc6ggyl'], [manufacturer:'_TZE204_ztc6ggyl'], [manufacturer:'_TZE200_ikvncluo'], [manufacturer:'_TZE200_lyetpprm'], [manufacturer:'_TZE200_wukb7rhc'],
-                [manufacturer:'_TZE200_jva8ink8'], [manufacturer:'_TZE200_mrf6vtua'], [manufacturer:'_TZE200_ar0slwnd'], [manufacturer:'_TZE200_sfiy5tfs'], [manufacturer:'_TZE200_holel4dk'],
-                [manufacturer:'_TZE200_xpq2rzhq'], [manufacturer:'_TZE204_qasjif9e'], [manufacturer:'_TZE204_xsm7l9xa']
-            ],
-            tuyaDPs:        [
-                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'Presence state'],
-                [dp:9,   name:'distance',           type:'decimal', rw: 'ro', scale:100,  unit:'meters',  description:'detected distance'],
-                [dp:104, name:'illuminance',        type:'number',  rw: 'ro', unit:'lx',  description:'illuminance'],
-
-            ], spammyDPsToIgnore : [9], spammyDPsToNotTrace : [9, 103]
-    ],
-
-    'TS0601_KAPVNNLK_RADAR'   : [
-            description   : 'Tuya TS0601_KAPVNNLK 24GHz Radar', models : ['TS0601'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'DistanceMeasurement':true],
-            fingerprints  : [[manufacturer:'_TZE204_kapvnnlk'], [manufacturer:'_TZE204_kyhbrfyl']],
-            tuyaDPs:        [
-                [dp:1, name:'motion', type:'enum', rw: 'ro', map:[0:'inactive', 1:'active'], description:'Presence state'],
-                [dp:19,  name:'distance', type:'decimal', rw: 'ro', scale:100, unit:'meters', description:'detected distance']
-
-            ], spammyDPsToIgnore : [19], spammyDPsToNotTrace : [19]
-    ],
-
-    'TS0601_RADAR_MIR-HE200-TY'   : [
-            description   : 'Tuya Human Presence Sensor MIR-HE200-TY', models : ['TS0601'], device : [isDepricated:true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true],
-            fingerprints  : [[manufacturer:'_TZE200_vrfecyku'], [manufacturer:'_TZE200_lu01t0zl'], [manufacturer:'_TZE200_ypprdwsl']],
-            tuyaDPs:        [
-                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'Presence state'],
-                [dp:102, name:'motionState',        type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'Motion state (occupancy)'],
-            ]
-    ],
-
-    'TS0601_BLACK_SQUARE_RADAR'   : [
-            description   : 'Tuya Black Square Radar', models : ['TS0601'], device : [isDepricated:true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor':true],
-            fingerprints  : [[manufacturer:'_TZE200_0u3bj3rc'], [manufacturer:'_TZE200_v6ossqfy'], [manufacturer:'_TZE200_mx6u6l4y']],
-            tuyaDPs:        [[dp:1,   name:'motion',         type:'enum',   rw: 'ro', map:[0:'inactive', 1:'active'],     description:'Presence']], spammyDPsToIgnore : [103], spammyDPsToNotTrace : [1, 101, 102, 103]
-    ],
-
-    'TS0601_YXZBRB58_RADAR'   : [
-            description   : 'Tuya YXZBRB58 Radar', models : ['TS0601'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy: false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
-            fingerprints  : [[manufacturer:'_TZE204_sooucan5']],
-            tuyaDPs:        [
-                [dp:1,   name:'motion',                 type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'],  description:'Presence state'],
-                [dp:101, name:'illuminance',            type:'number',  rw: 'ro', unit:'lx', description:'Illuminance'],
-                [dp:105, name:'distance',               type:'decimal', rw: 'ro', scale:100,  unit:'meters',   description:'Distance']
-            ], spammyDPsToIgnore : [105], spammyDPsToNotTrace : [105]
-    ],
-
-    'TS0601_SXM7L9XA_RADAR'   : [
-            description   : 'Tuya Human Presence Detector SXM7L9XA', models : ['TS0601'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
-            fingerprints  : [[manufacturer:'_TZE204_sxm7l9xa'], [manufacturer:'_TZE204_e5m9c5hl']],
-            tuyaDPs:        [
-                [dp:104, name:'illuminance',            type:'number',  rw: 'ro', unit:'lx', description:'illuminance'],
-                [dp:105, name:'motion',                 type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'],  description:'Presence state'],
-                [dp:109, name:'distance',               type:'decimal', rw: 'ro', scale:100,  unit:'meters',    description:'Distance']
-            ], spammyDPsToIgnore : [109], spammyDPsToNotTrace : [109]
-    ],
-
-    'TS0601_IJXVKHD0_RADAR'   : [
-            description   : 'Tuya Human Presence Detector IJXVKHD0',
-            models        : ['TS0601'],
-            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
-            fingerprints  : [[manufacturer:'_TZE204_ijxvkhd0']],
-            tuyaDPs:        [
-                [dp:104, name:'illuminance',            type:'number',  rw: 'ro', unit:'lx', description:'illuminance'],
-                [dp:105, name:'humanMotionState',       type:'enum',    rw: 'ro', map:[0:'none', 1:'present', 2:'moving'], description:'Presence state'],
-                [dp:109, name:'distance',               type:'decimal', rw: 'ro', unit:'meters', description:'Target distance'],
-                [dp:112, name:'motion',                 type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'Presence state'],
-                [dp:123, name:'presence',               type:'enum',    rw: 'ro', map:[0:'none', 1:'presence'],   description:'Presence']
-            ], spammyDPsToIgnore : [109, 9], spammyDPsToNotTrace : [109, 104]
-    ],
-
-    'TS0601_YENSYA2C_RADAR'   : [
-            description   : 'Tuya Human Presence Detector YENSYA2C', models : ['TS0601'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy: false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
-            fingerprints  : [[manufacturer:'_TZE204_yensya2c'], [manufacturer:'_TZE204_mhxn2jso']],
-            tuyaDPs:        [
-                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
-                [dp:19,  name:'distance',           type:'decimal', rw: 'ro', scale:100, unit:'meters',  description:'Distance'],
-                [dp:20,  name:'illuminance',        type:'number',  rw: 'ro', unit:'lx', description:'illuminance']
-            ], spammyDPsToIgnore : [19], spammyDPsToNotTrace : [19]
-    ],
-
-    'TS0225_HL0SS9OA_RADAR'   : [
-            description   : 'Tuya TS0225_HL0SS9OA Radar', models : ['TS0225'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'HumanMotionState':true],
-            fingerprints  : [[manufacturer:'_TZE200_hl0ss9oa']],
-            tuyaDPs:        [
-                [dp:1,   name:'motion',                          type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
-                [dp:11,  name:'humanMotionState',                type:'enum',    rw: 'ro', map:[0:'none', 1:'large', 2:'small', 3:'static'],       description:'Human motion state'],
-                [dp:20,  name:'illuminance',                     type:'number',  rw: 'ro', scale:10,  unit:'lx', description:'Illuminance']
-            ], spammyDPsToIgnore : [], spammyDPsToNotTrace : [11]
-    ],
-
-    'TS0225_2AAELWXK_RADAR'   : [
-            description   : 'Tuya TS0225_2AAELWXK 5.8 GHz Radar', models : ['TS0225'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'HumanMotionState':true],
-            fingerprints  : [[manufacturer:'_TZE200_2aaelwxk']],
-            tuyaDPs:        [
-                [dp:1,   name:'motion',                          type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
-                [dp:101, name:'humanMotionState',                type:'enum',    rw: 'ro', map:[0:'none', 1:'large', 2:'small', 3:'static'],       description:'Human motion state'],
-                [dp:106, name:'illuminance',                     type:'number',  rw: 'ro', scale:10,  unit:'lx', description:'Illuminance']
-            ]
-    ],
-
-    'TS0601_SBYX0LM6_RADAR'   : [
-            description   : 'Tuya Human Presence Detector SBYX0LM6', models : ['TS0601'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
-            fingerprints  : [
-                [manufacturer:'_TZE204_sbyx0lm6'], [manufacturer:'_TZE200_sbyx0lm6'], [manufacturer:'_TZE204_dtzziy1e'], [manufacturer:'_TZE200_dtzziy1e'], [manufacturer:'_TZE204_clrdrnya'], [manufacturer:'_TZE200_clrdrnya'],
-                [manufacturer:'_TZE204_cfcznfbz'], [manufacturer:'_TZE204_iaeejhvf'], [manufacturer:'_TZE204_mtoaryre'], [manufacturer:'_TZE204_8s6jtscb'], [manufacturer:'_TZE204_rktkuel1'], [manufacturer:'_TZE204_mp902om5'],
-                [manufacturer:'_TZE200_w5y5slkq'], [manufacturer:'_TZE204_w5y5slkq'], [manufacturer:'_TZE200_xnaqu2pc'], [manufacturer:'_TZE204_xnaqu2pc'], [manufacturer:'_TZE200_wk7seszg'], [manufacturer:'_TZE204_wk7seszg'],
-                [manufacturer:'_TZE200_0wfzahlw'], [manufacturer:'_TZE204_0wfzahlw'], [manufacturer:'_TZE200_pfayrzcw'], [manufacturer:'_TZE204_pfayrzcw'], [manufacturer:'_TZE200_z4tzr0rg'], [manufacturer:'_TZE204_z4tzr0rg']
-            ],
-            tuyaDPs:        [
-                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
-                [dp:9,   name:'distance',           type:'decimal', rw: 'ro', scale:100,  unit:'meters',   description:'detected distance'],
-                [dp:104, name:'illuminance',        type:'number',  rw: 'ro', scale:10,   unit:'lx',       description:'illuminance']
-            ],  spammyDPsToIgnore : [9], spammyDPsToNotTrace : [9]
-    ],
-
-    'TS0225_LINPTECH_RADAR'   : [
-            description   : 'Tuya TS0225_LINPTECH 24GHz Radar', models : ['TS0225'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
-            fingerprints  : [[manufacturer:'_TZ3218_awarhusb']],
-            tuyaDPs:       [ [dp:101, name:'fadingTime', type:'number', rw: 'rw', min:1, max:9999, defVal:10, scale:1, unit:'seconds', title: '<b>Fading time</b>', description:'Presence inactivity timer, seconds']]
-    ],
-
-    'TS0225_EGNGMRZH_RADAR'   : [
-            description   : 'Tuya TS0225_EGNGMRZH 24GHz Radar', models : ['TS0225'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
-            fingerprints  : [[manufacturer:'_TZFED8_egngmrzh']],    // uses IAS for occupancy!
-            tuyaDPs:        [
-                [dp:101, name:'illuminance',        type:'number',  rw: 'ro', unit:'lx'],
-                [dp:103, name:'distance',           type:'decimal', rw: 'ro', scale:10,  unit:'meters']
-            ], spammyDPsToIgnore : [103], spammyDPsToNotTrace : [103]
-    ],
-
-    'TS0225_O7OE4N9A_RADAR'   : [
-            description   : 'Tuya Human Presence Detector YENSYA2C', models : ['TS0225'], device : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
-            fingerprints  : [[manufacturer:'_TZFED8_o7oe4n9a']],
-            tuyaDPs:        [
-                [dp:1,   name:'motion',                 type:'enum',    rw: 'ro', map:[0:'inactive', 1:'active'], description:'Presence state'],
-                [dp:181, name:'illuminance',            type:'number',  rw: 'ro', unit:'lx', description:'illuminance'],
-                [dp:182, name:'distance',               type:'decimal', rw: 'ro', unit:'meters',  description:'Distance to target']
-            ], spammyDPsToIgnore : [182], spammyDPsToNotTrace : [182]
-    ],
-
-    'OWON_OCP305_RADAR'   : [
-            description   : 'OWON OCP305 Radar', models : ['OCP305'], device: [isDepricated:true, type: 'radar', powerSource: 'dc', isSleepy:false], capabilities  : ['MotionSensor': true, 'Battery': true],
-            fingerprints  : [[manufacturer:'OWON']]
-    ],
-
-    'SONOFF_SNZB-06P_RADAR' : [ // Depricated
-            description   : 'SONOFF SNZB-06P RADAR', models : ['SNZB-06P'], device : [isDepricated:true, type: 'radar', powerSource: 'dc', isIAS:false, isSleepy:false], capabilities : ['MotionSensor': true],
-            fingerprints  : [[manufacturer:'SONOFF']]
-    ],
-
-    'UNKNOWN'             : [                        // the Device Profile key (shown in the State Variables)
-            description   : 'Unknown device',        // the Device Profile description (shown in the Preferences)
-            models        : ['UNKNOWN'],             // used to match a Device profile if the individuak fingerprints do not match
-            device        : [
-                type: 'PIR',         // 'PIR' or 'radar'
-                isIAS:true,                          // define it for PIR sensors only!
-                powerSource: 'dc',                   // determines the powerSource value - can be 'battery', 'dc', 'mains'
-                isSleepy:false                       // determines the update and ping behaviour
-            ],
-            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'Battery': true],
-            preferences   : ['motionReset':true],
-            commands      : ['resetSettings':'resetSettings', 'resetStats':'resetStats', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences' \
-            ],
-            //fingerprints  : [
-            //    [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0406", outClusters:"0003", model:"model", manufacturer:"manufacturer"]
-            //],
-            tuyaDPs:        [
-                [
-                    dp:1,
-                    name:'motion',
-                    type:'enum',
-                    rw: 'ro',
-                    min:0,
-                    max:1,
-                    map:[0:'inactive', 1:'active'],
-                    description:'Motion state'
-                ]
-            ],
-            configuration : ['battery': true],
-    ]
+@Field static final Map PollingIntervalOpts = [
+    defaultValue: 0,
+    options     : [0: 'Disabled', 5: 'Every 5 seconds (DONT DO THAT!)', 60: 'Every minute (not recommended)', 120: 'Every 2 minutes', 300: 'Every 5 minutes', 600: 'Every 10 minutes', 900: 'Every 15 minutes', 1800: 'Every 30 minutes', 3600: 'Every 1 hour']
 ]
 
-// this is a motion driver -> IAS events represent motion/occupancy
-public void customParseIasMessage(final String description) {
-    Map zs = zigbee.parseZoneStatusChange(description)
-    if (zs.alarm1Set == true) {
-        logDebug "customParseIasMessage: Alarm 1 is set"
-        handleMotion(true)      // motionLib.groovy
-    }
-    else {
-        logDebug "customParseIasMessage: Alarm 1 is cleared"
-        handleMotion(false)     // motionLib.groovy
-    }
-}
+@Field static final Map VolumeUnitOpts = [
+    defaultValue: 0,
+    options     : [0: 'm3 (cubic meters)', 1: 'L (liters)']
+]
 
-void customParseOccupancyCluster(final Map descMap) {
-    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
-    logTrace "customParseOccupancyCluster: zigbee received cluster 0x0406 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
-    boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
-    if (result == false) {
-        if (descMap.attrId == '0000') {
-            int raw = Integer.parseInt(descMap.value, 16)
-            handleMotion(raw ? true : false)
-        }
-        // TODO - should be processed in the processClusterAttributeFromDeviceProfile method!
-        else if (descMap.attrId == '0020') {    // OWON and SONOFF
-            int fadingTimeValue = zigbee.convertHexToInt(descMap.value)
-            sendEvent('name': 'fadingTime', 'value': fadingTimeValue, 'unit': 'seconds', 'type': 'physical', 'descriptionText': "fading time is ${fadingTimeValue} seconds")
-            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (fadingTime) value is ${fadingTimeValue} (0x${descMap.value} seconds)"
-        }
-        else if (descMap.attrId == '0022') {
-            int radarSensitivityValue = zigbee.convertHexToInt(descMap.value)
-            sendEvent('name': 'radarSensitivity', 'value': radarSensitivityValue, 'unit': '', 'type': 'physical', 'descriptionText': "radar sensitivity is ${radarSensitivityValue}")
-            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (radarSensitivity) value is ${radarSensitivityValue} (0x${descMap.value})"
-        }
-        else {
-            logDebug "UNPROCESSED Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${descMap.value} (0x${descMap.value})"
-        }
-    }
+// dp5 - the fault bitmap, as decoded by the Zigbee2MQTT TS0601_water_meter / TS0601_water_valve converters
+@Field static final Map FaultBitsMap = [
+    0x0001: 'battery_alarm',    0x0002: 'magnetism_alarm',  0x0004: 'cover_alarm',      0x0008: 'credit_alarm',
+    0x0010: 'switch_gaps_alarm', 0x0020: 'meter_body_alarm', 0x0040: 'abnormal_water_alarm', 0x0080: 'arrearage_alarm',
+    0x0100: 'overflow_alarm',   0x0200: 'revflow_alarm',    0x0400: 'over_pre_alarm',   0x0800: 'empty_pipe_alarm',
+    0x1000: 'transducer_alarm'
+]
 
-}
+// the battery is a 3.6V ER14505 lithium cell - the batteryLib 2.2 .. 3.2V range does not apply here
+@Field static final BigDecimal BATTERY_MIN_VOLTS = 2.5
+@Field static final BigDecimal BATTERY_MAX_VOLTS = 3.7
+
+/*
+Measures : total / monthly / daily / reverse water consumption, instantaneous flow rate, water temperature, battery voltage.
+Controls (meters with a valve only) : valve open/close, auto clean.
+All the values are sent over the Tuya EF00 cluster - the meters expose no standard ZCL Power or Temperature clusters.
+*/
+
+// https://www.alibaba.com/product-detail/Smart-Ultrasonic-Water-Flow-Meter-With_1600722839075.html
+// https://github.com/Koenkk/zigbee2mqtt/issues/21255
+// https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/tuya.ts  (TS0601_water_valve, TS0601_water_meter)
+@Field static final Map deviceProfilesV3 = [
+    'TS0601_WATER_METER_VALVE'  : [            // ultrasonic water meter with a valve (dp13) and auto clean (dp14)
+            description   : 'Tuya Ultrasonic Water Meter with Valve',
+            models        : ['TS0601'],
+            device        : [type: 'Sensor', powerSource: 'battery', isSleepy:false],
+            capabilities  : ['Battery': true, 'TemperatureMeasurement': true, 'Valve': true],
+            preferences   : ['reportPeriod':'4', 'autoClean':'14'],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences', 'printFingerprints':'printFingerprints', 'printPreferences':'printPreferences'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601',  manufacturer:'_TZE200_vuwtqx0t', deviceJoinName: 'Tuya 214C Ultrasonic Water Flow Meter'],
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000,ED00', outClusters:'0019,000A', model:'TS0601',  manufacturer:'_TZE284_vuwtqx0t', deviceJoinName: 'Tuya 214C Ultrasonic Water Flow Meter'],
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601',  manufacturer:'_TZE200_zlwr0raf', deviceJoinName: 'Tuya 213E Ultrasonic Water Flow Meter'],      // no DP reports captured yet - assumed identical to the 214C // https://www.aliexpress.com/item/1005007308058989.html
+            ],
+            tuyaDPs:        [                                                                                                                                       // dp1, dp2, dp3, dp5, dp16, dp18 and dp21 are decoded in customProcessTuyaDp()
+                [dp:4,   name:'reportPeriod',            type:'enum',    rw: 'rw',  defVal:'6',  scale:1,   unit:'',      title:'<b>Report Period</b>', description:'How often the meter wakes up and sends a report', map:[0:'1h', 1:'2h', 2:'3h', 3:'4h', 4:'6h', 5:'8h', 6:'12h', 7:'24h']],    // dtype 4 - enum
+                [dp:6,   name:'monthAndDailyFrozenSet',  type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'Month and daily frozen set'],   // dtype 0 - raw
+                [dp:13,  name:'valve',                   type:'enum',    rw: 'ro',  scale:1,   unit:'',      description:'Valve state', map:[0:'closed', 1:'open']],           // dtype 1 - bool - written by open() / close()
+                [dp:14,  name:'autoClean',               type:'enum',    rw: 'rw',  defVal:'0',  scale:1,   unit:'',      title:'<b>Auto Clean</b>', description:'Periodic self-cleaning of the valve', map:[0:'off', 1:'on']],   // dtype 1 - bool
+                [dp:15,  name:'UnknownDp15',             type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'Unknown DP15'],         // dtype 0 - raw  - ?
+                [dp:22,  name:'temperature',             type:'decimal', rw: 'ro',  scale:100, unit:'C',     description:'Water Temperature'],    // dtype 2 - value
+                [dp:26,  name:'batteryVoltage',          type:'decimal', rw: 'ro',  scale:100, unit:'V',     description:'Battery voltage'],      // dtype 2 - value
+            ],
+            refresh:        ['refreshQueryAllTuyaDP'],
+            configuration : ['battery': false],
+            deviceJoinName: 'Tuya Ultrasonic Water Meter with Valve'
+    ],
+
+    'TS0601_WATER_METER'  : [                  // ultrasonic water meter without a valve - sends dp 1,2,3,4,5,6,16,18,21,22,26 only
+            description   : 'Tuya Ultrasonic Water Meter',
+            models        : ['TS0601'],
+            device        : [type: 'Sensor', powerSource: 'battery', isSleepy:false],
+            capabilities  : ['Battery': true, 'TemperatureMeasurement': true],
+            preferences   : ['reportPeriod':'4'],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences', 'printFingerprints':'printFingerprints', 'printPreferences':'printPreferences'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000,ED00', outClusters:'0019,000A', model:'TS0601',  manufacturer:'_TZE284_ajlu4cud', deviceJoinName: 'Tuya Ultrasonic Water Meter'],           // https://community.hubitat.com/t/tuya-smart-zigbee-ultrasonic-water-meters/142433/25
+            ],
+            tuyaDPs:        [                                                                                                                                       // dp1, dp2, dp3, dp5, dp16, dp18 and dp21 are decoded in customProcessTuyaDp()
+                [dp:4,   name:'reportPeriod',            type:'enum',    rw: 'rw',  defVal:'6',  scale:1,   unit:'',      title:'<b>Report Period</b>', description:'How often the meter wakes up and sends a report', map:[0:'1h', 1:'2h', 2:'3h', 3:'4h', 4:'6h', 5:'8h', 6:'12h', 7:'24h']],    // dtype 4 - enum
+                [dp:6,   name:'monthAndDailyFrozenSet',  type:'number',  rw: 'ro',  scale:1,   unit:'',      description:'Month and daily frozen set'],   // dtype 0 - raw
+                [dp:22,  name:'temperature',             type:'decimal', rw: 'ro',  scale:100, unit:'C',     description:'Water Temperature'],    // dtype 2 - value
+                [dp:26,  name:'batteryVoltage',          type:'decimal', rw: 'ro',  scale:100, unit:'V',     description:'Battery voltage'],      // dtype 2 - value
+            ],
+            refresh:        ['refreshQueryAllTuyaDP'],
+            configuration : ['battery': false],
+            deviceJoinName: 'Tuya Ultrasonic Water Meter'
+    ]
+]
 
 // called from standardProcessTuyaDP in the commonLib for each Tuya dp report in a Zigbee message
 // should always return true, as we are processing all the dp reports here
 boolean customProcessTuyaDp(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
     logDebug "customProcessTuyaDp: dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len} descMap.data = ${descMap?.data}"
+    // the DPs that the deviceProfile engine can not express : a non-scalar payload, or a scale that depends on the volumeUnit preference
+    if (processWaterMeterDP(descMap, dp, fncmd) == true) {
+        return true
+    }
     if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {
-        return true      // sucessfuly processed from the deviceProfile 
+        return true      // sucessfuly processed from the deviceProfile
     }
 
     logWarn "<b>NOT PROCESSED from deviceProfile</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -841,102 +195,154 @@ boolean customProcessTuyaDp(final Map descMap, final int dp, final int dp_id, fi
 
 void localProcessTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len) {
     switch (dp) {
-        case 0x01 : // motion state for almost of the Tuya PIR sensors
-            logDebug "(DP=0x01) motion event fncmd = ${fncmd}"
-            handleMotion(fncmd ? true : false)
-            break
-        case 0x04 :    // battery level for TS0202 and TS0601 2in1 ; battery1 for Fantem 4-in-1 (100% or 0% ) Battery level for _TZE200_3towulqd (2in1)
-            logDebug "(DP=0x04) Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
-            handleTuyaBatteryLevel(fncmd)
-            break
-        case 0x07 : // temperature for 4-in-1 (no data)
-            logDebug "(DP=0x07) unexpected 4-in-1 temperature (dp=07) is ${fncmd / 10.0 } ${fncmd}"
-            handleTemperatureEvent(fncmd / 10.0 as BigDecimal)
-            break
-        case 0x08 : // humidity for 4-in-1 (no data)
-            logDebug "(DP=0x08) unexpected 4-in-1 humidity (dp=08) is ${fncmd} ${fncmd}"
-            handleHumidityEvent(fncmd as BigDecimal)
-            break
-        case 0x09 : // sensitivity for TS0202 4-in-1 and 2in1 _TZE200_3towulqd
-            logInfo "(DP=0x09) unexpected received sensitivity : ${fncmd}"
-            //device.updateSetting('sensitivity', [value:fncmd.toString(), type:'enum'])
-            break
-        case 0x0A : // (10) keep time for TS0202 4-in-1 and 2in1 _TZE200_3towulqd
-            logInfo "(DP=0x0A) unexpected Keep Time (dp=0x0A) is ${fncmd}"
-            //device.updateSetting('keepTime', [value:fncmd.toString(), type:'enum'])
-            break
-        case 0x19 : // (25)
-            logDebug "(DP=0x19) unexpected battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
-            handleTuyaBatteryLevel(fncmd)
-            break
-        case 0x65 :    // (101)
-            //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
-            if (DEVICE?.device?.isDepricated == true) {      // safe navigation on 'device' too - DEVICE is null when the device profile was not resolved (UNKNOWN)
-                logDebug '(DP=0x65) unexpected : ignored depricated device 0x65 event'
-            }
-            else {
-                logDebug "(DP=0x65) unexpected : motion event 0x65 fncmd = ${fncmd}"
-                handleMotion(fncmd ? true : false)
-            }
-            break
-        case 0x68 :     // (104)
-            // 4in1  0x68 temperature compensation
-            logInfo "(DP=0x68) unexpected : 4-in-1 temperature calibration is ${fncmd / 10.0}"
-            break
-        case 0x69 :    // (105)
-            // 4in1 0x69 humidity calibration (compensation)
-            logInfo "(DP=0x69) unexpected : 4-in-1 humidity calibration is ${fncmd}"
-            break
-        case 0x6A : // (106)
-            // 4in1 0x6a lux calibration (compensation)
-            logInfo "(DP=0x6A) unexpected : 4-in-1 lux calibration is ${fncmd}"
-            break
         default :
-                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             break
     }
 }
 
+// returns true if the DP was handled here, false to let the deviceProfile engine have it
+private boolean processWaterMeterDP(final Map descMap, final int dp, final int fncmd) {
+    switch (dp) {
+        case 1  : sendVolumeEvent('waterConsumed', descMap, dp) ; return true
+        case 2  : sendVolumeEvent('monthConsumption', descMap, dp) ; return true
+        case 3  : sendVolumeEvent('dailyConsumption', descMap, dp) ; return true
+        case 5  : sendFaultsEvent(fncmd) ; return true
+        case 16 : sendMeterIdEvent(descMap, dp) ; return true
+        case 18 : sendVolumeEvent('reverseWaterConsumed', descMap, dp) ; return true
+        case 21 : sendFlowRateEvent(descMap, dp) ; return true
+        default : return false
+    }
+}
+
+// dp1, dp2, dp3 and dp18 - the meter always sends liters as a big-endian uint32 in the LAST 4 payload bytes.
+// dp2 and dp3 prepend a 4-byte frozen-date stamp that is not decoded (yet).
+private void sendVolumeEvent(final String attribute, final Map descMap, final int dp) {
+    List<String> payload = getTuyaDpPayload(descMap, dp)
+    if (payload == null) { logWarn "sendVolumeEvent: could not extract the dp=${dp} payload from ${descMap?.data}" ; return }
+    long liters = lastUInt32BE(payload)
+    boolean isCubicMeters = safeToInt(settings?.volumeUnit ?: VolumeUnitOpts.defaultValue) == 0
+    BigDecimal value = isCubicMeters ? ((liters as BigDecimal) / 1000G) : (liters as BigDecimal)
+    String unitText = isCubicMeters ? 'm3' : 'L'
+    String descText = "${attribute} is ${value} ${unitText}"
+    if (settings?.logEnable == true) { descText += " (raw:${liters} L)" }
+    sendEvent(name: attribute, value: value, unit: unitText, descriptionText: descText, type: 'physical', isStateChange: true)
+    logInfo "${descText}"
+}
+
+// dp21 - instantaneous flow rate, big-endian uint32 in L/h. Also feeds the LiquidFlowRate 'rate' attribute in LPM.
+private void sendFlowRateEvent(final Map descMap, final int dp) {
+    List<String> payload = getTuyaDpPayload(descMap, dp)
+    if (payload == null) { logWarn "sendFlowRateEvent: could not extract the dp=${dp} payload from ${descMap?.data}" ; return }
+    long litersPerHour = lastUInt32BE(payload)
+    String descText = "instantaneousFlowRate is ${litersPerHour} L/h"
+    sendEvent(name: 'instantaneousFlowRate', value: litersPerHour, unit: 'L/h', descriptionText: descText, type: 'physical', isStateChange: true)
+    logInfo "${descText}"
+    BigDecimal lpm = (Math.round((litersPerHour / 60.0d) * 100.0d) as BigDecimal) / 100G
+    String rateText = "rate is ${lpm} LPM"
+    sendEvent(name: 'rate', value: lpm, unit: 'LPM', descriptionText: rateText, type: 'physical', isStateChange: true)
+    logInfo "${rateText}"
+}
+
+// dp5 - the fault bitmap. The deviceProfile engine has no 'bitmap' type, so it is decoded here.
+private void sendFaultsEvent(final int fncmd) {
+    String faults = 'no_alarm'
+    if (fncmd != 0) {
+        List<String> active = []
+        FaultBitsMap.each { bit, name ->
+            if ((fncmd & (bit as int)) != 0) { active.add(name as String) }
+        }
+        faults = active.isEmpty() ? "unknown (0x${zigbee.convertToHexString(fncmd, 4)})" : active.join(',')
+    }
+    String descText = "faults is ${faults}"
+    if (settings?.logEnable == true) { descText += " (raw:0x${zigbee.convertToHexString(fncmd, 4)})" }
+    sendEvent(name: 'faults', value: faults, descriptionText: descText, type: 'physical', isStateChange: true)
+    logInfo "${descText}"
+}
+
+// dp16 - the meter identification number, a UTF-8 string (Tuya dtype 3). getTuyaAttributeValue() can not decode it.
+private void sendMeterIdEvent(final Map descMap, final int dp) {
+    List<String> payload = getTuyaDpPayload(descMap, dp)
+    if (payload == null) { logWarn "sendMeterIdEvent: could not extract the dp=${dp} payload from ${descMap?.data}" ; return }
+    String meterId = hexListToAscii(payload)
+    String descText = "meterId is ${meterId}"
+    sendEvent(name: 'meterId', value: meterId, descriptionText: descText, type: 'physical', isStateChange: true)
+    logInfo "${descText}"
+}
+
+// commonLib standardParseTuyaCluster() forwards neither the chunk offset nor the DP length to customProcessTuyaDp(),
+// so walk the frame the same way it does and return the raw payload bytes of this particular DP.
+private List<String> getTuyaDpPayload(final Map descMap, final int dp) {
+    List<String> data = descMap?.data
+    if (data == null || data.size() < 7) { return null }
+    for (int i = 0; i < (data.size() - 4); ) {
+        int thisDp = zigbee.convertHexToInt(data[2 + i])
+        int len    = zigbee.convertHexToInt(data[5 + i])
+        if (len <= 0 || (6 + i + len) > data.size()) { return null }
+        if (thisDp == dp) { return data[(6 + i)..(5 + i + len)] }
+        i = i + len + 4
+    }
+    return null
+}
+
+private long lastUInt32BE(final List<String> payload) {
+    if (payload == null || payload.size() < 4) { return 0L }
+    List<String> b = payload[-4..-1]
+    return (((long)zigbee.convertHexToInt(b[0])) << 24) + (((long)zigbee.convertHexToInt(b[1])) << 16) + (((long)zigbee.convertHexToInt(b[2])) << 8) + ((long)zigbee.convertHexToInt(b[3]))
+}
+
+private String hexListToAscii(final List<String> payload) {
+    String result = ''
+    for (int i = 0; i < payload.size(); i++) {
+        result += (char)zigbee.convertHexToInt(payload[i])
+    }
+    return result
+}
 
 // called from processFoundItem in the deviceProfileLib
 void customProcessDeviceProfileEvent(final Map descMap, final String name, valueScaled, final String unitText, final String descText) {
     logTrace "customProcessDeviceProfileEvent(${name}, ${valueScaled}) called"
-    boolean doNotTrace = isSpammyDPsToNotTrace(descMap)
-    Map eventMap = [name: name, value: valueScaled, unit: unitText, descriptionText: descText, type: 'physical', isStateChange: true]
-    switch (name) {
-        case 'motion' :
-            logTrace "customProcessDeviceProfileEvent: motion event received deviceProfile is ${getDeviceProfile()} valueScaled=${valueScaled} as boolean=${(valueScaled as boolean) }"
-            handleMotion(valueScaled == 'active' ? true : false)  // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            break
-        case 'temperature' :
-            //temperatureEvent(value / getTemperatureDiv())
-            handleTemperatureEvent(valueScaled as Float)
-            break
-        case 'humidity' :
-            handleHumidityEvent(valueScaled)
-            break
-        case 'illuminance' :
-        case 'illuminance_lux' :    // ignore the IAS Zone illuminance reports for HL0SS9OA and 2AAELWXK
-            //log.trace "illuminance event received deviceProfile is ${getDeviceProfile()} value=${value} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
-            handleIlluminanceEvent(valueScaled as int)  // check !!!!!!!!!!
-            break
-        case 'pushed' :     // used in 'TS0202_MOTION_SWITCH'
-            logDebug "button event received value=${value} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
-            buttonEvent(valueScaled)
-            break
-        default :
-            sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
-            if (!doNotTrace) {
-                logTrace "event ${name} sent w/ value ${valueScaled}"
-                logInfo "${descText}"   // TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
-            }
-            break
+    sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
+    logInfo "${descText}"   // TODO - send info log only if the value has changed?
+    if (name == 'batteryVoltage') {
+        sendBatteryPercentageFromVoltage(safeToBigDecimal(valueScaled))
     }
 }
 
-List<String> refreshFantem() {
-    List<String>  cmds = zigbee.command(0xEF00, 0x07, '00')    // Fantem Tuya Magic
-    return cmds
+// the meters send no battery percentage - derive it from the dp26 voltage.
+// batteryLib sendBatteryVoltageEvent() is deliberately not used : it expects 0.1V units and clamps to 2.2 .. 3.2V.
+private void sendBatteryPercentageFromVoltage(final BigDecimal volts) {
+    if (volts == null || volts <= 0) { return }
+    BigDecimal pct = ((volts - BATTERY_MIN_VOLTS) / (BATTERY_MAX_VOLTS - BATTERY_MIN_VOLTS)) * 100G
+    int roundedPct = Math.round(pct as double) as int
+    if (roundedPct < 1) { roundedPct = 1 }
+    if (roundedPct > 100) { roundedPct = 100 }
+    String descText = "battery is ${roundedPct} %"
+    if (settings?.logEnable == true) { descText += " (${volts} V)" }
+    sendEvent(name: 'battery', value: roundedPct, unit: '%', descriptionText: descText, type: 'physical', isStateChange: true)
+    logInfo "${descText}"
+}
+
+private boolean hasValve() { return DEVICE?.tuyaDPs?.find { it.dp == 13 } != null }
+
+void open() {
+    if (hasValve() == false) { logWarn 'open() : this water meter does not have a valve!' ; return }
+    if (state.states == null) { state.states = [:] }
+    state.states['isDigital'] = true
+    scheduleCommandTimeoutCheck()
+    List<String> cmds = sendTuyaCommand('0D', DP_TYPE_BOOL, '01')
+    logDebug "open() : ${cmds}"
+    sendZigbeeCommands(cmds)
+}
+
+void close() {
+    if (hasValve() == false) { logWarn 'close() : this water meter does not have a valve!' ; return }
+    if (state.states == null) { state.states = [:] }
+    state.states['isDigital'] = true
+    scheduleCommandTimeoutCheck()
+    List<String> cmds = sendTuyaCommand('0D', DP_TYPE_BOOL, '00')
+    logDebug "close() : ${cmds}"
+    sendZigbeeCommands(cmds)
 }
 
 List<String> customRefresh() {
@@ -946,27 +352,12 @@ List<String> customRefresh() {
     if (devProfCmds != null && !devProfCmds.isEmpty()) {
         cmds += devProfCmds
     }
-    if (settings.allStatusTextEnable == true) {
-        runIn(3, 'formatAttrib', [overwrite: true])
-    }
     return cmds
 }
 
 void customUpdated() {
     logDebug "customUpdated()"
-    if ('DistanceMeasurement' in DEVICE?.capabilities) {
-        if (settings?.ignoreDistance == true) {
-            device.deleteCurrentState('distance')
-            logDebug "customUpdated: deleted distance state"
-        }
-        else {
-            logDebug "customUpdated: ignoreDistance is ${settings?.ignoreDistance}"
-        }
-    }
-    if (settings?.allStatusTextEnable == false) {
-        device.deleteCurrentState('all')
-    }
-
+    List<String> cmds = []
     if (settings?.forcedProfile != null) {
         if (this.respondsTo('getProfileKey') == false) {
             logWarn "getProfileKey() is not defined in the driver"
@@ -987,251 +378,105 @@ void customUpdated() {
         logDebug "forcedProfile is not set"
     }
 
-    if (DEVICE?.device?.isDepricated == true) {
-        logWarn 'The use of this driver with this device is depricated. Please update to the new driver!'
-        return
+    final int interval = (settings?.pollingInterval as Integer) ?: 0
+    if (interval > 0) {
+        logInfo "customUpdated: scheduling polling every ${interval} seconds"
+        schedulePolling(interval)
     }
-
+    else {
+        unSchedulePolling()
+        logInfo 'customUpdated: polling is disabled!'
+    }
 
     // Itterates through all settings
-    updateAllPreferences()  // defined in deviceProfileLib - it is void and sends its own Zigbee commands via setPar()
-
-    if (DEVICE?.preferences?.refreshOnSave == true) {
-        setRefreshRequest() 
-        runIn(2, customRefresh, [overwrite: true])
-    }
-    if (settings.allStatusTextEnable == true) {
-        runIn(3, 'formatAttrib', [overwrite: true])
-    }
+    cmds += updateAllPreferences()  // defined in deviceProfileLib
+    sendZigbeeCommands(cmds)
 }
 
-boolean isIAS()  { DEVICE?.device?.isIAS == true  }
+/**
+ * Schedule polling
+ * @param intervalMins interval in seconds
+ */
+private void schedulePolling(final int intervalSecs) {
+    String cron = getCron( intervalSecs )
+    logDebug "cron = ${cron}"
+    schedule(cron, 'autoPoll')
+}
 
-List<String> customConfigureDevice() {
-    logDebug "customConfigureDevice()"
+private void unSchedulePolling() {
+    unschedule('autoPoll')
+}
+
+/**
+ * Scheduled job for polling device specific attribute(s)
+ */
+void autoPoll() {
+    logDebug 'autoPoll()...'
+    checkDriverVersion(state)
     List<String> cmds = []
-    if (DEVICE?.device?.isDepricated == true) {
-        logWarn 'The use of this driver with this device is depricated. Please update to the new driver!'
-        return cmds
+    cmds = refreshFromDeviceProfileList()
+    if (cmds != null && cmds != [] ) {
+        sendZigbeeCommands(cmds)
     }
-    if (DEVICE?.device?.isIAS == true ) {
-        cmds += zigbee.enrollResponse(300) + zigbee.readAttribute(0x0500, 0x0000, [:], delay = 224)
-        logDebug 'Enrolling IAS device ...'
-    }
-
-    if (DEVICE?.configuration == null || DEVICE?.configuration.isEmpty()) {
-        logDebug 'No configuration found'
-        return cmds
-    }
-    int intMinTime = safeToInt(3600)    // TODO: make it configurable
-    int intMaxTime = safeToInt(7200)    // TODO: make it configurable
-    int delta = 0x02
-    //            '0x0001':['bind':true,  'voltageReporting':[3600, 7200, 0x02], 'batteryReporting':[3600, 7200, 0x02] ],    // TODO - use the reproting values
-    if ('0x0001' in DEVICE?.configuration) {    // Power Configuration cluster
-        if (DEVICE?.configuration['0x0001']['bind'] == true) {
-            cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", 'delay 229', ]
-            logDebug "binding the device to the Power Configuration cluster"
-        }
-        else {
-            logDebug "no bind in 0x0001"
-        }
-        if ('voltageReporting' in DEVICE?.configuration['0x0001']) {
-            intMinTime = safeToInt(DEVICE?.configuration['0x0001']['voltageReporting' ][0])
-            intMaxTime = safeToInt(DEVICE?.configuration['0x0001']['voltageReporting' ][1])
-            delta =      safeToInt(DEVICE?.configuration['0x0001']['voltageReporting' ][2])
-            logDebug "configuring the battery voltageReporting... (min=${intMinTime}, max=${intMaxTime}, delta=${delta})"
-            cmds += zigbee.configureReporting(0x0001, 0x20, DataType.UINT8, intMinTime, intMaxTime, delta, [:], delay = 226)  // TEST - seems to be overwritten by the next line configuration?
-            cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 228)    // try also battery voltage
-        }
-        if ('batteryReporting' in DEVICE?.configuration['0x0001']) {
-            intMinTime = safeToInt(DEVICE?.configuration['0x0001']['batteryReporting'][0])
-            intMaxTime = safeToInt(DEVICE?.configuration['0x0001']['batteryReporting'][1])
-            delta =      safeToInt(DEVICE?.configuration['0x0001']['batteryReporting'][2])
-            logDebug "configuring the battery batteryReporting... (min=${intMinTime}, max=${intMaxTime}, delta=${delta})"
-            cmds += zigbee.configureReporting(0x0001, 0x21, DataType.UINT8, intMinTime, intMaxTime, 0x02, [:], delay = 225)  // delta 0x02 = 1% change battery percentage remaining
-            cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 227)    // battery percentage   - SONOFF GW configures and reads only attr 0x0021 !
-        }
-    }
-    //            '0x0500':['bind':false, 'sensitivity':false, 'keepTime':false],       // TODO - use in update function
-    if ('0x0500' in DEVICE?.configuration && DEVICE?.configuration['0x0500']['bind'] == true) {
-        cmds += zigbee.configureReporting(0x0500, 0x0002, 0x19, 0, 3600, 0x00, [:], delay = 227)
-    }
-    if ('0x0400' in DEVICE?.configuration) {
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}", 'delay 229', ]
-    }
-    if ('0x0402' in DEVICE?.configuration) {
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}", 'delay 229', ]
-    }
-    if ('0x0405' in DEVICE?.configuration) {
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0405 {${device.zigbeeId}} {}", 'delay 229', ]
-    }
-    if ('0x0406' in DEVICE?.configuration) {
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}", 'delay 229', ]    // OWON and SONOFF motion/occupancy cluster
-    }
-    if ('0xFC11' in DEVICE?.configuration) {
-        cmds += zigbee.configureReporting(0xFC11, 0x2001, DataType.UINT16, 0, 1440, 0x01, [:], delay = 230)  // attribute 2001 - ??
-    }
-
-    if ('custom' in DEVICE?.configuration) {
-        String funcName = DEVICE?.configuration['custom']
-        if (this.respondsTo(funcName)) {
-            cmds += "$funcName"()
-        }
-    }
-    return cmds
 }
 
 
-List<String> configureEspressif() {
-    logDebug "configureEspressif()"
-    List<String> cmds = []
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x0B 0x01 0x0402 {${device.zigbeeId}} {}", 'delay 229', ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x0A 0x01 0x0406 {${device.zigbeeId}} {}", 'delay 229', ]  
-    return cmds
-}
 
 void customInitializeVars(final boolean fullInit=false) {
     logDebug "customInitializeVars(${fullInit})"
-    if (state.deviceProfile == null) {
-        setDeviceNameAndProfile()               // in deviceProfileiLib.groovy
+    if (state.deviceProfile == null || state.deviceProfile == '' || state.deviceProfile == 'UNKNOWN') {
+        String model        = device.getDataValue('model') ?: 'TS0601'
+        String manufacturer = device.getDataValue('manufacturer') ?: ''
+        setDeviceNameAndProfile(model, manufacturer)               // in deviceProfileiLib.groovy
+        if (state.deviceProfile == null || state.deviceProfile == 'UNKNOWN') {
+            logWarn "customInitializeVars: unknown model ${model} manufacturer ${manufacturer} - defaulting to the TS0601_WATER_METER_VALVE profile"
+            state.deviceProfile = 'TS0601_WATER_METER_VALVE'
+        }
     }
     if (fullInit == true) {
         resetPreferencesToDefaults()
     }
-    if (fullInit == true || settings?.ignoreDistance == null) { device.updateSetting('ignoreDistance', true) }
-    if (fullInit == true || state.motionStarted == null) { state.motionStarted = unix2formattedDate(now()) }
-    // overwrite the default value of the invertMotion setting if the device is 2in1
-    if (fullInit == true || settings.invertMotion == null) device.updateSetting('invertMotion', is2in1() ? true : false)
-    // overwrite the default value of the motionReset setting for the PGST PIR+siren combo - no 'motion inactive' report was seen in the first device log, so the software reset is on by default
-    if (getDeviceProfile() == 'TS0601_PGST_PIR_SIREN') {
-        if (fullInit == true || settings.motionReset == null) device.updateSetting('motionReset', true)
-    }
-    if (fullInit == true || settings.allStatusTextEnable == null) device.updateSetting('allStatusTextEnable', false)
+    if (fullInit || settings?.pollingInterval == null) { device.updateSetting('pollingInterval', [value: PollingIntervalOpts.defaultValue.toString(), type: 'enum']) }
+    if (fullInit || settings?.volumeUnit == null) { device.updateSetting('volumeUnit', [value: VolumeUnitOpts.defaultValue.toString(), type: 'enum']) }
 }
 
 void customInitEvents(final boolean fullInit=false) {
     logDebug "customInitEvents()"
-    if (getDeviceProfile() == 'TS0601_BLACK_SQUARE_RADAR') {
-        sendEvent(name: 'WARNING', value: 'EXTREMLY SPAMMY DEVICE!', descriptionText: 'This device bombards the hub every 4 seconds!')
+}
+
+void customParseZdoClusters(Map descMap) {
+    if (descMap.clusterInt == 0x0013) {
+        logDebug "customParseZdoClusters() - device announce"
+        sendZigbeeCommands(refreshQueryAllTuyaDP())
     }
 }
 
-
-
-
-void customParseIlluminanceCluster(final Map descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    if (DEVICE?.device?.ignoreIAS == true) {
-        logDebug "customCustomParseIlluminanceCluster: ignoring IAS reporting device"
-        return
-    }    // ignore IAS devices
-    if (DEVICE?.device?.ignoreZclIlluminance == true) {
-        logDebug "customParseIlluminanceCluster: this profile receives illuminance over a Tuya DP - ignoring the duplicated ZCL 0x0400 report"
-        return
-    }    // the device reports the same lux value twice - once as a Tuya DP and once as a ZCL 0x0400 attribute report
-    standardParseIlluminanceCluster(descMap)  // illuminance.lib
+List<String> refreshQueryAllTuyaDP() {
+    return queryAllTuyaDP()
 }
 
-void customParseIASCluster(final Map descMap) {
-    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
-    logTrace "customParseIASCluster: zigbee received cluster 0x0500 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
-    boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
-    if (result == false) {
-        logDebug "customParseIASCluster: received unknown 0x0500 attribute 0x${descMap.attrId} (value ${descMap.value})"
-        standardParseIASCluster(descMap) 
-    }
-}
+// _DEBUG only - replays the DP reports captured from a _TZE284_ajlu4cud meter
+// https://community.hubitat.com/t/tuya-smart-zigbee-ultrasonic-water-meters/142433/25
+@Field static final List<String> TEST_FRAMES = [
+    'catchall: 0104 EF00 01 01 0040 00 8F4F 01 00 0000 02 01 03140102000400000000',                    // dp1  waterConsumed 0
+    'catchall: 0104 EF00 01 01 0040 00 8F4F 01 00 0000 02 01 0315020000081506150600000000',            // dp2  monthConsumption 0
+    'catchall: 0104 EF00 01 01 0040 00 8F4F 01 00 0000 02 01 0316030000080707070700000000',            // dp3  dailyConsumption 0
+    'catchall: 0104 EF00 01 01 0040 00 8F4F 01 00 0000 02 01 03170404000106',                          // dp4  reportPeriod 12h
+    'catchall: 0104 EF00 01 01 0040 00 8F4F 01 00 0000 02 01 0318050500021800',                        // dp5  faults empty_pipe_alarm,transducer_alarm
+    'catchall: 0104 EF00 01 01 0040 00 8F4F 01 00 0000 02 01 0319060000020100',                        // dp6  monthAndDailyFrozenSet
+    'catchall: 0104 EF00 01 01 0040 00 8F4F 01 00 0000 02 01 031A1003000E3030303030303236303039313632', // dp16 meterId 00000026009162
+    'catchall: 0104 EF00 01 01 0040 00 8F4F 01 00 0000 02 01 031B1200000400000000',                    // dp18 reverseWaterConsumed 0
+    'catchall: 0104 EF00 01 01 0040 00 8F4F 01 00 0000 02 01 031C1500000400000000',                    // dp21 instantaneousFlowRate 0
+    'catchall: 0104 EF00 01 01 0040 00 8F4F 01 00 0000 02 01 031D1602000400000CD0',                    // dp22 temperature 32.8 C
+    'catchall: 0104 EF00 01 01 0040 00 8F4F 01 00 0000 02 01 031E1A02000400000156'                     // dp26 batteryVoltage 3.42 V
+]
 
-void customParseFC11Cluster(final Map descMap) {
-    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
-    logTrace "customParseFC11Cluster: zigbee received 0xFC11 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
-    boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
-    if (result == false) {
-        logWarn "customParseFC11Cluster: received unknown 0xFC11 attribute 0x${descMap.attrId} (value ${descMap.value})"
-    }
-}
-
-void customParseED00Cluster(final Map descMap) {
-    logDebug "customParseED00Cluster: Ignored cluster 0xED00 message (${descMap})"
-}
-
-// ------------------------- formatAttrib() methods for the 4-in-1 driver -------------------------
-
-void formatAttrib() {
-    if (settings.allStatusTextEnable == false) {    // do not send empty html or text attributes
-        return
-    }
-    String attrStr = ''
-    attrStr += addToAttr('status', 'healthStatus')
-    attrStr += addToAttr('motion', 'motion')
-    if (DEVICE?.capabilities?.DistanceMeasurement == true && settings?.ignoreDistance == false) { attrStr += addToAttr('distance', 'distance') }
-    if (DEVICE?.capabilities?.Battery == true) { attrStr += addToAttr('battery', 'battery') }
-    if (DEVICE?.capabilities?.IlluminanceMeasurement == true) { attrStr += addToAttr('illuminance', 'illuminance') }
-    if (DEVICE?.capabilities?.TemperatureMeasurement == true) { attrStr += addToAttr('temperature', 'temperature') }
-    if (DEVICE?.capabilities?.RelativeHumidityMeasurement == true) { attrStr += addToAttr('humidity', 'humidity')  }
-    attrStr = attrStr.substring(0, attrStr.length() - 3)    // remove the ',  '
-    updateAttr('all', attrStr)
-    if (attrStr.length() > 64) {
-        updateAttr('all', "Max Attribute Size Exceeded: ${attrStr.length()}")
-    }
-}
-
-/* groovylint-disable-next-line UnusedMethodParameter */
-String addToAttr(String name, String key, String convert = 'none') {
-    String retResult = ''
-    String attrUnit = getUnitFromState(key)
-    if (attrUnit == null) { attrUnit = '' }
-    /* groovylint-disable-next-line NoDef */
-    def curVal = device.currentValue(key, true)
-    if (curVal != null) {
-        if (convert == 'int') {
-            retResult += safeToInt(curVal).toString() + '' + attrUnit
-        }
-        else if (convert == 'double') {
-            retResult += safeToDouble(curVal).toString() + '' + attrUnit
-        }
-        else {
-            retResult += curVal.toString() + '' + attrUnit
-        }
-    }
-    else {
-        retResult += 'n/a'
-    }
-    retResult += ',  '
-    return retResult
-}
-
-String getUnitFromState(String attrName) {
-    return device.currentState(attrName)?.unit
-}
-
-void updateAttr(String aKey, String aValue, String aUnit = '') {
-    sendEvent(name:aKey, value:aValue, unit:aUnit, type: 'digital')
-}
-
-// ------------------------- end of formatAttrib() methods -------------------------
-
-//@CompileStatic
-void testFunc( par) {
-    parse('catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100') 
-}
-
-// catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100 
 void test(String par) {
-    long startTime = now()
-    logDebug "test() started at ${startTime}"
-    //parse('catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100')
-    def parpar = 'catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100'
-
-    for (int i=0; i<100; i++) { 
-        testFunc(parpar) 
+    logDebug "test() replaying ${TEST_FRAMES.size()} captured DP reports"
+    for (int i = 0; i < TEST_FRAMES.size(); i++) {
+        parse(TEST_FRAMES[i])
     }
-
-    long endTime = now()
-    logDebug "test() ended at ${endTime} (duration ${endTime - startTime}ms)"
 }
-
-
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
 
@@ -4406,881 +3651,3 @@ static String timeToHMS(final int time) { // library marker kkossev.commonLib, l
 } // library marker kkossev.commonLib, line 1635
 
 // ~~~~~ end include (144) kkossev.commonLib ~~~~~
-
-// ~~~~~ start include (171) kkossev.batteryLib ~~~~~
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoJavaUtilDate, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */ // library marker kkossev.batteryLib, line 1
-library( // library marker kkossev.batteryLib, line 2
-    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Battery Library', name: 'batteryLib', namespace: 'kkossev', // library marker kkossev.batteryLib, line 3
-    importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/batteryLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-batteryLib', // library marker kkossev.batteryLib, line 4
-    version: '3.2.3' // library marker kkossev.batteryLib, line 5
-) // library marker kkossev.batteryLib, line 6
-/* // library marker kkossev.batteryLib, line 7
- *  Zigbee Battery Library // library marker kkossev.batteryLib, line 8
- * // library marker kkossev.batteryLib, line 9
- *  Licensed Virtual the Apache License, Version 2.0 // library marker kkossev.batteryLib, line 10
- * // library marker kkossev.batteryLib, line 11
- * ver. 3.0.0  2024-04-06 kkossev  - added batteryLib.groovy // library marker kkossev.batteryLib, line 12
- * ver. 3.0.1  2024-04-06 kkossev  - customParsePowerCluster bug fix // library marker kkossev.batteryLib, line 13
- * ver. 3.0.2  2024-04-14 kkossev  - batteryPercentage bug fix (was x2); added bVoltCtr; added battertRefresh // library marker kkossev.batteryLib, line 14
- * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment; added lastBattery; added handleTuyaBatteryLevel // library marker kkossev.batteryLib, line 15
- * ver. 3.2.1  2024-07-06 kkossev  - added tuyaToBatteryLevel and handleTuyaBatteryLevel; added batteryInitializeVars // library marker kkossev.batteryLib, line 16
- * ver. 3.2.2  2024-07-18 kkossev  - added BatteryVoltage and BatteryDelay device capability checks // library marker kkossev.batteryLib, line 17
- * ver. 3.2.3  2025-07-13 kkossev  - bug fix: corrected runIn method name from 'sendDelayedBatteryEvent' to 'sendDelayedBatteryPercentageEvent' // library marker kkossev.batteryLib, line 18
- * // library marker kkossev.batteryLib, line 19
- *                                   TODO: add an Advanced Option resetBatteryToZeroWhenOffline // library marker kkossev.batteryLib, line 20
- *                                   TODO: battery voltage low/high limits configuration // library marker kkossev.batteryLib, line 21
-*/ // library marker kkossev.batteryLib, line 22
-
-static String batteryLibVersion()   { '3.2.3' } // library marker kkossev.batteryLib, line 24
-static String batteryLibStamp() { '2025/07/13 7:45 PM' } // library marker kkossev.batteryLib, line 25
-
-metadata { // library marker kkossev.batteryLib, line 27
-    capability 'Battery' // library marker kkossev.batteryLib, line 28
-    attribute  'batteryVoltage', 'number' // library marker kkossev.batteryLib, line 29
-    attribute  'lastBattery', 'date'         // last battery event time - added in 3.2.0 05/21/2024 // library marker kkossev.batteryLib, line 30
-    // no commands // library marker kkossev.batteryLib, line 31
-    preferences { // library marker kkossev.batteryLib, line 32
-        if (device && advancedOptions == true) { // library marker kkossev.batteryLib, line 33
-            if ('BatteryVoltage' in DEVICE?.capabilities) { // library marker kkossev.batteryLib, line 34
-                input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: 'Convert battery voltage to battery Percentage remaining.' // library marker kkossev.batteryLib, line 35
-            } // library marker kkossev.batteryLib, line 36
-            if ('BatteryDelay' in DEVICE?.capabilities) { // library marker kkossev.batteryLib, line 37
-                input(name: 'batteryDelay', type: 'enum', title: '<b>Battery Events Delay</b>', description:'Select the Battery Events Delay<br>(default is <b>no delay</b>)', options: DelayBatteryOpts.options, defaultValue: DelayBatteryOpts.defaultValue) // library marker kkossev.batteryLib, line 38
-            } // library marker kkossev.batteryLib, line 39
-        } // library marker kkossev.batteryLib, line 40
-    } // library marker kkossev.batteryLib, line 41
-} // library marker kkossev.batteryLib, line 42
-
-@Field static final Map DelayBatteryOpts = [ defaultValue: 0, options: [0: 'No delay', 30: '30 seconds', 3600: '1 hour', 14400: '4 hours', 28800: '8 hours', 43200: '12 hours']] // library marker kkossev.batteryLib, line 44
-
-public void standardParsePowerCluster(final Map descMap) { // library marker kkossev.batteryLib, line 46
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.batteryLib, line 47
-    final int rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.batteryLib, line 48
-    if (descMap.attrId == '0020') { // battery voltage // library marker kkossev.batteryLib, line 49
-        state.lastRx['batteryTime'] = new Date().getTime() // library marker kkossev.batteryLib, line 50
-        state.stats['bVoltCtr'] = (state.stats['bVoltCtr'] ?: 0) + 1 // library marker kkossev.batteryLib, line 51
-        sendBatteryVoltageEvent(rawValue) // library marker kkossev.batteryLib, line 52
-        if ((settings.voltageToPercent ?: false) == true) { // library marker kkossev.batteryLib, line 53
-            sendBatteryVoltageEvent(rawValue, convertToPercent = true) // library marker kkossev.batteryLib, line 54
-        } // library marker kkossev.batteryLib, line 55
-    } // library marker kkossev.batteryLib, line 56
-    else if (descMap.attrId == '0021') { // battery percentage // library marker kkossev.batteryLib, line 57
-        state.lastRx['batteryTime'] = new Date().getTime() // library marker kkossev.batteryLib, line 58
-        state.stats['battCtr'] = (state.stats['battCtr'] ?: 0) + 1 // library marker kkossev.batteryLib, line 59
-        if (isTuya()) { // library marker kkossev.batteryLib, line 60
-            sendBatteryPercentageEvent(rawValue) // library marker kkossev.batteryLib, line 61
-        } // library marker kkossev.batteryLib, line 62
-        else { // library marker kkossev.batteryLib, line 63
-            sendBatteryPercentageEvent((rawValue / 2) as int) // library marker kkossev.batteryLib, line 64
-        } // library marker kkossev.batteryLib, line 65
-    } // library marker kkossev.batteryLib, line 66
-    else { // library marker kkossev.batteryLib, line 67
-        logWarn "customParsePowerCluster: zigbee received unknown Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.batteryLib, line 68
-    } // library marker kkossev.batteryLib, line 69
-} // library marker kkossev.batteryLib, line 70
-
-public void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false) { // library marker kkossev.batteryLib, line 72
-    logDebug "batteryVoltage = ${(double)rawValue / 10.0} V" // library marker kkossev.batteryLib, line 73
-    final Date lastBattery = new Date() // library marker kkossev.batteryLib, line 74
-    Map result = [:] // library marker kkossev.batteryLib, line 75
-    BigDecimal volts = safeToBigDecimal(rawValue) / 10G // library marker kkossev.batteryLib, line 76
-    if (rawValue != 0 && rawValue != 255) { // library marker kkossev.batteryLib, line 77
-        BigDecimal minVolts = 2.2 // library marker kkossev.batteryLib, line 78
-        BigDecimal maxVolts = 3.2 // library marker kkossev.batteryLib, line 79
-        BigDecimal pct = (volts - minVolts) / (maxVolts - minVolts) // library marker kkossev.batteryLib, line 80
-        int roundedPct = Math.round(pct * 100) // library marker kkossev.batteryLib, line 81
-        if (roundedPct <= 0) { roundedPct = 1 } // library marker kkossev.batteryLib, line 82
-        if (roundedPct > 100) { roundedPct = 100 } // library marker kkossev.batteryLib, line 83
-        if (convertToPercent == true) { // library marker kkossev.batteryLib, line 84
-            result.value = Math.min(100, roundedPct) // library marker kkossev.batteryLib, line 85
-            result.name = 'battery' // library marker kkossev.batteryLib, line 86
-            result.unit  = '%' // library marker kkossev.batteryLib, line 87
-            result.descriptionText = "battery is ${roundedPct} %" // library marker kkossev.batteryLib, line 88
-        } // library marker kkossev.batteryLib, line 89
-        else { // library marker kkossev.batteryLib, line 90
-            result.value = volts // library marker kkossev.batteryLib, line 91
-            result.name = 'batteryVoltage' // library marker kkossev.batteryLib, line 92
-            result.unit  = 'V' // library marker kkossev.batteryLib, line 93
-            result.descriptionText = "battery is ${volts} Volts" // library marker kkossev.batteryLib, line 94
-        } // library marker kkossev.batteryLib, line 95
-        result.type = 'physical' // library marker kkossev.batteryLib, line 96
-        result.isStateChange = true // library marker kkossev.batteryLib, line 97
-        logInfo "${result.descriptionText}" // library marker kkossev.batteryLib, line 98
-        sendEvent(result) // library marker kkossev.batteryLib, line 99
-        sendEvent(name: 'lastBattery', value: lastBattery) // library marker kkossev.batteryLib, line 100
-    } // library marker kkossev.batteryLib, line 101
-    else { // library marker kkossev.batteryLib, line 102
-        logWarn "ignoring BatteryResult(${rawValue})" // library marker kkossev.batteryLib, line 103
-    } // library marker kkossev.batteryLib, line 104
-} // library marker kkossev.batteryLib, line 105
-
-public void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=false) { // library marker kkossev.batteryLib, line 107
-    if ((batteryPercent as int) == 255) { // library marker kkossev.batteryLib, line 108
-        logWarn "ignoring battery report raw=${batteryPercent}" // library marker kkossev.batteryLib, line 109
-        return // library marker kkossev.batteryLib, line 110
-    } // library marker kkossev.batteryLib, line 111
-    final Date lastBattery = new Date() // library marker kkossev.batteryLib, line 112
-    Map map = [:] // library marker kkossev.batteryLib, line 113
-    map.name = 'battery' // library marker kkossev.batteryLib, line 114
-    map.timeStamp = now() // library marker kkossev.batteryLib, line 115
-    map.value = batteryPercent < 0 ? 0 : batteryPercent > 100 ? 100 : (batteryPercent as int) // library marker kkossev.batteryLib, line 116
-    map.unit  = '%' // library marker kkossev.batteryLib, line 117
-    map.type = isDigital ? 'digital' : 'physical' // library marker kkossev.batteryLib, line 118
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}" // library marker kkossev.batteryLib, line 119
-    map.isStateChange = true // library marker kkossev.batteryLib, line 120
-    // // library marker kkossev.batteryLib, line 121
-    Object latestBatteryEvent = device.currentState('battery') // library marker kkossev.batteryLib, line 122
-    Long latestBatteryEventTime = latestBatteryEvent != null ? latestBatteryEvent.getDate().getTime() : now() // library marker kkossev.batteryLib, line 123
-    //log.debug "battery latest state timeStamp is ${latestBatteryTime} now is ${now()}" // library marker kkossev.batteryLib, line 124
-    int timeDiff = ((now() - latestBatteryEventTime) / 1000) as int // library marker kkossev.batteryLib, line 125
-    if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) { // library marker kkossev.batteryLib, line 126
-        // send it now! // library marker kkossev.batteryLib, line 127
-        sendDelayedBatteryPercentageEvent(map) // library marker kkossev.batteryLib, line 128
-        sendEvent(name: 'lastBattery', value: lastBattery) // library marker kkossev.batteryLib, line 129
-    } // library marker kkossev.batteryLib, line 130
-    else { // library marker kkossev.batteryLib, line 131
-        int delayedTime = (settings?.batteryDelay as int) - timeDiff // library marker kkossev.batteryLib, line 132
-        map.delayed = delayedTime // library marker kkossev.batteryLib, line 133
-        map.descriptionText += " [delayed ${map.delayed} seconds]" // library marker kkossev.batteryLib, line 134
-        map.lastBattery = lastBattery // library marker kkossev.batteryLib, line 135
-        logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds" // library marker kkossev.batteryLib, line 136
-        runIn(delayedTime, 'sendDelayedBatteryPercentageEvent', [overwrite: true, data: map]) // library marker kkossev.batteryLib, line 137
-    } // library marker kkossev.batteryLib, line 138
-} // library marker kkossev.batteryLib, line 139
-
-private void sendDelayedBatteryPercentageEvent(Map map) { // library marker kkossev.batteryLib, line 141
-    logInfo "${map.descriptionText}" // library marker kkossev.batteryLib, line 142
-    //map.each {log.trace "$it"} // library marker kkossev.batteryLib, line 143
-    sendEvent(map) // library marker kkossev.batteryLib, line 144
-    sendEvent(name: 'lastBattery', value: map.lastBattery) // library marker kkossev.batteryLib, line 145
-} // library marker kkossev.batteryLib, line 146
-
-/* groovylint-disable-next-line UnusedPrivateMethod */ // library marker kkossev.batteryLib, line 148
-private void sendDelayedBatteryVoltageEvent(Map map) { // library marker kkossev.batteryLib, line 149
-    logInfo "${map.descriptionText}" // library marker kkossev.batteryLib, line 150
-    //map.each {log.trace "$it"} // library marker kkossev.batteryLib, line 151
-    sendEvent(map) // library marker kkossev.batteryLib, line 152
-    sendEvent(name: 'lastBattery', value: map.lastBattery) // library marker kkossev.batteryLib, line 153
-} // library marker kkossev.batteryLib, line 154
-
-public int tuyaToBatteryLevel(int fncmd) { // library marker kkossev.batteryLib, line 156
-    int rawValue = fncmd // library marker kkossev.batteryLib, line 157
-    switch (fncmd) { // library marker kkossev.batteryLib, line 158
-        case 0: rawValue = 100; break // Battery Full // library marker kkossev.batteryLib, line 159
-        case 1: rawValue = 75;  break // Battery High // library marker kkossev.batteryLib, line 160
-        case 2: rawValue = 50;  break // Battery Medium // library marker kkossev.batteryLib, line 161
-        case 3: rawValue = 25;  break // Battery Low // library marker kkossev.batteryLib, line 162
-        case 4: rawValue = 100; break // Tuya 3 in 1 -> USB powered // library marker kkossev.batteryLib, line 163
-        // for all other values >4 we will use the raw value, expected to be the real battery level 4..100% // library marker kkossev.batteryLib, line 164
-    } // library marker kkossev.batteryLib, line 165
-    return rawValue // library marker kkossev.batteryLib, line 166
-} // library marker kkossev.batteryLib, line 167
-
-public void handleTuyaBatteryLevel(int fncmd) { // library marker kkossev.batteryLib, line 169
-    int rawValue = tuyaToBatteryLevel(fncmd) // library marker kkossev.batteryLib, line 170
-    sendBatteryPercentageEvent(rawValue) // library marker kkossev.batteryLib, line 171
-} // library marker kkossev.batteryLib, line 172
-
-public void batteryInitializeVars( boolean fullInit = false ) { // library marker kkossev.batteryLib, line 174
-    logDebug "batteryInitializeVars()... fullInit = ${fullInit}" // library marker kkossev.batteryLib, line 175
-    if (device.hasCapability('Battery')) { // library marker kkossev.batteryLib, line 176
-        if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) } // library marker kkossev.batteryLib, line 177
-        if (fullInit || settings?.batteryDelay == null) { device.updateSetting('batteryDelay', [value: DelayBatteryOpts.defaultValue.toString(), type: 'enum']) } // library marker kkossev.batteryLib, line 178
-    } // library marker kkossev.batteryLib, line 179
-} // library marker kkossev.batteryLib, line 180
-
-public List<String> batteryRefresh() { // library marker kkossev.batteryLib, line 182
-    List<String> cmds = [] // library marker kkossev.batteryLib, line 183
-    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 100)         // battery voltage // library marker kkossev.batteryLib, line 184
-    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 100)         // battery percentage // library marker kkossev.batteryLib, line 185
-    return cmds // library marker kkossev.batteryLib, line 186
-} // library marker kkossev.batteryLib, line 187
-
-// ~~~~~ end include (171) kkossev.batteryLib ~~~~~
-
-// ~~~~~ start include (172) kkossev.temperatureLib ~~~~~
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */ // library marker kkossev.temperatureLib, line 1
-library( // library marker kkossev.temperatureLib, line 2
-    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Temperature Library', name: 'temperatureLib', namespace: 'kkossev', // library marker kkossev.temperatureLib, line 3
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/temperatureLib.groovy', documentationLink: '', // library marker kkossev.temperatureLib, line 4
-    version: '3.3.1' // library marker kkossev.temperatureLib, line 5
-) // library marker kkossev.temperatureLib, line 6
-/* // library marker kkossev.temperatureLib, line 7
- *  Zigbee Temperature Library // library marker kkossev.temperatureLib, line 8
- * // library marker kkossev.temperatureLib, line 9
- *  Licensed Virtual the Apache License, Version 2.0 // library marker kkossev.temperatureLib, line 10
- * // library marker kkossev.temperatureLib, line 11
- * ver. 3.0.0  2024-04-06 kkossev  - added temperatureLib.groovy // library marker kkossev.temperatureLib, line 12
- * ver. 3.0.1  2024-04-19 kkossev  - temperature rounding fix // library marker kkossev.temperatureLib, line 13
- * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment; added temperatureRefresh() // library marker kkossev.temperatureLib, line 14
- * ver. 3.2.1  2024-06-07 kkossev  - excluded maxReportingTime for mmWaveSensor and Thermostat // library marker kkossev.temperatureLib, line 15
- * ver. 3.2.2  2024-07-06 kkossev  - fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug // library marker kkossev.temperatureLib, line 16
- * ver. 3.2.3  2024-07-18 kkossev  - added 'ReportingConfiguration' capability check for minReportingTime and maxReportingTime // library marker kkossev.temperatureLib, line 17
- * ver. 3.3.0  2025-09-15 kkossev  - commonLib 4.0.0 allignment; added temperatureOffset // library marker kkossev.temperatureLib, line 18
- * ver. 3.3.1  2025-10-31 kkossev  - bugfix: isRefresh was not checked if temperature delta < 0.1 // library marker kkossev.temperatureLib, line 19
- * // library marker kkossev.temperatureLib, line 20
- *                                   TODO: unschedule('sendDelayedTempEvent') only if needed (add boolean flag to sendDelayedTempEvent()) // library marker kkossev.temperatureLib, line 21
- *                                   TODO: check for negative temperature values in standardParseTemperatureCluster() // library marker kkossev.temperatureLib, line 22
-*/ // library marker kkossev.temperatureLib, line 23
-
-static String temperatureLibVersion()   { '3.3.1' } // library marker kkossev.temperatureLib, line 25
-static String temperatureLibStamp() { '2025/10/31 3:13 PM' } // library marker kkossev.temperatureLib, line 26
-
-metadata { // library marker kkossev.temperatureLib, line 28
-    capability 'TemperatureMeasurement' // library marker kkossev.temperatureLib, line 29
-    // no commands // library marker kkossev.temperatureLib, line 30
-    preferences { // library marker kkossev.temperatureLib, line 31
-        if (device && advancedOptions == true) { // library marker kkossev.temperatureLib, line 32
-            if ('ReportingConfiguration' in DEVICE?.capabilities) { // library marker kkossev.temperatureLib, line 33
-                input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: 'Minimum reporting interval, seconds <i>(1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.temperatureLib, line 34
-                if (!(deviceType in ['mmWaveSensor', 'Thermostat', 'TRV'])) { // library marker kkossev.temperatureLib, line 35
-                    input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: 'Maximum reporting interval, seconds <i>(120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME // library marker kkossev.temperatureLib, line 36
-                } // library marker kkossev.temperatureLib, line 37
-            } // library marker kkossev.temperatureLib, line 38
-        } // library marker kkossev.temperatureLib, line 39
-        input name: 'temperatureOffset', type: 'decimal', title: '<b>Temperature Offset</b>', description: '<i>Adjust temperature by this many degrees</i>', range: '-100..100', defaultValue: 0 // library marker kkossev.temperatureLib, line 40
-   } // library marker kkossev.temperatureLib, line 41
-} // library marker kkossev.temperatureLib, line 42
-
-void standardParseTemperatureCluster(final Map descMap) { // library marker kkossev.temperatureLib, line 44
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.temperatureLib, line 45
-    if (descMap.attrId == '0000') { // library marker kkossev.temperatureLib, line 46
-        int value = hexStrToSignedInt(descMap.value) // library marker kkossev.temperatureLib, line 47
-        handleTemperatureEvent(value / 100.0F as BigDecimal) // library marker kkossev.temperatureLib, line 48
-    } // library marker kkossev.temperatureLib, line 49
-    else { // library marker kkossev.temperatureLib, line 50
-        logWarn "standardParseTemperatureCluster() - unknown attribute ${descMap.attrId} value=${descMap.value}" // library marker kkossev.temperatureLib, line 51
-    } // library marker kkossev.temperatureLib, line 52
-} // library marker kkossev.temperatureLib, line 53
-
-void handleTemperatureEvent(BigDecimal temperaturePar, boolean isDigital=false) { // library marker kkossev.temperatureLib, line 55
-    Map eventMap = [:] // library marker kkossev.temperatureLib, line 56
-    BigDecimal temperature = safeToBigDecimal(temperaturePar).setScale(2, BigDecimal.ROUND_HALF_UP) // library marker kkossev.temperatureLib, line 57
-    if (state.stats != null) { state.stats['tempCtr'] = (state.stats['tempCtr'] ?: 0) + 1 } else { state.stats = [:] } // library marker kkossev.temperatureLib, line 58
-    eventMap.name = 'temperature' // library marker kkossev.temperatureLib, line 59
-    if (location.temperatureScale == 'F') { // library marker kkossev.temperatureLib, line 60
-        temperature = ((temperature * 1.8) + 32).setScale(2, BigDecimal.ROUND_HALF_UP) // library marker kkossev.temperatureLib, line 61
-        eventMap.unit = '\u00B0F' // library marker kkossev.temperatureLib, line 62
-    } // library marker kkossev.temperatureLib, line 63
-    else { // library marker kkossev.temperatureLib, line 64
-        eventMap.unit = '\u00B0C' // library marker kkossev.temperatureLib, line 65
-    } // library marker kkossev.temperatureLib, line 66
-    BigDecimal tempCorrected = (temperature + safeToBigDecimal(settings?.temperatureOffset ?: 0)).setScale(2, BigDecimal.ROUND_HALF_UP) // library marker kkossev.temperatureLib, line 67
-    eventMap.value = tempCorrected.setScale(1, BigDecimal.ROUND_HALF_UP) // library marker kkossev.temperatureLib, line 68
-    BigDecimal lastTemp = device.currentValue('temperature') ?: 0 // library marker kkossev.temperatureLib, line 69
-    logTrace "lastTemp=${lastTemp} tempCorrected=${tempCorrected} delta=${Math.abs(lastTemp - tempCorrected)}" // library marker kkossev.temperatureLib, line 70
-
-    boolean isRefresh = state.states['isRefresh'] == true // library marker kkossev.temperatureLib, line 72
-
-    if (!isRefresh && Math.abs(lastTemp - tempCorrected) < 0.1) { // library marker kkossev.temperatureLib, line 74
-        logDebug "skipped temperature ${tempCorrected}, less than delta 0.1 (lastTemp=${lastTemp})" // library marker kkossev.temperatureLib, line 75
-        return // library marker kkossev.temperatureLib, line 76
-    } // library marker kkossev.temperatureLib, line 77
-    eventMap.type = isDigital == true ? 'digital' : 'physical' // library marker kkossev.temperatureLib, line 78
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}" // library marker kkossev.temperatureLib, line 79
-    if (isRefresh) { // library marker kkossev.temperatureLib, line 80
-        eventMap.descriptionText += ' [refresh]' // library marker kkossev.temperatureLib, line 81
-        eventMap.isStateChange = true // library marker kkossev.temperatureLib, line 82
-    } // library marker kkossev.temperatureLib, line 83
-    Integer timeElapsed = Math.round((now() - (state.lastRx['tempTime'] ?: now())) / 1000) // library marker kkossev.temperatureLib, line 84
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.temperatureLib, line 85
-    Integer timeRamaining = (minTime - timeElapsed) as Integer // library marker kkossev.temperatureLib, line 86
-    if (timeElapsed >= minTime) { // library marker kkossev.temperatureLib, line 87
-        logInfo "${eventMap.descriptionText}" // library marker kkossev.temperatureLib, line 88
-        unschedule('sendDelayedTempEvent')        //get rid of stale queued reports // library marker kkossev.temperatureLib, line 89
-        state.lastRx['tempTime'] = now() // library marker kkossev.temperatureLib, line 90
-        sendEvent(eventMap) // library marker kkossev.temperatureLib, line 91
-    } // library marker kkossev.temperatureLib, line 92
-    else {         // queue the event // library marker kkossev.temperatureLib, line 93
-        eventMap.type = 'delayed' // library marker kkossev.temperatureLib, line 94
-        logDebug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.temperatureLib, line 95
-        runIn(timeRamaining, 'sendDelayedTempEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.temperatureLib, line 96
-    } // library marker kkossev.temperatureLib, line 97
-} // library marker kkossev.temperatureLib, line 98
-
-void sendDelayedTempEvent(Map eventMap) { // library marker kkossev.temperatureLib, line 100
-    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.temperatureLib, line 101
-    state.lastRx['tempTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.temperatureLib, line 102
-    sendEvent(eventMap) // library marker kkossev.temperatureLib, line 103
-} // library marker kkossev.temperatureLib, line 104
-
-List<String> temperatureLibInitializeDevice() { // library marker kkossev.temperatureLib, line 106
-    List<String> cmds = [] // library marker kkossev.temperatureLib, line 107
-    cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1도*/)                // 402 - temperature // library marker kkossev.temperatureLib, line 108
-    logDebug "temperatureLibInitializeDevice() cmds=${cmds}" // library marker kkossev.temperatureLib, line 109
-    return cmds // library marker kkossev.temperatureLib, line 110
-} // library marker kkossev.temperatureLib, line 111
-
-List<String> temperatureRefresh() { // library marker kkossev.temperatureLib, line 113
-    List<String> cmds = [] // library marker kkossev.temperatureLib, line 114
-    cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200) // library marker kkossev.temperatureLib, line 115
-    return cmds // library marker kkossev.temperatureLib, line 116
-} // library marker kkossev.temperatureLib, line 117
-
-// ~~~~~ end include (172) kkossev.temperatureLib ~~~~~
-
-// ~~~~~ start include (173) kkossev.humidityLib ~~~~~
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */ // library marker kkossev.humidityLib, line 1
-library( // library marker kkossev.humidityLib, line 2
-    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Humidity Library', name: 'humidityLib', namespace: 'kkossev', // library marker kkossev.humidityLib, line 3
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/humidityLib.groovy', documentationLink: '', // library marker kkossev.humidityLib, line 4
-    version: '3.3.0' // library marker kkossev.humidityLib, line 5
-) // library marker kkossev.humidityLib, line 6
-/* // library marker kkossev.humidityLib, line 7
- *  Zigbee Humidity Library // library marker kkossev.humidityLib, line 8
- * // library marker kkossev.humidityLib, line 9
- *  Licensed Virtual the Apache License, Version 2.0 // library marker kkossev.humidityLib, line 10
- * // library marker kkossev.humidityLib, line 11
- * ver. 3.0.0  2024-04-06 kkossev  - added humidityLib.groovy // library marker kkossev.humidityLib, line 12
- * ver. 3.2.0  2024-05-29 kkossev  - commonLib 3.2.0 allignment; added humidityRefresh() // library marker kkossev.humidityLib, line 13
- * ver. 3.2.2  2024-07-02 kkossev  - fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug // library marker kkossev.humidityLib, line 14
- * ver. 3.2.3  2024-07-24 kkossev  - added humidity delta filtering to prevent duplicate events for unchanged values // library marker kkossev.humidityLib, line 15
- * ver. 3.3.0  2025-09-15 kkossev  - (dev. branch) commonLib 4.0.0 allignment; added humidityOffset; // library marker kkossev.humidityLib, line 16
- * // library marker kkossev.humidityLib, line 17
- *                                   TODO: add humidityOffset // library marker kkossev.humidityLib, line 18
-*/ // library marker kkossev.humidityLib, line 19
-
-static String humidityLibVersion()   { '3.3.0' } // library marker kkossev.humidityLib, line 21
-static String humidityLibStamp() { '2025/09/15 7:56 PM' } // library marker kkossev.humidityLib, line 22
-
-metadata { // library marker kkossev.humidityLib, line 24
-    capability 'RelativeHumidityMeasurement' // library marker kkossev.humidityLib, line 25
-    // no commands // library marker kkossev.humidityLib, line 26
-    preferences { // library marker kkossev.humidityLib, line 27
-        // the minReportingTime and maxReportingTime are already defined in the temperatureLib.groovy // library marker kkossev.humidityLib, line 28
-        input name: 'humidityOffset', type: 'decimal', title: '<b>Humidity Offset</b>', description: '<i>Adjust humidity by this many percent</i>', range: '-100..100', defaultValue: 0 // library marker kkossev.humidityLib, line 29
-    } // library marker kkossev.humidityLib, line 30
-} // library marker kkossev.humidityLib, line 31
-
-void standardParseHumidityCluster(final Map descMap) { // library marker kkossev.humidityLib, line 33
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.humidityLib, line 34
-    if (descMap.attrId == '0000') { // library marker kkossev.humidityLib, line 35
-        final int value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.humidityLib, line 36
-        handleHumidityEvent(value / 100.0F as BigDecimal) // library marker kkossev.humidityLib, line 37
-    } // library marker kkossev.humidityLib, line 38
-    else { // library marker kkossev.humidityLib, line 39
-        logWarn "standardParseHumidityCluster() - unknown attribute ${descMap.attrId} value=${descMap.value}" // library marker kkossev.humidityLib, line 40
-    } // library marker kkossev.humidityLib, line 41
-} // library marker kkossev.humidityLib, line 42
-
-void handleHumidityEvent(BigDecimal humidityPar, Boolean isDigital=false) { // library marker kkossev.humidityLib, line 44
-    Map eventMap = [:] // library marker kkossev.humidityLib, line 45
-    BigDecimal humidity = safeToBigDecimal(humidityPar) // library marker kkossev.humidityLib, line 46
-    if (state.stats != null) { state.stats['humiCtr'] = (state.stats['humiCtr'] ?: 0) + 1 } else { state.stats = [:] } // library marker kkossev.humidityLib, line 47
-    humidity +=  safeToBigDecimal(settings?.humidityOffset ?: 0) // library marker kkossev.humidityLib, line 48
-    if (humidity <= 0.0 || humidity > 100.0) { // library marker kkossev.humidityLib, line 49
-        logWarn "ignored invalid humidity ${humidity} (${humidityPar})" // library marker kkossev.humidityLib, line 50
-        return // library marker kkossev.humidityLib, line 51
-    } // library marker kkossev.humidityLib, line 52
-    BigDecimal humidityRounded = humidity.setScale(0, BigDecimal.ROUND_HALF_UP) // library marker kkossev.humidityLib, line 53
-    BigDecimal lastHumi = device.currentValue('humidity') ?: 0 // library marker kkossev.humidityLib, line 54
-    logTrace "lastHumi=${lastHumi} humidityRounded=${humidityRounded} delta=${Math.abs(lastHumi - humidityRounded)}" // library marker kkossev.humidityLib, line 55
-    if (Math.abs(lastHumi - humidityRounded) < 1.0) { // library marker kkossev.humidityLib, line 56
-        logDebug "skipped humidity ${humidityRounded}, less than delta 1.0 (lastHumi=${lastHumi})" // library marker kkossev.humidityLib, line 57
-        return // library marker kkossev.humidityLib, line 58
-    } // library marker kkossev.humidityLib, line 59
-    eventMap.value = humidityRounded // library marker kkossev.humidityLib, line 60
-    eventMap.name = 'humidity' // library marker kkossev.humidityLib, line 61
-    eventMap.unit = '% RH' // library marker kkossev.humidityLib, line 62
-    eventMap.type = isDigital == true ? 'digital' : 'physical' // library marker kkossev.humidityLib, line 63
-    //eventMap.isStateChange = true // library marker kkossev.humidityLib, line 64
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}" // library marker kkossev.humidityLib, line 65
-    Integer timeElapsed = Math.round((now() - (state.lastRx['humiTime'] ?: now())) / 1000) // library marker kkossev.humidityLib, line 66
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.humidityLib, line 67
-    Integer timeRamaining = (minTime - timeElapsed) as Integer // library marker kkossev.humidityLib, line 68
-    if (timeElapsed >= minTime) { // library marker kkossev.humidityLib, line 69
-        logInfo "${eventMap.descriptionText}" // library marker kkossev.humidityLib, line 70
-        unschedule('sendDelayedHumidityEvent') // library marker kkossev.humidityLib, line 71
-        state.lastRx['humiTime'] = now() // library marker kkossev.humidityLib, line 72
-        sendEvent(eventMap) // library marker kkossev.humidityLib, line 73
-    } // library marker kkossev.humidityLib, line 74
-    else { // library marker kkossev.humidityLib, line 75
-        eventMap.type = 'delayed' // library marker kkossev.humidityLib, line 76
-        logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.humidityLib, line 77
-        runIn(timeRamaining, 'sendDelayedHumidityEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.humidityLib, line 78
-    } // library marker kkossev.humidityLib, line 79
-} // library marker kkossev.humidityLib, line 80
-
-void sendDelayedHumidityEvent(Map eventMap) { // library marker kkossev.humidityLib, line 82
-    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.humidityLib, line 83
-    state.lastRx['humiTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.humidityLib, line 84
-    sendEvent(eventMap) // library marker kkossev.humidityLib, line 85
-} // library marker kkossev.humidityLib, line 86
-
-List<String> humidityLibInitializeDevice() { // library marker kkossev.humidityLib, line 88
-    List<String> cmds = [] // library marker kkossev.humidityLib, line 89
-    cmds += zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0 /*RALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.UINT16, 15, 300, 400/*10/100=0.4%*/)   // 405 - humidity // library marker kkossev.humidityLib, line 90
-    return cmds // library marker kkossev.humidityLib, line 91
-} // library marker kkossev.humidityLib, line 92
-
-List<String> humidityRefresh() { // library marker kkossev.humidityLib, line 94
-    List<String> cmds = [] // library marker kkossev.humidityLib, line 95
-    cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay = 200) // library marker kkossev.humidityLib, line 96
-    return cmds // library marker kkossev.humidityLib, line 97
-} // library marker kkossev.humidityLib, line 98
-
-// ~~~~~ end include (173) kkossev.humidityLib ~~~~~
-
-// ~~~~~ start include (168) kkossev.illuminanceLib ~~~~~
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */ // library marker kkossev.illuminanceLib, line 1
-library( // library marker kkossev.illuminanceLib, line 2
-    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Illuminance Library', name: 'illuminanceLib', namespace: 'kkossev', // library marker kkossev.illuminanceLib, line 3
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/illuminanceLib.groovy', documentationLink: '', // library marker kkossev.illuminanceLib, line 4
-    version: '3.2.2' // library marker kkossev.illuminanceLib, line 5
-) // library marker kkossev.illuminanceLib, line 6
-/* // library marker kkossev.illuminanceLib, line 7
- *  Zigbee Illuminance Library // library marker kkossev.illuminanceLib, line 8
- * // library marker kkossev.illuminanceLib, line 9
- *  Licensed Virtual the Apache License, Version 2.0 (the "License"); you may not use this file except // library marker kkossev.illuminanceLib, line 10
- *  in compliance with the License. You may obtain a copy of the License at: // library marker kkossev.illuminanceLib, line 11
- * // library marker kkossev.illuminanceLib, line 12
- *      http://www.apache.org/licenses/LICENSE-2.0 // library marker kkossev.illuminanceLib, line 13
- * // library marker kkossev.illuminanceLib, line 14
- *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed // library marker kkossev.illuminanceLib, line 15
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License // library marker kkossev.illuminanceLib, line 16
- *  for the specific language governing permissions and limitations under the License. // library marker kkossev.illuminanceLib, line 17
- * // library marker kkossev.illuminanceLib, line 18
- * ver. 3.0.0  2024-04-06 kkossev  - added illuminanceLib.groovy // library marker kkossev.illuminanceLib, line 19
- * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment; added capability 'IlluminanceMeasurement'; added illuminanceRefresh() // library marker kkossev.illuminanceLib, line 20
- * ver. 3.2.1  2024-07-06 kkossev  - added illuminanceCoeff; added luxThreshold and illuminanceCoeff to preferences (if applicable) // library marker kkossev.illuminanceLib, line 21
- * ver. 3.2.2  2026-08-03 kkossev  - (BUGS.md B10) illuminanceThreshold UI default corrected from 5 to 10 lx; (BUGS.md A4) a lux threshold of 0 (no filtering) is no longer silently replaced by the default // library marker kkossev.illuminanceLib, line 22
- * // library marker kkossev.illuminanceLib, line 23
- *                                   TODO: check illuminanceInitializeVars() and illuminanceProcessTuyaDP() usage // library marker kkossev.illuminanceLib, line 24
-*/ // library marker kkossev.illuminanceLib, line 25
-
-static String illuminanceLibVersion()   { '3.2.2' } // library marker kkossev.illuminanceLib, line 27
-static String illuminanceLibStamp() { '2026/08/03 11:46 PM' } // library marker kkossev.illuminanceLib, line 28
-
-metadata { // library marker kkossev.illuminanceLib, line 30
-    capability 'IlluminanceMeasurement' // library marker kkossev.illuminanceLib, line 31
-    // no attributes // library marker kkossev.illuminanceLib, line 32
-    // no commands // library marker kkossev.illuminanceLib, line 33
-    preferences { // library marker kkossev.illuminanceLib, line 34
-        if (device) { // library marker kkossev.illuminanceLib, line 35
-            // note: only 'illuminanceThreshold':false in a device profile 'preferences' map is meaningful here - it hides the input; declaring it as 'true' or omitting the key altogether behave identically // library marker kkossev.illuminanceLib, line 36
-            if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.illuminanceThreshold != false) && !(DEVICE?.device?.isDepricated == true)) { // library marker kkossev.illuminanceLib, line 37
-                input('illuminanceThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: 10) // library marker kkossev.illuminanceLib, line 38
-                if (advancedOptions) { // library marker kkossev.illuminanceLib, line 39
-                    input('illuminanceCoeff', 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: 'Illuminance correction coefficient, range (0.10..10.00)', range: '0.10..10.00', defaultValue: 1.00) // library marker kkossev.illuminanceLib, line 40
-                    input('illuminanceMinReportingTime', 'number', title: '<b>Illuminance Minimum Reporting Time</b>', description: 'Minimum time (seconds) between illuminance events; overrides the shared Minimum Reporting Time for illuminance only', range: '1..3600', defaultValue: DEFAULT_ILLUMINANCE_MIN_REPORTING_TIME) // library marker kkossev.illuminanceLib, line 41
-                } // library marker kkossev.illuminanceLib, line 42
-            } // library marker kkossev.illuminanceLib, line 43
-        } // library marker kkossev.illuminanceLib, line 44
-    } // library marker kkossev.illuminanceLib, line 45
-} // library marker kkossev.illuminanceLib, line 46
-
-@Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 10 // library marker kkossev.illuminanceLib, line 48
-@Field static final Integer DEFAULT_ILLUMINANCE_MIN_REPORTING_TIME = 10 // library marker kkossev.illuminanceLib, line 49
-
-void standardParseIlluminanceCluster(final Map descMap) { // library marker kkossev.illuminanceLib, line 51
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.illuminanceLib, line 52
-    final int value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.illuminanceLib, line 53
-    int lux = value > 0 ? Math.round(Math.pow(10, (value / 10000))) : 0 // library marker kkossev.illuminanceLib, line 54
-    handleIlluminanceEvent(lux) // library marker kkossev.illuminanceLib, line 55
-} // library marker kkossev.illuminanceLib, line 56
-
-void handleIlluminanceEvent(int illuminance, boolean isDigital=false) { // library marker kkossev.illuminanceLib, line 58
-    Map eventMap = [:] // library marker kkossev.illuminanceLib, line 59
-    if (state.stats != null) { state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 } else { state.stats = [:] } // library marker kkossev.illuminanceLib, line 60
-    eventMap.name = 'illuminance' // library marker kkossev.illuminanceLib, line 61
-    Integer illumCorrected = Math.round((illuminance * ((settings?.illuminanceCoeff ?: 1.00) as float))) // library marker kkossev.illuminanceLib, line 62
-    eventMap.value  = illumCorrected // library marker kkossev.illuminanceLib, line 63
-    eventMap.type = isDigital ? 'digital' : 'physical' // library marker kkossev.illuminanceLib, line 64
-    eventMap.unit = 'lx' // library marker kkossev.illuminanceLib, line 65
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}" // library marker kkossev.illuminanceLib, line 66
-    boolean isRefresh = state.states['isRefresh'] == true // library marker kkossev.illuminanceLib, line 67
-    if (isRefresh) { // library marker kkossev.illuminanceLib, line 68
-        eventMap.descriptionText += ' [refresh]' // library marker kkossev.illuminanceLib, line 69
-        eventMap.isStateChange = true // library marker kkossev.illuminanceLib, line 70
-    } // library marker kkossev.illuminanceLib, line 71
-    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now())) / 1000) // library marker kkossev.illuminanceLib, line 72
-    Integer minTime = (settings?.illuminanceMinReportingTime != null ? settings.illuminanceMinReportingTime : (settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME)) as int    // illuminance-specific override takes precedence over the shared minReportingTime // library marker kkossev.illuminanceLib, line 73
-    Integer timeRamaining = (minTime - timeElapsed) as Integer // library marker kkossev.illuminanceLib, line 74
-    Integer lastIllum = device.currentValue('illuminance') as Integer    // null when the attribute was never set - the first report must be published to establish the baseline // library marker kkossev.illuminanceLib, line 75
-    Integer threshold = (settings?.illuminanceThreshold != null ? settings.illuminanceThreshold : DEFAULT_ILLUMINANCE_THRESHOLD) as int    // 0 is a valid threshold, meaning 'no filtering' // library marker kkossev.illuminanceLib, line 76
-    if (!isRefresh && lastIllum != null) { // library marker kkossev.illuminanceLib, line 77
-        Integer delta = Math.abs(lastIllum - illumCorrected) // library marker kkossev.illuminanceLib, line 78
-        if (delta < threshold) { // library marker kkossev.illuminanceLib, line 79
-            logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${threshold} (lastIllum=${lastIllum}, delta=${delta})" // library marker kkossev.illuminanceLib, line 80
-            return // library marker kkossev.illuminanceLib, line 81
-        } // library marker kkossev.illuminanceLib, line 82
-    } // library marker kkossev.illuminanceLib, line 83
-    if (isRefresh || timeElapsed >= minTime) { // library marker kkossev.illuminanceLib, line 84
-        logInfo "${eventMap.descriptionText}" // library marker kkossev.illuminanceLib, line 85
-        unschedule('sendDelayedIllumEvent')        //get rid of stale queued reports // library marker kkossev.illuminanceLib, line 86
-        state.lastRx['illumTime'] = now() // library marker kkossev.illuminanceLib, line 87
-        sendEvent(eventMap) // library marker kkossev.illuminanceLib, line 88
-    } // library marker kkossev.illuminanceLib, line 89
-    else {         // queue the event // library marker kkossev.illuminanceLib, line 90
-        eventMap.type = 'delayed' // library marker kkossev.illuminanceLib, line 91
-        logDebug "${device.displayName} delaying ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.illuminanceLib, line 92
-        runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.illuminanceLib, line 93
-    } // library marker kkossev.illuminanceLib, line 94
-} // library marker kkossev.illuminanceLib, line 95
-
-/* groovylint-disable-next-line UnusedPrivateMethod */ // library marker kkossev.illuminanceLib, line 97
-private void sendDelayedIllumEvent(Map eventMap) { // library marker kkossev.illuminanceLib, line 98
-    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.illuminanceLib, line 99
-    state.lastRx['illumTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.illuminanceLib, line 100
-    sendEvent(eventMap) // library marker kkossev.illuminanceLib, line 101
-} // library marker kkossev.illuminanceLib, line 102
-
-@Field static final Map tuyaIlluminanceOpts = [0: 'low', 1: 'medium', 2: 'high'] // library marker kkossev.illuminanceLib, line 104
-
-/* groovylint-disable-next-line UnusedMethodParameter */ // library marker kkossev.illuminanceLib, line 106
-void illuminanceProcessTuyaDP(final Map descMap, int dp, int dp_id, int fncmd) { // library marker kkossev.illuminanceLib, line 107
-    switch (dp) { // library marker kkossev.illuminanceLib, line 108
-        case 0x01 : // on/off // library marker kkossev.illuminanceLib, line 109
-            if (DEVICE_TYPE in  ['LightSensor']) { // library marker kkossev.illuminanceLib, line 110
-                logDebug "LightSensor BrightnessLevel = ${tuyaIlluminanceOpts[fncmd as int]} (${fncmd})" // library marker kkossev.illuminanceLib, line 111
-            } // library marker kkossev.illuminanceLib, line 112
-            else { // library marker kkossev.illuminanceLib, line 113
-                sendSwitchEvent(fncmd) // library marker kkossev.illuminanceLib, line 114
-            } // library marker kkossev.illuminanceLib, line 115
-            break // library marker kkossev.illuminanceLib, line 116
-        case 0x02 : // library marker kkossev.illuminanceLib, line 117
-            if (DEVICE_TYPE in  ['LightSensor']) { // library marker kkossev.illuminanceLib, line 118
-                handleIlluminanceEvent(fncmd) // library marker kkossev.illuminanceLib, line 119
-            } // library marker kkossev.illuminanceLib, line 120
-            else { // library marker kkossev.illuminanceLib, line 121
-                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" // library marker kkossev.illuminanceLib, line 122
-            } // library marker kkossev.illuminanceLib, line 123
-            break // library marker kkossev.illuminanceLib, line 124
-        case 0x04 : // battery // library marker kkossev.illuminanceLib, line 125
-            sendBatteryPercentageEvent(fncmd) // library marker kkossev.illuminanceLib, line 126
-            break // library marker kkossev.illuminanceLib, line 127
-        default : // library marker kkossev.illuminanceLib, line 128
-            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" // library marker kkossev.illuminanceLib, line 129
-            break // library marker kkossev.illuminanceLib, line 130
-    } // library marker kkossev.illuminanceLib, line 131
-} // library marker kkossev.illuminanceLib, line 132
-
-void illuminanceInitializeVars( boolean fullInit = false ) { // library marker kkossev.illuminanceLib, line 134
-    logDebug "illuminanceInitializeVars()... fullInit = ${fullInit}" // library marker kkossev.illuminanceLib, line 135
-    if (DEVICE?.capabilities?.IlluminanceMeasurement == true) { // library marker kkossev.illuminanceLib, line 136
-        if (fullInit || settings?.minReportingTime == null) { device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number']) } // defined in commonLib // library marker kkossev.illuminanceLib, line 137
-        if (fullInit || settings?.maxReportingTime == null) { device.updateSetting('maxReportingTime', [value:DEFAULT_MAX_REPORTING_TIME, type:'number']) } // library marker kkossev.illuminanceLib, line 138
-        if (fullInit || settings?.illuminanceThreshold == null) { device.updateSetting('illuminanceThreshold', [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:'number']) } // library marker kkossev.illuminanceLib, line 139
-        if (fullInit || settings?.illuminanceCoeff == null) { device.updateSetting('illuminanceCoeff', [value:1.00, type:'decimal']) } // library marker kkossev.illuminanceLib, line 140
-        if (fullInit || settings?.illuminanceMinReportingTime == null) { device.updateSetting('illuminanceMinReportingTime', [value:DEFAULT_ILLUMINANCE_MIN_REPORTING_TIME, type:'number']) } // library marker kkossev.illuminanceLib, line 141
-    } // library marker kkossev.illuminanceLib, line 142
-} // library marker kkossev.illuminanceLib, line 143
-
-List<String> illuminanceRefresh() { // library marker kkossev.illuminanceLib, line 145
-    List<String> cmds = [] // library marker kkossev.illuminanceLib, line 146
-    cmds = zigbee.readAttribute(0x0400, 0x0000, [:], delay = 200) // illuminance // library marker kkossev.illuminanceLib, line 147
-    return cmds // library marker kkossev.illuminanceLib, line 148
-} // library marker kkossev.illuminanceLib, line 149
-
-// ~~~~~ end include (168) kkossev.illuminanceLib ~~~~~
-
-// ~~~~~ start include (178) kkossev.iasLib ~~~~~
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */ // library marker kkossev.iasLib, line 1
-library( // library marker kkossev.iasLib, line 2
-    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee IASLibrary', name: 'iasLib', namespace: 'kkossev', // library marker kkossev.iasLib, line 3
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/iasLib.groovy', documentationLink: '', // library marker kkossev.iasLib, line 4
-    version: '3.2.2' // library marker kkossev.iasLib, line 5
-
-) // library marker kkossev.iasLib, line 7
-/* // library marker kkossev.iasLib, line 8
- *  Zigbee IAS Library // library marker kkossev.iasLib, line 9
- * // library marker kkossev.iasLib, line 10
- *  Licensed Virtual the Apache License, Version 2.0 (the "License"); you may not use this file except // library marker kkossev.iasLib, line 11
- *  in compliance with the License. You may obtain a copy of the License at: // library marker kkossev.iasLib, line 12
- * // library marker kkossev.iasLib, line 13
- *      http://www.apache.org/licenses/LICENSE-2.0 // library marker kkossev.iasLib, line 14
- * // library marker kkossev.iasLib, line 15
- *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed // library marker kkossev.iasLib, line 16
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License // library marker kkossev.iasLib, line 17
- *  for the specific language governing permissions and limitations under the License. // library marker kkossev.iasLib, line 18
- * // library marker kkossev.iasLib, line 19
- * ver. 3.2.0  2024-05-27 kkossev  - added iasLib.groovy // library marker kkossev.iasLib, line 20
- * ver. 3.2.1  2024-07-06 kkossev  - added standardParseIasMessage (debug only); zs null check // library marker kkossev.iasLib, line 21
- * ver. 3.2.2  2024-08-09 kkossev  - zs null check // library marker kkossev.iasLib, line 22
- * ver. 3.2.3  2026-08-03 kkossev  - minor bug fixes and improvements // library marker kkossev.iasLib, line 23
- * // library marker kkossev.iasLib, line 24
- *                                   TODO: // library marker kkossev.iasLib, line 25
-*/ // library marker kkossev.iasLib, line 26
-
-static String iasLibVersion()   { '3.2.3' } // library marker kkossev.iasLib, line 28
-static String iasLibStamp() { '2026/08/03 11:46 PM' } // library marker kkossev.iasLib, line 29
-
-metadata { // library marker kkossev.iasLib, line 31
-    // no capabilities // library marker kkossev.iasLib, line 32
-    // no attributes // library marker kkossev.iasLib, line 33
-    // no commands // library marker kkossev.iasLib, line 34
-    preferences { // library marker kkossev.iasLib, line 35
-    // no prefrences // library marker kkossev.iasLib, line 36
-    } // library marker kkossev.iasLib, line 37
-} // library marker kkossev.iasLib, line 38
-
-@Field static final Map<Integer, String> IAS_ATTRIBUTES = [ // library marker kkossev.iasLib, line 40
-    //  Zone Information // library marker kkossev.iasLib, line 41
-    0x0000: 'zone state', // library marker kkossev.iasLib, line 42
-    0x0001: 'zone type', // library marker kkossev.iasLib, line 43
-    0x0002: 'zone status', // library marker kkossev.iasLib, line 44
-    //  Zone Settings // library marker kkossev.iasLib, line 45
-    0x0010: 'CIE addr',    // EUI64 // library marker kkossev.iasLib, line 46
-    0x0011: 'Zone Id',     // uint8 // library marker kkossev.iasLib, line 47
-    0x0012: 'Num zone sensitivity levels supported',     // uint8 // library marker kkossev.iasLib, line 48
-    0x0013: 'Current zone sensitivity level',            // uint8 // library marker kkossev.iasLib, line 49
-    0xF001: 'Current zone keep time'                     // uint8 // library marker kkossev.iasLib, line 50
-] // library marker kkossev.iasLib, line 51
-
-@Field static final Map<Integer, String> ZONE_TYPE = [ // library marker kkossev.iasLib, line 53
-    0x0000: 'Standard CIE', // library marker kkossev.iasLib, line 54
-    0x000D: 'Motion Sensor', // library marker kkossev.iasLib, line 55
-    0x0015: 'Contact Switch', // library marker kkossev.iasLib, line 56
-    0x0028: 'Fire Sensor', // library marker kkossev.iasLib, line 57
-    0x002A: 'Water Sensor', // library marker kkossev.iasLib, line 58
-    0x002B: 'Carbon Monoxide Sensor', // library marker kkossev.iasLib, line 59
-    0x002C: 'Personal Emergency Device', // library marker kkossev.iasLib, line 60
-    0x002D: 'Vibration Movement Sensor', // library marker kkossev.iasLib, line 61
-    0x010F: 'Remote Control', // library marker kkossev.iasLib, line 62
-    0x0115: 'Key Fob', // library marker kkossev.iasLib, line 63
-    0x021D: 'Key Pad', // library marker kkossev.iasLib, line 64
-    0x0225: 'Standard Warning Device', // library marker kkossev.iasLib, line 65
-    0x0226: 'Glass Break Sensor', // library marker kkossev.iasLib, line 66
-    0x0229: 'Security Repeater', // library marker kkossev.iasLib, line 67
-    0xFFFF: 'Invalid Zone Type' // library marker kkossev.iasLib, line 68
-] // library marker kkossev.iasLib, line 69
-
-@Field static final Map<Integer, String> ZONE_STATE = [ // library marker kkossev.iasLib, line 71
-    0x00: 'Not Enrolled', // library marker kkossev.iasLib, line 72
-    0x01: 'Enrolled' // library marker kkossev.iasLib, line 73
-] // library marker kkossev.iasLib, line 74
-
-public void standardParseIasMessage(final String description) { // library marker kkossev.iasLib, line 76
-    // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn // library marker kkossev.iasLib, line 77
-    Map zs = zigbee.parseZoneStatusChange(description) // library marker kkossev.iasLib, line 78
-    if (zs == null) { // library marker kkossev.iasLib, line 79
-        logWarn "standardParseIasMessage: zs is null!" // library marker kkossev.iasLib, line 80
-        return // library marker kkossev.iasLib, line 81
-    } // library marker kkossev.iasLib, line 82
-    if (zs.alarm1Set == true) { // library marker kkossev.iasLib, line 83
-        logDebug "standardParseIasMessage: Alarm 1 is set" // library marker kkossev.iasLib, line 84
-        //handleMotion(true) // library marker kkossev.iasLib, line 85
-    } // library marker kkossev.iasLib, line 86
-    else { // library marker kkossev.iasLib, line 87
-        logDebug "standardParseIasMessage: Alarm 1 is cleared" // library marker kkossev.iasLib, line 88
-        //handleMotion(false) // library marker kkossev.iasLib, line 89
-    } // library marker kkossev.iasLib, line 90
-} // library marker kkossev.iasLib, line 91
-
-public void standardParseIASCluster(final Map descMap) { // library marker kkossev.iasLib, line 93
-    logDebug "standardParseIASCluster: cluster=${descMap} attrInt=${descMap.attrInt} value=${descMap.value}" // library marker kkossev.iasLib, line 94
-    if (descMap.cluster != '0500') { return } // not IAS cluster // library marker kkossev.iasLib, line 95
-    if (descMap.attrInt == null) { return } // missing attribute // library marker kkossev.iasLib, line 96
-    //String zoneSetting = IAS_ATTRIBUTES[descMap.attrInt] // library marker kkossev.iasLib, line 97
-    if ( IAS_ATTRIBUTES[descMap.attrInt] == null ) { // library marker kkossev.iasLib, line 98
-        logWarn "standardParseIASCluster: Unknown IAS attribute ${descMap?.attrId} (value:${descMap?.value})" // library marker kkossev.iasLib, line 99
-        return // library marker kkossev.iasLib, line 100
-    } // unknown IAS attribute // library marker kkossev.iasLib, line 101
-    /* // library marker kkossev.iasLib, line 102
-    logDebug "standardParseIASCluster: Don't know how to handle IAS attribute 0x${descMap?.attrId} '${zoneSetting}' (value:${descMap?.value})!" // library marker kkossev.iasLib, line 103
-    return // library marker kkossev.iasLib, line 104
-    */ // library marker kkossev.iasLib, line 105
-
-    String clusterInfo = 'standardParseIASCluster:' // library marker kkossev.iasLib, line 107
-
-    if (descMap?.cluster == '0500' && descMap?.command in ['01', '0A']) {    //IAS read attribute response // library marker kkossev.iasLib, line 109
-        logDebug "${clusterInfo} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}" // library marker kkossev.iasLib, line 110
-        if (descMap?.attrId == '0000') { // library marker kkossev.iasLib, line 111
-            int value = Integer.parseInt(descMap?.value, 16) // library marker kkossev.iasLib, line 112
-            String status = "${ZONE_STATE[value]}" // library marker kkossev.iasLib, line 113
-            if (value == 0 ) { status = "<b>${status}</b>" ; logWarn "${clusterInfo} is NOT ENROLLED!" } // library marker kkossev.iasLib, line 114
-            logInfo "${clusterInfo} IAS Zone State report is '${status}' (${value})" // library marker kkossev.iasLib, line 115
-        } // library marker kkossev.iasLib, line 116
-        else if (descMap?.attrId == '0001') { // library marker kkossev.iasLib, line 117
-            int value = Integer.parseInt(descMap?.value, 16) // library marker kkossev.iasLib, line 118
-            logInfo "${clusterInfo} IAS Zone Type report is '${ZONE_TYPE[value]}' (${value})" // library marker kkossev.iasLib, line 119
-        } // library marker kkossev.iasLib, line 120
-        else if (descMap?.attrId == '0002') { // library marker kkossev.iasLib, line 121
-            logInfo "${clusterInfo} IAS Zone status repoted: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}" // library marker kkossev.iasLib, line 122
-        } // library marker kkossev.iasLib, line 123
-        else if (descMap?.attrId == '0010') { // library marker kkossev.iasLib, line 124
-            logInfo "${clusterInfo} IAS Zone Address received (bitmap = ${descMap?.value})" // library marker kkossev.iasLib, line 125
-        } // library marker kkossev.iasLib, line 126
-        else if (descMap?.attrId == '0011') { // library marker kkossev.iasLib, line 127
-            logInfo "${clusterInfo} IAS Zone ID: ${descMap.value}" // library marker kkossev.iasLib, line 128
-        } // library marker kkossev.iasLib, line 129
-        else if (descMap?.attrId == '0012') { // library marker kkossev.iasLib, line 130
-            logInfo "${clusterInfo} IAS Num zone sensitivity levels supported: ${descMap.value}" // library marker kkossev.iasLib, line 131
-        } // library marker kkossev.iasLib, line 132
-        else if (descMap?.attrId == '0013') { // library marker kkossev.iasLib, line 133
-            int value = Integer.parseInt(descMap?.value, 16) // library marker kkossev.iasLib, line 134
-            //logInfo "${clusterInfo} IAS Current Zone Sensitivity Level = ${sensitivityOpts.options[value]} (${value})" // library marker kkossev.iasLib, line 135
-            logInfo "${clusterInfo} IAS Current Zone Sensitivity Level = (${value})" // library marker kkossev.iasLib, line 136
-        // device.updateSetting('settings.sensitivity', [value:value.toString(), type:'enum']) // library marker kkossev.iasLib, line 137
-        } // library marker kkossev.iasLib, line 138
-        else if (descMap?.attrId == 'F001') {    // [raw:7CC50105000801F02000, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:F001, encoding:20, command:0A, value:00, clusterInt:1280, attrInt:61441] // library marker kkossev.iasLib, line 139
-            int value = Integer.parseInt(descMap?.value, 16) // library marker kkossev.iasLib, line 140
-            //String str   = getKeepTimeOpts().options[value] // library marker kkossev.iasLib, line 141
-            //logInfo "${clusterInfo} Current IAS Zone Keep-Time =  ${str} (${value})" // library marker kkossev.iasLib, line 142
-            logInfo "${clusterInfo} Current IAS Zone Keep-Time =  (${value})" // library marker kkossev.iasLib, line 143
-        //device.updateSetting('keepTime', [value: value.toString(), type: 'enum']) // library marker kkossev.iasLib, line 144
-        } // library marker kkossev.iasLib, line 145
-        else { // library marker kkossev.iasLib, line 146
-            logDebug "${clusterInfo} Zone status attribute ${descMap?.attrId}: <b>NOT PROCESSED</b> ${descMap}" // library marker kkossev.iasLib, line 147
-        } // library marker kkossev.iasLib, line 148
-    } // if IAS read attribute response // library marker kkossev.iasLib, line 149
-    else if (descMap?.clusterId == '0500' && descMap?.command == '04') {    //write attribute response (IAS) // library marker kkossev.iasLib, line 150
-        logDebug "${clusterInfo} AS write attribute response is ${descMap?.data[0] == '00' ? 'success' : '<b>FAILURE</b>'}" // library marker kkossev.iasLib, line 151
-    } // library marker kkossev.iasLib, line 152
-    else { // library marker kkossev.iasLib, line 153
-        logDebug "${clusterInfo} <b>NOT PROCESSED</b> ${descMap}" // library marker kkossev.iasLib, line 154
-    } // library marker kkossev.iasLib, line 155
-} // library marker kkossev.iasLib, line 156
-
-List<String> refreshAllIas() { // library marker kkossev.iasLib, line 158
-    logDebug 'refreshAllIas()' // library marker kkossev.iasLib, line 159
-    List<String> cmds = [] // library marker kkossev.iasLib, line 160
-    IAS_ATTRIBUTES.each { key, value -> // library marker kkossev.iasLib, line 161
-        cmds += zigbee.readAttribute(0x0500, key, [:], delay = 199) // library marker kkossev.iasLib, line 162
-    } // library marker kkossev.iasLib, line 163
-    return cmds // library marker kkossev.iasLib, line 164
-} // library marker kkossev.iasLib, line 165
-
-// ~~~~~ end include (178) kkossev.iasLib ~~~~~
-
-// ~~~~~ start include (180) kkossev.motionLib ~~~~~
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */ // library marker kkossev.motionLib, line 1
-library( // library marker kkossev.motionLib, line 2
-    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Motion Library', name: 'motionLib', namespace: 'kkossev', // library marker kkossev.motionLib, line 3
-    importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/motionLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-motionLib', // library marker kkossev.motionLib, line 4
-    version: '3.2.3' // library marker kkossev.motionLib, line 5
-) // library marker kkossev.motionLib, line 6
-/*  Zigbee Motion Library // library marker kkossev.motionLib, line 7
- * // library marker kkossev.motionLib, line 8
- *  Licensed Virtual the Apache License, Version 2.0 // library marker kkossev.motionLib, line 9
- * // library marker kkossev.motionLib, line 10
- * ver. 3.2.0  2024-07-06 kkossev  - added motionLib.groovy; added [digital] [physical] to the descriptionText // library marker kkossev.motionLib, line 11
- * ver. 3.2.1  2025-03-24 kkossev  - documentation // library marker kkossev.motionLib, line 12
- * ver. 3.2.2  2025-10-12 kkossev  - setMotion help text improved // library marker kkossev.motionLib, line 13
- * ver. 3.2.3  2026-08-05 kkossev  - (dev.branch) motionResetTimer description warns that the value must be longer than the device Keep Time; motionReset recommendation text now says for which sensors 'false' is the right value; bug fix: the Motion Reset Timer input visibility check used '.value' on a Boolean setting // library marker kkossev.motionLib, line 14
- * // library marker kkossev.motionLib, line 15
- *                                   TODO: // library marker kkossev.motionLib, line 16
-*/ // library marker kkossev.motionLib, line 17
-
-static String motionLibVersion()   { '3.2.3' } // library marker kkossev.motionLib, line 19
-static String motionLibStamp() { '2026/08/05 9:22 PM' } // library marker kkossev.motionLib, line 20
-
-metadata { // library marker kkossev.motionLib, line 22
-    capability 'MotionSensor' // library marker kkossev.motionLib, line 23
-    // no custom attributes // library marker kkossev.motionLib, line 24
-    command 'setMotion', [[name: 'setMotion', type: 'ENUM', constraints: ['No selection', 'active', 'inactive'], description: '🧪 Force motion state to active or inactive for testing purposes']]    // keep our own 'No selection' first - it is the only harmless value the user can explicitly pick; setMotion() has no no-arg overload, so an un-selected Run has nothing safe to dispatch to // library marker kkossev.motionLib, line 25
-    preferences { // library marker kkossev.motionLib, line 26
-        if (device) { // library marker kkossev.motionLib, line 27
-            if (('motionReset' in DEVICE?.preferences) && (DEVICE?.preferences.motionReset == true)) { // library marker kkossev.motionLib, line 28
-                input(name: 'motionReset', type: 'bool', title: '<b>Reset Motion to Inactive</b>', description: 'Software Reset Motion to Inactive after timeout. Recommended value is <b>false</b> for sensors that report motion inactive on their own', defaultValue: false) // library marker kkossev.motionLib, line 29
-                if (settings?.motionReset == true) {     // must match the guard in handleMotion() - '.value' on a Boolean is not valid Groovy and would hide this input while the software reset kept running // library marker kkossev.motionLib, line 30
-                    input('motionResetTimer', 'number', title: '<b>Motion Reset Timer</b>', description: 'After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds. Set this <b>longer</b> than the device Keep Time, otherwise the motion is reset while the sensor still considers it active.', range: '0..7200', defaultValue: 60) // library marker kkossev.motionLib, line 31
-                } // library marker kkossev.motionLib, line 32
-            } // library marker kkossev.motionLib, line 33
-            if (advancedOptions == true) { // library marker kkossev.motionLib, line 34
-                if ('invertMotion' in DEVICE?.preferences) { // library marker kkossev.motionLib, line 35
-                    input(name: 'invertMotion', type: 'bool', title: '<b>Invert Motion Active/Not Active</b>', description: 'Some Tuya motion sensors may report the motion active/inactive inverted...', defaultValue: false) // library marker kkossev.motionLib, line 36
-                } // library marker kkossev.motionLib, line 37
-            } // library marker kkossev.motionLib, line 38
-        } // library marker kkossev.motionLib, line 39
-    } // library marker kkossev.motionLib, line 40
-} // library marker kkossev.motionLib, line 41
-
-public void handleMotion(final boolean motionActive, final boolean isDigital=false) { // library marker kkossev.motionLib, line 43
-    boolean motionActiveCopy = motionActive // library marker kkossev.motionLib, line 44
-
-    if (settings.invertMotion == true) {    // patch!! fix it! // library marker kkossev.motionLib, line 46
-        motionActiveCopy = !motionActiveCopy // library marker kkossev.motionLib, line 47
-    } // library marker kkossev.motionLib, line 48
-
-    //log.trace "handleMotion: motionActive=${motionActiveCopy}, isDigital=${isDigital}" // library marker kkossev.motionLib, line 50
-    if (motionActiveCopy) { // library marker kkossev.motionLib, line 51
-        int timeout = settings?.motionResetTimer ?: 0 // library marker kkossev.motionLib, line 52
-        // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in code // library marker kkossev.motionLib, line 53
-        if (settings?.motionReset == true && timeout != 0) { // library marker kkossev.motionLib, line 54
-            runIn(timeout, 'resetToMotionInactive', [overwrite: true]) // library marker kkossev.motionLib, line 55
-        } // library marker kkossev.motionLib, line 56
-        if (device.currentState('motion')?.value != 'active') { // library marker kkossev.motionLib, line 57
-            state.motionStarted = unix2formattedDate(now()) // library marker kkossev.motionLib, line 58
-        } // library marker kkossev.motionLib, line 59
-    } // library marker kkossev.motionLib, line 60
-    else { // library marker kkossev.motionLib, line 61
-        if (device.currentState('motion')?.value == 'inactive') { // library marker kkossev.motionLib, line 62
-            logDebug "ignored motion inactive event after ${getSecondsInactive()}s" // library marker kkossev.motionLib, line 63
-            return      // do not process a second motion inactive event! // library marker kkossev.motionLib, line 64
-        } // library marker kkossev.motionLib, line 65
-    } // library marker kkossev.motionLib, line 66
-    sendMotionEvent(motionActiveCopy, isDigital) // library marker kkossev.motionLib, line 67
-} // library marker kkossev.motionLib, line 68
-
-public void sendMotionEvent(final boolean motionActive, boolean isDigital=false) { // library marker kkossev.motionLib, line 70
-    String descriptionText = 'Detected motion' // library marker kkossev.motionLib, line 71
-    if (motionActive) { // library marker kkossev.motionLib, line 72
-        descriptionText = device.currentValue('motion') == 'active' ? "Motion is active ${getSecondsInactive()}s" : 'Detected motion' // library marker kkossev.motionLib, line 73
-    } // library marker kkossev.motionLib, line 74
-    else { // library marker kkossev.motionLib, line 75
-        descriptionText = "Motion reset to inactive after ${getSecondsInactive()}s" // library marker kkossev.motionLib, line 76
-    } // library marker kkossev.motionLib, line 77
-    if (isDigital) { descriptionText += ' [digital]' } // library marker kkossev.motionLib, line 78
-    logInfo "${descriptionText}" // library marker kkossev.motionLib, line 79
-    sendEvent( // library marker kkossev.motionLib, line 80
-            name            : 'motion', // library marker kkossev.motionLib, line 81
-            value            : motionActive ? 'active' : 'inactive', // library marker kkossev.motionLib, line 82
-            type            : isDigital == true ? 'digital' : 'physical', // library marker kkossev.motionLib, line 83
-            descriptionText : descriptionText // library marker kkossev.motionLib, line 84
-    ) // library marker kkossev.motionLib, line 85
-    //runIn(1, formatAttrib, [overwrite: true]) // library marker kkossev.motionLib, line 86
-} // library marker kkossev.motionLib, line 87
-
-public void resetToMotionInactive() { // library marker kkossev.motionLib, line 89
-    if (device.currentState('motion')?.value == 'active') { // library marker kkossev.motionLib, line 90
-        String descText = "Motion reset to inactive after ${getSecondsInactive()}s (software timeout)" // library marker kkossev.motionLib, line 91
-        sendEvent( // library marker kkossev.motionLib, line 92
-            name : 'motion', // library marker kkossev.motionLib, line 93
-            value : 'inactive', // library marker kkossev.motionLib, line 94
-            isStateChange : true, // library marker kkossev.motionLib, line 95
-            type:  'digital', // library marker kkossev.motionLib, line 96
-            descriptionText : descText // library marker kkossev.motionLib, line 97
-        ) // library marker kkossev.motionLib, line 98
-        logInfo "${descText}" // library marker kkossev.motionLib, line 99
-    } // library marker kkossev.motionLib, line 100
-    else { // library marker kkossev.motionLib, line 101
-        logDebug "ignored resetToMotionInactive (software timeout) after ${getSecondsInactive()}s" // library marker kkossev.motionLib, line 102
-    } // library marker kkossev.motionLib, line 103
-} // library marker kkossev.motionLib, line 104
-
-public void setMotion(String mode) { // library marker kkossev.motionLib, line 106
-    if (mode == 'active') { // library marker kkossev.motionLib, line 107
-        handleMotion(motionActive = true, isDigital = true) // library marker kkossev.motionLib, line 108
-    } else if (mode == 'inactive') { // library marker kkossev.motionLib, line 109
-        handleMotion(motionActive = false, isDigital = true) // library marker kkossev.motionLib, line 110
-    } else { // library marker kkossev.motionLib, line 111
-        if (settings?.txtEnable) { // library marker kkossev.motionLib, line 112
-            log.warn "${device.displayName} please select motion action" // library marker kkossev.motionLib, line 113
-        } // library marker kkossev.motionLib, line 114
-    } // library marker kkossev.motionLib, line 115
-} // library marker kkossev.motionLib, line 116
-
-public int getSecondsInactive() { // library marker kkossev.motionLib, line 118
-    Long unixTime = 0 // library marker kkossev.motionLib, line 119
-    try { unixTime = formattedDate2unix(state.motionStarted) } catch (Exception e) { logWarn "getSecondsInactive: ${e}" } // library marker kkossev.motionLib, line 120
-    if (unixTime) { return Math.round((now() - unixTime) / 1000) as int } // library marker kkossev.motionLib, line 121
-    return settings?.motionResetTimer ?: 0 // library marker kkossev.motionLib, line 122
-} // library marker kkossev.motionLib, line 123
-
-public List<String> refreshAllMotion() { // library marker kkossev.motionLib, line 125
-    logDebug 'refreshAllMotion()' // library marker kkossev.motionLib, line 126
-    List<String> cmds = [] // library marker kkossev.motionLib, line 127
-    return cmds // library marker kkossev.motionLib, line 128
-} // library marker kkossev.motionLib, line 129
-
-public void motionInitializeVars( boolean fullInit = false ) { // library marker kkossev.motionLib, line 131
-    logDebug "motionInitializeVars()... fullInit = ${fullInit}" // library marker kkossev.motionLib, line 132
-    if (device.hasCapability('MotionSensor')) { // library marker kkossev.motionLib, line 133
-        if (fullInit == true || settings.motionReset == null) { device.updateSetting('motionReset', false) } // library marker kkossev.motionLib, line 134
-        if (fullInit == true || settings.invertMotion == null) { device.updateSetting('invertMotion', false) } // library marker kkossev.motionLib, line 135
-        if (fullInit == true || settings.motionResetTimer == null) { device.updateSetting('motionResetTimer', 60) } // library marker kkossev.motionLib, line 136
-    } // library marker kkossev.motionLib, line 137
-} // library marker kkossev.motionLib, line 138
-
-// ~~~~~ end include (180) kkossev.motionLib ~~~~~

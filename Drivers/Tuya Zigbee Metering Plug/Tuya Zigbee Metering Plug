@@ -70,6 +70,7 @@
  *  ver. 2.0.1 2025-04-12 kkossev - added Shelly 1PM (Gen 4); added  Frient Monitor 2 EMIZB-141;
  *  ver. 2.0.2 2025-08-19 kkossev - EMIZB-141 fix attempt
  *  ver. 2.0.3 2026-04-20 kkossev - bug fix: breaker threshold boolean variables declared as int in processTuyaThresholdsCommands(); AC Frequency polling (0x0300) now auto-disabled after first unsupported-attribute response;
+ *  ver. 2.0.4 2026-08-07 kkossev - minor bug fixes
  *
  *                                 TODO: change the ping() command to cluster 0x0000 attribute 0x0000 (ZCL Version)
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
@@ -92,8 +93,8 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
-static String version() { '2.0.3' }
-static String timeStamp() { '2026/04/20 11:23 AM' }
+static String version() { '2.0.4' }
+static String timeStamp() { '2026/08/07 11:30 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -147,7 +148,7 @@ metadata {
 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,0006,0702,0B04', outClusters:'0019,000A', manufacturer:'_TZ3000_vtscrpmw', model:'TS0121',  deviceJoinName: 'Tuya Outlet' //Tuya Smart Plug
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,0006,0702,0B04', outClusters:'0019,000A', manufacturer:'_TZ3000_3ooaz3ng', model:'TS0121',  deviceJoinName: 'Tuya Outlet' //Tuya Smart Plug
-        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,0006,0702 0B04', outClusters:'0019,000A', manufacturer:'_TZ3000_rdtixbnu', model:'TS0121',  deviceJoinName: 'Tuya Outlet' //Tuya Smart Plug
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,0006,0702,0B04', outClusters:'0019,000A', manufacturer:'_TZ3000_rdtixbnu', model:'TS0121',  deviceJoinName: 'Tuya Outlet' //Tuya Smart Plug
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,0006,0702,0B04', outClusters:'0019,000A', model:'TS0121', manufacturer:'_TZ3000_g5xawfcq',  deviceJoinName: 'Blitzwolf BW-SHP13' //Blitzwolf BW-SHP13
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,0702,0B04,E000,E001', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_cphmq0q7', deviceJoinName: 'Tuya Outlet TS011F' //TS011F
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,0702,0B04,E000,E001', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_ps3dmato',  deviceJoinName: 'Lellki WK35 Plug Wall Socket'
@@ -182,7 +183,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ves1ycwx', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // SPM02
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_v9hkz2yn', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // https://community.hubitat.com/t/release-tuya-zigbee-metering-plug-w-healthstatus/86465/520?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_81yrt3lo', deviceJoinName: 'Bidirectional energy meter with 80A current clamp'       // https://github.com/Koenkk/zigbee-herdsman-converters/blob/8162314dbfd6e3803aeaf1d35fffd83c7e6ff5c6/src/devices/tuya.ts#L5185
-        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,FF66"', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_rks0sgb7', deviceJoinName: 'Bidirectional energy meter with 80A current clamp'  //https://community.hubitat.com/t/driver-for-zigbee-tuya-power-monitoring/123257/14?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,FF66', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_rks0sgb7', deviceJoinName: 'Bidirectional energy meter with 80A current clamp'  //https://community.hubitat.com/t/driver-for-zigbee-tuya-power-monitoring/123257/14?u=kkossev
 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E001,E000,0000', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_ky0fq4ho', deviceJoinName: 'ATMS1602Z DIN Relay'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E001,E000,0000', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_ksw8qtmt', deviceJoinName: 'Smart ZigBee Socket NOUS A1Z' //https://nous.technology/product/a1z-1.html
@@ -541,9 +542,13 @@ void parse(String description) {
                         if (logEnable) { log.debug "${device.displayName} Tuya check-in message (attribute ${it.attrId} reported: ${it.value})" }
                         Long now = new Date().getTime()
                         if (state.lastTx == null) { state.lastTx = [:] }
-                        int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: '0').toInteger()
-                        if (timeRunning < MAX_PING_MILISECONDS) {
-                            sendRttEvent()
+                        Long pingTime = state.lastTx['pingTime'] as Long
+                        if (pingTime != null) {
+                            state.lastTx.remove('pingTime')                 // consume once — prevents repetitive bogus rtt events from subsequent check-ins
+                            int timeRunning = (now - pingTime) as int       // Long math, then narrow
+                            if (timeRunning >= 0 && timeRunning < MAX_PING_MILISECONDS) {
+                                sendRttEvent()
+                            }
                         }
                     }
                     else {
@@ -557,7 +562,7 @@ void parse(String description) {
                     parseOnOffAttributes(it)
                 }
                 else if (it.cluster == '0B04' && it.attrId == '050B') {
-                    if (descMap.command == '0A' && safeToInt(zigbee.convertHexToInt(it.value)) == 0 && safeToInt(device.currentValue('power', true)) != 0  && device.currentValue('switch', true) == 'on') {
+                    if (descMap.command == '0A' && safeToInt(zigbee.convertHexToInt(it.value)) == 0 && safeToDouble(device.currentValue('power', true)) != 0  && device.currentValue('switch', true) == 'on') {
                         logWarn "${device.displayName} ignoring potentially false zero power automatic report!"
                         runInMillis(3500, pollOnce, [overwrite: true])
                     }
@@ -1587,7 +1592,7 @@ void parseZHAcommand(Map descMap) {
                 int min = zigbee.convertHexToInt(descMap.data[6]) * 256 + zigbee.convertHexToInt(descMap.data[5])
                 int max = zigbee.convertHexToInt(descMap.data[8] + descMap.data[7])
                 int delta = 0
-                if (descMap.data.size() >= 10) {
+                if (descMap.data.size() >= 11) {
                     delta = zigbee.convertHexToInt(descMap.data[10] + descMap.data[9])
                 }
                 else {
@@ -1923,7 +1928,8 @@ void ping() {
 void sendRttEvent(String value=null) {
     Long now = new Date().getTime()
     if (state.lastTx == null) { state.lastTx = [:] }
-    int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: now).toInteger()
+    Long pingTime = state.lastTx['pingTime'] as Long
+    int timeRunning = pingTime != null ? (now - pingTime) as int : 0
     String descriptionText = "Round-trip time is ${timeRunning} ms"
     if (value == null) {
         logInfo "${descriptionText}"
@@ -2801,6 +2807,9 @@ void afterResetEvents() {
 }
 
 String calculateEnergyDuration(String lastResetDate) {
+    if (lastResetDate == null) {
+        return 'Unknown'
+    }
     long energyTimeMS = unixFromFormattedDateTime(lastResetDate)
     if (!energyTimeMS) {
         return 'Unknown'
@@ -2834,6 +2843,9 @@ double roundTwoPlaces(val) {    // static throws exception!
 @Field static final String dateFormat = 'yyyy-MM-dd HH:mm:ss.SSS'
 
 static long unixFromFormattedDateTime(String formattedDateTime) {
+    if (formattedDateTime == null) {
+        return 0
+    }
     return Date.parse(dateFormat, formattedDateTime).time
 }
 

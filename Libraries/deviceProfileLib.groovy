@@ -1,7 +1,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/deviceProfileLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-deviceProfileLib',
-    version: '3.5.6'
+    version: '3.5.7'
 )
 /*
  *  Device Profile Library (V3)
@@ -42,6 +42,7 @@ library(
  * ver. 3.5.4  2026-02-04 kkossev  - changed inputIt min param rounding to floor instead of ceil
  * ver. 3.5.5  2026-03-05 kkossev  - added deviceProfilesV3defaults?.defaultCommands
  * ver. 3.5.6  2026-06-04 kkossev  - fixed setPar() invalid virtual enum parameter false error when preference key is passed instead of label
+ * ver. 3.5.7  2026-08-03 kkossev  - (BUGS.md B13) processFoundItem() no longer skips illuminance events based on the raw-DP dedupe, which ignored illuminanceCoeff
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
@@ -53,8 +54,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.5.6' }
-static String deviceProfileLibStamp() { '2026/06/04 5:36 PM' }
+static String deviceProfileLibVersion()   { '3.5.7' }
+static String deviceProfileLibStamp() { '2026/08/05 11:12 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -69,17 +70,17 @@ metadata {
     /*
     // copy the following commands to the main driver, if needed
     command 'sendCommand', [
-        [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
-        [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
+        [name:'command', type: 'STRING', description: '▶️ Run one of the commands supported by this device profile • Leave empty to list the valid names in the log', constraints: ['STRING']],
+        [name:'val',     type: 'STRING', description: 'Optional value, needed only by some commands', constraints: ['STRING']]
     ]
     command 'setPar', [
-            [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
-            [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
+            [name:'par', type: 'STRING', description: '🎛️ Set a device profile preference and write it to the device • Leave empty to list the valid parameter names in the log', constraints: ['STRING']],
+            [name:'val', type: 'STRING', description: 'Leave empty to see the allowed range or values for that parameter', constraints: ['STRING']]
     ]
     */
     preferences {
         if (device) {
-            input(name: 'forcedProfile', type: 'enum', title: '<b>Device Profile</b>', description: 'Manually change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!',  options: getDeviceProfilesMap())
+            input(name: 'forcedProfile', type: 'enum', title: '<b>⚠️ Device Profile</b>', description: 'Which set of datapoints, attributes and preferences this driver uses for your device. Matched automatically from the model and manufacturer when the device is paired.<br>Change it manually only if your device was not recognized - the wrong profile stops it working correctly.<br>After changing the profile, pair the device again to your hub, without deleting it! Otherwise the new configuration may never reach a battery-powered sleepy device.',  options: getDeviceProfilesMap())
             // itterate over DEVICE.preferences map and inputIt all
             if (DEVICE != null && DEVICE?.preferences != null && DEVICE?.preferences != [:] && DEVICE?.device?.isDepricated != true) {
                 (DEVICE?.preferences).each { key, value ->
@@ -335,7 +336,7 @@ private List<String> zclWriteAttribute(Map attributesMap, int scaledValue) {
         map['mfgCode'] = attributesMap.mfgCode ? attributesMap.mfgCode as String : null
         map['ep'] = (attributesMap.ep != null && attributesMap.ep != '') ? hubitat.helper.HexUtils.hexStringToInt(attributesMap.ep) as Integer : null
     }
-    catch (e) { logWarn "setPar: Exception caught while splitting cluser and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val})) :  '${e}' " ; return [] }
+    catch (e) { logWarn "zclWriteAttribute: Exception caught while splitting the cluster and attribute <b>${attributesMap?.at}</b> (scaledValue=${scaledValue}) : '${e}'" ; return [] }
     // dt (data type) is obligatory when writing to a cluster...
     if (attributesMap.rw != null && attributesMap.rw == 'rw' && map.dt == null) {
         map.dt = attributesMap.type in ['number', 'decimal'] ? DataType.INT16 : DataType.ENUM8
@@ -479,7 +480,7 @@ public boolean setPar(final String parPar=null, final String val=null ) {
     String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1]
     String customSetFunction = "customSet${capitalizedFirstChar}"
     if (this.respondsTo(customSetFunction)) {
-        logDebug "setPar: found customSetFunction=${setFunction}, scaledValue=${scaledValue}  (val=${val})"
+        logDebug "setPar: found customSetFunction=${customSetFunction}, scaledValue=${scaledValue}  (val=${val})"
         // execute the customSetFunction
         try { cmds = "$customSetFunction"(scaledValue) }
         catch (e) { logWarn "setPar: Exception caught while processing <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val})) : '${e}'" ; return false }
@@ -541,7 +542,7 @@ public boolean setPar(final String parPar=null, final String val=null ) {
         else {
             logInfo "setPar: (2) sending parameter <b>$par</b> (<b>$val</b> (scaledValue=${scaledValue}))"
             sendZigbeeCommands(cmds)
-            return false
+            return true
         }
     }
     else if (dpMap.at != null) {
@@ -615,7 +616,7 @@ public boolean sendAttribute(String par=null, val=null ) {
     if (par == null || DEVICE?.preferences == null || DEVICE?.preferences == [:]) { logDebug 'DEVICE.preferences is empty!' ; return false }
 
     Map dpMap = getAttributesMap(par, false)                                   // get the map for the attribute
-    l//log.trace "sendAttribute: dpMap=${dpMap}"
+    //log.trace "sendAttribute: dpMap=${dpMap}"
     if (dpMap == null || dpMap?.isEmpty()) { logWarn "sendAttribute: map not found for parameter <b>${par}</b>"; return false }
     if (val == null) { logWarn "sendAttribute: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return false }
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
@@ -848,8 +849,8 @@ public Map inputIt(String paramPar, boolean debug = false) {
         if (debug) { log.warn "inputIt: unsupported type ${input.type} for param '${param}'!" }
         return [:]
     }
-    if (input.defVal != null) {
-        input.defVal = foundMap.defVal
+    if (foundMap.defVal != null) {
+        input.defaultValue = foundMap.defVal
     }
     return input
 }
@@ -888,14 +889,14 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
 // called from  initializeVars( fullInit = true)
 public void setDeviceNameAndProfile(String model=null, String manufacturer=null) {
     def (String deviceName, String deviceProfile) = getDeviceNameAndProfile(model, manufacturer)
+    String dataValueModel = model != null ? model : device.getDataValue('model') ?: UNKNOWN
+    String dataValueManufacturer  = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
     if (deviceProfile == null || deviceProfile == UNKNOWN) {
-        logInfo "unknown model ${deviceModel} manufacturer ${deviceManufacturer}"
+        logInfo "unknown model ${dataValueModel} manufacturer ${dataValueManufacturer}"
         // don't change the device name when unknown
         state.deviceProfile = UNKNOWN
     }
-    String dataValueModel = model != null ? model : device.getDataValue('model') ?: UNKNOWN
-    String dataValueManufacturer  = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
-    if (deviceName != NULL && deviceName != UNKNOWN) {
+    if (deviceName != null && deviceName != UNKNOWN) {
         device.setName(deviceName)
         state.deviceProfile = deviceProfile
         device.updateSetting('forcedProfile', [value:deviceProfilesV3[deviceProfile]?.description, type:'enum'])
@@ -914,7 +915,7 @@ public List<String> refreshFromConfigureReadList(List<String> refreshList) {
             k = k.replaceAll('\\[|\\]', '')
             if (k != null) {
                 // check whether the string in the refreshList matches an attribute name in the DEVICE.attributes list
-                Map map = DEVICE.attributes.find { it.name == k }
+                Map map = DEVICE.attributes?.find { it.name == k }
                 if (map != null) {
                     Map mfgCode = map.mfgCode != null ? ['mfgCode':map.mfgCode] : [:]
                     cmds += zigbee.readAttribute(hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[0]), hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[1]), mfgCode, delay = 100)
@@ -939,7 +940,7 @@ public List<String> refreshFromDeviceProfileList() {
             k = k.replaceAll('\\[|\\]', '')
             if (k != null) {
                 // check whether the string in the refreshList matches an attribute name in the DEVICE.attributes list
-                Map map = DEVICE.attributes.find { it.name == k }
+                Map map = DEVICE.attributes?.find { it.name == k }
                 if (map != null) {
                     Map mfgCode = map.mfgCode != null ? ['mfgCode':map.mfgCode] : [:]
                     cmds += zigbee.readAttribute(hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[0]), hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[1]), mfgCode, delay = 100)
@@ -1036,7 +1037,7 @@ public boolean isSpammyDeviceProfile() {
 private List<Object> compareAndConvertStrings(final Map foundItem, String tuyaValue, String hubitatValue) {
     String convertedValue = tuyaValue
     boolean isEqual    = ((tuyaValue  as String) == (hubitatValue as String))      // because the events(attributes) are always strings
-    if (foundItem?.scale != null || foundItem?.scale != 0 || foundItem?.scale != 1) {
+    if (foundItem?.scale != null && foundItem?.scale != 0 && foundItem?.scale != 1) {
         logTrace "compareAndConvertStrings: scaling: foundItem.scale=${foundItem.scale} tuyaValue=${tuyaValue} hubitatValue=${hubitatValue}"
     }
     return [isEqual, convertedValue]
@@ -1372,8 +1373,13 @@ private boolean processFoundItem(final Map descMap, final Map foundItem, int val
             }
 
             // patch for inverted motion sensor 2-in-1
-            if (name == 'motion' && is2in1()) {                 // TODO - remove the patch !!
+            if (name == 'motion' && is2in1()) {                 // TODO - remove the patch !
                 logDebug 'patch for inverted motion sensor 2-in-1'
+            // continue ...
+            }
+            // B13: raw-DP dedupe above ignores illuminanceCoeff - let handleIlluminanceEvent() do its own correct-space delta filter
+            else if (name == 'illuminance' || name == 'illuminance_lux') {
+                logDebug "patch for ${name} (B13)"
             // continue ...
             }
 

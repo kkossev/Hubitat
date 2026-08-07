@@ -3,7 +3,7 @@
  *  Tuya ZigBee Vibration Sensor
  *  Device Driver for Hubitat Elevation hub
  *
- *  https://community.hubitat.com/t/tuya-vibration-sensor/75269
+ *  https://community.hubitat.com/t/release-tuya-zigbee-vibration-sensor/138208
  *  
  *  Based on Mikhail Diatchenko (muxa) 'Konke ZigBee Motion Sensor' Version 1.0.2, based on code from Robert Morris and ssalahi.
  *
@@ -16,40 +16,25 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  * 
- * ver 1.0.3 2022-02-28 kkossev - inital version
- * ver 1.0.4 2022-03-02 kkossev - 'acceleration' misspelled bug fix
- * ver 1.0.5 2022-03-03 kkossev - Battery reporting
- * ver 1.0.6 2022-03-03 kkossev - Vibration Sensitivity
- * ver 1.0.7 2022-05-12 kkossev - TS0210 _TYZB01_pbgpvhgx Smart Vibration Sensor HS1VS 
- * ver 1.0.8 2022-11-08 kkossev - TS0210 _TZ3000_bmfw9ykl
- * ver 1.1.0 2023-03-07 kkossev - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj ; IAS is initialized on configure();
- * ver 1.2.0 2024-05-20 kkossev - add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability and preference 'ThreeAxis'; added Samsung multisensor; logsOff scheduler; added sensitivity attribute,
- * ver 1.2.1 2024-05-22 kkossev - delete scheduled jobs on Save Preferences; added lastBattery attribute; added setAccelarationInactive command;
- * ver 1.2.2 2024-06-03 kkossev - sensitivity preference is hidden for non-Tuya models; threeAxis preference is hidden for Tuya models;
- * ver 1.3.0 2025-01-28 kkossev - added Tuya Cluster parser; added TS0601 _TZE200_kzm5w4iz (contact&vibration); added TS0601 _TZE200_iba1ckek (Tilt Xyz Axis Sensor) (ZG-103Z); added queryAllTuyaDP(); missing [overwrite: true] bug fix;
- * ver 1.3.1 2025-02-19 kkossev - added TS0210 _TZ3000_lqpt3mvr _TZ3000_lzdjjfss _TYZB01_geigpsy4
- * ver 1.4.0 2025-03-01 kkossev - added ShockSensor capability; added shockSensor option (default:enabled)
- * ver 1.4.1 2025-08-30 kkossev - added TS0210 _TZ3210100000_5oy7cysk for tests @masachapa34
- * ver 1.4.2 2026-02-04 kkossev - added TS0210 _TZ32101000000_5oy7cysk (alternative variant); added _TZE200_hggxgsjj _TZE200_yjryxpot _TZE200_afycb3cg (ZG-103Z variants); added Tuya sensitivity setting for some models;
- * ver 1.4.3 2026-03-22 kkossev - _TZ32101000000_5oy7cysk bugfix
- * 
- *                                TODO: save the configuration commands in a state and send them on device wakes up
- *                                TODO: this driver does not process ZCL battery percentage reports, only voltage reports!
- *                                TODO: bugFix: healthCheck is not started on installed()
- *                                TODO: add powerSource attribute
- *                                TODO: make sensitivity range dependant on the device model
- *                                TODO: minimum time filter : https://community.hubitat.com/t/tuya-vibration-sensor-better-laundry-monitor/113296/9?u=kkossev 
- *                                TODO: add capability.tamperAlert
- *                                TODO: handle tamper: (zoneStatus & 1<<2); handle battery_low: (zoneStatus & 1<<3); TODO: check const sens = {'high': 0, 'medium': 2, 'low': 6}[value];
+ * ver 1.4.6 2026-07-31 kkossev - TS0210 IAS sensitivity 0..50; repeated vibration reset timer; tamper and battery-low reporting
+ * ver 1.4.7 2026-08-02 kkossev - (development version) - minor bug fixes; timer-driven vibration reset is now a digital event; exposed contact state for the kzm5w4iz TS0601 door/vibration sensor.
+ *
+ * Full version history: see CHANGELOG.md: https://github.com/kkossev/Hubitat/blob/development/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/CHANGELOG.md
+ *
+ * Open work is tracked in TODO.md.
  */
 
-static String version() { "1.4.3" }
-static String timeStamp() { "2026/03/22 9:07 PM" }
+static String version() { "1.4.7" }
+static String timeStamp() { "2026/08/02 06:35 AM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import com.hubitat.zigbee.DataType
 import groovy.transform.CompileStatic
+
+@Field static final Boolean _DEBUG = false
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = false
+@Field static final String UNKNOWN = 'unknown'
 
 
 metadata {
@@ -57,7 +42,7 @@ metadata {
         capability "Sensor"
         capability "AccelerationSensor"
         capability "ShockSensor"              // shock - ENUM ["clear", "detected"] attribute
-        //capability "TamperAlert"            // tamper - ENUM ["clear", "detected"]
+        capability "TamperAlert"              // tamper - ENUM ["clear", "detected"]
 		capability "Battery"
 		capability "Configuration"
         capability "Refresh"
@@ -73,6 +58,7 @@ metadata {
         attribute 'sensitivity', 'number'
         attribute 'tuyaSensitivity', 'enum', ['low', 'middle', 'high']
         attribute 'lastBattery', 'date'         // last battery event time - added in 1.2.1 05/21/2024
+        attribute 'contact', 'enum', ['open', 'closed']
         attribute 'tilt', 'enum', ["clear", "detected"]
         
 		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_3zv6oleo"              // KK
@@ -85,9 +71,12 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TZ3000_lzdjjfss"         // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TYZB01_j9xxahcl"         // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TZ3000_fkxmyics"         // https://community.hubitat.com/t/vibration-sensor-sensitivity-adjustment/93930/26?u=kkossev
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,FFF1",           outClusters:"0019", model:"3RVS01031Z", manufacturer:"Third Reality, Inc"        // Third Reality vibration sensor   
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,FFF1",           outClusters:"0019", model:"3RVS01031Z", manufacturer:"Third Reality, Inc"        // Third Reality vibration sensor
+        // 3RDTS01056Z garage door tilt sensor pairs to the Tuya Contact Sensor driver; assign this driver manually for contact + acceleration events
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0500,0B05,FC02", outClusters:"0003,0019", model:"multi", manufacturer:"Samjin"          // Samsung Multisensor
 		fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_kzm5w4iz"         // https://github.com/flatsiedatsie/zigbee-herdsman-converters/blob/ef4d559ccba0a39cd6957d2270352e29fb1d0296/converters/fromZigbee.js#L7449-L7467
+		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,EF00,0001",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_jfw0a4aa"         // HOBEIAN ZG-102ZM
+		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,EF00,0001",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_wzk0x7fq"         // HOBEIAN ZG-102ZM variant
 		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_iba1ckek"         // https://nl.aliexpress.com/item/1005007520278259.html Tilt Xyz Axis Sensor (ZG-103Z)
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_hggxgsjj"         // ZG-103Z variant
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001",           outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_yjryxpot"         // ZG-103Z variant
@@ -102,14 +91,17 @@ metadata {
 	preferences {
 		input name: "txtEnable", type: "bool", title: "<b>Enable info message logging</b>", description: ""
 		input name: "logEnable", type: "bool", title: "<b>Enable debug message logging</b>", description: ""
-        if (device && supportsIasSensitivity()) {
-            input name: "sensitivity", type: "enum", title: "<b>Vibration Sensitivity</b>", description: "Select Vibration Sensitivity", defaultValue: "3", options:["0":"0 - Maximum", "1":"1", "2":"2", "3":"3 - Medium", "4":"4", "5":"5", "6":"6 - Minimum"]
+        if (device && supportsNumericSensitivity()) {
+            input name: 'sensitivity', type: 'number', title: '<b>Vibration Sensitivity</b>', description: 'Vibration detection sensitivity (ZG-102ZM)', range: '1..50'
+        }
+        else if (device && supportsIasSensitivity()) {
+            input name: "sensitivity", type: "number", title: "<b>Vibration Sensitivity</b>", description: "Vibration detection sensitivity: 0 = maximum ... 50 = minimum.<br>Wake up the device (press its button) right before clicking Save Preferences!", range: "0..50"
         }
         if (device && supportsTuyaSensitivity()) {
             input name: 'tuyaSensitivity', type: 'enum', title: '<b>Tuya Sensitivity</b>', description: 'Vibration detection sensitivity (ZG-103Z family)', defaultValue: TuyaSensitivityOpts.defaultValue, options: TuyaSensitivityOpts.options
         }
 		input "vibrationReset", "number", title: "After vibration is detected, wait $vibrationReset second(s) until <b>resetting to inactive state</b>. Default = $VIBRATION_RESET seconds.", description: "", range: "1..7200", defaultValue: VIBRATION_RESET
-        if (device && (!isTuya() || isTuyaTiltXyzAxisSensor )) {
+        if (device && (!isTuya() || isTuyaTiltXyzAxisSensor()) && !isThirdRealityGarageDoorTiltSensor()) {
             input name: 'threeAxis', type: 'enum', title: '<b>Three Axis</b>', description: 'Enable or disable the Three Axis reporting<br>(ThirdReality and Samsung)', defaultValue: ThreeAxisOpts.defaultValue, options: ThreeAxisOpts.options
         }
         if (device) {
@@ -118,15 +110,34 @@ metadata {
                 input (name: "shockSensor", type: "bool",   title: "<b>Shock Sensor</b>", description: "Simulate a Shock Sensor", defaultValue: true)
                 input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
                 input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
-                input "batteryReportingHours", "number", title: "Report battery every $batteryReportingHours hours. Default = 12h (Minimum 2 h)", description: "", range: "2..12", defaultValue: 12
+                if (!isThirdRealityGarageDoorTiltSensor()) {
+                    input "batteryReportingHours", "number", title: "Report battery every $batteryReportingHours hours. Default = 12h (Minimum 2 h)", description: "", range: "2..12", defaultValue: 12
+                }
+                else {
+                    input name: 'garageDoorOpenDelay', type: 'number', title: '<b>Garage Door Open Delay</b>, seconds', description: 'Delay before the open state is reported, 0..3600 seconds (write-only attribute 0xFF01:0x0000).<br>Requires firmware 1.00.36 or newer - older firmware rejects the write with status 0x86', range: '0..3600'
+                    input name: 'calibrate', type: 'bool', title: '<b>Calibrate</b>', description: 'Trigger the z-axis calibration when Save Preferences is clicked.<br>Run it with the garage door fully closed; this switch resets automatically. Requires firmware 1.00.36 or newer', defaultValue: false
+                }
             }
         }
 	}
 }
 
-boolean isTuyaVibrationDoorSensor() {
-    return device.getDataValue("manufacturer") == "_TZE200_kzm5w4iz"    // Tuya TS0601 Vibration and Door Sensor
+boolean isThirdRealityGarageDoorTiltSensor() {
+    return device?.getDataValue('model') == '3RDTS01056Z' && device?.getDataValue('manufacturer') == 'Third Reality, Inc'
 }
+
+boolean isTuyaVibrationDoorSensor() {
+    return device?.getDataValue("manufacturer") == "_TZE200_kzm5w4iz"    // Tuya TS0601 Vibration and Door Sensor
+}
+
+boolean isTuyaZG102ZM() {
+    return device?.getDataValue('model') == 'TS0601' && TuyaZG102ZMManufacturers.contains(device?.getDataValue('manufacturer'))
+}
+
+@Field static final Set<String> TuyaZG102ZMManufacturers = [
+    '_TZE200_jfw0a4aa',
+    '_TZE200_wzk0x7fq',
+].toSet()
 
 boolean isTuyaVibrationSensorTZ32101000000() {
     return device?.getDataValue('manufacturer') == '_TZ32101000000_5oy7cysk'
@@ -146,21 +157,27 @@ boolean isTuyaTiltXyzAxisSensor() {
 ].toSet()
 
 boolean supportsTuyaSensitivity() {
-    return isTuya() && isTuyaTiltXyzAxisSensor()
+    return isTuya() && !supportsNumericSensitivity() && isTuyaTiltXyzAxisSensor()
 }
 
 boolean supportsIasSensitivity() {
-    return isTuya() && !supportsTuyaSensitivity()
+    return isTuya() && !isTuyaVibrationDoorSensor() && !supportsTuyaSensitivity() && !supportsNumericSensitivity()
+}
+
+boolean supportsNumericSensitivity() {
+    return isTuya() && isTuyaZG102ZM()
 }
 
 @Field static final Integer COMMAND_TIMEOUT = 10             // timeout time in seconds
 @Field static final Integer VIBRATION_RESET = 3            // timeout time in seconds
-@Field static final Integer MAX_PING_MILISECONDS = 10000     // rtt more than 10 seconds will be ignored
+@Field static final Integer MAX_PING_MILLISECONDS = 15000     // rtt more than 10 seconds will be ignored
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3     // missing 3 checks will set the device healthStatus to offline
+@Field static final BigDecimal MIN_BATTERY_VOLTS = 2.5
+@Field static final BigDecimal MAX_BATTERY_VOLTS = 3.0
 @Field static final int PING_ATTR_ID = 0x01
 
 @Field static final Map HealthcheckMethodOpts = [            // used by healthCheckMethod
-    defaultValue: 1, options: [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
+    defaultValue: 1, options: [0: 'Disabled', 1: 'Activity check']
 ]
 @Field static final Map HealthcheckIntervalOpts = [          // used by healthCheckInterval
     defaultValue: 240, options: [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
@@ -261,7 +278,8 @@ def parse(String description) {
         event = zigbee.getEvent(description)
     }
     catch ( e ) {
-        if (logEnable) log.warn "exception caught while decoding event description:  ${description}"
+        // zigbee.getEvent() throws on multi-attribute read responses; these are decoded from the description map instead
+        logDebug "zigbee.getEvent could not decode the event description: ${description}"
         // return null // ignore and continue, changed 05/19/2024
     }
     //
@@ -321,16 +339,25 @@ def parse(String description) {
             def zs = new ZoneStatus(Integer.parseInt(descMap.value, 16))
             map = parseIasMessage(zs)        
         } 
+        else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0000) {
+            // IAS ZoneState: 00 = not enrolled, 01 = enrolled; the read may race the enroll response, so 00 is not necessarily a problem
+            logDebug "IAS zone state: ${descMap.value == '01' ? 'enrolled' : 'not enrolled'} (${descMap.value})"
+        }
         else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0011) {
             logInfo("IAS Zone ID: ${descMap.value}")
         } 
+        else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0012) {
+            if (descMap.value != null) {
+                logInfo "number of zone sensitivity levels supported: ${zigbee.convertHexToInt(descMap.value)}"
+            }
+        }
         else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0013) {
             String descText = "IAS Zone Sensitivity: ${descMap.value}"
-            int iSens = descMap.value?.toInteger()
+            int iSens = zigbee.convertHexToInt(descMap.value)
             logInfo "vibration sensitivity : ${iSens}"
-            sendEvent(name: "sensitivity", value: iSens, descText: descText)
-            if (iSens>=0 && iSens<7)  {
-                device.updateSetting("sensitivity",[value:iSens.toString(), type:"enum"])
+            sendEvent(name: "sensitivity", value: iSens, descriptionText: descText)
+            if (iSens>=0 && iSens<=50)  {
+                device.updateSetting("sensitivity", [value:iSens, type:"number"])
             }
             else {
                 logDebug "unsupported sensitivity value ${iSens} !"
@@ -341,6 +368,12 @@ def parse(String description) {
         } 
         else if (descMap.clusterInt == zigbee.BASIC_CLUSTER && descMap.attrInt == PING_ATTR_ID) {
             handlePingResponse(descMap)
+        }
+        else if (descMap.clusterInt == zigbee.BASIC_CLUSTER && descMap.command == '01') {
+            parseBasicClusterReadResponse(descMap)
+        }
+        else if (descMap.clusterInt == 0xFF01) {
+            parseThirdRealityFF01(descMap)
         }
         else if (descMap.clusterInt == 0xFFF1 && descMap.command in ['01', '0A']) {
             handleThreeAxisTR(descMap)
@@ -353,21 +386,39 @@ def parse(String description) {
             //log.warn "dataLen=${dataLen}"
             //def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
             if (dataLen <= 5) {
-                logWarn "unprocessed short Tuya command response: dp_id=${descMap?.data[3]} dp=${descMap?.data[2]} fncmd_len=${fncmd_len} data=${descMap?.data})"
+                logWarn "unprocessed short Tuya command response: dataLen=${dataLen} data=${descMap?.data}"
                 return
             }
             boolean isSpammyDeviceProfileDefined = this.respondsTo('isSpammyDeviceProfile') // check if the method exists 05/21/2024
             for (int i = 0; i < (dataLen - 4); ) {
+                if (i + 5 >= dataLen) {
+                    logWarn "malformed Tuya DP record: index=${i} dataLen=${dataLen} data=${descMap?.data}"
+                    break
+                }
                 int dp = zigbee.convertHexToInt(descMap?.data[2 + i])          // "dp" field describes the action/message of a command frame
-                int dp_id = zigbee.convertHexToInt(descMap?.data[3 + i])       // "dp_identifier" is device dependant
+                int dp_id = zigbee.convertHexToInt(descMap?.data[3 + i])       // "dp_identifier" is device-dependent
                 int fncmd_len = zigbee.convertHexToInt(descMap?.data[5 + i])
+                if (i + 6 + fncmd_len > dataLen) {
+                    logWarn "malformed Tuya DP record: index=${i} fncmd_len=${fncmd_len} dataLen=${dataLen} data=${descMap?.data}"
+                    break
+                }
                 int fncmd = getTuyaAttributeValue(descMap?.data, i)          //
                 processTuyaDP(descMap, dp, dp_id, fncmd)
                 i = i + fncmd_len + 4
             }
-        } // if (descMap?.command == "01" || descMap?.command == "02")        
+        } // if (descMap?.command == "01" || descMap?.command == "02")
+        else if (descMap.command == '04' && descMap.data?.size() >= 1) {
+            // ZCL Write Attributes Response - a simple ack; warn only on a non-zero status
+            if (descMap.data[0] == '00') { logDebug "cluster 0x${descMap.clusterId} Write Attributes Response: SUCCESS" }
+            else { logWarn "cluster 0x${descMap.clusterId} Write Attributes Response status 0x${descMap.data[0]} (data=${descMap.data})" }
+        }
+        else if (descMap.command == '0B' && descMap.data?.size() >= 2) {
+            // ZCL Default Response - an ack to a cluster command; data = [command, status]
+            if (descMap.data[1] == '00') { logDebug "cluster 0x${descMap.clusterId} Default Response to command 0x${descMap.data[0]}: SUCCESS" }
+            else { logWarn "cluster 0x${descMap.clusterId} Default Response to command 0x${descMap.data[0]} status 0x${descMap.data[1]}" }
+        }
         else {
-            if (logEnable) log.warn ("Description map not parsed: $descMap")            
+            if (logEnable) log.warn ("Description map not parsed: $descMap")
         }
     }
     else {
@@ -406,8 +457,11 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
             }
             else if (isTuyaVibrationDoorSensor()) {
                 logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
-                logInfo "TuyaVibrationDoorSensor: contact is ${fncmd == 1 ? 'open' : 'closed'}"
-            // TODO - create a child device?
+                sendContactEvent(fncmd == 1)
+            }
+            else if (isTuyaZG102ZM()) {
+                logDebug "Tuya vibration cmd (ZG-102ZM): dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                sendVibrationEvent(fncmd != 0)
             }
             else {
                 // isTuyaTiltXyzAxisSensor() - Vibration State 
@@ -418,7 +472,7 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
         case 0x02:  // ?
             logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             break
-        case 0x03:  // thitBatteryPercentage  isTuyaVibrationDoorSensor() TS0601 _TZE200_kzm5w4iz
+        case 0x03:  // batteryPercentage  isTuyaVibrationDoorSensor() TS0601 _TZE200_kzm5w4iz
             logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             sendBatteryPercentageEvent(fncmd)
             sendLastBatteryEvent()
@@ -428,6 +482,28 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
                 logDebug "Tuya battery cmd (TZ32101000000): dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
                 sendBatteryPercentageEvent(fncmd)
                 sendLastBatteryEvent()
+            }
+            else if (isTuyaZG102ZM()) {
+                logDebug "Tuya battery cmd (ZG-102ZM): dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                sendBatteryPercentageEvent(fncmd)
+                sendLastBatteryEvent()
+            }
+            else {
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            break
+        case 0x06:  // (6) ZG-102ZM numeric sensitivity
+            if (isTuyaZG102ZM()) {
+                logDebug "Tuya sensitivity cmd (ZG-102ZM): dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                if (fncmd >= 1 && fncmd <= 50) {
+                    sendEvent(name: 'sensitivity', value: fncmd, descriptionText: "Vibration sensitivity is ${fncmd}")
+                    if (settings?.sensitivity != fncmd) {
+                        device.updateSetting('sensitivity', [value: fncmd, type: 'number'])
+                    }
+                }
+                else {
+                    logWarn "unsupported ZG-102ZM sensitivity value ${fncmd}"
+                }
             }
             else {
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -442,8 +518,13 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
             sendVibrationEvent(fncmd != 0)
             break
         case 0x65:  // (101) X-axis acceleration
-            logDebug "Tuya X-axis acceleration cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
-            state.lastAcceleration['x'] = fncmd
+            if (isTuyaZG102ZM()) {
+                logDebug "Tuya contact cmd (ZG-102ZM) ignored: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+            }
+            else {
+                logDebug "Tuya X-axis acceleration cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
+                state.lastAcceleration['x'] = fncmd
+            }
             break
         case 0x66:  // (102) Y-axis acceleration
             logDebug "Tuya 102) Y-axis acceleration cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -594,6 +675,14 @@ def sendEnrollResponse() {
 // helpers -------------------
 
 Map parseIasMessage(ZoneStatus zs) {
+    if (isThirdRealityGarageDoorTiltSensor()) {
+        sendGarageDoorContactEvent(zs.alarm1Set)
+        sendBatteryStatusEvent(zs.batterySet)
+    }
+    else {
+        sendTamperEvent(zs.tamperSet)
+        sendBatteryStatusEvent(zs.batterySet)
+    }
     String currentAccel = device.currentState('acceleration')?.value
     String zsStr = ''
     zs.properties.sort().each { key, value ->  zsStr += "$key = $value, "}
@@ -605,6 +694,8 @@ Map parseIasMessage(ZoneStatus zs) {
             return handleVibration(true)
         }
         else {
+            // Sensors send repeated active notifications but no clear; restart the countdown each time.
+            runIn(vibrationReset ?: 3, resetToVibrationInactive, [overwrite: true])
             logDebug "Vibration already active"
             return [:]
         }
@@ -625,16 +716,112 @@ Map parseIasMessage(ZoneStatus zs) {
     }
 }
 
+void sendGarageDoorContactEvent(final boolean isOpen) {
+    final String contactValue = isOpen ? 'open' : 'closed'
+    if (device.currentValue('contact') == contactValue) {
+        logDebug 'Contact is already ' + contactValue
+        return
+    }
+    final String descriptionText = 'Garage door contact is ' + contactValue
+    sendEvent(name: 'contact', value: contactValue, type: 'physical', descriptionText: descriptionText)
+    logInfo descriptionText
+}
+
+void sendContactEvent(final boolean isOpen) {
+    final String contactValue = isOpen ? 'open' : 'closed'
+    if (device.currentValue('contact') == contactValue) {
+        logDebug 'Contact is already ' + contactValue
+        return
+    }
+    final String descriptionText = 'Contact is ' + contactValue
+    sendEvent(name: 'contact', value: contactValue, type: 'physical', descriptionText: descriptionText)
+    logInfo descriptionText
+}
+
+void sendBatteryStatusEvent(final boolean isBatteryLow) {
+    final String batteryStatusValue = isBatteryLow ? 'replace' : 'normal'
+    if (device.currentValue('batteryStatus') == batteryStatusValue) {
+        logDebug 'batteryStatus is already ' + batteryStatusValue
+        return
+    }
+    final String descriptionText = 'Battery status is ' + batteryStatusValue
+    sendEvent(name: 'batteryStatus', value: batteryStatusValue, type: 'physical', descriptionText: descriptionText)
+    logInfo descriptionText
+}
+
+void sendTamperEvent(final boolean isTampered) {
+    final String tamperValue = isTampered ? 'detected' : 'clear'
+    if (device.currentValue('tamper') == tamperValue) {
+        //logDebug 'Tamper is already ' + tamperValue
+        return
+    }
+    final String descriptionText = 'Tamper alert is ' + tamperValue
+    sendEvent(name: 'tamper', value: tamperValue, type: 'physical', descriptionText: descriptionText)
+    logInfo descriptionText
+}
+
+// Basic cluster Read Attributes Response, including multi-attribute responses that zigbee.getEvent() can not decode
+void parseBasicClusterReadResponse(final Map descMap) {
+    List<Map> attrs = [[attrInt: descMap.attrInt, value: descMap.value]]
+    descMap.additionalAttrs?.each { attrs += it as Map }
+    attrs.each { Map attr ->
+        switch (attr.attrInt as Integer) {
+            case 0x0000 : logDebug "ZCL version: ${attr.value}"; break
+            case 0x0001 : logDebug "application version: ${attr.value}"; break
+            case 0x0004 : logDebug "manufacturer: ${attr.value}"; break
+            case 0x0005 : logDebug "model: ${attr.value}"; break
+            case 0x0007 : logDebug "power source: ${attr.value}"; break
+            case 0xFFFE : break      // attribute reporting status - or an unsupported attribute status record
+            default : logDebug "basic cluster attribute ${attr.attrInt != null ? sprintf('0x%04X', attr.attrInt as Integer) : '(unknown)'} value: ${attr.value}"; break
+        }
+    }
+}
+
+// Third Reality 3RDTS01056Z private cluster; attributes 0x0000 (open delay) and 0x0003 (calibration) are write-only
+void parseThirdRealityFF01(final Map descMap) {
+    switch (descMap.command) {
+        case '04':  // Write Attributes Response
+            final String status = descMap.data?.size() > 0 ? descMap.data[0] : null
+            if (status == '00') {
+                logInfo '0xFF01 attribute write was confirmed by the device'
+            }
+            else {
+                logWarn "0xFF01 attribute write failed, status 0x${status} (data=${descMap.data})"
+            }
+            break
+        case '01':  // Read Attributes Response - expected status 0x86 (the attributes are write-only)
+            logDebug "0xFF01 read response (write-only attributes): data=${descMap.data}"
+            break
+        case '0B':  // Default Response
+            logDebug "0xFF01 default response: data=${descMap.data}"
+            break
+        default:
+            logDebug "unprocessed 0xFF01 message: ${descMap}"
+            break
+    }
+}
+
+void calibrate(BigDecimal value = null) {
+    if (!isThirdRealityGarageDoorTiltSensor()) {
+        logWarn 'calibrate is supported only on the Third Reality 3RDTS01056Z garage door tilt sensor'
+        return
+    }
+    int iValue = (value ?: 1) as int
+    if (iValue < 0 || iValue > 0xFF) {
+        logWarn "calibrate: value ${iValue} is out of range 0..255"
+        return
+    }
+    logInfo "calibrate: writing ${iValue} to 0xFF01:0x0003 (z-axis calibration)"
+    sendZigbeeCommands(zigbee.writeAttribute(0xFF01, 0x0003, DataType.UINT8, iValue, [mfgCode: 0x1407], delay=200))
+}
+
 // called when processing Tuya TS0601 model EF00 cluster commands
 void sendVibrationEvent(boolean vibrationActive) {
-    log.trace "Vibration : $vibrationActive"
+    logDebug "Vibration : $vibrationActive"
     Map result = handleVibration(vibrationActive)
     if (result != [:]) {
         sendEvent(result)
         logInfo (result.descriptionText)
-        if (settings.shockSensor == true) {
-            sendEvent(getShockResult(vibrationActive))
-        }
     }
     else {
         logDebug "Vibration event not sent"
@@ -649,13 +836,17 @@ Map handleVibration(boolean vibrationActive) {
         if (device.currentState('acceleration')?.value != "active") {
             state.vibrationStarted = now()
         }
-        sendEvent(getShockResult(vibrationActive))
+        if (settings.shockSensor == true) {
+            sendEvent(getShockResult(vibrationActive))
+        }
     	return getVibrationResult(vibrationActive)
     }
     else { // vibration inactive event
         unschedule('resetToVibrationInactive')
         if (device.currentState('acceleration')?.value != "inactive") {
-            sendEvent(getShockResult(vibrationActive))
+            if (settings.shockSensor == true) {
+                sendEvent(getShockResult(vibrationActive))
+            }
         	return getVibrationResult(vibrationActive)
         }
         else {
@@ -695,7 +886,7 @@ void setAccelarationInactive() {
     resetToVibrationInactive(true)
 }
 
-void resetToVibrationInactive(boolean isDigital = false) {
+void resetToVibrationInactive(boolean isDigital = true) {
 	if (device.currentState('acceleration')?.value == "active") {
         String type = isDigital ? "digital" : "physical"
 		String descText = "Vibration reset to inactive after ${getSecondsInactive()}s [$type]"
@@ -726,10 +917,10 @@ int getSecondsInactive() {
 private parseBatteryVoltage(valueHex) {
 	//logDebug("Battery parse string = ${valueHex}")
 	def rawVolts = Integer.parseInt(valueHex, 16) / 10
-	def minVolts = voltsmin ? voltsmin : 2.5
-	def maxVolts = voltsmax ? voltsmax : 3.0
+	def minVolts = MIN_BATTERY_VOLTS
+	def maxVolts = MAX_BATTERY_VOLTS
 	def pct = (rawVolts - minVolts) / (maxVolts - minVolts)
-	def roundedPct = Math.min(100, Math.round(pct * 100))
+	def roundedPct = Math.max(0, Math.min(100, Math.round(pct * 100)))
 	def descText = "Battery level is ${roundedPct}% (${rawVolts} Volts)"
 	//logInfo(descText)
     // sendEvent(name: "batteryLevelLastReceived", value: new Date())    
@@ -754,6 +945,10 @@ import groovy.json.JsonOutput
 
 /* Some parts borrowed from veeceeoh in this method */
 void convertXYZtoPsiPhiTheta(int x, int y, int z) {
+    if (x == 0 && y == 0 && z == 0) {
+        logDebug 'Ignoring invalid all-zero three-axis vector'
+        return
+    }
     BigDecimal psi = new BigDecimal(Math.atan(x.div(Math.sqrt(z * z + y * y))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
     BigDecimal phi = new BigDecimal(Math.atan(y.div(Math.sqrt(x * x + z * z))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
     BigDecimal theta = new BigDecimal(Math.atan(z.div(Math.sqrt(x * x + y * y))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
@@ -818,6 +1013,7 @@ def installed() {
 	logInfo "Installing..."
     sendEvent(name: 'healthStatus', value: 'unknown')
     initializeVars(fullInit = true)
+    configureDeviceHealthCheck()
     updateTuyaVersion()
     refresh()
 }
@@ -837,14 +1033,25 @@ List<String> queryAllTuyaDP() {
 void refresh() {
 	logInfo("Refreshing...")
     List<String> cmds = []
+    if (isTuyaZG102ZM()) {
+        cmds += queryAllTuyaDP()
+        sendZigbeeCommands(cmds)
+        return
+    }
     cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, [:], delay=200) // battery voltage
+    if (isThirdRealityGarageDoorTiltSensor()) {
+        cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0021, [:], delay=200) // battery percentage
+        cmds += zigbee.readAttribute(0x0500, 0x0002, [:], delay=200) // IAS zone status / contact state
+        // note: the private cluster 0xFF01 attributes 0x0000 (open delay) and 0x0003 (calibration) are write-only - reads return status 0x86
+    }
     if (supportsIasSensitivity()) {
+        cmds += zigbee.readAttribute(0x0500, 0x0012, [:], delay=200)    // IAS sensitivity levels supported
         cmds += zigbee.readAttribute(0x0500, 0x0013, [:], delay=200)    // IAS sensitivity
     }
     if (device?.getDataValue('manufacturer') == 'Samjin') {
         cmds += zigbee.readAttribute(0xFC02, [0x0010, 0x0012], [:], delay=200) // vibration and three axis
     }
-    else if (device?.getDataValue('manufacturer') == 'Third Reality, Inc') {
+    else if (device?.getDataValue('manufacturer') == 'Third Reality, Inc' && !isThirdRealityGarageDoorTiltSensor()) {
         cmds += zigbee.readAttribute(0xFFF1, [0x0000, 0x0001, 0x0002, 0x0003], [:], delay=200) // vibration and three axis
     }
     if (isTuya()) {
@@ -859,27 +1066,17 @@ void updated() {
     checkDriverVersion(state)
     logInfo("Updating settings...") // added 2026-02-01
     unschedule()        // added 05/21/2024
+    if (device.currentState('acceleration')?.value == 'active') {
+        runIn(vibrationReset ?: 3, resetToVibrationInactive, [overwrite: true])
+    }
     if (logEnable == true) {
-        runIn(86400, 'logsOff', [overwrite: true, misfire: 'ignore'])    // turn off debug logging after 30 minutes
+        runIn(86400, 'logsOff', [overwrite: true, misfire: 'ignore'])    // turn off debug logging after 24 hours
         if (settings?.txtEnable) { log.info "${device.displayName} Debug logging will be turned off after 24 hours" }
     }
     else {
         unschedule('logsOff')
     }
-    final int healthMethod = (settings.healthCheckMethod as Integer) ?: 0
-    if (healthMethod == 1 || healthMethod == 2) {                            //    [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
-        // schedule the periodic timer
-        final int interval = (settings.healthCheckInterval as Integer) ?: 0
-        if (interval > 0) {
-            //log.trace "healthMethod=${healthMethod} interval=${interval}"
-            log.info "scheduling health check every ${interval} minutes by ${HealthcheckMethodOpts.options[healthCheckMethod as int]} method"
-            scheduleDeviceHealthCheck(interval, healthMethod)
-        }
-    }
-    else {
-        unScheduleDeviceHealthCheck()        // unschedule the periodic job, depending on the healthMethod
-        logInfo 'Health Check is disabled!'
-    }
+    configureDeviceHealthCheck()
     if (settings.shockSensor == true) {
         logInfo "Shock Sensor is enabled"
         if (device.currentState('shock') == null) {
@@ -902,6 +1099,10 @@ void updated() {
     else if (settings.threeAxis as int != 0 && currentTreeAxis == null) {
         logInfo "Three Axis reporting is now enabled with option ${settings.threeAxis}"
     }
+    if (settings?.calibrate == true) {
+        device.updateSetting('calibrate', [value: 'false', type: 'bool'])   // one-shot: always reset back to false
+        calibrate()
+    }
     configureReporting()
 }
 
@@ -920,6 +1121,36 @@ private List<String> tuyaSetEnumDp(final int dp, final int value, final Integer 
     // Tuya EF00 payload format (common): status(00) + transId + dpId + dpType(enum=04) + lenHi(00) + lenLo(01) + value
     String payload = "00" + zigbee.convertToHexString(tid, 2) + zigbee.convertToHexString(dp, 2) + "04" + "00" + "01" + zigbee.convertToHexString(value & 0xFF, 2)
     return zigbee.command(0xEF00, 0x00, payload)
+}
+
+private List<String> tuyaSetValueDp(final int dp, final int value, final Integer transId = null) {
+    Integer tid = transId
+    if (tid == null) {
+        int prev = (state.tuyaTransId ?: 0) as int
+        tid = (prev + 1) & 0xFF
+        state.tuyaTransId = tid
+    }
+    // Tuya EF00 payload format (common): status(00) + transId + dpId + dpType(value=02) + lenHi(00) + lenLo(04) + 4-byte big-endian value
+    String payload = "00" + zigbee.convertToHexString(tid, 2) + zigbee.convertToHexString(dp, 2) + "02" + "00" + "04" + zigbee.convertToHexString(value, 8)
+    return zigbee.command(0xEF00, 0x00, payload)
+}
+
+private List<String> setTuyaNumericSensitivity(final Object sens) {
+    if (!supportsNumericSensitivity()) { return [] }
+    Integer value
+    try {
+        value = sens as Integer
+    }
+    catch (e) {
+        logWarn "setTuyaNumericSensitivity: unsupported value ${sens}"
+        return []
+    }
+    if (value < 1 || value > 50) {
+        logWarn "setTuyaNumericSensitivity: value ${value} is outside the supported range 1..50"
+        return []
+    }
+    logDebug "Sending Tuya sensitivity set command dp=6 value=${value}"
+    return tuyaSetValueDp(0x06, value)
 }
 
 private List<String> setTuyaSensitivity(final String sens) {
@@ -980,8 +1211,8 @@ void handlePingResponse(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
     state.lastRx['checkInTime'] = now
     if (isPing) {
-        int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: '0').toInteger()
-        if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
+        Long timeRunning = now - ((state.lastTx['pingTime'] ?: 0L) as Long)
+        if (timeRunning > 0 && timeRunning < MAX_PING_MILLISECONDS) {
             state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1
             if (timeRunning < (state.stats['pingsMin'] ?: 999)) { state.stats['pingsMin'] = timeRunning }
             if (timeRunning > (state.stats['pingsMax'] ?: 0))   { state.stats['pingsMax'] = timeRunning }
@@ -1028,6 +1259,7 @@ void unscheduleCommandTimeoutCheck(final Map state) {   // can not be static :(
 }
 
 void deviceCommandTimeout() {
+    state.states['isPing'] = false
     logWarn 'no response received (sleepy device or offline?)'
     sendRttEvent('timeout')
     state.stats['pingsFail'] = (state.stats['pingsFail'] ?: 0) + 1
@@ -1036,22 +1268,21 @@ void deviceCommandTimeout() {
 void sendRttEvent( String value=null) {
     Long now = new Date().getTime()
     if (state.lastTx == null ) { state.lastTx = [:] }
-    int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: now).toInteger()
+    Long timeRunning = now - ((state.lastTx['pingTime'] ?: now) as Long)
     String descriptionText = "Round-trip time is ${timeRunning} ms (min=${state.stats['pingsMin']} max=${state.stats['pingsMax']} average=${state.stats['pingsAvg']})"
     if (value == null) {
         logInfo "${descriptionText}"
-        sendEvent(name: 'rtt', value: timeRunning, descriptionText: descriptionText, unit: 'ms', isDigital: true)
+        sendEvent(name: 'rtt', value: timeRunning, descriptionText: descriptionText, unit: 'ms', type: 'digital')
     }
     else {
         descriptionText = "Round-trip time : ${value}"
         logInfo "${descriptionText}"
-        sendEvent(name: 'rtt', value: value, descriptionText: descriptionText, isDigital: true)
+        sendEvent(name: 'rtt', value: value, descriptionText: descriptionText, type: 'digital')
     }
 }
 
 String getCron(int timeInSeconds) {
     //schedule("${rnd.nextInt(59)} ${rnd.nextInt(9)}/${intervalMins} * ? * * *", 'ping')
-    // TODO: runEvery1Minute runEvery5Minutes runEvery10Minutes runEvery15Minutes runEvery30Minutes runEvery1Hour runEvery3Hours
     final Random rnd = new Random()
     int minutes = (timeInSeconds / 60 ) as int
     int  hours = (minutes / 60 ) as int
@@ -1071,12 +1302,35 @@ String getCron(int timeInSeconds) {
     return cron
 }
 
+private void configureDeviceHealthCheck() {
+    Integer configuredHealthMethod = settings?.healthCheckMethod as Integer
+    int healthMethod = configuredHealthMethod == null ? HealthcheckMethodOpts.defaultValue as int : configuredHealthMethod
+    if (healthMethod == 2) {
+        logInfo 'Migrating legacy Periodic polling setting to Activity check'
+        device.updateSetting('healthCheckMethod', [value: '1', type: 'enum'])
+        healthMethod = 1
+    }
+    if (healthMethod == 1) {                                                //    [0: 'Disabled', 1: 'Activity check']
+        Integer configuredInterval = settings?.healthCheckInterval as Integer
+        int interval = configuredInterval == null ? HealthcheckIntervalOpts.defaultValue as int : configuredInterval
+        if (interval > 0) {
+            //log.trace "healthMethod=${healthMethod} interval=${interval}"
+            log.info "scheduling health check every ${interval} minutes by ${HealthcheckMethodOpts.options[healthMethod as int]} method"
+            scheduleDeviceHealthCheck(interval, healthMethod)
+        }
+    }
+    else {
+        unScheduleDeviceHealthCheck()        // unschedule the periodic job, depending on the healthMethod
+        logInfo 'Health Check is disabled!'
+    }
+}
+
 /**
  * Schedule a device health check
  * @param intervalMins interval in minutes
  */
 private void scheduleDeviceHealthCheck(final int intervalMins, final int healthMethod) {
-    if (healthMethod == 1 || healthMethod == 2)  {
+    if (healthMethod == 1)  {
         String cron = getCron( intervalMins * 60 )
         schedule(cron, 'deviceHealthCheck')
         logDebug "deviceHealthCheck is scheduled every ${intervalMins} minutes"
@@ -1122,7 +1376,7 @@ void deviceHealthCheck() {
 
 void sendHealthStatusEvent(final String value) {
     String descriptionText = "healthStatus changed to ${value}"
-    sendEvent(name: 'healthStatus', value: value, descriptionText: descriptionText, isStateChange: true, isDigital: true)
+    sendEvent(name: 'healthStatus', value: value, descriptionText: descriptionText, isStateChange: true, type: 'digital')
     if (value == 'online') {
         logInfo "${descriptionText}"
     }
@@ -1142,6 +1396,7 @@ String getModel() {
     try {
         /* groovylint-disable-next-line UnnecessaryGetter, UnusedVariable */
         String model = getHubVersion() // requires >=2.2.8.141
+        return model
     } catch (ignore) {
         try {
             httpGet("http://${location.hub.localIP}:8080/api/hubitat.xml") { res ->
@@ -1173,8 +1428,8 @@ void resetStats() {
     logDebug 'resetStats...'
     state.stats = [:] ; state.states = [:] ; state.lastRx = [:] ; state.lastTx = [:] ; state.health = [:]
     state.stats['rxCtr'] = 0 ; state.stats['txCtr'] = 0
-    state.states['isDigital'] = false ; state.states['isRefresh'] = false ; state.states['isPing'] = false
-    state.health['offlineCtr'] = 0 ; state.health['checkCtr3'] = 0
+    state.states['isPing'] = false
+    state.health['checkCtr3'] = 0
 }
 
 void initializeVars( boolean fullInit = false ) {
@@ -1221,20 +1476,41 @@ void logsOff() {
 }
 
 void configureReporting() {
-    int seconds = Math.round((settings?.batteryReportingHours ?: 12)*3600)
-    logInfo("Battery reporting frequency: ${seconds/3600}h")    
-    
     List<String> cmds = []
-    cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200) 
-    cmds += zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, DataType.UINT8, seconds-1, seconds, 0x00, [:], delay=200)
-    cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20, [:], delay=200)
+    cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)
+    if (isTuyaZG102ZM()) {
+        if (settings?.sensitivity != null) {
+            cmds += setTuyaNumericSensitivity(settings.sensitivity)
+        }
+        sendZigbeeCommands(cmds)
+        return
+    }
+    if (isThirdRealityGarageDoorTiltSensor()) {
+        logInfo 'Battery reporting configuration is not supported; reading battery attributes only'
+        cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, [:], delay=200)
+        cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0021, [:], delay=200)
+        if (settings?.garageDoorOpenDelay != null) {
+            int openDelay = settings.garageDoorOpenDelay as int
+            logInfo "Writing Garage Door Open Delay ${openDelay} to 0xFF01:0x0000 (EXPERIMENTAL)"
+            cmds += zigbee.writeAttribute(0xFF01, 0x0000, DataType.UINT16, openDelay, [mfgCode: 0x1407], delay=200)
+        }
+    }
+    else {
+        int seconds = Math.round((settings?.batteryReportingHours ?: 12)*3600)
+        logInfo("Battery reporting frequency: ${seconds/3600}h")
+        cmds += zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, DataType.UINT8, seconds-1, seconds, 0x00, [:], delay=200)
+        cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20, [:], delay=200)
+    }
     // added 03/07/2023
     cmds += zigbee.enrollResponse(200) + zigbee.readAttribute(0x0500, 0x0000, [:], delay=200)
+    if (isThirdRealityGarageDoorTiltSensor()) {
+        cmds += zigbee.readAttribute(0x0500, 0x0002, [:], delay=200) // IAS zone status / contact state
+    }
     //
     if (settings?.sensitivity != null && supportsIasSensitivity()) {
         logDebug("Configuring IAS vibration sensitivity to : ${settings?.sensitivity}")
             int iSens = settings.sensitivity?.toInteger()
-            if (iSens>=0 && iSens<7)  {
+            if (iSens>=0 && iSens<=50)  {
                 cmds += zigbee.writeAttribute(0x0500, 0x0013,  DataType.UINT8, iSens, [:], delay=200)
             }    
     }

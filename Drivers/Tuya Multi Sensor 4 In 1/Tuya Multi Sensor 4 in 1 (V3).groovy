@@ -34,18 +34,20 @@
  * ver. 3.5.4  2025-10-03 kkossev  - added model:'ZG-204ZL' (note the 'ZL' sufix!), manufacturer:'HOBEIAN' 2-in-1 sensor into TS0601_2IN1' device profile group
  * ver. 3.5.5  2025-10-20 kkossev  - added IMOU Motion Sensor ZP1 model:'ZP2-EN', manufacturer:'MultIR'
  * ver. 3.5.6  2026-06-04 kkossev  - added TS0601 _TZE284_gnpflcoq 4-in-1 mmWave Radar Sensor profile 'TS0601_TZE284_4IN1'
+ * ver. 3.5.7  2026-07-31 kkossev  - added HOBEIAN ZG-204ZX fingerprint to 'TS0601_TZE284_4IN1'
+ * ver. 3.6.0  2026-08-05 kkossev  - (dev. branch) bug fixes; TS0202_MOTION_SWITCH (Linkoze LKMSZ001) dp:102 now maps to illumState (dark/light) instead of a fake lux value; added PGST TS0601 _TZE284_zmgahdog PIR+siren combo (motion-only) profile 'TS0601_PGST_PIR_SIREN'; TS0601_PGST_PIR_SIREN dp:1 motion confirmed, added dp:3/9/10/80/101/102 (sensitivity, keepTime and 4 diagnostic unknown_x attributes); fixed a NullPointerException in localProcessTuyaDP() dp 0x65 when the device profile is UNKNOWN; 'Reset Motion to Inactive' is shown again for RH3040_TUYATEC and SONOFF_MOTION_IAS (still defaulting to false); sendCommand() and setPar() now explain that leaving the name empty lists the valid names in the log
  *
  *                                   TODO: show Temperature Offset and Humidity Offset only when the device profile supports TemperatureMeasurement and RelativeHumidityMeasurement capabilities
  *                                   TODO: check why no preferences : updateAllPreferences: no preferences defined for device profile SIHAS_USM-300Z_4_IN_1
  *                                   TODO: update documentation : https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1 
  */
 
-static String version() { "3.5.6" }
-static String timeStamp() {"2026/06/04 5:30 PM"}
+static String version() { "3.6.0" }
+static String timeStamp() {"2026/08/05 11:12 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
-@Field static final Boolean DEFAULT_DEBUG_LOGGING = false    // disable it for the production release !
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = true    // disable it for the production release !
 
 
 import groovy.transform.Field
@@ -93,17 +95,22 @@ metadata {
         attribute 'reportingTime4in1', 'number'
         attribute 'ledEnable', 'enum', ['disabled', 'enabled']
         attribute 'WARNING', 'string'
+        // diagnostic attributes - PGST _TZE284_zmgahdog PIR+siren, DPs seen in the logs but not decoded yet
+        attribute 'unknown_3', 'number'             // Tuya DP 3 (0x03)
+        attribute 'unknown_80', 'number'            // Tuya DP 80 (0x50)
+        attribute 'unknown_101', 'number'           // Tuya DP 101 (0x65)
+        attribute 'unknown_102', 'number'           // Tuya DP 102 (0x66) - siren switch candidate
 
         // command 'setMotion' is defined in motionLib
         // version 3.3.0
         command 'sendCommand', [
-            [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
-            [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
+            [name:'command', type: 'STRING', description: '▶️ Run one of the commands supported by this device profile • Leave empty to list the valid names in the log', constraints: ['STRING']],
+            [name:'val',     type: 'STRING', description: 'Optional value, needed only by some commands', constraints: ['STRING']]
         ]
         command 'setPar', [
-                [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
-                [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
-        ]       
+                [name:'par', type: 'STRING', description: '🎛️ Set a device profile preference and write it to the device • Leave empty to list the valid parameter names in the log', constraints: ['STRING']],
+                [name:'val', type: 'STRING', description: 'Leave empty to see the allowed range or values for that parameter', constraints: ['STRING']]
+        ]
 
         // itterate through all the figerprints and add them on the fly
         deviceProfilesV3.each { profileName, profileMap ->
@@ -168,7 +175,7 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:25,  name:'battery2',                               type:'number',  rw: 'ro', min:0,     max:100,  defVal:100,  scale:1,  unit:'%',          description:'Remaining battery 2 in %'],
                 [dp:102, name:'reportingTime4in1', dt:'02', tuyaCmd:04, type:'number',  rw: 'rw', min:0, max:240, defVal:10, step:5, scale:1, unit:'minutes', title:'<b>Reporting Interval</b>', description:'Reporting interval in minutes'],
                 [dp:104, name:'tempCalibration',                        type:'decimal', rw: 'ro', min:-2.0,  max:2.0,  defVal:0.0,  scale:10, unit:'deg.',  title:'<b>Temperature Calibration</b>',       description:'Temperature calibration (-2.0...2.0)'],
-                [dp:105, name:'humiCalibration',                        type:'number',  rw: 'ro', min:-15,   max:15,   defVal:0,    scale:1,  unit:'%RH',    title:'<b>Huidity Calibration</b>',     description:'Humidity Calibration'],
+                [dp:105, name:'humiCalibration',                        type:'number',  rw: 'ro', min:-15,   max:15,   defVal:0,    scale:1,  unit:'%RH',    title:'<b>Humidity Calibration</b>',     description:'Humidity Calibration'],
                 [dp:106, name:'illumCalibration',                       type:'number',  rw: 'ro', min:-20, max:20, defVal:0,        scale:1, unit:'Lx', title:'<b>Illuminance Calibration</b>', description:'Illuminance calibration in lux'],
                 [dp:107, name:'temperature',                            type:'decimal', rw: 'ro', min:-20.0, max:80.0, defVal:0.0,  scale:10, unit:'deg.',       description:'Temperature'],
                 [dp:108, name:'humidity',                               type:'number',  rw: 'ro', min:1,     max:100,  defVal:100,  scale:1,  unit:'%RH',        description:'Humidity'],
@@ -218,15 +225,24 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
     'TS0601_2IN1'  : [      // https://github.com/Koenkk/zigbee-herdsman-converters/blob/bf32ce2b74689328048b407e56ca936dc7a54a0b/src/devices/tuya.ts#L4568
             description   : 'Tuya 2in1 (Motion and Illuminance) sensor',
             models         : ['TS0601'],
-            device        : [type: 'PIR', isIAS:false, powerSource: 'battery', isSleepy:true],
+            device        : [type: 'PIR', isIAS:false, powerSource: 'battery', isSleepy:true, ignoreZclIlluminance:true],    // the lux value is received twice - as Tuya dp:12 AND as a ZCL 0x0400 report; z2m handles these devices as Tuya DP only
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'Battery': true],
-            preferences   : ['motionReset':true, 'invertMotion':true, 'keepTime':'10', 'sensitivity':'9'],
+            preferences   : ['motionReset':true, 'invertMotion':true, 'keepTime':'10', 'sensitivity':'9', 'illuminance_interval':'102'],
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_3towulqd', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // https://www.aliexpress.com/item/1005004095233195.html
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0500,0001,0400', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_3towulqd', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],     // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/934?u=kkossev
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0400', outClusters:'', model:'TS0601', manufacturer:'_TZE200_3towulqd', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],           // newer f/w revision - same clusters as the HOBEIAN ZG-204ZL below, but TS0601/_TZE200_3towulqd identity : https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1187?u=kkossev
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bh3n6gk8', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // https://community.hubitat.com/t/tze200-bh3n6gk8-motion-sensor-not-working/123213?u=kkossev
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_1ibpyhdc', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          //
+                // the six manufacturers below are in the same z2m 'ZG-204ZL' definition (src/devices/tuya.ts) but were never reported on HE - the inClusters/outClusters lists are the family default and are NOT verified on a real device;
+                // if auto-pairing fails for one of them, ask the owner for the 'Device pairing info' and correct the line (the driver still resolves the profile correctly when the driver is selected manually - see getDeviceNameAndProfile())
+                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ttcovulf', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
+                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_gjldowol', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
+                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_jxyhl4eq', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
+                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_qxyh4r7g', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
+                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_na5qlzow', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // z2m ZG-204ZL group - clusters not verified
+                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_s6hzw8g2', deviceJoinName: 'Nedis ZBSM20WT Motion Sensor (ZG-204ZL)'],                                    // z2m whitelabel 'Nedis ZBSM20WT'; reports illuminance on dp 101 instead of dp 12 - clusters not verified
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,EF00,0001,0400', outClusters:'', model:'ZG-204ZL', manufacturer:'HOBEIAN', deviceJoinName: 'HOBEIAN ZG-204ZL 2 in 1 PIR Motion Detector and Lux sensor'],                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1153?u=kkossev 
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0400', outClusters:'', model:'ZG-204ZL', manufacturer:'HOBEIAN', deviceJoinName: 'HOBEIAN ZG-204ZL 2 in 1 PIR Motion Detector and Lux sensor']                       // https://github.com/JohanBendz/com.tuya.zigbee/issues/1267
             ],
@@ -236,7 +252,8 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:9,   name:'sensitivity',              type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'0 - low', 1:'1 - medium', 2:'2 - high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
                 [dp:10,  name:'keepTime',                 type:'enum',   rw: 'rw', min:0, max:3,    defVal:'0',  unit:'seconds',    map:[0:'10 seconds', 1:'30 seconds', 2:'60 seconds', 3:'120 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)'],
                 [dp:12,  name:'illuminance',              type:'number', rw: 'ro', min:0, max:1000, defVal:0,    scale:1,  unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance'],
-                [dp:102, name:'illuminance_interval',     type:'number', rw: 'rw', min:1, max:720,  defVal:1,    scale:1,  unit:'minutes',  title:'<b>Illuminance Interval</b>',     description:'Brightness acquisition interval (update at the time motion is activated)'],
+                [dp:101, name:'illuminance',              type:'number', rw: 'ro', min:0, max:1000, defVal:0,    scale:1,  unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance (_TZE200_s6hzw8g2 / Nedis ZBSM20WT reports lux on dp 101 instead of dp 12)'],
+                [dp:102, name:'illuminance_interval',     type:'number', rw: 'rw', min:1, max:720,  defVal:1,    scale:1,  unit:'minutes',  title:'<b>Illuminance Interval</b>',     description:'Brightness acquisition interval. Factory default is 1 minute - <b>increase</b> it to reduce the number of lux reports. Written only while the PIR is awake, so trigger a motion when saving.'],
 
             ],
             configuration : ['battery': false]
@@ -263,12 +280,36 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             refresh:        ['queryAllTuyaDP'],
     ],
 
+    // https://community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739 - no public DP map exists (z2m issue closed 'not planned'); dp:1 motion confirmed from @calinatl log 2026-08-05, siren DP still unknown
+    'TS0601_PGST_PIR_SIREN' : [
+            description   : 'PGST Zigbee PIR Motion Sensor (siren not supported)',
+            models        : ['TS0601'],
+            device        : [type: 'PIR', isIAS:false, powerSource: 'battery', isSleepy:true],    // powerSource/isSleepy NOT confirmed - the device reports dp:80 every ~3.4 seconds, which is not sleepy behaviour; waiting for @calinatl to confirm battery vs USB
+            capabilities  : ['MotionSensor': true, 'Battery': true],
+            preferences   : ['motionReset':true, 'sensitivity':'9', 'keepTime':'10'],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_zmgahdog', deviceJoinName: 'PGST Zigbee PIR Motion Sensor Alarm (siren not supported)'],   // https://community.hubitat.com/t/zigbee-tuya-combo-pir-sensor-siren/158739 - cluster list not verified on a real device, see TODO.md
+            ],
+            tuyaDPs:        [
+                [dp:1,   name:'motion',      type:'enum',   rw: 'ro', min:0, max:1, defVal:'0', scale:1,  map:[0:'inactive', 1:'active'], description:'Motion (confirmed from the @calinatl log 2026-08-05)'],
+                [dp:3,   name:'unknown_3',   type:'number', rw: 'ro', scale:1, unit:'',   description:'Unknown Tuya DP 3 (0x03) - enum, reported 0 at pairing'],
+                [dp:9,   name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2, defVal:'2', dt:'04', tuyaCmd:04, unit:'', map:[0:'0 - low', 1:'1 - medium', 2:'2 - high'], title:'<b>Sensitivity</b>', description:'PIR sensor sensitivity (Tuya convention, NOT confirmed on this model)'],
+                [dp:10,  name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:3, defVal:'0', dt:'04', tuyaCmd:04, unit:'seconds', map:[0:'10 seconds', 1:'30 seconds', 2:'60 seconds', 3:'120 seconds'], title:'<b>Keep Time</b>', description:'PIR keep time in seconds (Tuya convention, NOT confirmed on this model)'],
+                [dp:80,  name:'unknown_80',  type:'number', rw: 'ro', scale:1, unit:'',   description:'Unknown Tuya DP 80 (0x50) - constant value 80, repeated every ~3.4 seconds'],
+                [dp:101, name:'unknown_101', type:'number', rw: 'ro', scale:1, unit:'',   description:'Unknown Tuya DP 101 (0x65)'],
+                [dp:102, name:'unknown_102', type:'number', rw: 'ro', scale:1, unit:'',   description:'Unknown Tuya DP 102 (0x66) - bool, siren switch candidate'],
+            ],
+            spammyDPsToNotTrace : [80],
+            refresh:        ['queryAllTuyaDP'],
+    ],
+
     'RH3040_TUYATEC'   : [ // testing TUYATEC-53o41joc   // non-configurable
             description   : 'TuyaTec RH3040 Motion sensor (IAS)',
             models        : ['RH3040'],
             device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],
             capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : ['motionReset':false, 'keepTime':false, 'sensitivity':false],
+            preferences   : ['motionReset':true, 'keepTime':false, 'sensitivity':false],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500', model:'RH3040', manufacturer:'TUYATEC-53o41joc', deviceJoinName: 'TUYATEC RH3040 Motion Sensor'],                                            // KK - 60 seconds reset period
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500', model:'RH3040', manufacturer:'TUYATEC-b5g40alm', deviceJoinName: 'TUYATEC RH3040 Motion Sensor'],
@@ -347,15 +388,15 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             description   : 'Tuya Motion Sensor and Scene Switch',
             models        : ['TS0202'],
             device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],
-            capabilities  : ['MotionSensor':true, 'IlluminanceMeasurement':true, 'switch':true, 'Battery':true],
-            preferences   : ['motionReset':true, 'keepTime':false, 'sensitivity':false, 'luxThreshold':false],    // keepTime is hardcoded 60 seconds, no sensitivity configuration
+            capabilities  : ['MotionSensor':true, 'switch':true, 'Battery':true],
+            preferences   : ['motionReset':true, 'keepTime':false, 'sensitivity':false],    // keepTime is hardcoded 60 seconds, no sensitivity configuration
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,EF00,0000', outClusters:'0019,000A', model:'TS0202', manufacturer:'_TZ3210_cwamkvua', deviceJoinName: 'Tuya Motion Sensor and Scene Switch']  // vendor: 'Linkoze', model: 'LKMSZ001'
 
             ],
             tuyaDPs:        [
                 [dp:101, name:'pushed',         type:'enum',   rw: 'ro', min:0, max:2, defVal:'0',   scale:1,    map:[0:'pushed', 1:'doubleTapped', 2:'held'] ,   unit:'',     title:'<b>Presence state</b>', description:'Presence state'],
-                [dp:102, name:'illuminance',    type:'number', rw: 'ro', min:0, max:1, defVal:0,     scale:1,    unit:'lx',       title:'<b>illuminance</b>',     description:'illuminance'],
+                [dp:102, name:'illumState',     type:'enum',   rw: 'ro', min:0, max:1, defVal:0,     scale:1,    map:[0:'dark', 1:'light'],   unit:'',       title:'<b>Illuminance State</b>',     description:'Illuminance State'],
 
             ],
             configuration : ['battery': false]
@@ -391,16 +432,16 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_auin8mzr', deviceJoinName: 'Tuya PIR Human Motion Sensor AIR']        // Tuya LY-TAD-K616S-ZB
             ],
             tuyaDPs:        [                                           // TODO - defaults !!
-                [dp:101, name:'vSensitivity',        type:'enum',    rw: 'rw', min:0,   max:1,     defVal:'0', scale:1,    map:[0:'Speed Priority', 1:'Standard', 2:'Accuracy Priority'] ,   unit:'-',     title:'<b>vSensitivity options</b>', description:'V-Sensitivity mode'],
-                [dp:102, name:'oSensitivity',        type:'enum',    rw: 'rw', min:0,   max:1,     defVal:'0', scale:1,    map:[0:'Sensitive', 1:'Normal', 2:'Cautious'] ,   unit:'',     title:'<b>oSensitivity options</b>', description:'O-Sensitivity mode'],
+                [dp:101, name:'vSensitivity',        type:'enum',    rw: 'rw', min:0,   max:2,     defVal:'0', scale:1,    map:[0:'Speed Priority', 1:'Standard', 2:'Accuracy Priority'] ,   unit:'-',     title:'<b>vSensitivity options</b>', description:'V-Sensitivity mode'],
+                [dp:102, name:'oSensitivity',        type:'enum',    rw: 'rw', min:0,   max:2,     defVal:'0', scale:1,    map:[0:'Sensitive', 1:'Normal', 2:'Cautious'] ,   unit:'',     title:'<b>oSensitivity options</b>', description:'O-Sensitivity mode'],
                 [dp:103, name:'vacancyDelay',        type:'number',  rw: 'rw', min:0,   max:1000,  defVal:10,  scale:1,    unit:'seconds',        title:'<b>Vacancy Delay</b>',          description:'Vacancy Delay'],
-                [dp:104, name:'detectionMode',       type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0', scale:1,    map:[0:'General Model', 1:'Temporary Stay', 2:'Basic Detecton', 3:'PIR Sensor Test'] ,   unit:'',     title:'<b>Detection Mode</b>', description:'Detection Mode'],
+                [dp:104, name:'detectionMode',       type:'enum',    rw: 'rw', min:0,   max:3 ,    defVal:'0', scale:1,    map:[0:'General Model', 1:'Temporary Stay', 2:'Basic Detecton', 3:'PIR Sensor Test'] ,   unit:'',     title:'<b>Detection Mode</b>', description:'Detection Mode'],
                 [dp:105, name:'unacknowledgedTime',  type:'number',  rw: 'ro', min:0,   max:9 ,    defVal:7,   scale:1,    unit:'seconds',         description:'unacknowledgedTime'],
                 [dp:106, name:'illuminance',         type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>illuminance</b>',                description:'illuminance'],
                 [dp:107, name:'lightOnLuminance',    type:'number',  rw: 'rw', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>lightOnLuminance</b>',                description:'lightOnLuminance'],        // Ligter, Medium, ... ?// TODO =- check range 0 - 10000 ?
                 [dp:108, name:'lightOffLuminance',   type:'number',  rw: 'rw', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>lightOffLuminance</b>',                description:'lightOffLuminance'],
                 [dp:109, name:'luminanceLevel',      type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>luminanceLevel</b>',                description:'luminanceLevel'],            // Ligter, Medium, ... ?
-                [dp:110, name:'ledStatusAIR',        type:'enum',    rw: 'rw', min:0,   max:1 ,    defVal:'0', scale:1,    map:[0: 'Switch On', 1:'Switch Off', 2: 'Default'] ,   unit:'',     title:'<b>LED status</b>', description:'Led status switch'],
+                [dp:110, name:'ledStatusAIR',        type:'enum',    rw: 'rw', min:0,   max:2 ,    defVal:'0', scale:1,    map:[0: 'Switch On', 1:'Switch Off', 2: 'Default'] ,   unit:'',     title:'<b>LED status</b>', description:'Led status switch'],
             ],
             configuration : ['battery': false]
     ],
@@ -410,7 +451,7 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             models        : ['SNZB-03', 'MS01', 'msO1', 'SQ510A', 'RHK09', '66666'],
             device        : [type: 'PIR', isIAS:true, powerSource: 'battery', isSleepy:true],   // very sleepy !!
             capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : ['motionReset':false/*, 'keepTime':false, 'sensitivity':false*/],   // just enable or disable showing the motionReset preference, no link to  tuyaDPs or attributes map!
+            preferences   : ['motionReset':true/*, 'keepTime':false, 'sensitivity':false*/],   // just enable or disable showing the motionReset preference, no link to  tuyaDPs or attributes map!
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001', outClusters:'0003', model:'SNZB-03', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],        // SNZB-O3 OUVOPO Wireless Motion Sensor (2023)
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,0001,0020', outClusters:'0003', model:'SNZB-03', manufacturer:'eWeLink', deviceJoinName: 'eWeLink Motion Sensor'],   // 
@@ -533,7 +574,8 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             preferences   : ['radarSensitivity':'2', 'pirSensitivity':'9', 'pirDelay':'12', 'detectionRange':'13'],
             commands      : ['resetStats':'resetStats', 'resetPreferencesToDefaults':'resetPreferencesToDefaults'],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_gnpflcoq', deviceJoinName: 'Tuya TS0601 4-in-1 mmWave Radar Sensor']
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_gnpflcoq', deviceJoinName: 'Tuya TS0601 4-in-1 mmWave Radar Sensor'],
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0500,EF00,0402,0405,0001,0400', outClusters:'0003', model:'ZG-204ZX', manufacturer:'HOBEIAN', controllerType:'ZGB', deviceJoinName: 'HOBEIAN ZG-204ZX 4-in-1 mmWave Presence Sensor']
             ],
             tuyaDPs:        [
                 [dp:1,   name:'motion',             type:'enum',    rw: 'ro', min:0,   max:1,    defVal:'0',  scale:1,  map:[0:'inactive', 1:'active'],              unit:'',        title:'<b>Presence</b>',             description:'Presence detection (mmWave radar)'],
@@ -758,7 +800,7 @@ public void customParseIasMessage(final String description) {
 }
 
 void customParseOccupancyCluster(final Map descMap) {
-    //final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "customParseOccupancyCluster: zigbee received cluster 0x0406 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
     if (result == false) {
@@ -768,14 +810,14 @@ void customParseOccupancyCluster(final Map descMap) {
         }
         // TODO - should be processed in the processClusterAttributeFromDeviceProfile method!
         else if (descMap.attrId == '0020') {    // OWON and SONOFF
-            int value = zigbee.convertHexToInt(descMap.value)
-            sendEvent('name': 'fadingTime', 'value': value, 'unit': 'seconds', 'type': 'physical', 'descriptionText': "fading time is ${value} seconds")
-            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (fadingTime) value is ${value} (0x${descMap.value} seconds)"
+            int fadingTimeValue = zigbee.convertHexToInt(descMap.value)
+            sendEvent('name': 'fadingTime', 'value': fadingTimeValue, 'unit': 'seconds', 'type': 'physical', 'descriptionText': "fading time is ${fadingTimeValue} seconds")
+            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (fadingTime) value is ${fadingTimeValue} (0x${descMap.value} seconds)"
         }
         else if (descMap.attrId == '0022') {
-            int value = zigbee.convertHexToInt(descMap.value)
-            sendEvent('name': 'radarSensitivity', 'value': value, 'unit': '', 'type': 'physical', 'descriptionText': "radar sensitivity is ${value}")
-            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (radarSensitivity) value is ${value} (0x${descMap.value})"
+            int radarSensitivityValue = zigbee.convertHexToInt(descMap.value)
+            sendEvent('name': 'radarSensitivity', 'value': radarSensitivityValue, 'unit': '', 'type': 'physical', 'descriptionText': "radar sensitivity is ${radarSensitivityValue}")
+            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (radarSensitivity) value is ${radarSensitivityValue} (0x${descMap.value})"
         }
         else {
             logDebug "UNPROCESSED Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${descMap.value} (0x${descMap.value})"
@@ -809,18 +851,18 @@ void localProcessTuyaDP(final Map descMap, final int dp, final int dp_id, final 
             break
         case 0x07 : // temperature for 4-in-1 (no data)
             logDebug "(DP=0x07) unexpected 4-in-1 temperature (dp=07) is ${fncmd / 10.0 } ${fncmd}"
-            temperatureEvent(fncmd / getTemperatureDiv())
+            handleTemperatureEvent(fncmd / 10.0 as BigDecimal)
             break
         case 0x08 : // humidity for 4-in-1 (no data)
             logDebug "(DP=0x08) unexpected 4-in-1 humidity (dp=08) is ${fncmd} ${fncmd}"
-            humidityEvent(fncmd / getHumidityDiv())
+            handleHumidityEvent(fncmd as BigDecimal)
             break
         case 0x09 : // sensitivity for TS0202 4-in-1 and 2in1 _TZE200_3towulqd
-            logInfo "(DP=0x09) unexpected received sensitivity : ${sensitivityOpts.options[fncmd]} (${fncmd})"
+            logInfo "(DP=0x09) unexpected received sensitivity : ${fncmd}"
             //device.updateSetting('sensitivity', [value:fncmd.toString(), type:'enum'])
             break
         case 0x0A : // (10) keep time for TS0202 4-in-1 and 2in1 _TZE200_3towulqd
-            logInfo "(DP=0x0A) unexpected Keep Time (dp=0x0A) is ${keepTimeIASOpts.options[fncmd]} (${fncmd})"
+            logInfo "(DP=0x0A) unexpected Keep Time (dp=0x0A) is ${fncmd}"
             //device.updateSetting('keepTime', [value:fncmd.toString(), type:'enum'])
             break
         case 0x19 : // (25)
@@ -829,7 +871,7 @@ void localProcessTuyaDP(final Map descMap, final int dp, final int dp_id, final 
             break
         case 0x65 :    // (101)
             //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
-            if (DEVICE?.device.isDepricated == true) {
+            if (DEVICE?.device?.isDepricated == true) {      // safe navigation on 'device' too - DEVICE is null when the device profile was not resolved (UNKNOWN)
                 logDebug '(DP=0x65) unexpected : ignored depricated device 0x65 event'
             }
             else {
@@ -839,22 +881,15 @@ void localProcessTuyaDP(final Map descMap, final int dp, final int dp_id, final 
             break
         case 0x68 :     // (104)
             // 4in1  0x68 temperature compensation
-            int val = fncmd
-            // for negative values produce complimentary hex (equivalent to negative values)
-            if (val > 4294967295) { val = val - 4294967295 }
-            logInfo "(DP=0x68) unexpected : 4-in-1 temperature calibration is ${val / 10.0}"
+            logInfo "(DP=0x68) unexpected : 4-in-1 temperature calibration is ${fncmd / 10.0}"
             break
         case 0x69 :    // (105)
             // 4in1 0x69 humidity calibration (compensation)
-            int val = fncmd
-            if (val > 4294967295) val = val - 4294967295
-            logInfo "(DP=0x69) unexpected : 4-in-1 humidity calibration is ${val}"
+            logInfo "(DP=0x69) unexpected : 4-in-1 humidity calibration is ${fncmd}"
             break
         case 0x6A : // (106)
             // 4in1 0x6a lux calibration (compensation)
-            int val = fncmd
-            if (val > 4294967295) { val = val - 4294967295 }
-            logInfo "(DP=0x69) unexpected : 4-in-1 lux calibration is ${val}"
+            logInfo "(DP=0x6A) unexpected : 4-in-1 lux calibration is ${fncmd}"
             break
         default :
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -919,7 +954,6 @@ List<String> customRefresh() {
 
 void customUpdated() {
     logDebug "customUpdated()"
-    List<String> cmds = []
     if ('DistanceMeasurement' in DEVICE?.capabilities) {
         if (settings?.ignoreDistance == true) {
             device.deleteCurrentState('distance')
@@ -960,8 +994,7 @@ void customUpdated() {
 
 
     // Itterates through all settings
-    cmds += updateAllPreferences()  // defined in deviceProfileLib
-    sendZigbeeCommands(cmds)
+    updateAllPreferences()  // defined in deviceProfileLib - it is void and sends its own Zigbee commands via setPar()
 
     if (DEVICE?.preferences?.refreshOnSave == true) {
         setRefreshRequest() 
@@ -1069,6 +1102,10 @@ void customInitializeVars(final boolean fullInit=false) {
     if (fullInit == true || state.motionStarted == null) { state.motionStarted = unix2formattedDate(now()) }
     // overwrite the default value of the invertMotion setting if the device is 2in1
     if (fullInit == true || settings.invertMotion == null) device.updateSetting('invertMotion', is2in1() ? true : false)
+    // overwrite the default value of the motionReset setting for the PGST PIR+siren combo - no 'motion inactive' report was seen in the first device log, so the software reset is on by default
+    if (getDeviceProfile() == 'TS0601_PGST_PIR_SIREN') {
+        if (fullInit == true || settings.motionReset == null) device.updateSetting('motionReset', true)
+    }
     if (fullInit == true || settings.allStatusTextEnable == null) device.updateSetting('allStatusTextEnable', false)
 }
 
@@ -1084,10 +1121,14 @@ void customInitEvents(final boolean fullInit=false) {
 
 void customParseIlluminanceCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    if (DEVICE?.device?.ignoreIAS == true) { 
+    if (DEVICE?.device?.ignoreIAS == true) {
         logDebug "customCustomParseIlluminanceCluster: ignoring IAS reporting device"
-        return 
+        return
     }    // ignore IAS devices
+    if (DEVICE?.device?.ignoreZclIlluminance == true) {
+        logDebug "customParseIlluminanceCluster: this profile receives illuminance over a Tuya DP - ignoring the duplicated ZCL 0x0400 report"
+        return
+    }    // the device reports the same lux value twice - once as a Tuya DP and once as a ZCL 0x0400 attribute report
     standardParseIlluminanceCluster(descMap)  // illuminance.lib
 }
 
