@@ -510,6 +510,18 @@ All GitHub-facing files, including Markdown, are written in **English**.
 Do not create parallel work-list files. Use the folder's existing `BUGS.md` / `TODO.md` and their
 canonical item ids.
 
+Forum findings follow a two-track rule:
+
+- A clear, concrete software change is recorded in both the applicable driver's canonical
+  `TODO.md` and a normal Jira `HUB` work item. Link the two with the canonical local item ID/path in
+  Jira and a bare Jira key in `TODO.md`.
+- A finding that does not yet define a concrete software change is recorded only as a Jira
+  `Forum Watch` item. This includes uncertain evidence and resolved, declined, out-of-scope, or
+  device-limitation findings. Promote it to dual tracking only after a concrete change is clear.
+- Repository-wide Forum crawl/baseline Markdown files are migration archives, not canonical work
+  lists. Do not add new work to them after Jira Forum Watch migration, and never remove or replace
+  a driver's canonical `TODO.md` as part of that migration.
+
 Rules that apply to every document here:
 
 - **Prefer stable symbols over line numbers.** A "lines 542–688" map is wrong within one release.
@@ -524,6 +536,9 @@ Rules that apply to every document here:
   *Implemented unverified*, not *Confirmed*.
 - **Never publish absolute local paths, private (RFC1918) hub addresses, device ids, or personal
   data** — including inside screenshots. This applies to anything that could become public.
+- **Repository documents use bare Jira keys only** (for example, `HUB-6`). Never include an
+  Atlassian site URL or hostname in repository files; the hostname may disclose a private company
+  or organization name even when the Jira issue itself is access-controlled.
 
 ### `BUGS.md` — reviewed bug work-list
 

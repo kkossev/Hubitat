@@ -180,6 +180,19 @@ Verification: confirm automatic driver selection, switch, power, current, voltag
 - Also resolve the ambiguous divisor expression separately tracked in `BUGS.md` B3 before making a
   model-family scaling change.
 
+### 13. [?] Zemismart `SDM01-TZ0-12-ZM` three-phase, three-CT meter
+
+- **Reported** in a private support request on 2026-08-15; the requester offered to purchase the
+  120 A device and provide test information. Private correspondence and identity are not reproduced
+  here.
+- Required before implementation: the exact `model` / `manufacturer`, full endpoint and cluster
+  fingerprint, and complete EF00/ED00 traffic while independently varying the load on each phase.
+- This is related to item 9 but is not assumed to use the same datapoints or scaling. The current
+  driver exposes one switch/power/current/voltage/energy channel and therefore cannot faithfully
+  represent three CT channels. Decide whether to create a dedicated multi-channel/child-device
+  driver after the evidence is captured; do not add a fingerprint to the existing single-channel
+  profile as a speculative shortcut.
+
 ---
 
 ## Already resolved, declined, limited, or out of scope

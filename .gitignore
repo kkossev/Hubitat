@@ -114,3 +114,7 @@ Drivers/Tuya ZigBee Vibration Sensor/codex_TS0210_fix.md
 Drivers/Tuya ZigBee Vibration Sensor/TS0210_FIXES_PLAN.md
 Drivers/Tuya ZigBee Vibration Sensor/C15-wake-safe-config-writes-plan.md
 Drivers/Tuya Multi Sensor 4 In 1/ILLUMINANCE_FIXES_PROMPT.md
+Drivers/Matter Advanced Device/AGENTS.md
+Drivers/Matter Advanced Device/BUGS.md
+Drivers/Matter Advanced Device/TODO.md
+Drivers/Matter Advanced Device/OTA_PROBE_PLAN.md

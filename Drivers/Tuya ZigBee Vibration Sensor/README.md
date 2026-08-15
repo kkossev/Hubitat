@@ -60,22 +60,46 @@ Preferences procedure instead.
 
 ## Supported device families
 
-| Device family | Model and manufacturer examples | Main protocol |
-|---|---|---|
-| Tuya TS0210 IAS vibration sensors | Model `TS0210` with `_TYZB01_*` and `_TZ3000_*` manufacturer IDs | IAS Zone |
-| Third Reality vibration sensor | Model `3RVS01031Z`, manufacturer `Third Reality, Inc` | IAS Zone and private cluster `0xFFF1` |
-| Third Reality garage-door tilt sensor | Model `3RDTS01056Z`, manufacturer `Third Reality, Inc` | IAS Zone and private cluster `0xFF01` |
-| Samsung/Samjin multisensor | Model `multi`, manufacturer `Samjin` | IAS Zone and private cluster `0xFC02` |
-| Tuya TS0601 vibration/contact sensor | Manufacturer `_TZE200_kzm5w4iz` | Tuya EF00 |
-| Tuya ZG-102ZM | Manufacturers `_TZE200_jfw0a4aa` and `_TZE200_wzk0x7fq` | Tuya EF00 and IAS |
-| Tuya ZG-103Z tilt and XYZ sensors | `_TZE200_iba1ckek`, `_TZE200_hggxgsjj`, `_TZE200_yjryxpot`, `_TZE200_afycb3cg`, and `_TZ321..._5oy7cysk` variants | Tuya EF00 |
+| Device family | Model | Manufacturer | Main protocol | Evidence |
+|---|---|---|---|---|
+| Tuya TS0210 IAS vibration sensor | `TS0210` | `_TYZB01_3zv6oleo` | IAS Zone | Historical |
+| Tuya TS0210 IAS vibration sensor | `TS0210` | `_TYZB01_kulduhbj` | IAS Zone | Implemented unverified |
+| Tuya TS0210 IAS vibration sensor | `TS0210` | `_TYZB01_cc3jzhlj` | IAS Zone | Implemented unverified |
+| Tuya TS0210 IAS vibration sensor | `TS0210` | `_TYZB01_geigpsy4` | IAS Zone | Implemented unverified |
+| Tuya TS0210 IAS vibration sensor | `TS0210` | `_TZ3000_lqpt3mvr` | IAS Zone | Reported |
+| Smart Vibration Sensor HS1VS | `TS0210` | `_TYZB01_pbgpvhgx` | IAS Zone | Implemented unverified |
+| Moes TS0210 vibration sensor | `TS0210` | `_TZ3000_bmfw9ykl` | IAS Zone | Reported |
+| Tuya TS0210 IAS vibration sensor | `TS0210` | `_TZ3000_lzdjjfss` | IAS Zone | Implemented unverified |
+| Tuya TS0210 IAS vibration sensor | `TS0210` | `_TYZB01_j9xxahcl` | IAS Zone | Implemented unverified |
+| Tuya TS0210 IAS vibration sensor | `TS0210` | `_TZ3000_fkxmyics` | IAS Zone | Reported |
+| Third Reality vibration sensor | `3RVS01031Z` | `Third Reality, Inc` | IAS Zone and private cluster `0xFFF1` | Reported |
+| Samsung/Samjin multisensor | `multi` | `Samjin` | IAS Zone and private cluster `0xFC02` | Implemented unverified |
+| Tuya vibration/contact sensor | `TS0601` | `_TZE200_kzm5w4iz` | Tuya EF00 | Implemented unverified |
+| HOBEIAN ZG-102ZM | `TS0601` | `_TZE200_jfw0a4aa` | Tuya EF00 and IAS | Implemented unverified |
+| HOBEIAN ZG-102ZM variant | `TS0601` | `_TZE200_wzk0x7fq` | Tuya EF00 and IAS | Implemented unverified |
+| ZG-103Z tilt and XYZ sensor | `TS0601` | `_TZE200_iba1ckek` | Tuya EF00 | Implemented unverified |
+| ZG-103Z tilt and XYZ sensor | `TS0601` | `_TZE200_hggxgsjj` | Tuya EF00 | Implemented unverified |
+| ZG-103Z tilt and XYZ sensor | `TS0601` | `_TZE200_yjryxpot` | Tuya EF00 | Implemented unverified |
+| ZG-103Z tilt and XYZ sensor | `TS0601` | `_TZE200_afycb3cg` | Tuya EF00 | Implemented unverified |
+| ZG-103Z tilt and XYZ sensor | `TS0601` | `_TZ3210100000_5oy7cysk` | Tuya EF00 | Reported |
+| ZG-103Z tilt and XYZ sensor | `TS0601` | `_TZ32101000000_5oy7cysk` | Tuya EF00 | Implemented unverified |
+| ZG-103Z tilt and XYZ sensor | `TS0210` | `_TZ3210100000_5oy7cysk` | IAS Zone and Tuya EF00 | Reported |
+| ZG-103Z tilt and XYZ sensor | `TS0210` | `_TZ32101000000_5oy7cysk` | IAS Zone and Tuya EF00 | Reported |
+| Third Reality garage-door tilt sensor (manual assignment) | `3RDTS01056Z` | `Third Reality, Inc` | IAS Zone and private cluster `0xFF01` | Implemented unverified |
 
-Some fingerprints in the driver are marked as not tested. New devices should
-be added only after their exact Hubitat fingerprint has been captured.
+`Implemented unverified` means the exact identity is represented in the
+driver but has not been confirmed on a named Hubitat hub/device combination.
+`Reported` means a user report is recorded in the driver history or source
+comments. `Historical` means the identity is retained from the driver's
+long-standing support list without a current named test record.
 
-The Third Reality garage-door tilt sensor is not automatically fingerprinted
-by this driver. Assign this driver manually when its contact and acceleration
+The first 23 rows correspond one-for-one with the production fingerprints in
+the driver. The Third Reality garage-door tilt sensor is not automatically
+fingerprinted; assign this driver manually when its contact and acceleration
 handling is required.
+
+New devices should be added only after their exact Hubitat fingerprint has
+been captured.
 
 ## Capabilities and attributes
 

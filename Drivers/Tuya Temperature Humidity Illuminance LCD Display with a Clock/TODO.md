@@ -1,11 +1,11 @@
 # Consolidated TODO — Tuya Temperature Humidity Illuminance LCD Display with a Clock
 
 Analysis date: 2026-07-11 (forum backlog, posts through 693); bug backlog merged 2026-08-04;
-posts 694-695 individually analyzed 2026-08-04  
-Forum cutoff: 2026-06-06, post 693 (full-thread sweep); 694-695 added ad hoc, not a resweep  
+incremental forum audit through post 712 on 2026-08-15
+Forum cutoff: post 712, 2026-08-15
 Topic: https://community.hubitat.com/t/-/88093  
-Coverage: complete Discourse stream through post 693 — 677 visible posts; highest visible post
-number 693 at that time
+Coverage: complete Discourse stream through post 712 — 696 visible posts; highest visible post
+number 712 at audit time
 
 This is the single consolidated backlog for this driver. It combines the forum-derived
 device-support/feature backlog with the reviewed bug list. **`BUGS.md` was merged into this file
@@ -192,7 +192,7 @@ Implementation direction:
   misleading warning.
 - Verify that refreshing either parent or child does not disturb normal probe reports.
 
-### 5. `[?]` `OPEN` — `_TZ3000_utwgoauk` ("SNZB-02" Tuya clone) falling off the network
+### `RESOLVED` — `_TZ3000_utwgoauk` ("SNZB-02" Tuya clone) pairing and apparent network dropout
 
 **User-visible problem:** poster calinatl reports a small USB/battery-powered temperature/humidity
 sensor "keeps falling off the network," paired with this driver in Auto Detect mode.
@@ -231,10 +231,14 @@ unit. Added a **third** fingerprint with the exact order from this log, kept the
 selected in the first place — the sleepy-device reporting-config hypothesis from 2026-08-04 is still
 unverified since the driver was never actually running on this device.
 
-Verification needed from the poster: re-pair once more with the updated driver, confirm this driver
-is now auto-selected (or select it manually and confirm `state.modelGroup` shows `Zigbee NON-Tuya`),
-and confirm over a few days whether the connectivity dropouts stop. If they don't, revert the
-`Zigbee NON-Tuya` reclassification — it's a plausible but unproven hypothesis.
+Resolution: after the exact-order fingerprint was added, the device auto-selected this driver and
+reported normally for more than 72 hours ([#706](https://community.hubitat.com/t/-/88093/706)–
+[#708](https://community.hubitat.com/t/-/88093/708)). The later offline event was not a driver or
+Zigbee failure: the USB cable had been knocked loose. It rejoined automatically as soon as power
+was restored ([#709](https://community.hubitat.com/t/-/88093/709)–
+[#711](https://community.hubitat.com/t/-/88093/711)). The screenshot in #708 shows ordinary
+temperature, humidity, battery-voltage, and online health-check logs, not an error. No new driver
+task remains from this report.
 
 ### 6. `[?]` `OPEN` — HaiHao HZ-SL03 soil sensor: humidity not reporting, battery misread
 
@@ -302,6 +306,17 @@ pairing/rejoin tests from multiple devices with the option both enabled and disa
 normally a platform responsibility, and the available evidence does not show that the custom
 responses caused the later success.
 
+### 10. [ ] `NEEDS_EVIDENCE` — eMylo TS0201-compatible sensor fingerprint
+
+Posts: https://community.hubitat.com/t/-/162681/3 and
+https://community.hubitat.com/t/-/162681/4 (calinatl, reviewed 2026-08-15).
+
+The sensor randomly dropped while using the Tuya Multi Sensor 4 In 1 driver. It was identified as
+belonging to this driver and manually assigned to Model Group `TS0201`, but the exact fingerprint is
+missing from the source and no result was posted after the requested re-pair. The Device Data exists
+only in a forum screenshot. Request textual model/manufacturer/cluster data and confirmation that the
+manual `TS0201` selection works before adding a fingerprint. **VERIFY ON DEVICE**.
+
 ## Already resolved, declined, or outside this backlog
 
 ### `RESOLVED` — `_TZE204_m9dzckna` SNT857Z temperature sensor
@@ -330,6 +345,7 @@ or commenting once verified.
 Requested at https://community.hubitat.com/t/-/88093/695 (show `37` instead of `37.4`). Added
 **Temperature Decimal Places** (0/1/2, default 1) and **Humidity Decimal Places** (0/1, default 0)
 preferences on 2026-08-04 — see `CHANGELOG.md` `[Unreleased]`.
+The requester confirmed both preferences work at https://community.hubitat.com/t/-/88093/712.
 
 ### `RESOLVED` — `_TZE284_hodyryli` external probe support
 
@@ -359,6 +375,16 @@ Version 2.1.2 added `_TZE200_npj9bug3` and `_TZE200_wrmhp6b3` to the new
 The sleepy EF00 contact sensor reports illuminance only with contact activity. No known EF00 command
 can request a current reading, and standard ZHA reporting configuration is not supported. See
 https://community.hubitat.com/t/-/88093/73.
+
+### `DEVICE_LIMITATION` — TS0201 LCZ030 temperature reporting granularity and cadence
+
+The LCZ030 graph in [#696](https://community.hubitat.com/t/-/88093/696) shows long flat periods and
+roughly 2 °F steps while adjacent sensors report smaller changes. The follow-up research found no
+confirmed writable reporting delta or interval; Configure Reporting is ignored or rejected and the
+approximately 1 °C threshold is firmware-controlled
+([#697](https://community.hubitat.com/t/-/88093/697)). Periodic endpoint-2 polling is only a
+hardware-verification experiment and may reduce battery life. The reporter replaced the sensor, so
+there is no open implementation request unless another owner volunteers hardware for that test.
 
 ### `OUT_OF_SCOPE` — Use LCD sensor buttons as thermostat/scene controls
 
