@@ -510,6 +510,10 @@ All GitHub-facing files, including Markdown, are written in **English**.
 Do not create parallel work-list files. Use the folder's existing `BUGS.md` / `TODO.md` and their
 canonical item ids.
 
+Before any Jira write in the `HUB` project, retrieve `HUB-126`, read its complete current
+description, and follow it. Do not rely on a cached copy. If it cannot be retrieved, do not write
+to Jira and report the blocker.
+
 Forum findings follow a two-track rule:
 
 - A clear, concrete software change is recorded in both the applicable driver's canonical
