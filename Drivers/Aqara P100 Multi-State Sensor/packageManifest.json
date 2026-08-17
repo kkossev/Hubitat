@@ -1,0 +1,19 @@
+{
+  "packageName": "Aqara P100 Multi-State Sensor",
+  "author": "Krassimir Kossev",
+  "version": "0.1.6",
+  "minimumHEVersion": "2.2.7",
+  "dateReleased": "2026-08-17",
+  "releaseNotes": "0.1.6 2026-05-06 - initial Hubitat Package Manager release of the Aqara P100 Multi-State Sensor (DWZTCGQ11LM) driver. Supports both operating modes: object mode (movement, vibration, orientation, triple-tap and fall events, device posture) and door/window mode (contact open/closed). Battery level is derived from the reported battery voltage. Includes the Aqara registration handshake, Time cluster (0x000A) replies and factory-reset prevention. This driver is work-in-progress - please report any issues.\n0.1.5 2026-05-03 - a forced Time cluster reply is sent after every FCC0 attr 0x00DF diagnostic heartbeat\n0.1.4 2026-05-01 - more aqaraBlackMagic(); added Time cluster (0x000A) forced response; added ZDO handlers for End_Device_Timeout_Req (0x0036), Node_Desc_req (0x0002), Mgmt_Rtg_rsp (0x8032); added FCC0 attr 0x00FF handler for the device registration-response report\n0.1.3 2026-04-29 - preventDeviceReset implementation\n0.1.2 2026-04-28 - bug fixes\n0.1.1 2026-04-19 - corrected fingerprint; bug fixes (tnx @rad1 for testing and feedback)\n0.1.0 2026-04-18 - initial version",
+  "documentationLink": "https://github.com/kkossev/Hubitat/blob/development/Drivers/Aqara%20P100%20Multi-State%20Sensor/README.md",
+  "communityLink": "https://community.hubitat.com/t/release-aqara-multi-state-sensor-p100-zigbee-driver-c8-only/163540",
+  "drivers": [
+    {
+      "id": "0cf0b9b7-cc5e-4a60-8d15-6bea294acbe8",
+      "name": "Aqara P100 Multi-State Sensor",
+      "namespace": "kkossev",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20P100%20Multi-State%20Sensor/Aqara_P100_Multi_State_Sensor.groovy",
+      "required": true
+    }
+  ]
+}

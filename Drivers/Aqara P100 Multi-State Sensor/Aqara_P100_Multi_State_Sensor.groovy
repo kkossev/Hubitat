@@ -1,7 +1,7 @@
 /**
  *  Aqara P100 Multi-State Sensor driver for Hubitat
  *
- *  https://community.hubitat.com/t/PLACEHOLDER
+ *  https://community.hubitat.com/t/release-aqara-multi-state-sensor-p100-zigbee-driver-c8-only/163540
  *
  *	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *	in compliance with the License. You may obtain a copy of the License at:
