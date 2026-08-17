@@ -391,6 +391,16 @@
         "Lights & Switches",
         "Zigbee"
       ]
+    },
+    {
+      "id": "7e8d3951-8550-470b-84a8-21e9d07acdec",
+      "name": "Aqara P100 Multi-State Sensor",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20P100%20Multi-State%20Sensor/packageManifest.json",
+      "description": "Aqara P100 Multi-State Sensor (DWZTCGQ11LM) driver for Hubitat Elevation hub - vibration, movement, orientation, triple-tap and fall detection in object mode, or contact open/closed in door/window mode",
+      "tags": [
+        "Zigbee"
+      ]
     }
   ]
 }
