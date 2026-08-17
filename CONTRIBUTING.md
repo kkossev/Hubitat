@@ -21,6 +21,28 @@ and other executable dependencies from `development`.
 Version tags are immutable historical releases. Anyone who needs a fixed,
 reproducible version should use a tag instead of a moving branch.
 
+## Cloning on Windows
+
+Before cloning on Windows, enable long path support in Git:
+
+```
+git config --global core.longpaths true
+```
+
+Several tracked paths in this repository exceed the Windows 260 character path
+limit once a clone directory is prepended. The longest is 148 characters. Without
+this setting, `git clone` into any but a very short directory, and every
+`git worktree add`, fails partway through the checkout with "Filename too long"
+and leaves an incomplete working tree.
+
+These paths cannot be shortened. The affected driver folder name and file name
+appear in that driver's `packageManifest.json`, in `repository.json`, and in the
+driver's own `importUrl`. Renaming either would break Hubitat Package Manager for
+every user who already installed the package, and would dead-link saved raw URLs.
+
+`core.longpaths` applies to Git only. Other Windows tools that walk these paths may
+still fail, because system wide long path support is a separate Windows setting.
+
 ## Development workflow
 
 1. Start from the latest `development` branch.
