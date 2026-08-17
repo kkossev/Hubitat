@@ -121,3 +121,4 @@ Drivers/Matter Advanced Device/OTA_PROBE_PLAN.md
 Drivers/Aqara P1 Motion Sensor/PLAN.md
 Drivers/Aqara P100 Multi-State Sensor/BUGS.md
 Drivers/Aqara P100 Multi-State Sensor/TODO.md
+Drivers/Misc/tests/Bluetooth Methods Dumper.groovy
