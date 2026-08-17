@@ -11,10 +11,16 @@ Community thread: <https://community.hubitat.com/t/release-aqara-multi-state-sen
 Current version: **0.1.6 (2026-05-06)** — see `version()` / `timeStamp()` at lines 29–30.
 
 **Bug work:** a reviewed list of known bugs with exact locations, fixes and verification steps is in
-[BUGS.md](BUGS.md) in this folder (written 2026-08-17 against v0.1.6). If you were asked to fix bugs
-in this driver, work from that list — do not re-derive the findings. Mark items `[x]` there only
-after kkossev confirms the hub test. Items marked **ASK USER** / **VERIFY ON DEVICE** must not be
-changed without confirmation.
+`BUGS.md` in this folder (written 2026-08-17 against v0.1.6). If you were asked to fix bugs in this
+driver, work from that list — do not re-derive the findings. Mark items `[x]` there only after
+kkossev confirms the hub test. Items marked **ASK USER** / **VERIFY ON DEVICE** must not be changed
+without confirmation.
+
+> **`BUGS.md` and `TODO.md` are maintainer working notes kept only in the local working copy.** They
+> are listed by exact path in the repository `.gitignore`, so they are **not** published and will not
+> be present in a clone — exactly as for the other driver folders (root
+> [AGENTS.md](../../AGENTS.md) §0). References to them below are deliberate and are not broken links;
+> if the files are absent, derive the finding yourself and raise it rather than assuming none exists.
 
 > **ARCHITECTURE WARNING:** this driver is the **legacy monolithic architecture**: one
 > self-contained 1380-line file. There are **no** `#include kkossev.*` libraries, **no**
@@ -36,10 +42,10 @@ changed without confirmation.
 |---|---|
 | **`Aqara_P100_Multi_State_Sensor.groovy`** | **The production driver** (v0.1.6). The only `.groovy` file, and the only one you ever edit. `importUrl` points at the `development` branch copy of this exact path. |
 | `AGENTS.md` | This guide. |
-| `BUGS.md` | Reviewed bug work-list (root AGENTS.md §9). |
+| `BUGS.md` | Reviewed bug work-list (root AGENTS.md §9). **Local-only** — `.gitignore`d, not published. |
 | `CHANGELOG.md` | Keep a Changelog history, reconstructed from the driver's header history. |
 | `README.md` | User-facing. |
-| `TODO.md` | Open questions. Thin by necessity — there is no forum thread to harvest yet. |
+| `TODO.md` | Open questions and unverified device behaviour. **Local-only** — `.gitignore`d, not published. The release thread is not yet analysed. |
 | `packageManifest.json` | HPM manifest. Version `0.1.6`, first HPM release dated 2026-08-17. **Only touch it at an HPM release kkossev has declared** — a manifest version trailing the driver is the normal state (root [PUBLISHING.md](../../PUBLISHING.md)). |
 | `.hubitat\metadata.json` | Hubitat VS Code extension mapping (local file ↔ hub code id 5154). **Tool-managed — never hand-edit.** |
 
@@ -437,7 +443,7 @@ All FCC0 writes carry `[mfgCode: MFG_AQARA]` (`0x115F`) and `delay = 200`.
 5. **`unschedule()` in `configure()`** (line 1111) also cancels the 24-hour `logsOff` timer without
    rescheduling it (BUGS.md C16).
 6. The header history's `TODO:` list is empty — there is no author TODO block to migrate to
-   [TODO.md](TODO.md).
+   `TODO.md`.
 7. The community-thread URL was a literal `PLACEHOLDER` until 2026-08-17; it is now the real
    release thread (BUGS.md C10, closed).
 
