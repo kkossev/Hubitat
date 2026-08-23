@@ -133,6 +133,8 @@ ver. 1.3.6  2023-06-25 - chatty radars excessive debug logging bug fix.
  * ver. 3.3.1  2024-10-26 - added TS0601 _TZE200_f1pvdgoh into a new device profile group 'TS0601_2IN1_MYQ_ZMS03'
  * ver. 3.3.2  2024-11-30 - added Azoula Zigbee 4 in 1 Multi Sensor model:'HK-SENSOR-4IN1-A', manufacturer:'Sunricher' into SIHAS group
  * ver. 3.3.3  2025-01-29 - (dev. branch) TS0601 _TZE200_ppuj1vem moved to 'TS0601_2IN1_MYQ_ZMS03' deviceProfile @ltdonjohnson
+ * ver. 3.4.0 - 3.6.0 - see [CHANGELOG.md](CHANGELOG.md) for the full per-version detail of these releases
+ * ver. 3.6.1  2026-08-23 - (dev. branch) Refresh now forces temperature and humidity events (previously an unchanged value was swallowed by the delta filter); non-Tuya battery percentage is rounded instead of truncated (raw 1 was reported as 0%); fixed two unquoted respondsTo() arguments that could throw a NullPointerException in drivers without deviceProfileLib; removed the non-working 'reportingTime4in1' command from the TS0202_4IN1 profile (the Reporting Interval preference is unaffected)
 
 
 ------------------

@@ -35,15 +35,16 @@
  * ver. 3.5.5  2025-10-20 kkossev  - added IMOU Motion Sensor ZP1 model:'ZP2-EN', manufacturer:'MultIR'
  * ver. 3.5.6  2026-06-04 kkossev  - added TS0601 _TZE284_gnpflcoq 4-in-1 mmWave Radar Sensor profile 'TS0601_TZE284_4IN1'
  * ver. 3.5.7  2026-07-31 kkossev  - added HOBEIAN ZG-204ZX fingerprint to 'TS0601_TZE284_4IN1'
- * ver. 3.6.0  2026-08-05 kkossev  - (dev. branch) bug fixes; TS0202_MOTION_SWITCH (Linkoze LKMSZ001) dp:102 now maps to illumState (dark/light) instead of a fake lux value; added PGST TS0601 _TZE284_zmgahdog PIR+siren combo (motion-only) profile 'TS0601_PGST_PIR_SIREN'; TS0601_PGST_PIR_SIREN dp:1 motion confirmed, added dp:3/9/10/80/101/102 (sensitivity, keepTime and 4 diagnostic unknown_x attributes); fixed a NullPointerException in localProcessTuyaDP() dp 0x65 when the device profile is UNKNOWN; 'Reset Motion to Inactive' is shown again for RH3040_TUYATEC and SONOFF_MOTION_IAS (still defaulting to false); sendCommand() and setPar() now explain that leaving the name empty lists the valid names in the log
+ * ver. 3.6.0  2026-08-05 kkossev  - bug fixes; TS0202_MOTION_SWITCH (Linkoze LKMSZ001) dp:102 now maps to illumState (dark/light) instead of a fake lux value; added PGST TS0601 _TZE284_zmgahdog PIR+siren combo (motion-only) profile 'TS0601_PGST_PIR_SIREN'; TS0601_PGST_PIR_SIREN dp:1 motion confirmed, added dp:3/9/10/80/101/102 (sensitivity, keepTime and 4 diagnostic unknown_x attributes); fixed a NullPointerException in localProcessTuyaDP() dp 0x65 when the device profile is UNKNOWN; 'Reset Motion to Inactive' is shown again for RH3040_TUYATEC and SONOFF_MOTION_IAS (still defaulting to false); sendCommand() and setPar() now explain that leaving the name empty lists the valid names in the log
+ * ver. 3.6.1  2026-08-23 kkossev  - (dev. branch) removed the non-existent 'reportingTime4in1' entry from the TS0202_4IN1 commands map (it threw MissingMethodException; the dp:102 Reporting Interval preference is unaffected); commonLib 4.1.1, onOffLib 3.2.4, batteryLib 3.2.4, humidityLib 3.3.1, temperatureLib 3.3.2 - Refresh now forces temperature/humidity events, non-Tuya battery percentage is rounded instead of truncated, and two unquoted respondsTo() arguments that threw NullPointerException were fixed
  *
  *                                   TODO: show Temperature Offset and Humidity Offset only when the device profile supports TemperatureMeasurement and RelativeHumidityMeasurement capabilities
  *                                   TODO: check why no preferences : updateAllPreferences: no preferences defined for device profile SIHAS_USM-300Z_4_IN_1
  *                                   TODO: update documentation : https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1 
  */
 
-static String version() { "3.6.0" }
-static String timeStamp() {"2026/08/05 11:12 PM"}
+static String version() { "3.6.1" }
+static String timeStamp() {"2026/08/23 4:31 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -151,6 +152,12 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
 //boolean is2in1() { return getDeviceProfile().contains('TS0601_2IN1') } defined in the deviceProfileLib, because of a patch!
 
 
+// deviceProfileLib sendCommand() merges deviceProfilesV3defaults.defaultCommands into every profile's commands map.
+// It must be defined here in the main driver - the library only reads it. Left empty: this driver declares its
+// commands per profile. Without this declaration the bare identifier resolves to null in the HE sandbox, which the
+// '?.' in the library tolerates but only by relying on undocumented platform behavior.
+@Field static final Map deviceProfilesV3defaults = [:]
+
 // based on 'Tuya Multi Sensor 4 In 1' version '1.9.0' '2024/05/06 10:39 AM' 
 @Field static final Map deviceProfilesV3 = [
     // is4in1() // tested _TZ3210_zmy9hjay - OK
@@ -160,7 +167,7 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             device        : [type: 'PIR', isIAS:true, powerSource: 'dc', isSleepy:false],    // check powerSource
             capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'IlluminanceMeasurement': true, 'tamper': true, 'Battery': true],
             preferences   : ['motionReset':true, 'illuminanceThreshold':true, 'reportingTime4in1':'102', 'ledEnable':'111', 'keepTime':'0x0500:0xF001', 'sensitivity':'0x0500:0x0013'],
-            commands      : ['reportingTime4in1':'reportingTime4in1', 'resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences', 'printFingerprints':'printFingerprints', 'printPreferences':'printPreferences'],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences', 'printFingerprints':'printFingerprints', 'printPreferences':'printPreferences'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,EF00', outClusters:'0019,000A', model:'TS0202',  manufacturer:'_TZ3210_zmy9hjay', deviceJoinName: 'Tuya TS0202 Multi Sensor 4 In 1'],        // pairing: double click!
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,EF00', outClusters:'0019,000A', model:'5j6ifxj', manufacturer:'_TYST11_i5j6ifxj', deviceJoinName: 'Tuya TS0202 Multi Sensor 4 In 1'],
@@ -1170,9 +1177,11 @@ void formatAttrib() {
     if (DEVICE?.capabilities?.TemperatureMeasurement == true) { attrStr += addToAttr('temperature', 'temperature') }
     if (DEVICE?.capabilities?.RelativeHumidityMeasurement == true) { attrStr += addToAttr('humidity', 'humidity')  }
     attrStr = attrStr.substring(0, attrStr.length() - 3)    // remove the ',  '
-    updateAttr('all', attrStr)
     if (attrStr.length() > 64) {
         updateAttr('all', "Max Attribute Size Exceeded: ${attrStr.length()}")
+    }
+    else {
+        updateAttr('all', attrStr)
     }
 }
 

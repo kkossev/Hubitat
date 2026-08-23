@@ -421,20 +421,28 @@ setting. Do not change the global `TS0601_2IN1` default without testing an older
 **Verification:** fresh-pair one older inverted unit and one application-91 unit. Each must report
 inactive at rest and active on motion without manually changing the preference. **VERIFY ON DEVICE.**
 
-#### B2 — OPEN (half done) — Refresh does not force humidity events
+#### B2 — FIXED, confirmed on hub 2026-08-23 — Refresh does not force humidity events
 
-Pressing Refresh re-reads the device, but an unchanged value is swallowed by the delta filter and no
-event is sent. Fixed for temperature (temperatureLib 3.3.1) and for illuminance (3.5.8);
-**humidityLib line 56 still has no `isRefresh` bypass.**
+Pressing Refresh re-read the device, but an unchanged value was swallowed by the delta filter and no
+event was sent. Temperature (temperatureLib 3.3.1) and illuminance (3.5.8) were already partly done;
+humidityLib had no `isRefresh` bypass at all, and temperatureLib bypassed only the delta filter, so a
+Refresh within 10 s of the last temperature event was still queued.
 
-Design decision already made for illuminance: `isRefresh` must bypass **both** the delta filter *and*
-the minimum reporting interval, so a Refresh publishes immediately rather than being queued —
-`if (isRefresh || timeElapsed >= minTime)` on the send branch, plus `!isRefresh &&` on the delta
-guard.
+All three libraries now use the same two-gate bypass as illuminanceLib: `!isRefresh &&` on the delta
+guard, and `if (isRefresh || timeElapsed >= minTime)` on the send branch, plus the `[refresh]`
+description suffix with `isStateChange`.
 
-**This means temperatureLib 3.3.1 is itself incomplete**: it bypasses only the delta filter, so a
-Refresh within 10 s of the last temperature event is still delayed. Aligning all three libraries on
-the two-gate bypass is the remaining work.
+Fixed 2026-08-23 in **humidityLib 3.3.1** (full pattern added) and **temperatureLib 3.3.2**
+(min-reporting-interval gate). Confirmed on HOME-C8-PRO-DEV with a SiHAS `USM-300Z`: one Refresh
+published `illuminance is 1 lx [refresh]`, `temperature is 32.4 °C [refresh]` and
+`humidity is 30 % RH [refresh]` immediately, humidity being the proof since 30 % was already the
+current value.
+
+**Known side effect, not yet decided:** `isRefresh` stays true for the whole `REFRESH_TIMER` window,
+so a device that answers a cluster twice publishes twice. The same SiHAS Refresh produced two
+`humidity is 30 % RH [refresh]` events, from an unsolicited report (`command:0A`) and the read
+response (`command:01`). Same class as the duplicate-lux-channel item in Part 0. Options: accept it,
+or gate the bypass to the first event per attribute per refresh.
 
 #### B3 — DONE, hub confirmation pending — `inputIt()` never propagated preference defaults
 
@@ -453,59 +461,174 @@ while `input.options` is keyed by **integers**. Hubitat is usually lenient, but 
    dropdown should pre-select the correct labeled option — not blank, not the wrong one.
 3. On a device with **saved** values, those must still display and must not be overwritten.
 
-#### B4 — OPEN — `TS0202_4IN1` advertises a `reportingTime4in1` command that cannot execute
+#### B4 — FIXED 2026-08-23, hub confirmation pending — `TS0202_4IN1` advertised a `reportingTime4in1` command that cannot execute
 
-The profile `commands` map includes `'reportingTime4in1':'reportingTime4in1'`, but no such method
-exists, so `sendCommand('reportingTime4in1', x)` throws (caught, logged, returns false). Remove the
-entry or route it through `setPar('reportingTime4in1', val)`.
+The profile `commands` map included `'reportingTime4in1':'reportingTime4in1'`, but no such method
+exists anywhere in the driver or the libraries, so `sendCommand('reportingTime4in1', x)` reached
+`"${func}"(val)` in `deviceProfileLib.sendCommand()` and threw `MissingMethodException` (caught,
+logged as a warning, returns false). `TS0202_4IN1` was the only profile carrying it; every other
+entry in that map is a real library method.
 
-#### B5 — OPEN — unquoted method name disables the deviceProfile fallback in commonLib
+**Fixed by removing the entry.** Nothing is lost: dp:102 is already a first-class preference in the
+same profile (`'reportingTime4in1':'102'`), with the tuyaDPs entry declaring `rw:'rw', min:0,
+max:240, unit:'minutes'`, so the Reporting Interval is still settable from the Preferences page, and
+the `reportingTime4in1` attribute is unaffected.
 
-commonLib line 827: `if (this.respondsTo(processTuyaDPfromDeviceProfile))` — a bare identifier
-evaluating to null. Should be `this.respondsTo('processTuyaDPfromDeviceProfile')`. Masked in this
-driver because `customProcessTuyaDp()` always returns true, but live for other drivers.
+**Alternative not taken:** a wrapper `reportingTime4in1(String val) { setPar('reportingTime4in1', val) }`
+would work — `getPreferencesMapByName()` resolves the parameter and the DP would be sent — but
+`sendCommand()` expects a `List` of commands back and `setPar()` returns a boolean, so it would log
+`returned true instead of a list of commands!` and report failure despite having succeeded. Say so
+if the ad-hoc command is wanted back and it can be added with that caveat.
 
-#### B6 — OPEN — `return` inside `.each` closures does not exit the method
+#### B5 — FIXED 2026-08-23, hub confirmation pending — unquoted method name in the commonLib deviceProfile fallback
 
-- `getDeviceNameAndProfile()` (deviceProfileLib line 878): `return [deviceName, deviceProfile]` only
-  exits the closure — iteration continues and a later overlapping fingerprint could overwrite the
-  match. Rewrite with a `for` loop plus labeled break, or `find`.
-- `validateAndFixPreferences()`: `return false` inside `.each` only skips an iteration; the method
-  still returns true. Rewrite with `for` if the return value matters.
+`commonLib` (line 832 in the current source, 827 when filed):
+`if (this.respondsTo(processTuyaDPfromDeviceProfile))` — a bare identifier where every other
+`respondsTo` call in the libraries passes a quoted string or a String variable. Fixed to
+`this.respondsTo('processTuyaDPfromDeviceProfile')`.
 
-#### B7 — OPEN — `deviceProfilesV3defaults` referenced but never defined
+**No effect on this driver, confirmed by reading the code:** `customProcessTuyaDp()` at driver line
+831 returns `true` on both paths, so `standardProcessTuyaDP()` always returns at the earlier
+`customProcessTuyaDp` branch and never reaches line 832.
 
-deviceProfileLib line 727, added in lib 3.5.5. Works only via HE's null-resolution quirk, breaks
-under `@CompileStatic`, and the "defaultCommands" feature silently does nothing here. Define an
-empty `@Field static final Map deviceProfilesV3defaults = [:]` in the main driver, or guard with
-`this.hasProperty(...)` in the library.
+**The original diagnosis was wrong, and the real defect is worse.** This entry assumed the bare
+identifier made the fallback silently dead. The sandbox-semantics test was run on the hub on
+2026-08-23 (full results in `Libraries\BUGS.md`, top section) and shows:
 
-#### B8 — OPEN — `divideBy10()` only divides values > 10
+- an unknown bare identifier resolves to **`null`** — not to its own name, and with no
+  `MissingPropertyException`, confirming the Hubitat-quirk note at the top of Part III;
+- `respondsTo(bareName)` **works** when the named method exists, so the fallback was never dead in
+  any driver that includes `deviceProfileLib`;
+- `respondsTo(bareName)` **throws `NullPointerException`** when the method does not exist, because
+  `respondsTo(null)` throws.
 
-deviceProfileLib lines 310–313: values 0–10 pass through unscaled (an old IJXVKHD0 patch). No active
-profile uses it, but it is a landmine for reuse. Fix, or rename to `divideBy10Legacy`.
+So the old line was not dead code — it was an **aborted Tuya parse** in the 10 drivers that include
+`commonLib` without `deviceProfileLib` (Aqara Cube T1 Pro, Aqara LED Strip T1, Aqara TVOC, Tuya
+Control Screen Panel, Tuya Fingerbot, Tuya Light Sensor, Tuya Temperature Humidity Sensor,
+VINDSTYRKA, Zigbee Button Dimmer, ZigUSB). The quoted form returns `false` cleanly instead.
 
-#### B9 — OPEN — `formatAttrib()` sends the oversized `all` event before checking the 64-char limit
+`Libraries\BUGS.md` **C2** covers the same defect and has been re-graded to severity A; its
+`onOffLib` half (`respondsTo(getDEVICE)` at lines 108 and 141, crashing `on()`/`off()` in 6 drivers)
+is still open.
 
-`updateAttr('all', attrStr)` runs before the `length() > 64` check, producing two events. Move the
-length check before the first `updateAttr`.
+**Verify on hub:** no change expected for this driver. The meaningful check is that a driver
+embedding `commonLib` *without* `deviceProfileLib` no longer throws on an EF00 datapoint.
 
-#### B10 — OPEN (documented, deliberately not fixed) — a device profile stuck at `UNKNOWN` never re-resolves
+#### B6 — FIXED 2026-08-23, hub confirmation pending — `return` inside `.each` closures does not exit the method
 
-`deviceProfileInitializeVars()` in `deviceProfileLib` calls `setDeviceNameAndProfile()` only when
-`state.deviceProfile == null`. Once it has been set to the string `UNKNOWN` — which is what happens
-when a device pairs against a driver version that does not yet contain its profile — it stays
-`UNKNOWN` forever, even across an `initializeVars(fullInit = true)`. Adding the profile in a later
-release then appears to do nothing: `DEVICE` resolves to `null`, every datapoint reports
-`NOT PROCESSED from deviceProfile`, and preferences for the profile never appear.
+- **`getDeviceNameAndProfile()`** — real fix. `return [deviceName, deviceProfile]` only left the
+  inner closure, so iteration continued over every remaining profile and fingerprint and the **last**
+  match won instead of the first. Rewritten with explicit `for` loops, mirroring the implementation
+  already present in `deviceProfileLibV4` (which carries the same explanatory comment — it was fixed
+  there and never back-ported). Also added the `deviceProfilesV3 != null` and
+  `profileMap.fingerprints ?: []` guards that V4 has; the old `.each` would have thrown on a profile
+  with no fingerprints.
 
-Seen in the wild on 2026-08-05 with `_TZE284_zmgahdog` (see I.4). The workaround is
-`*** LOAD ALL DEFAULTS ***` from the **Device Utilities** command, which clears state entirely and
-forces re-resolution.
+  **Latent in this driver, not live.** A scan of all 35 profiles / 85 fingerprints found six
+  duplicated `(model, manufacturer)` pairs, but every duplicate sits *within a single profile* and
+  every one carries an identical `deviceJoinName`, so both the profile and the name resolved
+  correctly regardless. The fix matters for drivers whose duplicates span two profiles.
 
-The one-line fix would be `if (fullInit == true || state.deviceProfile == null || state.deviceProfile == UNKNOWN)`,
-but it lives in a shared library and would reach every driver that embeds it, so it is recorded here
-rather than applied. Revisit when the next library-wide change is being made anyway.
+- **`validateAndFixPreferences()`** — no behavior change, intent made explicit. The four
+  `return false` statements inside the `.each` are *continues*, not method returns. That is the
+  correct semantics here: one unusable preference must not stop the rest from being validated. They
+  are now plain `return` with a comment saying so, and the misleading `false` value is gone. The
+  method's return value is not consumed by any caller — it is only reachable as a profile command,
+  and `sendCommand()` discards non-List results — so converting to a `for` loop with real aborts
+  would have been a behavior regression for no benefit.
+
+#### B7 — FIXED 2026-08-23, hub confirmation pending — `deviceProfilesV3defaults` referenced but never defined
+
+`deviceProfileLib.sendCommand()` merges `deviceProfilesV3defaults?.defaultCommands` into every
+profile's commands map, but no driver in the repo ever defined the map.
+
+**It never crashed** — the 2026-08-23 sandbox test confirmed the bare identifier resolves to `null`,
+and the `?.` in the library tolerates that, so the feature was simply inert. The defect was the
+undeclared dependency on undocumented platform behavior, not a fault.
+
+Fixed by taking the first option above: `@Field static final Map deviceProfilesV3defaults = [:]` is
+now declared in the main driver, above `deviceProfilesV3`, with a comment explaining what the
+library does with it and why it is left empty (this driver declares commands per profile). The
+library was deliberately **not** touched — it is embedded by ~25 drivers and the `?.` guard there is
+already correct.
+
+**Still open for other drivers:** every other driver embedding `deviceProfileLib` continues to rely
+on the null quirk. Declaring the map in each, or adding a `this.hasProperty(...)` guard in the
+library, would close it repo-wide.
+
+
+#### B9 — FIXED 2026-08-23, hub confirmation pending — `formatAttrib()` sent the oversized `all` event before checking the 64-char limit
+
+`updateAttr('all', attrStr)` ran unconditionally and only then was `length() > 64` tested, firing a
+second `updateAttr` with the error text. Any device whose `all` string exceeded 64 characters
+emitted **two events per update** — the oversized value followed by
+`Max Attribute Size Exceeded: N`. Live for 4-in-1 devices with **Show All Status Text** enabled,
+where status + motion + battery + illuminance + temperature + humidity clears 64 easily.
+
+Fixed by testing the length first and sending exactly one event either way. Driver-local, no
+library involved.
+
+**Still open, found while fixing this (not part of B9):** line 1173
+`attrStr.substring(0, attrStr.length() - 3)` is unguarded and would throw
+`StringIndexOutOfBoundsException` on an empty `attrStr`. Not reachable today because `status` and
+`motion` are always appended, but one profile change away from being live.
+
+**Verify on hub:** with **Show All Status Text** on and a device exceeding 64 characters, the event
+log must show a single `all` event reading `Max Attribute Size Exceeded: N`, with no preceding
+oversized value.
+
+#### B10 — FIXED 2026-08-23, hub confirmation pending — a device profile stuck at `UNKNOWN` did not re-resolve after a driver update
+
+**This entry was substantially wrong as originally filed. Two of its three assertions did not hold.**
+Re-analyzed 2026-08-23 against the actual call chain.
+
+**What was wrong in the original filing:**
+
+- *"it stays `UNKNOWN` forever, even across an `initializeVars(fullInit = true)`"* — **false**.
+  `commonLib.initializeVars(true)` does `state.clear()` (line 1414), which wipes the stale value, and
+  then calls `setDeviceNameAndProfile()` (line 1417), which re-resolves. Only afterwards, at line
+  1451, does `executeCustomHandler('deviceProfileInitializeVars', fullInit)` run, by which time the
+  profile is already set. That line 1417 was added on **2025-09-08**, about eleven months before this
+  bug was filed.
+- *"the workaround is `*** LOAD ALL DEFAULTS ***`"* — incomplete. `commonLib.initialize()` calls
+  `initializeVars(fullInit = true)`, so the plain **Initialize** button already recovered a stuck
+  device. This driver does not override `initialize()`.
+
+**What was actually broken — the real defect, which the original entry never identified:**
+
+After a driver code update, `checkDriverVersion()` fires and calls **`initializeVars(false)`**, not
+`true`. That path does no `state.clear()` and no `setDeviceNameAndProfile()`. It then reached
+`deviceProfileInitializeVars(false)`, whose guard was `if (state.deviceProfile == null)` — and the
+string `UNKNOWN` is not null, so nothing re-resolved. A device that paired against a driver version
+lacking its profile therefore stayed broken after the profile was added in a later release, until
+the user manually pressed Initialize. That is the symptom seen with `_TZE284_zmgahdog` on 2026-08-05
+(see I.4).
+
+**Fix applied:** back-ported `shouldDetectDeviceProfile()` from `deviceProfileLibV4` into
+`deviceProfileLib`, and `deviceProfileInitializeVars()` now calls it instead of the null test:
+
+```groovy
+public boolean shouldDetectDeviceProfile() {
+    String currentProfile = state?.deviceProfile
+    return currentProfile == null || currentProfile == '' || currentProfile == UNKNOWN
+}
+```
+
+Same situation as **B6** — V4 already had the correct implementation and it was never back-ported.
+
+**Risk:** low, but it is a shared library reaching the 17 drivers that embed `deviceProfileLib`. The
+new guard only fires when the stored profile is null, empty or `UNKNOWN`, so a correctly-resolved
+device is untouched. Verified that no driver includes both `deviceProfileLib` and
+`deviceProfileLibV4`, so there is no duplicate-method collision (17 use V3, 1 uses V4).
+
+**Verify on hub:** pair a device against a driver build without its profile so `state.deviceProfile`
+becomes `UNKNOWN`, then paste in a build that has the profile and press **Save**. The profile must
+resolve on the version-change path alone, with no Initialize and no LOAD ALL DEFAULTS.
+
+**Separate latent flaw, not fixed:** in `setDeviceNameAndProfile()`, if a profile is found but
+`deviceName` comes back `UNKNOWN` — possible only when a fingerprint has neither `deviceJoinName`
+nor a profile `description` — neither branch assigns `state.deviceProfile` and it is left unset.
+Not reachable with this driver's current profiles.
 
 ### Considered and rejected — do not re-open
 
@@ -523,6 +646,12 @@ once `invertMotion` is taken into account — that is the trap that produced thi
 "fix" and it would break motion reporting on every device in that group.
 
 Optional tidy-up: mirror this reference as a code comment next to `is2in1()` or the dp:1 entry.
+
+#### B8 — NOT A BUG — `divideBy10()` only divides values > 10
+
+deviceProfileLib lines 310–313: values 0–10 pass through unscaled. Filed as a landmine; closed
+2026-08-23 by kkossev — **this is intentional and must not be "fixed"**. Do not change the
+threshold, and do not rename it to `divideBy10Legacy`.
 
 #### A15 — NOT A BUG — the `packageManifest.json` version lag is deliberate
 

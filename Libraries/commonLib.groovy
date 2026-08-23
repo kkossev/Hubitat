@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/commonLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-commonLib',
-    version: '4.1.0'
+    version: '4.1.1'
 )
 /*
   *  Common ZCL Library
@@ -29,7 +29,8 @@ library(
   * ver. 4.0.3  2025-10-18 kkossev  - added ignoreDuplicatedZigbeeMessages setting; DIGITAL_TIMER increased to 5000 ms
   * ver. 4.0.4  2026-06-04 kkossev  - added ED00 cluster;
   * ver. 4.0.5  2026-08-03 kkossev  - bug fixes
-  * ver. 4.1.0  2026-08-05 kkossev  - (dev. branch) the administrative commands drop-down moved from configure(par) to the new deviceUtilities(par) command, so that configure() is again a plain Configuration capability button; removed the two separator entries from ConfigureOpts; configureHelp() is callable again and shows the command list and a '_status_' event when nothing was selected; do not use 'defaultValue' in a command parameter - it does not preselect the drop-down, but it IS submitted when Run is pressed without a selection!; configure() now shows a 'sleepy devices can not be configured' warning text; ping() icon changed to the antenna bars; added a one-click 'loadAllDefaults' command button
+  * ver. 4.1.0  2026-08-05 kkossev  - the administrative commands drop-down moved from configure(par) to the new deviceUtilities(par) command, so that configure() is again a plain Configuration capability button; removed the two separator entries from ConfigureOpts; configureHelp() is callable again and shows the command list and a '_status_' event when nothing was selected; do not use 'defaultValue' in a command parameter - it does not preselect the drop-down, but it IS submitted when Run is pressed without a selection!; configure() now shows a 'sleepy devices can not be configured' warning text; ping() icon changed to the antenna bars; added a one-click 'loadAllDefaults' command button
+  * ver. 4.1.1  2026-08-23 kkossev  - (dev. branch) bug fix: quoted the respondsTo('processTuyaDPfromDeviceProfile') argument in standardProcessTuyaDP(); the bare identifier threw a NullPointerException in drivers without deviceProfileLib
   *
   *                                   TODO: change the offline threshold to 2 
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
@@ -46,8 +47,8 @@ library(
   *
 */
 
-String commonLibVersion() { '4.1.0' }
-String commonLibStamp() { '2026/08/05 11:18 PM' }
+String commonLibVersion() { '4.1.1' }
+String commonLibStamp() { '2026/08/23 4:28 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -829,7 +830,7 @@ void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, fin
         }
     }
     // check if DeviceProfile processing method exists (deviceProfieLib should be included in the main driver)
-    if (this.respondsTo(processTuyaDPfromDeviceProfile)) {
+    if (this.respondsTo('processTuyaDPfromDeviceProfile')) {
         //logTrace 'standardProcessTuyaDP: processTuyaDPfromDeviceProfile exists, calling it...'
         if (this.respondsTo('isInCooldown') && isInCooldown()) {
             logDebug "standardProcessTuyaDP: device is in cooldown, skipping processing of dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
