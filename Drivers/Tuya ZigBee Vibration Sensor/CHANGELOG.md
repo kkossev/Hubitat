@@ -9,6 +9,8 @@ and this project follows Semantic Versioning where applicable.
 
 Changes for the next release will be documented here.
 
+## [1.4.7] - 2026-08-02
+
 ### Added
 
 - Exposed contact state for the `_TZE200_kzm5w4iz` TS0601 door/vibration sensor via the
