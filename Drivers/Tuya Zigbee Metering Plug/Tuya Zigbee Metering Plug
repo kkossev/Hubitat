@@ -71,8 +71,8 @@
  *  ver. 2.0.2 2025-08-19 kkossev - EMIZB-141 fix attempt
  *  ver. 2.0.3 2026-04-20 kkossev - bug fix: breaker threshold boolean variables declared as int in processTuyaThresholdsCommands(); AC Frequency polling (0x0300) now auto-disabled after first unsupported-attribute response;
  *  ver. 2.0.4 2026-08-07 kkossev - minor bug fixes
+ *  ver. 2.0.5 2026-08-23 kkossev - ping() now reads the Basic cluster ZCL Version attribute (0x0000) instead of the Application Version (0x0001), which Tuya devices also send as unsolicited check-in reports; the rtt measurement moved to the 0x0000 response accordingly;
  *
- *                                 TODO: change the ping() command to cluster 0x0000 attribute 0x0000 (ZCL Version)
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
  *                                 TODO: add toggle() command
  *                                 TODO: configure the temperature reproting (be able to switch if off!)
@@ -93,8 +93,8 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
-static String version() { '2.0.4' }
-static String timeStamp() { '2026/08/07 11:30 PM' }
+static String version() { '2.0.5' }
+static String timeStamp() { '2026/08/23 06:29 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -538,18 +538,21 @@ void parse(String description) {
                     return null
                 }
                 else if (it.cluster == '0000' && (descMap.attrId in ['0000', '0001', '0004', '0005', '0007'])) {
-                    if (it.attrId == '0001') {
-                        if (logEnable) { log.debug "${device.displayName} Tuya check-in message (attribute ${it.attrId} reported: ${it.value})" }
+                    if (it.attrId == '0000') {                              // ZCL Version - the ping() command response
+                        if (logEnable) { log.debug "${device.displayName} ZCL Version (attribute ${it.attrId}) reported: ${it.value}" }
                         Long now = new Date().getTime()
                         if (state.lastTx == null) { state.lastTx = [:] }
                         Long pingTime = state.lastTx['pingTime'] as Long
                         if (pingTime != null) {
-                            state.lastTx.remove('pingTime')                 // consume once — prevents repetitive bogus rtt events from subsequent check-ins
+                            state.lastTx.remove('pingTime')                 // consume once — prevents repetitive bogus rtt events from subsequent reports
                             int timeRunning = (now - pingTime) as int       // Long math, then narrow
                             if (timeRunning >= 0 && timeRunning < MAX_PING_MILISECONDS) {
                                 sendRttEvent()
                             }
                         }
+                    }
+                    else if (it.attrId == '0001') {
+                        if (logEnable) { log.debug "${device.displayName} Tuya check-in message (attribute ${it.attrId} reported: ${it.value})" }
                     }
                     else {
                         logDebug "attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
@@ -1922,7 +1925,7 @@ void ping() {
     scheduleCommandTimeoutCheck()
     if (state.lastTx == null) { state.lastTx = [:] }
     state.lastTx['pingTime'] = new Date().getTime()
-    sendZigbeeCommands(zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0))
+    sendZigbeeCommands(zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x0000, [:], 0))    // ZCL Version - mandatory attribute, not spontaneously reported by Tuya devices
 }
 
 void sendRttEvent(String value=null) {
