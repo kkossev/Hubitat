@@ -71,7 +71,7 @@
  *  ver. 2.0.2 2025-08-19 kkossev - EMIZB-141 fix attempt
  *  ver. 2.0.3 2026-04-20 kkossev - bug fix: breaker threshold boolean variables declared as int in processTuyaThresholdsCommands(); AC Frequency polling (0x0300) now auto-disabled after first unsupported-attribute response;
  *  ver. 2.0.4 2026-08-07 kkossev - minor bug fixes
- *  ver. 2.0.5 2026-08-23 kkossev - ping() now reads the Basic cluster ZCL Version attribute (0x0000) instead of the Application Version (0x0001), which Tuya devices also send as unsolicited check-in reports; the rtt measurement moved to the 0x0000 response accordingly;
+ *  ver. 2.0.5 2026-08-23 kkossev - ping() now reads the Basic cluster ZCL Version attribute (0x0000) instead of the Application Version (0x0001), which Tuya devices also send as unsolicited check-in reports; the rtt measurement moved to the 0x0000 response accordingly; bug fix: rtt was always reported as 0 ms - pingTime was consumed from state before sendRttEvent() could read it;
  *
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
  *                                 TODO: add toggle() command
@@ -544,11 +544,11 @@ void parse(String description) {
                         if (state.lastTx == null) { state.lastTx = [:] }
                         Long pingTime = state.lastTx['pingTime'] as Long
                         if (pingTime != null) {
-                            state.lastTx.remove('pingTime')                 // consume once — prevents repetitive bogus rtt events from subsequent reports
                             int timeRunning = (now - pingTime) as int       // Long math, then narrow
                             if (timeRunning >= 0 && timeRunning < MAX_PING_MILISECONDS) {
-                                sendRttEvent()
+                                sendRttEvent()                              // reads state.lastTx['pingTime'] itself, so it must still be there!
                             }
+                            state.lastTx.remove('pingTime')                 // consume once - prevents repetitive bogus rtt events from subsequent reports
                         }
                     }
                     else if (it.attrId == '0001') {
