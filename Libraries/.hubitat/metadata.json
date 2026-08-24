@@ -64,13 +64,13 @@
       "filepath": "/c:/work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 717
+      "version": 721
     },
     {
       "filepath": "/c:/work/Hubitat/Libraries/illuminanceLib.groovy",
       "id": 168,
       "codeType": "library",
-      "version": 23
+      "version": 25
     },
     {
       "filepath": "/c:/work/Hubitat/Libraries/deviceProfileLib.groovy",

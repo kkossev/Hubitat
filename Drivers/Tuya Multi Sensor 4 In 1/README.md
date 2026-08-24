@@ -39,6 +39,8 @@ If your Tuya device did not work with the HE inbuilt drivers, simply changing to
 | | | |
 | **PIR Motion Sensor Detector With Light Sensor Scene Switch** <br> ![image](https://github.com/kkossev/Hubitat/assets/6189950/386c4047-5dd0-44d7-9fca-0d6eea98bbaf)| Model : TS0202 <br>Manufacturer : _TZ3210_cwamkvua <br><br> | AliExpres: [link](https://s.click.aliexpress.com/e/_DBt1Guj)<br>AliExpress: [link](https://s.click.aliexpress.com/e/_DDELb39)<br>|
 | | | |
+| **LinknLink eMotion Air Presence Multi-Sensor** | Model : eMotion Air <br>Manufacturer : LinknLink <br>Battery powered mmWave presence sensor <br>Reports: Motion (occupancy cluster 0x0406), Illuminance, Temperature, Humidity, Battery <br>The built-in button is exposed as a child device (Generic Component Button Controller) | Product guide: [link](https://www.linknlink.com/blogs/emotion-air/product-guide)<br>Zigbee2MQTT: [link](https://www.zigbee2mqtt.io/devices/eMotion_Air.html)<br>|
+| | | |
 
 ----------------------------
 

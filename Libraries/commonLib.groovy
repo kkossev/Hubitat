@@ -30,7 +30,7 @@ library(
   * ver. 4.0.4  2026-06-04 kkossev  - added ED00 cluster;
   * ver. 4.0.5  2026-08-03 kkossev  - bug fixes
   * ver. 4.1.0  2026-08-05 kkossev  - the administrative commands drop-down moved from configure(par) to the new deviceUtilities(par) command, so that configure() is again a plain Configuration capability button; removed the two separator entries from ConfigureOpts; configureHelp() is callable again and shows the command list and a '_status_' event when nothing was selected; do not use 'defaultValue' in a command parameter - it does not preselect the drop-down, but it IS submitted when Run is pressed without a selection!; configure() now shows a 'sleepy devices can not be configured' warning text; ping() icon changed to the antenna bars; added a one-click 'loadAllDefaults' command button
-  * ver. 4.1.1  2026-08-23 kkossev  - (dev. branch) bug fix: quoted the respondsTo('processTuyaDPfromDeviceProfile') argument in standardProcessTuyaDP(); the bare identifier threw a NullPointerException in drivers without deviceProfileLib
+  * ver. 4.1.1  2026-08-23 kkossev  - (dev. branch) bug fix: quoted the respondsTo('processTuyaDPfromDeviceProfile') argument in standardProcessTuyaDP(); the bare identifier threw a NullPointerException in drivers without deviceProfileLib; cosmetic: parse() and standardAndCustomParseCluster() log the cluster id from clusterId/clusterInt when descMap.cluster is null (catchall messages), instead of 'cluster:0xnull'; removed a stray '}' from the healthStatus warning text
   *
   *                                   TODO: change the offline threshold to 2 
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
@@ -210,7 +210,9 @@ public void parse(final String description) {
             break
         default:
             if (settings.logEnable) {
-                logWarn "parse: zigbee received <b>unknown cluster:${descMap.cluster} (${descMap.clusterInt})</b> message (${descMap})"
+                // descMap.cluster is null for catchall messages - fall back to clusterId, or format clusterInt
+                String clusterHex = descMap.cluster ?: descMap.clusterId ?: zigbee.convertToHexString(descMap.clusterInt as Integer, 4)
+                logWarn "parse: zigbee received <b>unknown cluster:0x${clusterHex} (${descMap.clusterInt})</b> message (${descMap})"
             }
             break
     }
@@ -229,8 +231,10 @@ public void parse(final String description) {
 boolean standardAndCustomParseCluster(Map descMap, final String description) {
     Integer clusterInt = descMap.clusterInt as Integer
     String  clusterName = ClustersMap[clusterInt] ?: UNKNOWN
+    // descMap.cluster is null for catchall messages - fall back to clusterId, or format clusterInt, so that the logs never show 'cluster:0xnull'
+    String  clusterHex = descMap.cluster ?: descMap.clusterId ?: zigbee.convertToHexString(clusterInt, 4)
     if (clusterName == null || clusterName == UNKNOWN) {
-        logWarn "standardAndCustomParseCluster: zigbee received <b>unknown cluster:0x${descMap.cluster} (${descMap.clusterInt})</b> message (${descMap})"
+        logWarn "standardAndCustomParseCluster: zigbee received <b>unknown cluster:0x${clusterHex} (${clusterInt})</b> message (${descMap})"
         return false
     }
     String customParser = "customParse${clusterName}Cluster"
@@ -248,7 +252,7 @@ boolean standardAndCustomParseCluster(Map descMap, final String description) {
         return true
     }
     if (device?.getDataValue('model') != 'ZigUSB' && descMap.cluster != '0300') {    // patch!
-        logWarn "standardAndCustomParseCluster: <b>Missing</b> ${standardParser} or ${customParser} handler for <b>cluster:0x${descMap.cluster} (${descMap.clusterInt})</b> message (${descMap})"
+        logWarn "standardAndCustomParseCluster: <b>Missing</b> ${standardParser} or ${customParser} handler for <b>cluster:0x${clusterHex} (${clusterInt})</b> message (${descMap})"
     }
     return false
 }
@@ -1144,7 +1148,7 @@ private void sendHealthStatusEvent(final String value) {
         logInfo "${descriptionText}"
     }
     else {
-        if (settings?.txtEnable) { log.warn "${device.displayName}} <b>${descriptionText}</b>" }
+        if (settings?.txtEnable) { log.warn "${device.displayName} <b>${descriptionText}</b>" }
     }
 }
 

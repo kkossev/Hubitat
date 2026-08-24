@@ -80,6 +80,35 @@ Carried over from the 3.5.8 verification checklist, in case those fixes were not
   confirm the next report of ~100 lx **is** published. It must establish the baseline instead of
   being swallowed.
 
+The `LINKNLINK_EMOTION_AIR` profile (2026-08-23) is **confirmed on the hub** — see Part I.6 and
+bug A6 for what was verified and for the two accepted limitations.
+
+Two changes made later on 2026-08-23, **not yet verified on the hub**:
+
+1. **`(delayed)` first event** — `temperatureLib` 3.3.2, `humidityLib` 3.3.1 and `illuminanceLib`
+   3.2.2 computed `timeElapsed` as `now() - (state.lastRx['…Time'] ?: now())`, so a **null** last-Rx
+   time (states just cleared) came out as 0 seconds elapsed and the first report was queued for the
+   full `minReportingTime`, published late and tagged `type: delayed`. A null now means "no previous
+   event" and the report is sent immediately. Verify: `Load All Defaults`, then confirm the first
+   temperature / humidity / illuminance report is published at once, with no `DELAYING …` debug line.
+   **Affects every driver that includes these three libraries.**
+2. **Temperature and humidity reporting intervals** — `customConfigureDevice()` now calls the new
+   `bindAndConfigureReporting()` helper for clusters 0x0400/0x0402/0x0405/0x0406 (bind as before,
+   plus `configureReporting` when the profile's `configuration:` entry has a
+   `'reporting':[minTime, maxTime, delta]` list). `LINKNLINK_EMOTION_AIR` sets 10 s / 3600 s / 0.5 °C
+   for temperature and 10 s / 3600 s / 1 %RH for humidity, and declares the `'ReportingConfiguration'`
+   capability so the *Minimum/Maximum time between reports* preferences (Advanced Options) override
+   the profile min/max — **only when changed from the library defaults** (10 / 3600), otherwise those
+   always-populated preferences would make the profile values dead code.
+   Confirmed on the hub 2026-08-23: `zigbee configure reporting response: Success` for both 0x0402
+   and 0x0405. Still to verify: T/H then arriving at the configured cadence instead of the factory one
+   (about 17 minutes), and a changed preference value actually reaching the device on Configure.
+   Only this one profile uses those `configuration:` keys, so no other profile changes behavior.
+   Fixed on the way: `zigbee.configureReporting()` emits its own `zdo bind`, which was doubling the
+   bind for 0x0402/0x0405. **The same duplication still exists in the `'0x0001'` block** (two binds
+   with `batteryReporting`, three when a profile also has `voltageReporting`, e.g. the SONOFF ones) —
+   left alone because that block is shared by several profiles.
+
 ---
 
 ## Part I — Device-support backlog
@@ -171,6 +200,46 @@ Determine whether the "must be ridiculously close" behaviour is configurable sen
 profile selection, placement, or device firmware — not automatically a driver defect.
 
 - Related thread: [t/109917 #8](https://community.hubitat.com/t/-/109917/8)
+
+### I.6 `[x]` DONE, confirmed on hub 2026-08-23 — LinknLink eMotion Air
+
+New profile `LINKNLINK_EMOTION_AIR` added to the V3 source. Battery-powered mmWave presence
+multi-sensor, pure standard ZCL (no Tuya EF00, no IAS), so it is handled entirely by the existing
+generic code paths — `customParseOccupancyCluster()` for 0x0406:0000 and the temperature / humidity
+/ illuminance / battery libraries.
+
+- Identity: `model:'eMotion Air', manufacturer:'LinknLink', profileId:'0104', endpointId:'01',
+  inClusters:'0000,0020,0402,0405,0400,0406,0001', outClusters:'0006,0008,0019'`
+- Z2M converter: [linknlink.ts](https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/linknlink.ts)
+  (`temperature`, `humidity`, `illuminance`, `occupancy`, `battery`, `commandsOnOff`, `commandsLevelCtrl`)
+- Device page: [zigbee2mqtt.io/devices/eMotion_Air](https://www.zigbee2mqtt.io/devices/eMotion_Air.html)
+
+Verified on the hub (kkossev, 2026-08-23):
+
+1. **Fingerprint** — the profile resolves by exact model + manufacturer match:
+   `deviceProfile=LINKNLINK_EMOTION_AIR, deviceName=LinknLink eMotion Air Presence Multi-Sensor`.
+2. **Reports** — motion from 0x0406, temperature (raw 0x0B90 → 29.6 °C), humidity, illuminance
+   (raw 0x39B4 → 30 lx, the ZCL `10^((raw-1)/10000)` formula), battery (raw 0xC8 → 100 %, raw 0x2F →
+   4.7 V).
+3. **`isSleepy:true`** — the device announce capability byte is 0x80 (RxOnWhenIdle = 0), but all the
+   binds (0x0001, 0x0400, 0x0402, 0x0405, 0x0406) and the battery `configureReporting` returned
+   Success on the first `Configure`.
+4. **Occupancy reset** — confirmed by the user.
+5. **Refresh** — returns all five values.
+6. **Button** — works through the child device (see A6). The ZCL traffic actually observed:
+   - short press → `0x0006 cmd 02` (Toggle) on the first press, `0x0006 cmd 01` (On) on every press
+     after that → both mapped to `pushed`
+   - long press → `0x0008 cmd 01` data `[00, 32]` (Move **up**, rate 0x32) → `held`
+   - release → `0x0008 cmd 03` (Stop), about 500 ms later → `released`
+   - `0x0006 cmd 00` (Off) and the Step commands `0x0008 cmd 02/06` were **never** seen. Only Move-up
+     occurs, so the direction-specific `cluster:command:firstDataByte` key form is not needed here.
+
+   Accepted as-is (kkossev, 2026-08-23): `doubleTapped` stays in `supportedButtonValues` and the two
+   Step rows stay in `zclCommands`, even though no Step command has been observed — revisit only if a
+   user reports a double-tap that does nothing.
+
+   If duplicate events ever appear (APS retries), add a short same-command debounce in
+   `processButtonZclCommand()`. If the commands stop arriving, add a `zdo bind` for 0x0006/0x0008.
 
 ### Fingerprint audit notes (2026-07-11)
 
@@ -359,7 +428,7 @@ on `null` throws NPE.
 
 ### A — Functional bugs
 
-#### A6 — ASK USER — `TS0202_MOTION_SWITCH` button events are dead
+#### A6 — `[x]` DONE, confirmed on hub 2026-08-23 — button events routed to a child device (was: dead button events)
 
 The profile defines dp:101 `pushed` and `customProcessDeviceProfileEvent()` has a `'pushed'` case,
 but: (1) the driver declares no PushableButton/DoubleTapableButton/HoldableButton capability and no
@@ -367,10 +436,34 @@ but: (1) the driver declares no PushableButton/DoubleTapableButton/HoldableButto
 (2) `buttonEvent()` does not exist anywhere in the driver and would throw
 `MissingMethodException`; (3) the handler logs undefined `value`/`valueCorrected`.
 
-Fix options — **kkossev's decision, ask before implementing**: (a) add button capabilities plus a
-minimal `buttonEvent()`, using the standalone `Tuya_Motion_Sensor_and_Scene_Switch.groovy` v1.4.2 in
-this folder as the reference; or (b) remove dp:101/`switch` from the profile and document that
-scene-switch users need the clone driver.
+**Resolved 2026-08-23 (option c — kkossev's decision): a child device, no parent capabilities.**
+Neither (a) button capabilities on the parent nor (b) removing the DP was taken. Instead the profile
+declares a `buttons:` map (`numberOfButtons`, `supportedButtonValues`, plus `zclCommands` and/or
+`tuyaDPs` event sources) and the driver creates one child device per parent running the Hubitat
+inbuilt **`Generic Component Button Controller`** (DNI `<device.id>-BTN`). Button events are pushed
+into the child with `child.parse([[name:'pushed', value:'1', …]])`. The parent still declares no
+button capability and no `pushed` attribute, and `buttonLib` is not included.
+
+Covers both devices that have a button: `TS0202_MOTION_SWITCH` (`_TZ3210_cwamkvua`, Tuya dp:101) and
+`LINKNLINK_EMOTION_AIR` (ZCL clusters 0x0006/0x0008 — see I.6).
+
+Verified on the hub (kkossev, 2026-08-23), with the LinknLink eMotion Air:
+
+1. The child device is created on Initialize (`customCreateChildDevices(true)` → "Created eMotion Air
+   Button") and each gesture produces exactly one correctly typed event on it — the child logs
+   `button 1 was pushed` / `held` / `released`.
+2. **Known limitation, accepted:** the inbuilt child driver filters `supportedButtonValues` out of
+   `parse()` — the child's Current States show `numberOfButtons`, `pushed`, `held` and `released`,
+   but no `supportedButtonValues`. The driver was deliberately **left as is**: the child declares
+   PushableButton / DoubleTapableButton / HoldableButton / ReleasableButton itself, which is what
+   Rule Machine uses. The fallback, if it is ever wanted, is one line — `child.sendEvent(…)` instead
+   of `child.parse(…)` for that attribute in `syncButtonChildDevice()`.
+3. Existing `_TZ3210_cwamkvua` users get the child automatically at the next driver-version change —
+   worth a release-note line.
+
+Not exercised on hardware: `TS0202_MOTION_SWITCH` dp:101 → child events (no `_TZ3210_cwamkvua` unit
+available). The plumbing is shared with the verified ZCL path; only the DP interception in
+`processButtonTuyaDp()` is unique to it. Recheck if a user reports.
 
 #### A8 — VERIFY ON DEVICE — `TS0601_TZE284_4IN1` `pirSensitivity` data type
 

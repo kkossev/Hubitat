@@ -35,8 +35,8 @@
  * ver. 3.5.5  2025-10-20 kkossev  - added IMOU Motion Sensor ZP1 model:'ZP2-EN', manufacturer:'MultIR'
  * ver. 3.5.6  2026-06-04 kkossev  - added TS0601 _TZE284_gnpflcoq 4-in-1 mmWave Radar Sensor profile 'TS0601_TZE284_4IN1'
  * ver. 3.5.7  2026-07-31 kkossev  - added HOBEIAN ZG-204ZX fingerprint to 'TS0601_TZE284_4IN1'
- * ver. 3.6.0  2026-08-05 kkossev  - bug fixes; TS0202_MOTION_SWITCH (Linkoze LKMSZ001) dp:102 now maps to illumState (dark/light) instead of a fake lux value; added PGST TS0601 _TZE284_zmgahdog PIR+siren combo (motion-only) profile 'TS0601_PGST_PIR_SIREN'; TS0601_PGST_PIR_SIREN dp:1 motion confirmed, added dp:3/9/10/80/101/102 (sensitivity, keepTime and 4 diagnostic unknown_x attributes); fixed a NullPointerException in localProcessTuyaDP() dp 0x65 when the device profile is UNKNOWN; 'Reset Motion to Inactive' is shown again for RH3040_TUYATEC and SONOFF_MOTION_IAS (still defaulting to false); sendCommand() and setPar() now explain that leaving the name empty lists the valid names in the log
- * ver. 3.6.1  2026-08-23 kkossev  - (dev. branch) removed the non-existent 'reportingTime4in1' entry from the TS0202_4IN1 commands map (it threw MissingMethodException; the dp:102 Reporting Interval preference is unaffected); commonLib 4.1.1, onOffLib 3.2.4, batteryLib 3.2.4, humidityLib 3.3.1, temperatureLib 3.3.2 - Refresh now forces temperature/humidity events, non-Tuya battery percentage is rounded instead of truncated, and two unquoted respondsTo() arguments that threw NullPointerException were fixed
+ * ver. 3.6.0  2026-08-05 kkossev  - added PGST TS0601 _TZE284_zmgahdog PIR+siren combo (motion only) profile 'TS0601_PGST_PIR_SIREN'; TS0202_MOTION_SWITCH illuminance state (dark/light); bug fixes
+ * ver. 3.6.1  2026-08-23 kkossev  - (dev. branch) added LinknLink eMotion Air 4-in-1 presence sensor; devices with a built-in button now create a child button device; bug fixes
  *
  *                                   TODO: show Temperature Offset and Humidity Offset only when the device profile supports TemperatureMeasurement and RelativeHumidityMeasurement capabilities
  *                                   TODO: check why no preferences : updateAllPreferences: no preferences defined for device profile SIHAS_USM-300Z_4_IN_1
@@ -44,7 +44,7 @@
  */
 
 static String version() { "3.6.1" }
-static String timeStamp() {"2026/08/23 4:31 PM"}
+static String timeStamp() {"2026/08/23 11:20 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false              // trace all messages, including the spammy ones
@@ -59,6 +59,8 @@ import hubitat.zigbee.zcl.DataType
 import java.util.concurrent.ConcurrentHashMap
 import groovy.json.JsonOutput
 import groovy.transform.CompileStatic
+import com.hubitat.app.ChildDeviceWrapper
+import com.hubitat.app.DeviceWrapper
 
 #include kkossev.deviceProfileLib
 #include kkossev.commonLib
@@ -406,6 +408,11 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
                 [dp:102, name:'illumState',     type:'enum',   rw: 'ro', min:0, max:1, defVal:0,     scale:1,    map:[0:'dark', 1:'light'],   unit:'',       title:'<b>Illuminance State</b>',     description:'Illuminance State'],
 
             ],
+            buttons       : [
+                numberOfButtons      : 1,
+                supportedButtonValues: ['pushed', 'doubleTapped', 'held'],
+                tuyaDPs              : [101: 1]     // Tuya DP -> button number; the button state comes from the dp:101 enum map above
+            ],
             configuration : ['battery': false]
     ],
 
@@ -517,6 +524,45 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             refresh       : [ 'batteryRefresh', 'illuminanceRefresh', 'temperatureRefresh', 'humidityRefresh', 'motion'],
             //configuration : ["0x0406":"bind"]     // TODO !!
             configuration : [:],
+    ],
+
+    'LINKNLINK_EMOTION_AIR' : [     // https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/linknlink.ts
+            description   : 'LinknLink eMotion Air 4-in-1 mmWave Presence Sensor',
+            models        : ['eMotion Air'],
+            device        : [type: 'radar', powerSource: 'battery', isIAS:false, isSleepy:true],    // device announce capability byte 0x80 - RxOnWhenIdle=0, sleepy end device
+            capabilities  : ['MotionSensor': true, 'TemperatureMeasurement': true, 'RelativeHumidityMeasurement': true, 'IlluminanceMeasurement': true, 'Battery': true, 'ReportingConfiguration': true],
+            preferences   : ['motionReset':true],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0020,0402,0405,0400,0406,0001', outClusters:'0006,0008,0019', model:'eMotion Air', manufacturer:'LinknLink', deviceJoinName: 'LinknLink eMotion Air Presence Multi-Sensor']
+            ],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize'],
+            attributes    : [
+                [at:'0x0406:0x0000', name:'motion',        type:'enum',   rw: 'ro', min:0,   max:1,    defVal:'0',   scale:1,    map:[0:'inactive', 1:'active'], title:'<b>Presence</b>', description:'Presence state']
+            ],
+            refresh       : [ 'batteryRefresh', 'illuminanceRefresh', 'temperatureRefresh', 'humidityRefresh', 'motion'],
+            configuration : [
+                '0x0001':['bind':true, 'batteryReporting':[14400, 28800, 0x02] ],   // 4 hours min, 8 hours max, UINT8, delta 2
+                '0x0400':['bind':true],                                 // illuminance - the device reports it every 30 seconds on its own
+                '0x0402':['reporting':[10, 3600, 50] ],                 // temperature - min 10s, max 3600s, 0.5 degrees (the ZCL units are 0.01 deg.); no 'bind' key needed - configureReporting() binds
+                '0x0405':['reporting':[10, 3600, 100] ],                // humidity - min 10s, max 3600s, 1 %RH (the ZCL units are 0.01 %); no 'bind' key needed - configureReporting() binds
+                '0x0406':['bind':true]                                  // occupancy
+            ],
+            // the built-in button sends On/Off and Level Control commands out - routed to a child device (uppercase hex keys!)
+            buttons       : [
+                numberOfButtons      : 1,
+                supportedButtonValues: ['pushed', 'doubleTapped', 'held', 'released'],
+                zclCommands          : [
+                    '0x0006:0x02': [1, 'pushed'],           // Toggle
+                    '0x0006:0x01': [1, 'pushed'],           // On
+                    '0x0006:0x00': [1, 'pushed'],           // Off
+                    '0x0008:0x01': [1, 'held'],             // Move
+                    '0x0008:0x05': [1, 'held'],             // Move (with On/Off)
+                    '0x0008:0x02': [1, 'doubleTapped'],     // Step
+                    '0x0008:0x06': [1, 'doubleTapped'],     // Step (with On/Off)
+                    '0x0008:0x03': [1, 'released'],         // Stop
+                    '0x0008:0x07': [1, 'released']          // Stop (with On/Off)
+                ]
+            ],
     ],
 
     'ESRESSIF_PIR_TEMP' : [
@@ -833,10 +879,136 @@ void customParseOccupancyCluster(final Map descMap) {
 
 }
 
+// ------------------------------------------------- buttons (child device) -------------------------------------------------
+// Buttons built into some of the supported sensors (LinknLink eMotion Air, TS0202 _TZ3210_cwamkvua) are exposed as a child
+// device using the Hubitat inbuilt 'Generic Component Button Controller' driver - no button capabilities are added to the
+// parent driver! The device profile declares its buttons in the 'buttons' map : numberOfButtons, supportedButtonValues and
+// the event sources - 'zclCommands' for the standard ZCL clusters, 'tuyaDPs' for the Tuya EF00 data points.
+
+@Field static final String BUTTON_CHILD_NAMESPACE = 'hubitat'
+@Field static final String BUTTON_CHILD_DRIVER    = 'Generic Component Button Controller'
+
+String buttonChildDni() { return "${device.id}-BTN" }
+
+ChildDeviceWrapper getButtonChildDevice() { return getChildDevice(buttonChildDni()) }
+
+// called from initializeVars() in the commonLib (pairing, Initialize, driver version change, device profile change) and from customUpdated()
+void customCreateChildDevices(boolean fullInit=false) {
+    logDebug "customCreateChildDevices(${fullInit})"
+    syncButtonChildDevice()
+}
+
+// creates, deletes or updates the button child device, depending on the 'buttons' map of the current device profile
+void syncButtonChildDevice() {
+    Map buttonsMap = DEVICE?.buttons as Map
+    ChildDeviceWrapper child = getButtonChildDevice()
+    if (buttonsMap == null || buttonsMap.isEmpty()) {
+        if (child != null) {
+            logInfo "deleting the button child device ${child} - device profile ${getDeviceProfile()} has no buttons"
+            deleteChildDevice(buttonChildDni())
+            sendInfoEvent 'Button child device DELETED'
+        }
+        return
+    }
+    if (child == null) {
+        String childName = "${device.displayName} Button"
+        try {
+            child = addChildDevice(BUTTON_CHILD_NAMESPACE, BUTTON_CHILD_DRIVER, buttonChildDni(), [isComponent: false, name: childName, label: childName])
+        }
+        catch (e) {
+            logWarn "could not create the button child device '${childName}' (${BUTTON_CHILD_DRIVER}) : ${e}"
+            return
+        }
+        logInfo "created the button child device ${child}"
+        sendInfoEvent "Created ${childName}"
+    }
+    // (re)publish the buttons metadata - it is cheap and it repairs a child device created by an older driver version
+    child.parse([[name: 'numberOfButtons', value: buttonsMap.numberOfButtons],
+                 [name: 'supportedButtonValues', value: JsonOutput.toJson(buttonsMap.supportedButtonValues)]])
+}
+
+void sendButtonEventToChild(final int buttonNumber, final String buttonState) {
+    ChildDeviceWrapper child = getButtonChildDevice()
+    if (child == null) {
+        logWarn "sendButtonEventToChild: no button child device (${buttonChildDni()}) - press Initialize"
+        return
+    }
+    String descriptionText = "button ${buttonNumber} was ${buttonState}"
+    child.parse([[name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']])
+    logDebug "sendButtonEventToChild: ${descriptionText}"       // the Info logging is done by the child device, as per its own txtEnable setting
+}
+
+void sendDigitalButtonEvent(final Object bn, final String buttonState) {
+    ChildDeviceWrapper child = getButtonChildDevice()
+    if (child == null) { logWarn 'sendDigitalButtonEvent: no button child device' ; return }
+    int buttonNumber = safeToInt(bn)
+    if (buttonNumber == 0) { buttonNumber = 1 }
+    String descriptionText = "button ${buttonNumber} was ${buttonState} [digital]"
+    child.parse([[name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'digital']])
+    logDebug "sendDigitalButtonEvent: ${descriptionText}"
+}
+
+// the inbuilt component button driver is not expected to send commands back to the parent, but the callbacks are implemented
+// anyway - pressing the buttons in the child device UI is handy when testing rules. The default parameter value provides both
+// the one-argument and the two-arguments version of each callback.
+/* groovylint-disable-next-line UnusedMethodParameter */
+void componentPush(DeviceWrapper childDevice, Object bn = 1)      { sendDigitalButtonEvent(bn, 'pushed') }
+/* groovylint-disable-next-line UnusedMethodParameter */
+void componentDoubleTap(DeviceWrapper childDevice, Object bn = 1) { sendDigitalButtonEvent(bn, 'doubleTapped') }
+/* groovylint-disable-next-line UnusedMethodParameter */
+void componentHold(DeviceWrapper childDevice, Object bn = 1)      { sendDigitalButtonEvent(bn, 'held') }
+/* groovylint-disable-next-line UnusedMethodParameter */
+void componentRelease(DeviceWrapper childDevice, Object bn = 1)   { sendDigitalButtonEvent(bn, 'released') }
+
+void componentRefresh(DeviceWrapper childDevice) {
+    logDebug "componentRefresh: ${childDevice} - n/a"
+}
+
+// cluster 0x0006 and cluster 0x0008 commands sent by the device button - mapped to button events in the device profile 'buttons.zclCommands' map
+void customParseOnOffCluster(final Map descMap)        { processButtonZclCommand(descMap, '0x0006') }
+void customParseLevelControlCluster(final Map descMap) { processButtonZclCommand(descMap, '0x0008') }
+
+void processButtonZclCommand(final Map descMap, final String clusterHex) {
+    Map zclCommands = DEVICE?.buttons?.zclCommands as Map
+    if (zclCommands == null || descMap?.isClusterSpecific != true) {
+        logDebug "processButtonZclCommand: ignoring cluster ${clusterHex} command ${descMap?.command} (${descMap})"
+        return
+    }
+    String cmd = ((descMap.command ?: '') as String).toUpperCase().padLeft(2, '0')
+    String arg0 = (descMap.data != null && !descMap.data.isEmpty()) ? ((descMap.data[0] as String).toUpperCase().padLeft(2, '0')) : null
+    List entry = null
+    if (arg0 != null) { entry = zclCommands["${clusterHex}:0x${cmd}:${arg0}"] as List }     // the most specific key first : cluster:command:firstDataByte
+    if (entry == null) { entry = zclCommands["${clusterHex}:0x${cmd}"] as List }
+    if (entry == null) {
+        logDebug "processButtonZclCommand: unmapped button command ${clusterHex}:0x${cmd}${arg0 != null ? ':' + arg0 : ''} (${descMap})"
+        return
+    }
+    sendButtonEventToChild(safeToInt(entry[0]), entry[1] as String)
+}
+
+// Tuya DP button reports must be intercepted before processTuyaDPfromDeviceProfile() - processFoundItem() in the deviceProfileLib
+// returns early for values that are neither a parent attribute nor a preference, and the parent has no button attributes by design.
+boolean processButtonTuyaDp(final int dp, final int fncmd) {
+    Map buttonDPs = DEVICE?.buttons?.tuyaDPs as Map
+    if (buttonDPs == null || !buttonDPs.containsKey(dp)) { return false }
+    int buttonNumber = safeToInt(buttonDPs[dp])
+    Map dpItem = (DEVICE?.tuyaDPs as List<Map>)?.find { it.dp == dp }
+    String buttonState = dpItem?.map?.get(fncmd)
+    if (buttonState == null) {
+        logWarn "processButtonTuyaDp: unknown button state ${fncmd} for dp=${dp}"
+        return true
+    }
+    sendButtonEventToChild(buttonNumber, buttonState)
+    return true
+}
+
 // called from standardProcessTuyaDP in the commonLib for each Tuya dp report in a Zigbee message
 // should always return true, as we are processing all the dp reports here
 boolean customProcessTuyaDp(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
     logDebug "customProcessTuyaDp: dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len} descMap.data = ${descMap?.data}"
+    if (processButtonTuyaDp(dp, fncmd) == true) {
+        return true      // the button DPs are routed to the child device
+    }
     if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {
         return true      // sucessfuly processed from the deviceProfile 
     }
@@ -927,9 +1099,8 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, value
             //log.trace "illuminance event received deviceProfile is ${getDeviceProfile()} value=${value} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
             handleIlluminanceEvent(valueScaled as int)  // check !!!!!!!!!!
             break
-        case 'pushed' :     // used in 'TS0202_MOTION_SWITCH'
-            logDebug "button event received value=${value} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
-            buttonEvent(valueScaled)
+        case 'pushed' :     // normally not reached - the button DPs are intercepted in customProcessTuyaDp()
+            sendButtonEventToChild(1, valueScaled as String)
             break
         default :
             sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
@@ -1010,6 +1181,7 @@ void customUpdated() {
     if (settings.allStatusTextEnable == true) {
         runIn(3, 'formatAttrib', [overwrite: true])
     }
+    syncButtonChildDevice()     // checkDriverVersion() calls initializeVars() only when the driver version has changed
 }
 
 boolean isIAS()  { DEVICE?.device?.isIAS == true  }
@@ -1063,18 +1235,10 @@ List<String> customConfigureDevice() {
     if ('0x0500' in DEVICE?.configuration && DEVICE?.configuration['0x0500']['bind'] == true) {
         cmds += zigbee.configureReporting(0x0500, 0x0002, 0x19, 0, 3600, 0x00, [:], delay = 227)
     }
-    if ('0x0400' in DEVICE?.configuration) {
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}", 'delay 229', ]
-    }
-    if ('0x0402' in DEVICE?.configuration) {
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}", 'delay 229', ]
-    }
-    if ('0x0405' in DEVICE?.configuration) {
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0405 {${device.zigbeeId}} {}", 'delay 229', ]
-    }
-    if ('0x0406' in DEVICE?.configuration) {
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}", 'delay 229', ]    // OWON and SONOFF motion/occupancy cluster
-    }
+    cmds += bindAndConfigureReporting('0x0400', 0x0400, 0x0000, DataType.UINT16)      // illuminance
+    cmds += bindAndConfigureReporting('0x0402', 0x0402, 0x0000, DataType.INT16)       // temperature
+    cmds += bindAndConfigureReporting('0x0405', 0x0405, 0x0000, DataType.UINT16)      // humidity
+    cmds += bindAndConfigureReporting('0x0406', 0x0406, 0x0000, 0x18)             // OWON and SONOFF motion/occupancy cluster (0x18 = bitmap8)
     if ('0xFC11' in DEVICE?.configuration) {
         cmds += zigbee.configureReporting(0xFC11, 0x2001, DataType.UINT16, 0, 1440, 0x01, [:], delay = 230)  // attribute 2001 - ??
     }
@@ -1088,6 +1252,33 @@ List<String> customConfigureDevice() {
     return cmds
 }
 
+
+// Binds the cluster to the hub, and configures the attribute reporting if the device profile 'configuration' entry for that cluster
+// has a 'reporting':[minTime, maxTime, delta] list. When the profile also declares the 'ReportingConfiguration' capability, the user
+// preferences 'Minimum time between reports' and 'Maximum time between reports' (Advanced Options) override the profile values - but
+// only when they were actually changed from the library defaults, otherwise the profile value would never be used.
+// The device must be awake when Configure is pressed - sleepy devices accept the new intervals only right after a wake-up or re-pairing.
+List<String> bindAndConfigureReporting(final String key, final int cluster, final int attribute, final int dataType) {
+    List<String> cmds = []
+    Map cfg = DEVICE?.configuration?.get(key) as Map
+    if (cfg == null) { return cmds }
+    List reporting = cfg['reporting'] as List
+    boolean hasReporting = reporting != null && reporting.size() >= 3
+    if (cfg['bind'] != false && hasReporting == false) {    // zigbee.configureReporting() emits its own 'zdo bind' command, so the 'bind' key is meaningless (and omitted) when 'reporting' is present
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 ${key} {${device.zigbeeId}} {}", 'delay 229', ]
+    }
+    if (hasReporting == false) { return cmds }
+    int minTime = safeToInt(reporting[0])
+    int maxTime = safeToInt(reporting[1])
+    int delta   = safeToInt(reporting[2])
+    if ('ReportingConfiguration' in DEVICE?.capabilities) {
+        if (settings?.minReportingTime != null && safeToInt(settings.minReportingTime) != DEFAULT_MIN_REPORTING_TIME) { minTime = safeToInt(settings.minReportingTime) }
+        if (settings?.maxReportingTime != null && safeToInt(settings.maxReportingTime) != DEFAULT_MAX_REPORTING_TIME) { maxTime = safeToInt(settings.maxReportingTime) }
+    }
+    logDebug "configuring the reporting for cluster ${key} attribute 0x${zigbee.convertToHexString(attribute, 4)} (min=${minTime}, max=${maxTime}, delta=${delta})"
+    cmds += zigbee.configureReporting(cluster, attribute, dataType, minTime, maxTime, delta, [:], delay = 231)
+    return cmds
+}
 
 List<String> configureEspressif() {
     logDebug "configureEspressif()"

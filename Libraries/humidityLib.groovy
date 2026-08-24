@@ -14,7 +14,7 @@ library(
  * ver. 3.2.2  2024-07-02 kkossev  - fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
  * ver. 3.2.3  2024-07-24 kkossev  - added humidity delta filtering to prevent duplicate events for unchanged values
  * ver. 3.3.0  2025-09-15 kkossev  - commonLib 4.0.0 allignment; added humidityOffset;
- * ver. 3.3.1  2026-08-23 kkossev  - (dev. branch) bugfix: isRefresh now bypasses the humidity delta filter and the minReportingTime queue
+ * ver. 3.3.1  2026-08-23 kkossev  - (dev. branch) bugfix: isRefresh now bypasses the humidity delta filter and the minReportingTime queue; bugfix: the first event after the states are cleared is no longer delayed by minReportingTime
  *
  *                                   TODO: add humidityOffset
 */
@@ -69,8 +69,9 @@ void handleHumidityEvent(BigDecimal humidityPar, Boolean isDigital=false) {
         eventMap.descriptionText += ' [refresh]'
         eventMap.isStateChange = true
     }
-    Integer timeElapsed = Math.round((now() - (state.lastRx['humiTime'] ?: now())) / 1000)
     Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
+    // a null lastRx time means there is no previous event to space this one from - send it right away instead of queueing it for minTime seconds
+    Integer timeElapsed = state.lastRx['humiTime'] != null ? Math.round((now() - (state.lastRx['humiTime'] as long)) / 1000) as Integer : minTime
     Integer timeRamaining = (minTime - timeElapsed) as Integer
     if (isRefresh || timeElapsed >= minTime) {
         logInfo "${eventMap.descriptionText}"
