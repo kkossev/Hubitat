@@ -445,7 +445,7 @@
     
     "TS0601_24GHZ_PIR_RADAR": {
       "description": "Tuya TS0601_2AAELWXK 24 GHz + PIR Radar",
-      "device": { "powerSource": "battery", "ignoreIAS": true },
+      "device": { "powerSource": "battery", "ignoreIAS": true, "disableDefaultResponse": true },
       "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "HumanMotionState": true, "Battery": true },
       "preferences": { "radarSensitivity": "123", "staticDetectionSensitivity": "2", "staticDetectionDistance": "4", "fadingTime": "102", "ledIndicator": "107", "motionDetectionMode": "122" },
       "commands": { "resetSettings": "", "resetStats": "" },
