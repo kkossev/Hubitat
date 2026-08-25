@@ -445,7 +445,7 @@
     
     "TS0601_24GHZ_PIR_RADAR": {
       "description": "Tuya TS0601_2AAELWXK 24 GHz + PIR Radar",
-      "device": { "powerSource": "battery", "ignoreIAS": true, "disableDefaultResponse": true },
+      "device": { "powerSource": "battery", "ignoreIAS": true, "disableDefaultResponse": false },
       "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true, "HumanMotionState": true, "Battery": true },
       "preferences": { "radarSensitivity": "123", "staticDetectionSensitivity": "2", "staticDetectionDistance": "4", "fadingTime": "102", "ledIndicator": "107", "motionDetectionMode": "122" },
       "commands": { "resetSettings": "", "resetStats": "" },
@@ -457,14 +457,14 @@
       "tuyaDPs": [
         { "dp": 1, "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "scale": 1, "map": { "0": "inactive", "1": "active" }, "unit": "", "title": "<b>Presence state</b>", "description": "<i>Presence state</i>" },
         { "dp": 2, "name": "staticDetectionSensitivity", "type": "number", "rw": "rw", "min": 0, "max": 10, "defVal": 7, "scale": 1, "unit": "", "title": "<b>Static Detection Sensitivity</b>", "description": "<i>Static detection sensitivity</i>" },
-        { "dp": 4, "name": "staticDetectionDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 10.0, "defVal": 5.0, "scale": 100, "unit": "meters", "title": "<b>Static detection distance</b>", "description": "<i>Static detection distance</i>" },
+        { "dp": 4, "name": "staticDetectionDistance", "type": "decimal", "rw": "rw", "min": 0.0, "max": 6.0, "defVal": 5.0, "scale": 100, "unit": "meters", "title": "<b>Static detection distance</b>", "description": "<i>Static detection distance</i>" },
         { "dp": 101, "name": "humanMotionState", "type": "enum", "rw": "ro", "min": 0, "max": 3, "defVal": "0", "map": { "0": "none", "1": "moving", "2": "small", "3": "static" }, "description": "Human motion state" },
         { "dp": 102, "name": "fadingTime", "type": "number", "rw": "rw", "min": 0, "max": 28800, "defVal": 30, "scale": 1, "unit": "seconds", "title": "<b>Presence keep time</b>", "description": "<i>Presence keep time</i>" },
-        { "dp": 106, "name": "illuminance", "type": "number", "rw": "ro", "scale": 10, "unit": "lx", "description": "Illuminance" },
+        { "dp": 106, "name": "illuminance", "type": "number", "rw": "ro", "scale": 1, "unit": "lx", "description": "Illuminance" },
         { "dp": 107, "name": "ledIndicator", "type": "enum", "rw": "rw", "min": 0, "max": 1, "defVal": "0", "map": { "0": "0 - OFF", "1": "1 - ON" }, "title": "<b>LED indicator</b>", "description": "<i>LED indicator mode</i>" },
         { "dp": 121, "name": "battery", "type": "number", "rw": "ro", "min": 0, "max": 100, "defVal": 100, "scale": 1, "unit": "%", "title": "<b>Battery level</b>", "description": "<i>Battery level</i>" },
         { "dp": 122, "name": "motionDetectionMode", "type": "enum", "rw": "rw", "min": 0, "max": 2, "defVal": "1", "map": { "0": "0 - onlyPIR", "1": "1 - PIRandRadar", "2": "2 - onlyRadar" }, "title": "<b>Motion detection mode</b>", "description": "<i>Motion detection mode</i>" },
-        { "dp": 123, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 1, "max": 9, "defVal": 5, "scale": 1, "unit": "", "title": "<b>Motion Detection sensitivity</b>", "description": "<i>Motion detection sensitivity</i>" }
+        { "dp": 123, "name": "radarSensitivity", "type": "number", "rw": "rw", "min": 0, "max": 10, "defVal": 5, "scale": 1, "unit": "", "title": "<b>Motion Detection sensitivity</b>", "description": "<i>Motion detection sensitivity</i>" }
       ],
       "refresh": ["queryAllTuyaDP"]
     },
@@ -815,6 +815,45 @@
       "configuration": { "0x0406": "bind", "0xFC57": "bind" }
     },
 
+    "SONOFF_SNZB-06P24_RADAR": {
+      "description": "SONOFF SNZB-06P24 24GHz Presence Sensor with Zone Detection",
+      "device": { "powerSource": "dc", "isIAS": false, "isSleepy": false },
+      "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true },
+      "preferences": { "fadingTime": "0x0406:0x0010", "illuminationOffset": "0xFC11:0x2018", "radarSensitivity": "0xFC11:0x2021", "zoneEnable": "0xFC11:0x2016" },
+      "commands": { "spatialLearning": "", "setZone": "", "setAllZones": "", "resetStats": "" },
+      "fingerprints": [
+        { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0003,0400,0406,FC11,FC57", "outClusters": "0003,0019", "model": "SNZB-06P24", "manufacturer": "SONOFF", "deviceJoinName": "SONOFF SNZB-06P24 Presence Sensor" }
+      ],
+      "attributes": [
+        { "at": "0x0406:0x0000", "name": "motion", "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "map": {"0": "inactive", "1": "active"}, "description": "Occupancy state" },
+        { "at": "0x0406:0x0010", "name": "fadingTime", "type": "number", "dt": "0x21", "rw": "rw", "min": 15, "max": 65535, "defVal": 30, "scale": 1, "unit": "seconds", "title": "<b>Fading Time</b>", "description": "<i>Time before changing to unoccupied (Occupied to Unoccupied Delay). 30 s or more is recommended to reduce missed detections.</i>" },
+        { "at": "0x0400:0x0000", "name": "illuminance", "type": "number", "dt": "0x21", "rw": "ro", "scale": 1, "unit": "lx", "description": "Illuminance measurement" },
+        { "at": "0xFC11:0x2015", "name": "zoneStatus", "type": "number", "dt": "0x19", "mfgCode": "0x1286", "rw": "ro", "scale": 1, "unit": "", "description": "Which detection zone is currently occupied, same bit layout as zoneEnable. Reported about once per second while someone is present." },
+        { "at": "0xFC11:0x2016", "name": "zoneEnable", "type": "number", "dt": "0x19", "mfgCode": "0x1286", "rw": "rw", "min": 0, "max": 255, "defVal": 255, "scale": 1, "unit": "", "title": "<b>Detection Zones Bitmap</b>", "description": "<i>Enable/disable the detection zones. Zone1(0-1m)=bits 0+1, Zone2(1-1.5m)=bit 2, Zone3(1.5-2m)=bit 3, Zone4(2-2.5m)=bit 4, Zone5(2.5-3m)=bit 5, Zone6(3-3.5m)=bit 6, Zone7(3.5-4m)=bit 7. 255 = all zones enabled. Tip: use the setZone / setAllZones commands instead of calculating the bitmap by hand.</i>" },
+        { "at": "0xFC11:0x2018", "name": "illuminationOffset", "type": "number", "dt": "0x29", "mfgCode": "0x1286", "rw": "rw", "min": -1000, "max": 1000, "defVal": 0, "scale": 1, "unit": "lx", "title": "<b>Illuminance Offset</b>", "description": "<i>Illuminance compensation offset</i>" },
+        { "at": "0xFC11:0x2021", "name": "radarSensitivity", "type": "number", "dt": "0x28", "mfgCode": "0x1286", "rw": "rw", "min": -6, "max": 6, "defVal": 0, "scale": 1, "unit": "", "title": "<b>Fine-tune Sensitivity</b>", "description": "<i>Radar sensitivity fine adjustment. Negative values make the sensor less sensitive, positive values more sensitive.</i>" }
+      ],
+      "refresh": ["motion", "fadingTime", "illuminance", "illuminationOffset", "radarSensitivity", "zoneStatus", "zoneEnable"],
+      "configureReporting": {
+        "reporting": [
+          { "at": "0x0406:0x0000", "dt": "0x18", "min": 0, "max": 3600 },
+          { "at": "0x0400:0x0000", "dt": "0x21", "min": 10, "max": 3600, "delta": 5 }
+        ]
+      },
+      "comments": [
+        "CUSTOM SONOFF SNZB-06P24 Zigbee Presence Sensor with 7-Zone Detection and Illuminance",
+        "Zone mapping: bit 0+1=Zone1(0-1m), bit 2=Zone2(1-1.5m), bit 3=Zone3(1.5-2m), bit 4=Zone4(2-2.5m), bit 5=Zone5(2.5-3m), bit 6=Zone6(3-3.5m), bit 7=Zone7(3.5-4m)",
+        "Zone Enable bitmap: Set bits to enable zones. Zone 1 requires both bits 0 and 1. E.g., 255 (0xFF) = all zones enabled",
+        "Calibration: use the 'spatialLearning' command (cluster 0xFC11 cluster-specific command 0x04, payload = subCmd 0x00 + uint64 LE timestamp in ms). Keep the room EMPTY while the countdown is running!",
+        "Manufacturer code 0x1286 (Shenzhen Coolkit) is required for the 0xFC11 attributes and for the spatial learning command",
+        "Attribute 0x2015 (zoneStatus) is implemented in neither Zigbee2MQTT nor ZHA, but it is real - verified on device 2026-08-24. The device pushes 0x2016 and 0x2015 together about once per second while a person is present, so this is a chatty attribute. Read responses use encoding 0x19 (BITMAP16), unsolicited reports use 0x21 (UINT16); only 0x19 matters, because it is used for writes.",
+        "Attribute 0x2021 (radarSensitivity / Fine-tune Sensitivity, INT8, -6..6) needs a firmware newer than v1.0.0. On a device running softwareBuild 1.0.0 (firmwareMT 1286-0812-00001000) BOTH a read and a write of it are answered with status 0x86 UNSUPPORTED_ATTRIBUTE, while 0x2015, 0x2016, 0x2017 and 0x2018 answer normally on the same manufacturer-specific frame - verified 2026-08-24. SONOFF firmware v1.0.4 release notes say \"Optimized sensitivity adjustment logic and refined the mapping between sensitivity levels and trigger thresholds\" (Koenkk/zigbee-OTA PR #1285), so the attribute arrives in a later firmware. It is kept here on purpose: it is the only sensitivity control the device has, and it starts working as soon as the sensor is updated.",
+        "Attribute 0x2017 exists but is NOT the enum8 'learning state' the ZHA quirk assumes: this firmware returns a ZCL ARRAY (encoding 0x48) of 16 uint8 - verified on device 2026-08-24. It is deliberately NOT in this profile, since the deviceProfile attribute processing can only handle numeric values. The spatialLearningState attribute is driven by the cluster-specific 0x04 command responses instead.",
+        "Zigbee2MQTT converter: https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/sonoff.ts (search for SNZB-06P24)",
+        "ZHA quirk (still an open pull request): https://github.com/zigpy/zha-device-handlers/pull/4907 (zhaquirks/sonoff/snzb06p24.py)"
+      ]
+    },
+
     "TS0601_NBKSHS6K_RADAR": {
       "description": "5GHz Tuya Generic White Square Basic",
       "device": { "powerSource": "dc" },
@@ -970,8 +1009,8 @@
       "spammyDPsToNotTrace": [19]
     } 
   },
-  "version": "4.1.5",
-  "timestamp": "2026-06-27 10:22 PM",
+  "version": "4.1.6",
+  "timestamp": "2026-08-25 04:37 PM",
   "description": "Device profiles for Tuya Zigbee mmWave Sensor",
   "author": "kkossev",
   "comments": [
@@ -982,6 +1021,7 @@
     "v.4.1.2 - added TS0601 _TZE204_aai5grix fingerprint to WENZHI_MTD285_ZB profile",
     "v.4.1.3 - WENZHI_MTD285_ZB profile improvements (+JSON Standard Profile bugfix)",
     "v.4.1.4 - added HOBEIAN ZG-204ZK 24 GHz Human Presence Detector (TS0601 _TZE200_ka8l86iu)",
-    "v.4.1.5 - split GKFBDVYX into dedicated profile; added TS0601 _TZE200_gkfbdvyx and Z2M-aligned distance ranges/steps"
+    "v.4.1.5 - split GKFBDVYX into dedicated profile; added TS0601 _TZE200_gkfbdvyx and Z2M-aligned distance ranges/steps",
+    "v.4.1.6 - added SONOFF SNZB-06P24 24GHz Presence Sensor"
   ]
 }

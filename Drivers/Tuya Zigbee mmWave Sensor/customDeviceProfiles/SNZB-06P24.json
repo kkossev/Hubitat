@@ -4,33 +4,43 @@
       "description": "CUSTOM PROFILE SONOFF SNZB-06P24 Presence Sensor with Zone Detection",
       "device": { "powerSource": "dc", "isIAS": false },
       "capabilities": { "MotionSensor": true, "IlluminanceMeasurement": true },
-      "preferences": { "fadingTime": "0x0406:0x0010", "illuminationOffset": "0xFC11:0x2018" },
-      "commands": { "resetSettings": "", "printFingerprints": "", "printAttributes": "" },
+      "preferences": { "fadingTime": "0x0406:0x0010", "illuminationOffset": "0xFC11:0x2018", "radarSensitivity": "0xFC11:0x2021", "zoneEnable": "0xFC11:0x2016" },
+      "commands": { "spatialLearning": "", "setZone": "", "setAllZones": "", "resetStats": "" },
       "fingerprints": [
         { "profileId": "0104", "endpointId": "01", "inClusters": "0000,0003,0400,0406,FC11,FC57", "outClusters": "0003,0019", "model": "SNZB-06P24", "manufacturer": "SONOFF", "deviceJoinName": "SONOFF SNZB-06P24 Presence Sensor" }
       ],
       "attributes": [
         { "at": "0x0406:0x0000", "name": "motion",     "type": "enum", "rw": "ro", "min": 0, "max": 1, "defVal": "0", "map": { "0": "inactive", "1": "active" }, "description": "Occupancy state" },
-        { "at": "0x0406:0x0010", "name": "fadingTime", "type": "number", "dt": "0x21", "rw": "rw", "min": 15, "max": 43199, "defVal": 30, "scale": 1, "unit": "seconds", "title": "<b>Fading Time</b>", "description": "<i>Time before changing to unoccupied (Occupancy Timeout)</i>" },
+        { "at": "0x0406:0x0010", "name": "fadingTime", "type": "number", "dt": "0x21", "rw": "rw", "min": 15, "max": 65535, "defVal": 30, "scale": 1, "unit": "seconds", "title": "<b>Fading Time</b>", "description": "<i>Time before changing to unoccupied (Occupied to Unoccupied Delay). 30 s or more is recommended to reduce missed detections.</i>" },
         { "at": "0x0400:0x0000", "name": "illuminance","type": "number", "dt": "0x21", "rw": "ro", "scale": 1, "unit": "lx", "description": "Illuminance measurement" },
-        { "at": "0xFC11:0x2015", "name": "zoneStatus", "type": "number", "dt": "0x21", "mfgCode": "0x1286", "rw": "ro", "scale": 1, "unit": "", "description": "Zone occupancy status bitmap (bits 0-7 for zones 1-8)" },
-        { "at": "0xFC11:0x2016", "name": "zoneEnable", "type": "number", "dt": "0x21", "mfgCode": "0x1286", "rw": "rw", "min": 0, "max": 255, "defVal": 255, "scale": 1, "unit": "", "title": "<b>Zone Enable Bitmap</b>", "description": "<i>Enable/disable detection zones (bit 0-7 = zones 1-8, default 255 = all enabled)</i>" },
-        { "at": "0xFC11:0x2018", "name": "illuminationOffset", "type": "number", "dt": "0x29", "mfgCode": "0x1286", "rw": "rw", "min": -1000, "max": 1000, "defVal": 0, "scale": 1, "unit": "lx", "title": "<b>Illuminance Offset</b>", "description": "<i>Illuminance calibration offset adjustment</i>" }
+        { "at": "0xFC11:0x2015", "name": "zoneStatus", "type": "number", "dt": "0x19", "mfgCode": "0x1286", "rw": "ro", "scale": 1, "unit": "", "description": "Which detection zone is currently occupied, same bit layout as zoneEnable. Reported about once per second while someone is present." },
+        { "at": "0xFC11:0x2016", "name": "zoneEnable", "type": "number", "dt": "0x19", "mfgCode": "0x1286", "rw": "rw", "min": 0, "max": 255, "defVal": 255, "scale": 1, "unit": "", "title": "<b>Detection Zones Bitmap</b>", "description": "<i>Enable/disable the detection zones. Zone1(0-1m)=bits 0+1, Zone2(1-1.5m)=bit 2, Zone3(1.5-2m)=bit 3, Zone4(2-2.5m)=bit 4, Zone5(2.5-3m)=bit 5, Zone6(3-3.5m)=bit 6, Zone7(3.5-4m)=bit 7. 255 = all zones enabled. Tip: use the setZone / setAllZones commands instead of calculating the bitmap by hand.</i>" },
+        { "at": "0xFC11:0x2018", "name": "illuminationOffset", "type": "number", "dt": "0x29", "mfgCode": "0x1286", "rw": "rw", "min": -1000, "max": 1000, "defVal": 0, "scale": 1, "unit": "lx", "title": "<b>Illuminance Offset</b>", "description": "<i>Illuminance compensation offset</i>" },
+        { "at": "0xFC11:0x2021", "name": "radarSensitivity", "type": "number", "dt": "0x28", "mfgCode": "0x1286", "rw": "rw", "min": -6, "max": 6, "defVal": 0, "scale": 1, "unit": "", "title": "<b>Fine-tune Sensitivity</b>", "description": "<i>Radar sensitivity fine adjustment. Negative values make the sensor less sensitive, positive values more sensitive.</i>" }
       ],
-      "refresh": ["motion", "fadingTime", "illuminance", "illuminationOffset", "zoneStatus", "zoneEnable"],
-      "configuration": { "0x0406": "bind", "0x0400": "bind" },
+      "refresh": ["motion", "fadingTime", "illuminance", "illuminationOffset", "radarSensitivity", "zoneStatus", "zoneEnable"],
+      "configureReporting": {
+        "reporting": [
+          { "at": "0x0406:0x0000", "dt": "0x18", "min": 0,  "max": 3600 },
+          { "at": "0x0400:0x0000", "dt": "0x21", "min": 10, "max": 3600, "delta": 5 }
+        ]
+      },
       "comments": [
-        "CUSTOM SONOFF SNZB-06P24 Zigbee Presence Sensor with 8-Zone Detection and Illuminance",
+        "CUSTOM SONOFF SNZB-06P24 Zigbee Presence Sensor with 7-Zone Detection and Illuminance",
         "Zone mapping: bit 0+1=Zone1(0-1m), bit 2=Zone2(1-1.5m), bit 3=Zone3(1.5-2m), bit 4=Zone4(2-2.5m), bit 5=Zone5(2.5-3m), bit 6=Zone6(3-3.5m), bit 7=Zone7(3.5-4m)",
         "Zone Enable bitmap: Set bits to enable zones. Zone 1 requires both bits 0 and 1. E.g., 255 (0xFF) = all zones enabled",
-        "Tested and verified: encoding 0x21 (UINT16), manufacturer code 0x1286 required for FC11 attributes",
-        "Home Assistant Python quirk: https://github.com/zigpy/zha-device-handlers (SNZB-06P24.py)",
-        "Zigbee2MQTT converter: https://github.com/Koenkk/zigbee-herdsman-converters (SNZB-06P24.js)"
-      ] 
+        "Calibration: use the 'spatialLearning' command (cluster 0xFC11 cluster-specific command 0x04, payload = subCmd 0x00 + uint64 LE timestamp in ms). Keep the room EMPTY while the countdown is running!",
+        "Manufacturer code 0x1286 (Shenzhen Coolkit) is required for the 0xFC11 attributes and for the spatial learning command",
+        "Attribute 0x2015 (zoneStatus) is implemented in neither Zigbee2MQTT nor ZHA, but it is real - verified on device 2026-08-24. The device pushes 0x2016 and 0x2015 together about once per second while a person is present, so this is a chatty attribute. Read responses use encoding 0x19 (BITMAP16), unsolicited reports use 0x21 (UINT16); only 0x19 matters, because it is used for writes.",
+        "Attribute 0x2021 (radarSensitivity / Fine-tune Sensitivity, INT8, -6..6) is declared by Zigbee2MQTT and by the ZHA quirk. On 2026-08-24 the test device answered a READ of it with status 0x86 UNSUPPORTED_ATTRIBUTE, while 0x2015, 0x2016, 0x2017 and 0x2018 all answered normally with the same manufacturer-specific frame - so that read failure is genuine and most likely means older firmware. It is kept in the profile anyway: a WRITE is a separate operation and is untested, and this is the only sensitivity control the device exposes. Watch for a Write Attributes Response with status 0x00 to confirm the write is accepted.",
+        "Attribute 0x2017 exists but is NOT the enum8 'learning state' the ZHA quirk assumes: this firmware returns a ZCL ARRAY (encoding 0x48) of 16 uint8 - verified on device 2026-08-24. It is deliberately NOT in this profile, since the deviceProfile attribute processing can only handle numeric values. The spatialLearningState attribute is driven by the cluster-specific 0x04 command responses instead.",
+        "Zigbee2MQTT converter: https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/sonoff.ts (search for SNZB-06P24)",
+        "ZHA quirk (still an open pull request): https://github.com/zigpy/zha-device-handlers/pull/4907 (zhaquirks/sonoff/snzb06p24.py)"
+      ]
     }
   },
-  "version": "1.0.1",
-  "timestamp": "2026-03-01 10:05 PM",
+  "version": "1.1.2",
+  "timestamp": "2026-08-24 11:44 PM",
   "description": "CUSTOM Device profile for SONOFF SNZB-06P24 Presence Sensor",
   "author": "kkossev"
 }

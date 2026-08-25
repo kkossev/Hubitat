@@ -753,7 +753,7 @@ public boolean setPar(final String parPar=null, final String val=null ) {
         else {
             logInfo "setPar: (2) sending parameter <b>$par</b> (<b>$val</b> (scaledValue=${scaledValue}))"
             sendZigbeeCommands(cmds)
-            return false
+            return true
         }
     }
     else if (dpMap.at != null) {
@@ -1069,8 +1069,8 @@ public Map inputIt(String paramPar, boolean debug = false) {
         if (debug) { log.warn "inputIt: unsupported type ${input.type} for param '${param}'!" }
         return [:]
     }
-    if (input.defVal != null) {
-        input.defVal = foundMap.defVal
+    if (foundMap.defVal != null) {
+        input.defaultValue = foundMap.defVal
     }
     return input
 }
@@ -2468,6 +2468,7 @@ void loadUserCustomProfilesFromLocalStorage(String filename) {
 
 // updateFromGitHub command - download JSON profiles from GitHub and store to Hubitat local storage
 void downloadFromGitHubAndSaveToHE(String url) {
+    if (state.gitHubV4 == null) { state.gitHubV4 = [:] }    // (BUGS.md B11) the httpGet response closure writes into it - an NPE there is swallowed by the outer catch and the download is silently discarded
     long startTime = now()
     String gitHubUrl = url
     String fileName = DEFAULT_PROFILES_FILENAME
