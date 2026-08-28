@@ -260,7 +260,7 @@
       "id":"fc13f97d-e5a8-4d5e-bf84-1c9b712f9568",
       "name":"Aqara Cube T1 Pro",
       "category":"Control",
-      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Aqara%20Cube%20T1%20Pro/packageManifest.json",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20Cube%20T1%20Pro/packageManifest.json",
       "description":"Aqara Cube T1 Pro (MFCZQ12LM) is fun! ",
       "tags":[
         "Buttons", "Misc. Devices", "Zigbee"
