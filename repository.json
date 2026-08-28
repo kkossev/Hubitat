@@ -6,7 +6,7 @@
       "id": "e6eedb98-4f18-404a-9f46-42ce5e9612db",
       "name": "Moes ZSS-ZK-THL_TS0222",
       "category": "Control",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Moes_ZSS-ZK-THL_TS0222/packageManifest.json",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Moes_ZSS-ZK-THL_TS0222/packageManifest.json",
       "description": "Moes ZSS-ZK-THL illuminance, temperature, humidity sensor model TS0222 (_TYZB01_kvwjujy9) driver for Hubitat",
       "tags": [
         "Zigbee"
@@ -36,7 +36,7 @@
       "id": "7aa89d9c-bafd-487e-9eed-ade6c948e320",
       "name": "Tuya ZigBee Vibration Sensor",
       "category": "Control",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/packageManifest.json",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/packageManifest.json",
       "description": "Tuya ZigBee Vibration Sensor TS0210 driver for Hubitat Elevation hub",
       "tags": [
         "Zigbee"
@@ -46,7 +46,7 @@
       "id": "39a56b8d-62a7-4b48-9915-fe26fb11d5e7",
       "name": "Tuya NEO Coolcam Zigbee Water Leak Sensor",
       "category": "Control",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20NEO%20Coolcam%20Zigbee%20Water%20Leak%20Sensor/packageManifest.json",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20NEO%20Coolcam%20Zigbee%20Water%20Leak%20Sensor/packageManifest.json",
       "description": "Tuya NEO Coolcam Zigbee Water Leak Sensor driver for Hubitat Elevation hub",
       "tags": [
         "Zigbee"
@@ -66,7 +66,7 @@
       "id": "d8aed522-094b-403f-b1b7-90900ada633c",
       "name": "Tuya Smart Siren Zigbee",
       "category": "Control",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Smart%20Siren%20Zigbee/packageManifest.json",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Smart%20Siren%20Zigbee/packageManifest.json",
       "description": "Tuya Smart Siren Zigbee driver for Hubitat Elevation hub",
       "tags": [
         "Zigbee"
@@ -86,7 +86,7 @@
       "id": "5057db0d-4572-4cf0-a7c3-22c2bffb711e",
       "name": "Tuya Zigbee Garage Door Opener",
       "category": "Control",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Garage%20Door%20Opener/packageManifest.json",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Garage%20Door%20Opener/packageManifest.json",
       "description": "Tuya Zigbee Garage Door Opener driver for Hubitat Elevation hub",
       "tags": [
         "Zigbee"
@@ -106,7 +106,7 @@
       "id": "f70af857-af94-4bca-8c13-444bf3bc8139",
       "name": "Tuya Multi Sensor 4 In 1 (PIR and mmWave Radars)",
       "category": "Control",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Multi%20Sensor%204%20In%201/packageManifest.json",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/packageManifest.json",
       "description": "Tuya PIR Motion Sensors and mmWave Radars - driver for Hubitat Elevation hub"
     },
     {
@@ -133,7 +133,7 @@
       "id": "c25fb12f-a13d-4d84-8bc5-40a2bba258d3",
       "name": "Tuya Zigbee Smoke Detector",
       "category": "Control",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya_Zigbee_Smoke_Detector/packageManifest.json",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya_Zigbee_Smoke_Detector/packageManifest.json",
       "description": "Tuya Zigbee Smoke Detector - driver for Hubitat Elevation hub",
       "tags": [
         "Zigbee"
@@ -183,7 +183,7 @@
       "id": "b6e99a33-7aa3-4b25-ac03-9e44b0be5816",
       "name": "Tuya Zigbee Contact Sensor++ w/ healthStatus",
       "category": "Control",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Contact%20Sensor/packageManifest.json",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Contact%20Sensor/packageManifest.json",
       "description": "Tuya Zigbee Contact Sensor++ w/ healthStatus - driver for Hubitat Elevation hub",
       "tags": [
         "Zigbee"
@@ -193,7 +193,7 @@
       "id": "8c11f83d-3fa8-4843-bf02-d7652089c952",
       "name": "Device Health Status",
       "category": "Control",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Apps/packageManifest_DeviceHealthStatus.json",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Apps/packageManifest_DeviceHealthStatus.json",
       "description": "Device Health Status - app for Hubitat Elevation hub"
     },
     {
@@ -210,7 +210,7 @@
       "id": "922c95be-07e9-4376-a94d-fc702bea7ec9",
       "name": "VINDSTYRKA Air Quality Monitor",
       "category": "Control",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/VINDSTYRKA%20Air%20Quality%20Monitor/packageManifest.json",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/VINDSTYRKA%20Air%20Quality%20Monitor/packageManifest.json",
       "description": "VINDSTYRKA Air Quality Monitor - driver for Hubitat Elevation hub",
       "tags": [
         "Zigbee"
@@ -220,7 +220,7 @@
       "id": "fbae2080-22f0-48e0-8788-f57dd5e571da",
       "name": "Tuya Zigbee Fingerbot",
       "category": "Control",
-      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Fingerbot/packageManifest.json",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Fingerbot/packageManifest.json",
       "description": "Tuya Zigbee Fingerbot - driver for Hubitat Elevation hub",
       "tags": [
         "Zigbee"
@@ -240,7 +240,7 @@
       "id":"3d3e4d40-3184-4604-b26c-0165f04f8b4a",
       "name":"Tuya Zigbee Control Screen Panel",
       "category":"Integrations",
-      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Control%20Screen%20Panel/packageManifest.json",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Control%20Screen%20Panel/packageManifest.json",
       "description":"T3E - Tuya Zigbee Control Screen Panel",
       "tags":[
         "Buttons", "Misc. Devices", "Zigbee"
@@ -250,7 +250,7 @@
       "id":"7d3627fd-27c6-4784-a76a-4f2eded51168",
       "name":"Zigbee Button Dimmer",
       "category":"Control",
-      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Zigbee%20Button%20Dimmer/packageManifest.json",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Zigbee%20Button%20Dimmer/packageManifest.json",
       "description":"Zigbee Buttons Dimmers",
       "tags":[
         "Buttons", "Zigbee"
@@ -270,7 +270,7 @@
       "id":"e4f2a589-2ac0-4923-b6c7-bfc08b9db948",
       "name":"Tuya Zigbee mmWave Sensor",
       "category":"Control",
-      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/manifest.json",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/manifest.json",
       "description":"Tuya mmWave sensors - new driver to replace the Tuya 4 In 1 driver. W.I.P.",
       "tags":[
         "Zigbee", "Motion Control"
@@ -301,7 +301,7 @@
       "id":"74b72270-8de7-4064-964f-a27e4887adeb",
       "name":"Tuya Zigbee Tank Level Monitor",
       "category":"Control",
-      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Tank%20Level%20Monitor/packageManifest.json",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Tank%20Level%20Monitor/packageManifest.json",
       "description":"Tuya Zigbee Tank Level Monitor",
       "tags":[
         "Misc. Devices",
@@ -315,7 +315,7 @@
       "id":"71fc3487-1559-47a3-a25b-838c18ad260d",
       "name":"Tuya Zigbee Chlorine Meter",
       "category":"Control",
-      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Chlorine%20Meter/packageManifest.json",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Chlorine%20Meter/packageManifest.json",
       "description":"Tuya Zigbee Chlorine Meter",
       "tags":[
         "Misc. Devices",
@@ -329,7 +329,7 @@
       "id":"b2212052-92d1-450f-9dca-08c0789c9c0c",
       "name":"Tuya Zigbee Rain Sensor",
       "category":"Convenience",
-      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Rain%20Sensor/manifest.json",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Rain%20Sensor/manifest.json",
       "description":"Tuya Zigbee Rain Sensor",
       "tags":[
         "Climate Control",
@@ -357,7 +357,7 @@
       "id":"35869981-30c0-4c06-b77a-7cab33ba1b61",
       "name":"Thermostats Sync",
       "category":"Control",
-      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Apps/Thermostats%20Sync/packageManifest.json",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Apps/Thermostats%20Sync/packageManifest.json",
       "description":"Bidirectional synchronization of thermostat attributes between two devices. Supports 8 sync options including battery and healthStatus with advanced loop prevention.",
       "tags":[
         "Climate Control",
