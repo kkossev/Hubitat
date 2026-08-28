@@ -1,10 +1,10 @@
 {
  "packageName":"Aqara Cube T1 Pro",
  "author":"Krassimir Kossev",
- "version":"3.0.6",
+ "version":"3.3.0",
  "minimumHEVersion":"2.3.6.0",
- "dateReleased":"2024-04-13",
- "releaseNotes":" 3.0.6  2023-07-16 kkossev  - first HPM version",
+ "dateReleased":"2026-08-27",
+ "releaseNotes":"3.3.0 2026-08-27 - fixed cube operation mode read-back writing to the wrong preference name; fixed a null sideUp value passed to button events on shake and rotate before the first flip; retired the internal aqaraCubeT1ProLib library, cube logic is now built into this driver.\n3.0.6  2023-07-16 kkossev  - first HPM version",
  "documentationLink":"https://community.hubitat.com/t/release-aqara-cube-t1-pro-mfczq12lm-is-fun/121604",
  "communityLink":"https://community.hubitat.com/t/release-aqara-cube-t1-pro-mfczq12lm-is-fun/121604",
  "drivers": [

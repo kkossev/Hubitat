@@ -20,12 +20,13 @@
  * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) commonLib 3.0.6
  * ver. 3.2.0  2024-05-21 kkossev  - (dev. branch) commonLib 3.2.0
+ * ver. 3.3.0  2026-08-27 kkossev  - (dev. branch) commonLib 4.1.1
  *
  *                                   TODO: 
  */
 
-static String version() { "3.2.0" }
-static String timeStamp() {"2024/05/21 4:10 PM"}
+static String version() { "3.3.0" }
+static String timeStamp() {"2026/08/27 11:24 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -60,7 +61,6 @@ metadata {
         capability "ReleasableButton"
         capability 'Battery'
 
-        // defined in aqaraCubeT1ProLib //attribute "mode", "enum", AqaraCubeModeOpts.options.values() as List<String>
         attribute 'batteryVoltage', 'number'
         attribute "operationMode", "enum", AqaraCubeModeOpts.options.values() as List<String>
         attribute "action", "enum", (AqaraCubeSceneModeOpts.options.values() + AqaraCubeActionModeOpts.options.values()) as List<String>
@@ -259,7 +259,7 @@ void customParseMultistateInputCluster(final Map descMap) {
         logInfo "${eventMap.descriptionText}"   
         if (action == "shake") {
             if (settings?.sendButtonEvent){
-                side = device.currentValue('sideUp', true) as Integer
+                side = (device.currentValue('sideUp', true) ?: 0) as Integer
                 sendButtonEvent(side, "doubleTapped", isDigital=true)
             }
         }
@@ -276,7 +276,7 @@ void parseXiaomiClusterAqaraCube(final Map descMap) {
         case 0x0148 :                    // Aqara Cube T1 Pro - Mode
             final Integer value = hexStrToUnsignedInt(descMap.value)
             log.info "cubeMode is '${AqaraCubeModeOpts.options[value]}' (0x${descMap.value})"
-            device.updateSetting('cubeMode', [value: value.toString(), type: 'enum'])
+            device.updateSetting('cubeOperationMode', [value: value.toString(), type: 'enum'])
             break
         case 0x0149:                     // (329) Aqara Cube T1 Pro - i side facing up (0..5)
             processSideFacingUp(descMap)
@@ -375,7 +375,7 @@ void sendAqaraCubeRotateEvent(final Integer degrees) {
     sendEvent(eventMap)
     logInfo "${eventMap.descriptionText}"
     if (settings?.sendButtonEvent){
-        def side = device.currentValue('sideUp', true) as Integer
+        def side = (device.currentValue('sideUp', true) ?: 0) as Integer
         sendButtonEvent(side, leftRight == "rotateLeft" ? "held" : "released", isDigital=true)
     }
 }
