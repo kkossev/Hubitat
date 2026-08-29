@@ -1,11 +1,14 @@
 # Consolidated TODO — Tuya Temperature Humidity Illuminance LCD Display with a Clock
 
 Analysis date: 2026-07-11 (forum backlog, posts through 693); bug backlog merged 2026-08-04;
-incremental forum audit through post 712 on 2026-08-15
+incremental forum audit through post 712 on 2026-08-15; supplemental topic 156210 audited through
+post 7 on 2026-08-29
 Forum cutoff: post 712, 2026-08-15
 Topic: https://community.hubitat.com/t/-/88093  
 Coverage: complete Discourse stream through post 712 — 696 visible posts; highest visible post
 number 712 at audit time
+Supplemental topic: https://community.hubitat.com/t/-/156210 — complete stream through post 7;
+7 visible posts, highest post number 7 at audit time
 
 This is the single consolidated backlog for this driver. It combines the forum-derived
 device-support/feature backlog with the reviewed bug list. **`BUGS.md` was merged into this file
@@ -316,6 +319,58 @@ belonging to this driver and manually assigned to Model Group `TS0201`, but the 
 missing from the source and no result was posted after the requested re-pair. The Device Data exists
 only in a forum screenshot. Request textual model/manufacturer/cluster data and confirmation that the
 manual `TS0201` selection works before adding a fingerprint. **VERIFY ON DEVICE**.
+
+### 11. [ ] `OPEN` — Expose core temperature-reporting controls without Advanced options — HUB-141
+
+**Requested outcome:** make **Temperature Sensitivity** and **Maximum reporting time** visible for
+the model groups that already support them, without requiring users to enable **Advanced options**.
+This is a preference-discoverability change, not a change to temperature readings or reporting
+semantics.
+
+Evidence:
+
+- A community reply recommended this driver for control over reporting:
+  https://community.hubitat.com/t/-/156210/5
+- The reporter said that changing the temperature reporting was not obvious and wanted an example
+  configuration of reporting on a 1 °C change and at least once per hour:
+  https://community.hubitat.com/t/-/156210/7
+- Supplemental topic 156210 was reviewed completely through post 7 on 2026-08-29: 7 visible posts;
+  highest visible post number 7.
+
+Evidence boundary:
+
+- The thread identifies the product as SNZB-02LD, and post 7 reports Hubitat C8 platform 2.5.1.152.
+- Post 7 does not provide the device's textual Hubitat manufacturer/model fingerprint. Do not
+  transfer one from another topic, poster, or similar-looking device.
+- Adding an SNZB-02LD fingerprint is separate work tracked in HUB-86; this item changes the existing
+  preference presentation only.
+
+Current code behavior (driver 2.2.0, timestamp 2026/08/06 12:22 AM):
+
+- `advancedOptions` defaults to `false`.
+- All dynamic `configParams` controls are rendered only inside `if (advancedOptions == true)`.
+- `temperatureSensitivity` and `maxReportingTimeTemp` are therefore hidden until Advanced options
+  is enabled, even for model groups allowed by their existing `limit` lists.
+- `updated()` already uses these settings when it builds the cluster `0x0402` Configure Reporting
+  command; the requested change does not require a new reporting mechanism.
+
+Implementation direction:
+
+- Move only `temperatureSensitivity` and `maxReportingTimeTemp` outside Advanced options, while
+  preserving each control's current model-group `limit`, name, default, range, unit, and saved value.
+- Keep `minReportingTimeTemp` and the remaining expert controls under Advanced options unless a
+  separate request expands the scope.
+- Preserve reporting configuration behavior, temperature offset/rounding/filtering behavior, and
+  all unsupported-model exclusions.
+
+Verification:
+
+- With Advanced options disabled, both controls appear for every model group that currently allows
+  them, and neither appears for a model group that its existing `limit` excludes.
+- Saving equivalent values sends the same temperature-reporting configuration as before the UI
+  relocation, and existing saved values survive the change.
+- Verify the reporting response on a supported sleepy Zigbee device. SNZB-02LD-specific behavior
+  remains **VERIFY ON DEVICE** until its exact fingerprint and reporting response are confirmed.
 
 ## Already resolved, declined, or outside this backlog
 
