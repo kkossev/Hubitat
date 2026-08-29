@@ -22,7 +22,7 @@ library(
 */
 
 static String ctLibVersion()   { '3.2.0' }
-static String ctLibStamp() { '2024/05/31 4:35 PM' }
+static String ctLibStamp() { '2026/08/27 10:13 PM' }
 
 metadata {
     capability 'Color Temperature'  // Attributes: colorName - STRING, colorTemperature - NUMBER, unit:°K; Commands:setColorTemperature(colortemperature, level, transitionTime)
@@ -251,7 +251,7 @@ def updateColor(rgb) {
         def val = Math.round(MIN_COLOR_TEMP + amount)
         sendColorTemperatureEvent([name: 'colorTemperature', value: val])
         sendColorModeEvent([name: 'colorMode', value: 'CT'])
-        sendColorNameEvent([setGenericTempName(val)])
+        sendColorNameEvent(setGenericTempName(val))
     }
     else {
         sendColorModeEvent([name: 'colorMode', value: 'RGB'])

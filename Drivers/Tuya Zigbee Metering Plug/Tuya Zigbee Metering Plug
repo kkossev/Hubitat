@@ -71,7 +71,7 @@
  *  ver. 2.0.2 2025-08-19 kkossev - EMIZB-141 fix attempt
  *  ver. 2.0.3 2026-04-20 kkossev - bug fix: breaker threshold boolean variables declared as int in processTuyaThresholdsCommands(); AC Frequency polling (0x0300) now auto-disabled after first unsupported-attribute response;
  *  ver. 2.0.4 2026-08-07 kkossev - minor bug fixes
- *  ver. 2.1.0 2026-08-27 kkossev - added Tuya multi-channel meter support (SDM02T, SPM02); fixed Tuya DP routing and ping RTT
+ *  ver. 2.1.0 2026-08-29 kkossev - added Tuya multi-channel meter support (SDM02T, SPM02); fixed Tuya DP routing and ping RTT; bug fixes
  *
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
  *                                 TODO: add toggle() command
@@ -94,7 +94,7 @@ import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
 static String version() { '2.1.0' }
-static String timeStamp() { '2026/08/27 1:14 PM' }
+static String timeStamp() { '2026/08/29 11:25 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -285,7 +285,7 @@ metadata {
             input(name: 'updateFrequency', type: 'number', title: '<b>Update frequency</b>, seconds', description: 'Multi-channel meter reporting interval. The current device value is populated after a report.', range: '5..3600', required: false)
         }
         input(name: 'autoReportingEnabled', type: 'bool', title: '<b>Automatic reporting configuration</b>', description: 'Enable the configuration of outlet automatic reporting, if supported by the device. Default setting is <b>off</b>', defaultValue: false)
-        input(name: 'autoPollingEnabled', type: 'bool', title: '<b>Automatic polling</b>', description: 'Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended setting is <b>on</b>', defaultValue: true)
+        input(name: 'autoPollingEnabled', type: 'bool', title: '<b>Automatic polling</b>', description: 'Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended setting is <b>on</b>', defaultValue: isTuyaMultiChannelMeter() ? false : true)
         if (autoPollingEnabled?.value == true) {
             input(name: 'pollingInterval', type: 'number', title: '<b>Polling interval</b>, seconds', description: 'The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended setting is <b>60 seconds</b>',
                    range: '10..99999', defaultValue: defaultPollingInterval)
@@ -1792,12 +1792,12 @@ private void parseSPM02PackedDatapoint(Map profile, int dp, String dpType, List<
     switch (dp) {
         case 1:
             if (validateTuyaMeterDatapoint(profile, dp, dpType, payload.size(), DP_TYPE_VALUE, 4)) {
-                energyEvent(tuyaMeterUnsignedValue(payload) / 100.0)
+                energyEvent(tuyaMeterUnsignedValue(payload) / 100.0d)
             }
             break
         case 2:
             if (validateTuyaMeterDatapoint(profile, dp, dpType, payload.size(), DP_TYPE_VALUE, 4)) {
-                sendTuyaMeterParentEvent(profile, 'producedEnergy', tuyaMeterUnsignedValue(payload) / 100.0, 'kWh')
+                sendTuyaMeterParentEvent(profile, 'producedEnergy', tuyaMeterUnsignedValue(payload) / 100.0d, 'kWh')
             }
             break
         case 6:
@@ -1818,16 +1818,16 @@ private void parseSPM02V2ScalarDatapoint(Map profile, int dp, String dpType, Lis
     long value = tuyaMeterUnsignedValue(payload)
     switch (dp) {
         case 1:
-            energyEvent(value / 100.0)
+            energyEvent(value / 100.0d)
             break
         case 2:
-            sendTuyaMeterParentEvent(profile, 'producedEnergy', value / 100.0, 'kWh')
+            sendTuyaMeterParentEvent(profile, 'producedEnergy', value / 100.0d, 'kWh')
             break
         case 15:
             powerFactorEvent(value)
             break
         case 101:
-            frequencyEvent(value / 100.0)
+            frequencyEvent(value / 100.0d)
             break
         case 102:
         case 105:
@@ -1877,7 +1877,7 @@ private void parseSDM02V1GTPackedDatapoint(String cmd, List<String> data) {
         switch (dp) {
             case 1:
                 if (validateSDM02V1GTDatapoint(dp, dpType, declaredLength, DP_TYPE_VALUE, 4)) {
-                    energyEvent(tuyaMeterUnsignedValue(payload) / 100.0)
+                    energyEvent(tuyaMeterUnsignedValue(payload) / 100.0d)
                 }
                 break
             case 6:
@@ -1888,7 +1888,7 @@ private void parseSDM02V1GTPackedDatapoint(String cmd, List<String> data) {
                 break
             case 23:
                 if (validateSDM02V1GTDatapoint(dp, dpType, declaredLength, DP_TYPE_VALUE, 4)) {
-                    sendTuyaMeterParentEvent(profile, 'producedEnergy', tuyaMeterUnsignedValue(payload) / 100.0, 'kWh')
+                    sendTuyaMeterParentEvent(profile, 'producedEnergy', tuyaMeterUnsignedValue(payload) / 100.0d, 'kWh')
                 }
                 break
             case 29:
@@ -1898,24 +1898,24 @@ private void parseSDM02V1GTPackedDatapoint(String cmd, List<String> data) {
                 break
             case 32:
                 if (validateSDM02V1GTDatapoint(dp, dpType, declaredLength, DP_TYPE_VALUE, 4)) {
-                    frequencyEvent(tuyaMeterUnsignedValue(payload) / 100.0)
+                    frequencyEvent(tuyaMeterUnsignedValue(payload) / 100.0d)
                 }
                 break
             case 50:
                 if (validateSDM02V1GTDatapoint(dp, dpType, declaredLength, DP_TYPE_VALUE, 4)) {
-                    powerFactorEvent(tuyaMeterUnsignedValue(payload))
+                    powerFactorEvent(tuyaMeterSignedValue(payload))
                 }
                 break
             case 53:
             case 54:
                 if (validateSDM02V1GTDatapoint(dp, dpType, declaredLength, DP_TYPE_VALUE, 4)) {
-                    sendTuyaMeterChannelEvent(profile, dp == 53 ? 1 : 2, 'energy', tuyaMeterUnsignedValue(payload) / 100.0, 'kWh')
+                    sendTuyaMeterChannelEvent(profile, dp == 53 ? 1 : 2, 'energy', tuyaMeterUnsignedValue(payload) / 100.0d, 'kWh')
                 }
                 break
             case 57:
             case 58:
                 if (validateSDM02V1GTDatapoint(dp, dpType, declaredLength, DP_TYPE_VALUE, 4)) {
-                    logTuyaMeterUnsupportedChannelMeasurement(profile, dp == 57 ? 1 : 2, 'producedEnergy', tuyaMeterUnsignedValue(payload) / 100.0, 'kWh')
+                    logTuyaMeterUnsupportedChannelMeasurement(profile, dp == 57 ? 1 : 2, 'producedEnergy', tuyaMeterUnsignedValue(payload) / 100.0d, 'kWh')
                 }
                 break
             case 101:
@@ -1944,7 +1944,7 @@ private void parseSDM02V1GTPackedDatapoint(String cmd, List<String> data) {
             case 108:
             case 117:
                 if (validateSDM02V1GTDatapoint(dp, dpType, declaredLength, DP_TYPE_VALUE, 4)) {
-                    logTuyaMeterUnsupportedChannelMeasurement(profile, dp == 108 ? 1 : 2, 'powerFactor', tuyaMeterUnsignedValue(payload), '%')
+                    logTuyaMeterUnsupportedChannelMeasurement(profile, dp == 108 ? 1 : 2, 'powerFactor', tuyaMeterSignedValue(payload), '%')
                 }
                 break
             default:
@@ -1999,7 +1999,7 @@ private void parseTuyaMeterPackedChannel(Map profile, int channel, List<String> 
 }
 
 private void logTuyaMeterUnsupportedChannelMeasurement(Map profile, int channel, String name, Object value, String unit) {
-    logInfo "${profile.id} Channel ${channel} ${name} is ${value} ${unit} (not exposed by Generic Component Metering Switch)"
+    logDebug "${profile.id} Channel ${channel} ${name} is ${value} ${unit} (not exposed by Generic Component Metering Switch)"
 }
 
 private void logTuyaMeterUnknownDatapoint(Map profile, int dp, String dpType, List<String> payload) {

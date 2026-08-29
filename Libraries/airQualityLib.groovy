@@ -22,7 +22,7 @@ library (
 */
 
 def airQualityLibVersion()   {"1.0.1"}
-def airQualityimeStamp() {"2023/09/02 9:18 PM"}
+def airQualityimeStamp() {"2026/08/27 10:13 PM"}
 
 metadata {
     attribute "pm25", "number"
@@ -320,7 +320,7 @@ def refreshAirQuality() {
 def initVarsAirQuality(boolean fullInit=false) {
     logDebug "initVarsAirQuality(${fullInit})"
     if (fullInit || settings?.airQualityIndexCheckInterval == null) device.updateSetting('airQualityIndexCheckInterval', [value: AirQualityIndexCheckIntervalOpts.defaultValue.toString(), type: 'enum'])
-    if (fullInit || settings?.TemperatureScaleOpts == null) device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum'])
+    if (fullInit || settings?.temperatureScale == null) device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.tVocUnut == null) device.updateSetting('tVocUnut', [value: TvocUnitOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.pm25Threshold == null) device.updateSetting("pm25Threshold", [value:DEFAULT_PM25_THRESHOLD, type:"number"])
     if (fullInit || settings?.airQualityIndexThreshold == null) device.updateSetting("airQualityIndexThreshold", [value:DEFAULT_AIR_QUALITY_INDEX_THRESHOLD, type:"number"])

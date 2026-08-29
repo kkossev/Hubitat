@@ -8,6 +8,11 @@ post 658 (seven post numbers are deleted or otherwise unavailable). The newest v
 post 658, dated **2026-02-05**. Candidates were checked against the production driver, its revision
 history, `README.MD`, and `BUGS.md`.
 
+Additional topic audit performed **2026-08-26** against driver **v2.0.5** (`timeStamp 2026/08/26 09:23 PM`).
+Source topic: [Hubitat Community topic 165245](https://community.hubitat.com/t/-/165245/1).
+The complete topic stream contains **10 visible posts**, from post 1 through post 10; the newest
+post is post 10, dated **2026-08-26**.
+
 This file is for forum-derived feature/device work. Confirmed code defects already recorded in
 `BUGS.md` are referenced rather than duplicated.
 
@@ -192,6 +197,45 @@ Verification: confirm automatic driver selection, switch, power, current, voltag
   represent three CT channels. Decide whether to create a dedicated multi-channel/child-device
   driver after the evidence is captured; do not add a fingerprint to the existing single-channel
   profile as a speculative shortcut.
+
+### 14. [?] Tuya SDM02T dual-channel monitor `TS0601 / _TZE284_x8diwkqb` — HUB-140
+
+- Reporter/device owner: @justcliff, [initial device report and behavior](https://community.hubitat.com/t/-/165245/8),
+  [request for Device Details](https://community.hubitat.com/t/-/165245/9), and
+  [Device Details screenshot](https://community.hubitat.com/t/-/165245/10).
+- **Confirmed target identity:** model `TS0601`, manufacturer `_TZE284_x8diwkqb`, endpoint `01`,
+  application `4A`, firmware MT `1002-1602-0000004A`, in-clusters
+  `0000,0004,0005,EF00,0000,ED00`, and out-clusters `0019,000A`. The Zigbee profile id is not
+  visible in the supplied evidence and remains unknown.
+- Keep this device separate from @chrisbvt's `TS0601 / _TZE284_81yrt3lo` in
+  [post 7](https://community.hubitat.com/t/-/165245/7). Similar appearance and two CT inputs do
+  not prove that the devices share fingerprints, firmware, or datapoints.
+- **Reported:** driver v2.0.4 did not expose two independent channels and routed reports through
+  unrelated generic branches, including DP 17 as forward energy, DP 102 as produced energy, and
+  DP 117 as Hoch reverse active power.
+- **External reference, not target-device capture:** the exact manufacturer/model pair is defined
+  upstream as `SDM02V1-GT`, with packed L1/L2 measurements on DPs 6/7 and a datapoint map that
+  conflicts with several current generic branches. Only `_TZE284_x8diwkqb` is in scope locally;
+  upstream sibling manufacturers are not evidence of Hubitat compatibility.
+- **Implemented unverified full support:** an exact-identity fingerprint (with profile id `0104`
+  explicitly marked as inferred), guarded decoding for the complete upstream SDM02T datapoint map,
+  parent total-meter events, L1/L2 Hubitat `Generic Component Metering Switch` children exposing
+  power and energy, informational logs for unsupported per-line measurements, device-locating and
+  update-frequency preferences, Tuya refresh queries, migration cleanup, and unknown-DP logging.
+- **Clarified — negative total power/power factor is not a driver bug:** the 2026-08-28 log capture
+  showed DP 29 (`total active power`) and DP 50 (`total power factor`) reading negative while both
+  channels drew positive power. Per-channel packed voltage/current/power (DP 6/7) decoded correctly
+  and matched V×I×PF sanity checks, so this is consistent with the total-power CT clamp being
+  installed in reversed orientation on this specific device, not a decoding defect. No driver change
+  needed for this point specifically. A separate, unrelated sign-decode bug (power factor read as
+  unsigned instead of signed, producing values like `4294967274 %`) was found in the same log and
+  fixed.
+- **Required:** install the parent driver, initialize it, and capture pairing/configuration plus
+  normal-reporting logs; verify values with known loads on CT1 only, CT2 only, and both inputs; test
+  clamp swap/orientation, imported/exported energy, locating, a controlled DP 102 interval change,
+  child power/energy and refresh, ignored child switch controls, unsupported-measurement info logs,
+  and all unknown datapoints. Keep `[?]` until the device owner confirms these checks; this
+  implementation remains **VERIFY ON DEVICE**.
 
 ---
 
