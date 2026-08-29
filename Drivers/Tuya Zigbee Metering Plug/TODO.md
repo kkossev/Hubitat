@@ -52,18 +52,42 @@ device-limitation findings are retained in the final audit section.
 - Verification: known resistive loads at several wattages, energy accumulation, on/off, re-pairing,
   and endpoint behavior.
 
-### 3. [ ] Add Zemismart SPM01 variant `_TZE284_iwn0gpzz`
+### 3. [?] Add Zemismart SPM01 variant `_TZE284_iwn0gpzz` — VERIFY ON DEVICE
 
 - GitHub issue: https://github.com/kkossev/Hubitat/issues/128.
 - Reporter: @gmanor77, [request](https://community.hubitat.com/t/-/86465/656); maintainer accepted it
-  in principle but deferred it in [post 657](https://community.hubitat.com/t/-/86465/657).
+  in principle but deferred it in [post 657](https://community.hubitat.com/t/-/86465/657). Cannot
+  reach the reporter for a fingerprint/log capture at the moment.
 - Known pair: model `TS0601`, manufacturer `_TZE284_iwn0gpzz`.
 - The device paired as the unrelated Tuya Zigbee Valve driver, confirming that v2.0.3 lacks its
-  fingerprint. Existing `isSPM01()` recognizes only `_TZE200_bcusnqt8` and `_TZE200_qhlxve78`.
-- Obtain the full fingerprint and EF00 debug reports, then compare DP IDs/scaling with the existing
-  SPM01 path before adding the manufacturer to `isSPM01()`.
-- Verification: voltage, current, power, frequency, energy, switch suppression, and sustained
-  reporting under a known load.
+  fingerprint.
+- **Implemented unverified support in v2.1.1**, sourced from a community Home Assistant ZHA quirk
+  ([orihuelasystem/Powermeter-zemismar-TS0601_TZE284_ywn0gpzz](https://github.com/orihuelasystem/Powermeter-zemismar-TS0601_TZE284_ywn0gpzz),
+  confirmed working by several users in
+  [zigpy/zha-device-handlers#4237](https://github.com/zigpy/zha-device-handlers/issues/4237)), not
+  from a capture on the reporter's actual device:
+  - Fingerprint added with the `ED00` in-cluster this device signature has (existing SPM01
+    fingerprints don't include it).
+  - Added the manufacturer to `isSPM01()`.
+  - DP 102 (voltage) and DP 103 (current) already matched the existing SPM01 divisors
+    (`getVoltageDiv()`=10, `getCurrentDiv()`=1000) — no change needed there.
+  - Added DP 32 (AC frequency) and DP 50 (power factor), which had no case in the switch before
+    (fell into `default:` as an unknown attribute).
+  - Added an `isSPM01()` branch to DP 111 (previously a generic "power factor" branch shared by other
+    families) for total active power.
+  - Split DP 23 out of the generic DP 21-24 "Forward energy" fallthrough into its own case, mapped to
+    the `producedEnergy` attribute for `isSPM01()`.
+  - DP 104 (power) is a known scaling conflict: the HA quirk uses no divisor (raw watts) for this
+    manufacturer, but the existing SPM01 path divides by `getPowerDiv()` (=10) for the two
+    already-confirmed manufacturers. Special-cased `_TZE284_iwn0gpzz` to skip the divisor rather than
+    changing shared behavior — unconfirmed which is actually correct.
+  - DP 6 (the packed voltage/current/power report older SPM01 firmware sends) is untouched; unknown
+    whether this manufacturer sends it at all, or with what byte layout — the HA quirk never
+    references it.
+- Verification still needed: voltage, current, power (including the DP 104 divisor question),
+  frequency, power factor, energy, produced energy, switch suppression, and sustained reporting under
+  a known load, from a `Get Info` fingerprint capture and EF00 debug log on the reporter's actual
+  device.
 
 ### 4. [ ] Implement `dailyEnergy`
 

@@ -5,9 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 and this project follows Semantic Versioning where applicable.
 
+## [2.1.1] - 2026-08-29
+
+This stays the working section for version 2.1.1 until a bump is explicitly requested.
+
+### Fixed
+
+- Fixed a `Cannot invoke method getDataValue() on null object` error on driver publish/save.
+  `getTuyaMultiChannelProfile()` (added in v2.1.0) called `device.getDataValue(...)` without a null
+  check; the `autoPollingEnabled` preference's `defaultValue:` calls `isTuyaMultiChannelMeter()`
+  unguarded (unlike the `deviceLocating`/`updateFrequency` block right above it, which already checks
+  `device != null`), and `preferences {}` is evaluated with no device bound when code is compiled/saved
+  outside of an actual paired device's context. Fixed at the source with `device?.getDataValue(...)`
+  (matching the existing `isTongouSY2()` pattern) and added a belt-and-suspenders `device != null`
+  guard at the `autoPollingEnabled` call site.
+
+### Added
+
+- Added unverified support for Zemismart SPM01V2.5, `TS0601` / `_TZE284_iwn0gpzz`: fingerprint (with
+  the `ED00` cluster this device reports that the existing SPM01 fingerprints don't have), added the
+  manufacturer to `isSPM01()`, and added decoding for DP 32 (AC frequency), DP 50 (power factor), and
+  DP 23 (produced energy, via the `producedEnergy` attribute) which had no case in the SPM01 DP
+  switch before. DP 111 (total active power) is also decoded now, since it collided with the existing
+  generic "power factor" DP 111 branch used by other device families.
+- Reporter: @gmanor77, [request](https://community.hubitat.com/t/-/86465/656). Tracked as
+  [kkossev/Hubitat#128](https://github.com/kkossev/Hubitat/issues/128) and TODO.md item 3.
+
+### Developer notes
+
+- The DP map (DP IDs, meanings, divisors) is sourced from a community Home Assistant ZHA quirk
+  ([orihuelasystem/Powermeter-zemismar-TS0601_TZE284_ywn0gpzz](https://github.com/orihuelasystem/Powermeter-zemismar-TS0601_TZE284_ywn0gpzz),
+  confirmed working by multiple users in
+  [zigpy/zha-device-handlers#4237](https://github.com/zigpy/zha-device-handlers/issues/4237)), not
+  from a capture on the actual reporter's device. **Nothing here has been verified on hardware.**
+- DP 102 (voltage) and DP 103 (current) already matched the existing SPM01 divisors
+  (`getVoltageDiv()`=10, `getCurrentDiv()`=1000) and needed no change.
+- DP 104 (power) is a known scaling conflict: the existing SPM01 path divides by `getPowerDiv()`
+  (=10) for the already-supported manufacturers, but the HA quirk reports this DP as raw watts (no
+  divisor) for `_TZE284_iwn0gpzz`. Rather than changing shared behavior for the confirmed-working
+  manufacturers, DP 104 now special-cases `_TZE284_iwn0gpzz` to skip the divisor; this needs
+  confirming against a real capture, not just the HA quirk's say-so.
+- DP 6 (the packed voltage/current/power report the older SPM01 firmware sends) is untouched -
+  unknown whether `_TZE284_iwn0gpzz` sends it at all, or with what byte layout, since the HA quirk
+  never references it.
+- Before trusting any of these readings, get a `Get Info` fingerprint capture and EF00 debug-log
+  traffic under a known load from the reporter's actual device.
+
 ## [2.1.0] - 2026-08-29
 
-This stays the working section for version 2.1.0 until a bump is explicitly requested.
+This stayed the working section for version 2.1.0.
 
 ### Added
 

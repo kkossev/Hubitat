@@ -72,6 +72,7 @@
  *  ver. 2.0.3 2026-04-20 kkossev - bug fix: breaker threshold boolean variables declared as int in processTuyaThresholdsCommands(); AC Frequency polling (0x0300) now auto-disabled after first unsupported-attribute response;
  *  ver. 2.0.4 2026-08-07 kkossev - minor bug fixes
  *  ver. 2.1.0 2026-08-29 kkossev - added Tuya multi-channel meter support (SDM02T, SPM02); fixed Tuya DP routing and ping RTT; bug fixes
+ *  ver. 2.1.1 2026-08-29 kkossev - fixed 2.1.0 bug: null device NPE in getTuyaMultiChannelProfile() on save; added unverified SPM01V2.5 _TZE284_iwn0gpzz support
  *
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
  *                                 TODO: add toggle() command
@@ -93,8 +94,8 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
-static String version() { '2.1.0' }
-static String timeStamp() { '2026/08/29 11:25 AM' }
+static String version() { '2.1.1' }
+static String timeStamp() { '2026/08/29 05:55 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -182,6 +183,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_cjbofhxw', deviceJoinName: 'MatSee Smart Meter with CT'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_abatw3kj', deviceJoinName: 'RTX Circuit Breaker 4x25A ZCB25-4P'        // https://community.hubitat.com/t/3phase-switch-recomendations/118293/12?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bcusnqt8', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // SPM01
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,ED00,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE284_iwn0gpzz', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // SPM01V2.5 - unverified, DP map from HA/ZHA community quirk, not confirmed on hardware - https://github.com/kkossev/Hubitat/issues/128
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_ves1ycwx', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // SPM02
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ves1ycwx', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // SPM02
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_v9hkz2yn', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // https://community.hubitat.com/t/release-tuya-zigbee-metering-plug-w-healthstatus/86465/520?u=kkossev
@@ -285,7 +287,7 @@ metadata {
             input(name: 'updateFrequency', type: 'number', title: '<b>Update frequency</b>, seconds', description: 'Multi-channel meter reporting interval. The current device value is populated after a report.', range: '5..3600', required: false)
         }
         input(name: 'autoReportingEnabled', type: 'bool', title: '<b>Automatic reporting configuration</b>', description: 'Enable the configuration of outlet automatic reporting, if supported by the device. Default setting is <b>off</b>', defaultValue: false)
-        input(name: 'autoPollingEnabled', type: 'bool', title: '<b>Automatic polling</b>', description: 'Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended setting is <b>on</b>', defaultValue: isTuyaMultiChannelMeter() ? false : true)
+        input(name: 'autoPollingEnabled', type: 'bool', title: '<b>Automatic polling</b>', description: 'Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended setting is <b>on</b>', defaultValue: (device != null && isTuyaMultiChannelMeter()) ? false : true)
         if (autoPollingEnabled?.value == true) {
             input(name: 'pollingInterval', type: 'number', title: '<b>Polling interval</b>, seconds', description: 'The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended setting is <b>60 seconds</b>',
                    range: '10..99999', defaultValue: defaultPollingInterval)
@@ -409,12 +411,12 @@ private boolean isHoch()                { device.getDataValue('manufacturer') in
 private boolean isTongouSY1()           { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3000_qeuvnohg', '_TZ3000_8bxrzyxz'] }    // TS011F
 private boolean isTongouSY2()           { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3000_cayepv1a', '_TZ3000_lepzuhto', '_TZ3000_qystbcjg'] }    // Din rail switch with power monitoring and threshold settings
 private boolean isPJ1203A()             { device.getDataValue('manufacturer') in ['_TZE204_81yrt3lo', '_TZE200_rks0sgb7'] }     // Bidirectional energy meter with 80A current clamp
-private boolean isSPM01()               { device.getDataValue('manufacturer') in ['_TZE200_bcusnqt8', '_TZE200_qhlxve78'] }     // Zemismart Single phase energy meter
+private boolean isSPM01()               { device.getDataValue('manufacturer') in ['_TZE200_bcusnqt8', '_TZE200_qhlxve78', '_TZE284_iwn0gpzz'] }     // Zemismart Single phase energy meter
 
 private Map getTuyaMultiChannelProfile() {
     /* groovylint-disable-next-line ReturnsNullInsteadOfEmptyCollection */
-    if (device.getDataValue('model') != 'TS0601') { return null }
-    switch (device.getDataValue('manufacturer')) {
+    if (device?.getDataValue('model') != 'TS0601') { return null }
+    switch (device?.getDataValue('manufacturer')) {
         case '_TZE204_ves1ycwx':
         case '_TZE200_ves1ycwx':
             return [id:'SPM02_PACKED_3CH', channelCount:3, supportsPreferences:false]
@@ -1419,12 +1421,41 @@ void parseZHAcommand(Map descMap) {
                                 break
                             case '15' : // (21) Forward energy
                             case '16' : // (22) Forward energy
-                            case '17' : // (23) Forward energy
                             case '18' : // (24) Forward energy
                                 logInfo "(${cmd}) Forward energy : ${value}"
                                 break
+                            case '17' : // (23) Forward energy, or SPM01V2.5 produced energy - unverified
+                                if (isSPM01()) {
+                                    BigDecimal producedEnergyValue = value / getEnergyDiv()
+                                    logDebug "(23) SPM01 produced energy : ${producedEnergyValue} kWh raw (${value})"
+                                    if (isEnergyEnabled()) {
+                                        sendEvent(name:'producedEnergy', value: producedEnergyValue, unit:'kWh', descriptionText: "producedEnergy is ${producedEnergyValue} kWh")
+                                    }
+                                }
+                                else {
+                                    logInfo "(23) Forward energy : ${value}"
+                                }
+                                break
                             case '1D' : // hochChildLock: 29
                                 if (txtEnable == true) { log.info "${device.displayName} Child Lock = ${value == 0 ? 'off' : 'on'}" }
+                                break
+                            case '20' : // (32) SPM01V2.5 AC frequency - unverified
+                                if (isSPM01()) {
+                                    logDebug "(32) SPM01 frequency : ${value / getFrequencyDiv()} raw ($value)"
+                                    frequencyEvent(value / getFrequencyDiv())
+                                }
+                                else {
+                                    logDebug "(32) unknown : ${value}"
+                                }
+                                break
+                            case '32' : // (50) SPM01V2.5 power factor - unverified
+                                if (isSPM01()) {
+                                    logDebug "(50) SPM01 power_factor : ${value / getPowerFactorDiv()} raw ($value)"
+                                    powerFactorEvent(value / getPowerFactorDiv())
+                                }
+                                else {
+                                    logDebug "(50) unknown : ${value}"
+                                }
                                 break
                             case '65' : // (101) Voltage HOCH    // DPID_ELECTRIC_ADD 101 // Total Energy ?
                                 if ((device.getDataValue('manufacturer') in ['_TZE204_cjbofhxw']) || isDinRail() || isRTXCircuitBreaker()) { // TODO - check RTX
@@ -1480,8 +1511,10 @@ void parseZHAcommand(Map descMap) {
                                     logDebug "(102) PJ1203A energy_flow_b : raw ($value)"
                                 }
                                 else if (isSPM01()) {
-                                    logDebug "(104) SPM01 power : ${value / getPowerDiv()} raw ($value)"
-                                    powerEvent(value / getPowerDiv())
+                                    // unverified: SPM01V2.5 (_TZE284_iwn0gpzz) HA/ZHA community quirk reports this DP as raw watts, no divisor
+                                    BigDecimal powerValue = device.getDataValue('manufacturer') == '_TZE284_iwn0gpzz' ? value : (value / getPowerDiv())
+                                    logDebug "(104) SPM01 power : ${powerValue} W raw ($value)"
+                                    powerEvent(powerValue)
                                 }
                                 else {
                                     logInfo "(104) Hoch Leakage Current is : ${value / getCurrentDiv()} raw (${value}) A"
@@ -1533,13 +1566,17 @@ void parseZHAcommand(Map descMap) {
                                     logInfo "(110) Total Reactive Power : ${value} raw (${value / getPowerDiv()} VAr)"
                                 }
                                 break
-                            case '6F' : // (111) power factor for ??? or hochCurrentThreshold
+                            case '6F' : // (111) power factor for ??? or hochCurrentThreshold or SPM01V2.5 total active power
                                 if (isHoch()) {
                                     logInfo "(111) Hoch Current Threshold is : ${value} raw (${value}) A"
                                 }
                                 else if (isPJ1203A()) {
                                     logInfo "(111) frequency : ${value / getFrequencyDiv()} raw (${value}) Hz"  // divideBy100
                                     frequencyEvent(value / getFrequencyDiv())
+                                }
+                                else if (isSPM01()) {   // unverified
+                                    logDebug "(111) SPM01 total active power : ${value} W raw"
+                                    powerEvent(value)
                                 }
                                 else {
                                     logInfo "(111) power factor : ${value} raw"
