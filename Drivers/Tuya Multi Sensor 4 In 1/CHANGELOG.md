@@ -15,10 +15,53 @@ Several entries change **shared libraries** in `C:\work\Hubitat\Libraries\`. Tho
 driver that embeds them, not only this one, and take effect for users only after each affected
 driver's bundle is regenerated.
 
-## [3.6.0] - 2026-08-05
+## [3.6.1] - 2026-08-23
 
 This is the current development version — all work stays under this heading until a version bump
 is explicitly requested, not a cut/released version with its own `[Unreleased]` above it.
+
+Most of this entry is **shared-library** work: `commonLib` 4.1.1, `onOffLib` 3.2.4, `batteryLib`
+3.2.4, `humidityLib` 3.3.1 and `temperatureLib` 3.3.2. Those reach every driver that embeds them.
+
+### Fixed
+
+- **Refresh now forces temperature and humidity events.** Pressing Refresh re-read the device, but
+  an unchanged value was swallowed by the delta filter and no event was sent. `humidityLib` had no
+  `isRefresh` bypass at all, and `temperatureLib` bypassed only the delta filter, so a Refresh
+  within 10 s of the last temperature event was still queued behind the minimum reporting interval.
+  All three sensor libraries now use the same two-gate bypass already proven in `illuminanceLib`:
+  `isRefresh` skips both the delta filter and the minimum interval, and the event carries a
+  `[refresh]` suffix with `isStateChange`. Confirmed on a SiHAS `USM-300Z`, where one Refresh
+  published illuminance, temperature and humidity immediately.
+- **Battery percentage no longer reads one step low on non-Tuya devices.** The ZCL half-percent
+  attribute 0x0021 was converted with `(rawValue / 2) as int`, which truncates: raw 1 (0.5 %) became
+  `0 %` and raw 3 (1.5 %) became `1 %`. Now rounded, matching zigbee-herdsman-converters. Tuya
+  devices report 0–100 directly and are unaffected.
+- **Two unquoted `respondsTo()` arguments that could throw `NullPointerException`.** A bare
+  identifier resolves to `null` in the Hubitat sandbox, and `respondsTo(null)` throws — verified on
+  hardware, see below. `commonLib.standardProcessTuyaDP()` would have thrown on every Tuya EF00
+  datapoint in drivers that embed `commonLib` without `deviceProfileLib`, and `onOffLib.on()` /
+  `off()` would have thrown for on/off-capable drivers embedding `onOffLib` without it. This driver
+  was never affected — its `customProcessTuyaDp()` returns before the line is reached.
+- **`TS0202_4IN1` no longer advertises a `reportingTime4in1` command that cannot execute.** The
+  profile's `commands` map named a method that does not exist, so invoking it threw
+  `MissingMethodException` (caught and logged). Removed; the Reporting Interval remains fully
+  settable through the dp:102 preference of the same name.
+
+### Notes
+
+- The Hubitat sandbox's handling of unknown bare identifiers was settled by testing on the hub: an
+  unknown identifier resolves to **`null`** — not to its own name as a String, and with no
+  `MissingPropertyException`. `respondsTo(bareName)` happens to work when the named method exists,
+  but throws `NullPointerException` when it does not. Details in `Libraries\BUGS.md`.
+- **Known issue introduced by the Refresh change:** `isRefresh` stays true for the whole refresh
+  window, so a device that answers one cluster twice — an unsolicited report plus the read response
+  — now publishes two events instead of one. Seen with humidity on the SiHAS `USM-300Z`. Not yet
+  decided whether to accept it or gate the bypass to the first event per attribute.
+
+---
+
+## [3.6.0] - 2026-08-05
 
 ### Added
 

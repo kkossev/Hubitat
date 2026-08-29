@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Temperature Library', name: 'temperatureLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/temperatureLib.groovy', documentationLink: '',
-    version: '3.3.1'
+    version: '3.3.2'
 )
 /*
  *  Zigbee Temperature Library
@@ -17,13 +17,14 @@ library(
  * ver. 3.2.3  2024-07-18 kkossev  - added 'ReportingConfiguration' capability check for minReportingTime and maxReportingTime
  * ver. 3.3.0  2025-09-15 kkossev  - commonLib 4.0.0 allignment; added temperatureOffset
  * ver. 3.3.1  2025-10-31 kkossev  - bugfix: isRefresh was not checked if temperature delta < 0.1
+ * ver. 3.3.2  2026-08-23 kkossev  - bugfix: isRefresh now also bypasses the minReportingTime queue; bugfix: the first event after the states are cleared is no longer delayed by minReportingTime
  *
  *                                   TODO: unschedule('sendDelayedTempEvent') only if needed (add boolean flag to sendDelayedTempEvent())
  *                                   TODO: check for negative temperature values in standardParseTemperatureCluster()
 */
 
-static String temperatureLibVersion()   { '3.3.1' }
-static String temperatureLibStamp() { '2025/10/31 3:13 PM' }
+static String temperatureLibVersion()   { '3.3.2' }
+static String temperatureLibStamp() { '2026/08/23 3:31 PM' }
 
 metadata {
     capability 'TemperatureMeasurement'
@@ -81,10 +82,11 @@ void handleTemperatureEvent(BigDecimal temperaturePar, boolean isDigital=false) 
         eventMap.descriptionText += ' [refresh]'
         eventMap.isStateChange = true
     }
-    Integer timeElapsed = Math.round((now() - (state.lastRx['tempTime'] ?: now())) / 1000)
     Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
+    // a null lastRx time means there is no previous event to space this one from - send it right away instead of queueing it for minTime seconds
+    Integer timeElapsed = state.lastRx['tempTime'] != null ? Math.round((now() - (state.lastRx['tempTime'] as long)) / 1000) as Integer : minTime
     Integer timeRamaining = (minTime - timeElapsed) as Integer
-    if (timeElapsed >= minTime) {
+    if (isRefresh || timeElapsed >= minTime) {
         logInfo "${eventMap.descriptionText}"
         unschedule('sendDelayedTempEvent')        //get rid of stale queued reports
         state.lastRx['tempTime'] = now()

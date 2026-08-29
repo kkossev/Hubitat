@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Battery Library', name: 'batteryLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/batteryLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-batteryLib',
-    version: '3.2.3'
+    version: '3.2.4'
 )
 /*
  *  Zigbee Battery Library
@@ -16,13 +16,14 @@ library(
  * ver. 3.2.1  2024-07-06 kkossev  - added tuyaToBatteryLevel and handleTuyaBatteryLevel; added batteryInitializeVars
  * ver. 3.2.2  2024-07-18 kkossev  - added BatteryVoltage and BatteryDelay device capability checks
  * ver. 3.2.3  2025-07-13 kkossev  - bug fix: corrected runIn method name from 'sendDelayedBatteryEvent' to 'sendDelayedBatteryPercentageEvent'
+ * ver. 3.2.4  2026-08-23 kkossev  - bug fix: non-Tuya battery percentage is now rounded instead of truncated (raw 1 was reported as 0%)
  *
  *                                   TODO: add an Advanced Option resetBatteryToZeroWhenOffline
  *                                   TODO: battery voltage low/high limits configuration
 */
 
-static String batteryLibVersion()   { '3.2.3' }
-static String batteryLibStamp() { '2025/07/13 7:45 PM' }
+static String batteryLibVersion()   { '3.2.4' }
+static String batteryLibStamp() { '2026/08/23 3:43 PM' }
 
 metadata {
     capability 'Battery'
@@ -61,7 +62,7 @@ public void standardParsePowerCluster(final Map descMap) {
             sendBatteryPercentageEvent(rawValue)
         }
         else {
-            sendBatteryPercentageEvent((rawValue / 2) as int)
+            sendBatteryPercentageEvent(Math.round(rawValue / 2.0) as int)
         }
     }
     else {

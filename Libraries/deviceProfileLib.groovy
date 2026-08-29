@@ -1,7 +1,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Device Profile Library', name: 'deviceProfileLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/deviceProfileLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-deviceProfileLib',
-    version: '3.5.7'
+    version: '3.5.8'
 )
 /*
  *  Device Profile Library (V3)
@@ -43,6 +43,7 @@ library(
  * ver. 3.5.5  2026-03-05 kkossev  - added deviceProfilesV3defaults?.defaultCommands
  * ver. 3.5.6  2026-06-04 kkossev  - fixed setPar() invalid virtual enum parameter false error when preference key is passed instead of label
  * ver. 3.5.7  2026-08-03 kkossev  - (BUGS.md B13) processFoundItem() no longer skips illuminance events based on the raw-DP dedupe, which ignored illuminanceCoeff
+ * ver. 3.5.8  2026-08-23 kkossev  - (TODO.md B6) getDeviceNameAndProfile() rewritten with explicit for loops so the first fingerprint match really exits the method - a 'return' inside the nested .each only left the closure, so the last match won; validateAndFixPreferences() closure 'return false' changed to plain 'return' to make the skip-this-preference intent explicit; (TODO.md B10) back-ported shouldDetectDeviceProfile() from deviceProfileLibV4 - deviceProfileInitializeVars() now re-resolves a profile stored as UNKNOWN, which the old 'state.deviceProfile == null' guard skipped on the checkDriverVersion() -> initializeVars(false) path taken after a driver code update
  *
  *                                   TODO - remove the 2-in-1 patch !
  *                                   TODO - add updateStateUnknownDPs (from the 4-in-1 driver)
@@ -54,8 +55,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.5.7' }
-static String deviceProfileLibStamp() { '2026/08/05 11:12 PM' }
+static String deviceProfileLibVersion()   { '3.5.8' }
+static String deviceProfileLibStamp() { '2026/08/23 4:48 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -870,13 +871,19 @@ public List<String> getDeviceNameAndProfile(String model=null, String manufactur
         deviceManufacturer = SIMULATED_DEVICE_MANUFACTURER
         logWarn "<b>getDeviceNameAndProfile: using SIMULATED_DEVICE_MODEL ${SIMULATED_DEVICE_MODEL} and SIMULATED_DEVICE_MANUFACTURER ${SIMULATED_DEVICE_MANUFACTURER} in _DEBUG mode</b>"
     }
-    deviceProfilesV3.each { profileName, profileMap ->
-        profileMap.fingerprints.each { fingerprint ->
-            if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
-                deviceProfile = profileName
-                deviceName = fingerprint.deviceJoinName ?: deviceProfilesV3[deviceProfile].description ?: UNKNOWN
-                logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
-                return [deviceName, deviceProfile]
+    // explicit loops (not .each{}) so 'return' here exits the whole method on first match -
+    // closure 'return' inside nested .each only exits the innermost closure, causing last-match-wins on duplicate fingerprints
+    if (deviceProfilesV3 != null && !deviceProfilesV3.isEmpty()) {
+        for (profileEntry in deviceProfilesV3) {
+            String profileName = profileEntry.key as String
+            Map profileMap = profileEntry.value as Map
+            for (fingerprint in (profileMap.fingerprints ?: [])) {
+                if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
+                    deviceProfile = profileName
+                    deviceName = fingerprint.deviceJoinName ?: profileMap.description ?: UNKNOWN
+                    logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
+                    return [deviceName, deviceProfile]
+                }
             }
         }
     }
@@ -979,9 +986,18 @@ List<String> initializeDeviceProfile() {
     return cmds
 }
 
+// true when the stored profile is missing or was never resolved. Back-ported from deviceProfileLibV4.
+// A plain 'state.deviceProfile == null' test is not enough: a device that paired against a driver version
+// which did not yet contain its profile is stored as the string UNKNOWN, and UNKNOWN is not null - so it
+// never re-resolved on the checkDriverVersion() -> initializeVars(false) path taken after a code update.
+public boolean shouldDetectDeviceProfile() {
+    String currentProfile = state?.deviceProfile
+    return currentProfile == null || currentProfile == '' || currentProfile == UNKNOWN
+}
+
 public void deviceProfileInitializeVars(boolean fullInit=false) {
     logDebug "deviceProfileInitializeVars(${fullInit})"
-    if (state.deviceProfile == null) {
+    if (shouldDetectDeviceProfile()) {
         setDeviceNameAndProfile()
     }
 }
@@ -1427,11 +1443,13 @@ public boolean validateAndFixPreferences(boolean debug=false) {
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def oldSettingValue, newValue
     String settingType = ''
+    // 'return' inside this closure skips to the next preference (it is a continue, not a method return) - that is intentional here:
+    // one unusable preference must not stop the remaining ones from being validated. The method's own return value is not consumed anywhere.
     DEVICE?.preferences.each {
         Map foundMap = getPreferencesMapByName(it.key)
-        if (foundMap == null || foundMap == [:]) { logDebug "validateAndFixPreferences: map not found for preference ${it.key}" ; return false }
+        if (foundMap == null || foundMap == [:]) { logDebug "validateAndFixPreferences: map not found for preference ${it.key}" ; return }
         settingType = device.getSettingType(it.key) ; oldSettingValue = device.getSetting(it.key)
-        if (settingType == null) { logDebug "validateAndFixPreferences: settingType not found for preference ${it.key}" ; return false }
+        if (settingType == null) { logDebug "validateAndFixPreferences: settingType not found for preference ${it.key}" ; return }
         if (debug) { logTrace "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) oldSettingValue = ${oldSettingValue} mapType = ${foundMap.type} settingType=${settingType}" }
         if (foundMap.type != settingType) {
             logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) new mapType = ${foundMap.type} <b>differs</b> from the old settingType=${settingType} (oldSettingValue = ${oldSettingValue}) "
@@ -1440,7 +1458,7 @@ public boolean validateAndFixPreferences(boolean debug=false) {
             try {
                 device.removeSetting(it.key) ; logDebug "validateAndFixPreferences: removing setting ${it.key}"
             } catch (e) {
-                logWarn "validateAndFixPreferences: exception ${e} caught while removing setting ${it.key}" ; return false
+                logWarn "validateAndFixPreferences: exception ${e} caught while removing setting ${it.key}" ; return
             }
             // first, try to use the old setting value
             try {
@@ -1474,7 +1492,7 @@ public boolean validateAndFixPreferences(boolean debug=false) {
                     logDebug "validateAndFixPreferences: updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with <b>default</b> value ${newValue} "
                     validationFixes ++
                 } catch (e2) {
-                    logWarn "<b>validateAndFixPreferences: exception '${e2}' caught while setting default value ... Giving up!</b>" ; return false
+                    logWarn "<b>validateAndFixPreferences: exception '${e2}' caught while setting default value ... Giving up on this preference!</b>" ; return
                 }
             }
         }

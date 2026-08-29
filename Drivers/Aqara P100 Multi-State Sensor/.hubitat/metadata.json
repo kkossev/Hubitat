@@ -5,6 +5,12 @@
       "codeType": "driver",
       "id": 5154,
       "version": 36
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Drivers/Aqara P100 Multi-State Sensor/Aqara_P100_Multi_State_Sensor.groovy",
+      "id": 5154,
+      "codeType": "driver",
+      "version": 37
     }
   ]
 }

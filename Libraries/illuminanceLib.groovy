@@ -19,7 +19,7 @@ library(
  * ver. 3.0.0  2024-04-06 kkossev  - added illuminanceLib.groovy
  * ver. 3.2.0  2024-05-28 kkossev  - commonLib 3.2.0 allignment; added capability 'IlluminanceMeasurement'; added illuminanceRefresh()
  * ver. 3.2.1  2024-07-06 kkossev  - added illuminanceCoeff; added luxThreshold and illuminanceCoeff to preferences (if applicable)
- * ver. 3.2.2  2026-08-03 kkossev  - (BUGS.md B10) illuminanceThreshold UI default corrected from 5 to 10 lx; (BUGS.md A4) a lux threshold of 0 (no filtering) is no longer silently replaced by the default
+ * ver. 3.2.2  2026-08-03 kkossev  - (BUGS.md B10) illuminanceThreshold UI default corrected from 5 to 10 lx; (BUGS.md A4) a lux threshold of 0 (no filtering) is no longer silently replaced by the default; bugfix (2026-08-23): the first event after the states are cleared is no longer delayed by minReportingTime
  *
  *                                   TODO: check illuminanceInitializeVars() and illuminanceProcessTuyaDP() usage
 */
@@ -69,8 +69,9 @@ void handleIlluminanceEvent(int illuminance, boolean isDigital=false) {
         eventMap.descriptionText += ' [refresh]'
         eventMap.isStateChange = true
     }
-    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now())) / 1000)
     Integer minTime = (settings?.illuminanceMinReportingTime != null ? settings.illuminanceMinReportingTime : (settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME)) as int    // illuminance-specific override takes precedence over the shared minReportingTime
+    // a null lastRx time means there is no previous event to space this one from - send it right away instead of queueing it for minTime seconds
+    Integer timeElapsed = state.lastRx['illumTime'] != null ? Math.round((now() - (state.lastRx['illumTime'] as long)) / 1000) as Integer : minTime
     Integer timeRamaining = (minTime - timeElapsed) as Integer
     Integer lastIllum = device.currentValue('illuminance') as Integer    // null when the attribute was never set - the first report must be published to establish the baseline
     Integer threshold = (settings?.illuminanceThreshold != null ? settings.illuminanceThreshold : DEFAULT_ILLUMINANCE_THRESHOLD) as int    // 0 is a valid threshold, meaning 'no filtering'

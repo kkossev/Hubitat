@@ -1,8 +1,8 @@
 # Tuya Ultrasonic Water Flow Meter — Consolidated TODO and Work-list
 
-Analysis date: 2026-08-05  
+Analysis date: 2026-08-05; incremental forum audit through post 26 on 2026-08-15
 Topic: https://community.hubitat.com/t/tuya-smart-zigbee-ultrasonic-water-meters/142433  
-Forum coverage: complete thread, posts 1–25 (the whole thread as of 2026-08-05)
+Forum coverage: complete thread, posts 1–26 (the whole thread as of 2026-08-15)
 
 This is the single consolidated backlog for this driver. Part I is the forum-derived device-support
 backlog, Part II the open technical questions and unverified decoding, Part III repo housekeeping.
@@ -38,6 +38,8 @@ Evidence:
 
 - Purchase note, logs promised: https://community.hubitat.com/t/-/142433/24
 - Device data + full debug log: https://community.hubitat.com/t/-/142433/25
+- Maintainer's working-driver link and screenshot of live device states:
+  https://community.hubitat.com/t/-/142433/26
 
 Fix applied (3.4.0): new `TS0601_WATER_METER` profile (no valve), fingerprint
 `_TZE284_ajlu4cud` / `TS0601` with `inClusters:'0004,0005,EF00,0000,ED00'`, and payload-level
@@ -53,6 +55,13 @@ Verification needed from jw970065:
 - `faults` should read `empty_pipe_alarm,transducer_alarm` while the meter is out of a pipe, and
   should clear to `no_alarm` once installed and filled — **this second half is unconfirmed**, see
   item 7.
+
+Partial hardware confirmation from post #26: the screenshot shows the device online with the exact
+meter ID `00000026009162`, plausible temperature and battery voltage, `reportPeriod = 12h`, and the
+expected two bench-test faults. This confirms that the driver loads and the principal read path is
+working. It does not show the raw debug log, non-zero consumption/flow scaling, fault clearing in a
+filled pipe, or any write path, so those checks remain open rather than treating “more or less” as
+full verification.
 
 ### 2. `[ ]` `OPEN` — Report period is a preference here, but users are looking for a command
 

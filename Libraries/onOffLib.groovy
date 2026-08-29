@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee OnOff Cluster Library', name: 'onOffLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/onOffLib.groovy', documentationLink: '',
-    version: '3.2.3'
+    version: '3.2.4'
 )
 /*
  *  Zigbee OnOff Cluster Library
@@ -20,12 +20,13 @@ library(
  * ver. 3.2.1  2024-06-07 kkossev  - the advanced options are excpluded for DEVICE_TYPE Thermostat
  * ver. 3.2.2  2024-06-29 kkossev  - added on/off control for Tuya device profiles with 'switch' dp;
  * ver. 3.2.3  2025-12-06 kkossev  - fixed a bug in off() and on() methods where clearIsDigital() was called too early
+ * ver. 3.2.4  2026-08-23 kkossev  - bug fix: quoted the respondsTo('getDEVICE') argument in on() and off(); the bare identifier threw a NullPointerException in drivers without deviceProfileLib
  *
  *                                   TODO:
 */
 
-static String onOffLibVersion()   { '3.2.3' }
-static String onOffLibStamp() { '2025/12/06 10:45 PM' }
+static String onOffLibVersion()   { '3.2.4' }
+static String onOffLibStamp() { '2026/08/23 4:27 PM' }
 
 @Field static final Boolean _THREE_STATE = true
 
@@ -105,7 +106,7 @@ void off() {
     if ((settings?.alwaysOn ?: false) == true) { logWarn "AlwaysOn option for ${device.displayName} is enabled , the command to switch it OFF is ignored!" ; return }
     List<String> cmds = []
     // added 06/29/2024 - control Tuya 0xEF00 switch
-    if (this.respondsTo(getDEVICE)) {   // defined in deviceProfileLib
+    if (this.respondsTo('getDEVICE')) {   // defined in deviceProfileLib
         Map switchMap = getAttributesMap('switch')
         int onOffValue = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  0  : 1
         if (switchMap != null && switchMap != [:]) {
@@ -138,7 +139,7 @@ void on() {
     if (this.respondsTo('customOn')) { customOn() ; return }
     List<String> cmds = []
     // added 06/29/2024 - control Tuya 0xEF00 switch
-    if (this.respondsTo(getDEVICE)) {   // defined in deviceProfileLib
+    if (this.respondsTo('getDEVICE')) {   // defined in deviceProfileLib
         Map switchMap = getAttributesMap('switch')
         int onOffValue = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  1  : 0
         if (switchMap != null && switchMap != [:]) {

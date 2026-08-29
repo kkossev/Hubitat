@@ -29,7 +29,8 @@
  * ver. 4.2.1  2025-10-19 kkossev  - added attributes 'switch', 'switchOnTime', 'switchState' for NEO NAS-PS10B2; added 'blockTime', 'motionDetectionDelayTime', 'radarScene', 'sensorMode', 'distanceReportMode' for TS0225_LEAPMMW_RADAR Z2M compatibility
  * ver. 4.2.2  2026-06-27 kkossev  - added HOBEIAN ZG-204ZK 24 GHz Human Presence Detector (TS0601 _TZE200_ka8l86iu)
  * ver. 4.2.3  2026-06-28 kkossev  - added ignoreSSLIssues=true for HTTPS profile JSON downloads;
- * ver. 4.2.4  2026-07-09 kkossev  - (dev. branch) multiple bug fixes
+ * ver. 4.2.4  2026-07-09 kkossev  - mutiple bug fixes
+ * ver. 4.2.5  2026-08-24 kkossev  - (dev.branch) added support for SONOFF SNZB-06P24 Presence Sensor
  *
  *                                   TODO: new info page on WiKi
  *                                   TODO: Show both the profile key and the profile name in the Preferences page!
@@ -39,10 +40,10 @@
  *                                   TODO: 
 */
 
-static String version() { "4.2.4" }
-static String timeStamp() {"2026/07/09 10:53 PM"}
+static String version() { "4.2.5" }
+static String timeStamp() {"2026/08/24 11:44 PM"}
 
-@Field static final Boolean _DEBUG = true           // debug commands
+@Field static final Boolean _DEBUG = false           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true 
 
@@ -109,6 +110,7 @@ metadata {
         attribute 'radarStatus', 'enum', ['checking', 'check_success', 'check_failure', 'others', 'comm_fault', 'radar_fault']
         attribute 'sensorMode', 'enum', ['normal', 'occupied', 'unoccupied']
         attribute 'smallMotionDetectionSensitivity', 'number'   // added 04/25/2024
+        attribute 'spatialLearningState', 'enum', ['idle', 'learning', 'success', 'failed', 'timeout']  // SONOFF SNZB-06P24
         attribute 'staticDetectionDistance', 'decimal'          // added 05/1/2024
         attribute 'staticDetectionSensitivity', 'number'        // added 10/29/2023
         attribute 'switch', 'enum', ['manual', 'auto']          // NEO NAS-PS10B2
@@ -119,6 +121,10 @@ metadata {
         attribute 'temperature', 'number'                       // TS0601_HOBEIAN_RADAR
         attribute 'unacknowledgedTime', 'number'                // AIR models
         attribute 'WARNING', 'string'
+        attribute 'zoneEnable', 'number'                        // SONOFF SNZB-06P24 - raw zone enable bitmap (0xFC11:0x2016)
+        attribute 'zonesEnabled', 'string'                      // SONOFF SNZB-06P24 - human readable list of the enabled detection zones
+        attribute 'zonesOccupied', 'string'                     // SONOFF SNZB-06P24 - human readable list of the currently occupied zones (experimental)
+        attribute 'zoneStatus', 'number'                        // SONOFF SNZB-06P24 - raw zone occupancy bitmap (0xFC11:0x2015, experimental)
 
         command 'sendCommand', [
             [name:'command', type: 'STRING', description: '⚡ Send a device-specific command with optional parameter value • Click the Run button to see the list of available commands', constraints: ['STRING']],
@@ -156,6 +162,9 @@ metadata {
         // 10/19/2024 - luxThreshold and illuminanceCoeff are defined in illuminanceLib.groovy
         if (('DistanceMeasurement' in DEVICE?.capabilities) && settings?.distanceReporting == null) {   // 10/19/2024 - show the soft 'ignoreDistance' switch only for these old devices that don't have the true distance reporting disabling switch!
             input(name: 'ignoreDistance', type: 'bool', title: '<b>Ignore distance reports</b>', description: 'If not used, ignore the distance reports received every 1 second!', defaultValue: true)
+        }
+        if (DEVICE?.attributes?.any { it.name == 'zoneStatus' }) {      // SONOFF SNZB-06P24
+            input(name: 'ignoreZoneStatus', type: 'bool', title: '<b>Ignore zone status reports</b>', description: 'The sensor reports which zone is occupied about once per second while a person is present. If you do not use the zonesOccupied attribute, turn this on to keep those events out of the event log.', defaultValue: false)
         }
     }
 }
@@ -222,7 +231,21 @@ void customParseE002Cluster(final Map descMap) {
 
 void customParseFC11Cluster(final Map descMap) {
     if (this.respondsTo('ensureCurrentProfileLoaded')) { ensureCurrentProfileLoaded() }
-    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    // SONOFF SNZB-06P24 reports the progress of the spatial learning (calibration) as a cluster-specific command 0x04,
+    // not as an attribute report - such a frame arrives as a 'catchall' and has no attrId/value at all.
+    if (descMap.isClusterSpecific == true) {
+        if (safeToInt(hexStrToUnsignedInt(descMap.command)) == SONOFF_SPATIAL_LEARNING_CMD) { parseSonoffSpatialLearning(descMap) }
+        else { logWarn "customParseFC11Cluster: received unknown 0xFC11 cluster-specific command 0x${descMap.command} (data ${descMap.data})" }
+        return
+    }
+    // not every 0xFC11 attribute holds a number - SNZB-06P24 answers a read of 0x2017 with a ZCL ARRAY (encoding 0x48)
+    // of 16 uint8, and hexStrToUnsignedInt() throws NumberFormatException on a value that wide.
+    Integer value
+    try { value = safeToInt(hexStrToUnsignedInt(descMap.value)) }
+    catch (e) {
+        logWarn "customParseFC11Cluster: 0xFC11 attribute 0x${descMap.attrId} is not a number (encoding 0x${descMap.encoding}, raw ${descMap.value}) - ignored"
+        return
+    }
     logTrace "customParseFC11Cluster: zigbee received 0xFC11 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
     if (result == false) {
@@ -258,6 +281,18 @@ void customProcessDeviceProfileEvent(final Map descMap, final String name, final
         case 'illuminance_lux' :    // ignore the IAS Zone illuminance reports for HL0SS9OA and 2AAELWXK
             //log.trace "illuminance event received deviceProfile is ${getDeviceProfile()} value=${value} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
             handleIlluminanceEvent(valueScaled as int)  // TODO : was valueCorrected !!!!! ?? check! TODO !
+            break
+        case 'zoneEnable' :         // SONOFF SNZB-06P24 - also publish the bitmap as a human readable list of zones
+            sendEvent(eventMap)
+            sendSonoffZonesEvent('zonesEnabled', safeToInt(valueScaled), 'enabled detection zones', true)
+            break
+        case 'zoneStatus' :         // SONOFF SNZB-06P24 - arrives about once per second while a person is present
+            if (settings?.ignoreZoneStatus == true) {
+                logTrace 'zoneStatus report ignored (ignoreZoneStatus is true)'
+                break
+            }
+            sendEvent(eventMap)
+            sendSonoffZonesEvent('zonesOccupied', safeToInt(valueScaled), 'occupied zones', false)
             break
         default :
             sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
@@ -428,6 +463,254 @@ void customParseIlluminanceCluster(final Map descMap) {
 
 void formatAttrib() {
     logDebug "trapped formatAttrib() from the 4-in-1 driver..."
+}
+
+/*
+ * -----------------------------------------------------------------------------
+ * SONOFF SNZB-06P24 - detection zones and spatial learning (calibration)
+ * Cluster 0xFC11, manufacturer code 0x1286 (Shenzhen Coolkit)
+ * References : Zigbee2MQTT src/devices/sonoff.ts, ZHA quirk PR zigpy/zha-device-handlers#4907
+ * -----------------------------------------------------------------------------
+*/
+
+@Field static final Integer SONOFF_FC11_CLUSTER = 0xFC11
+@Field static final String  SONOFF_MFG_CODE     = '0x1286'
+@Field static final Integer SONOFF_SPATIAL_LEARNING_CMD = 0x04
+@Field static final Integer SONOFF_ZONES_COUNT  = 7
+@Field static final Integer SONOFF_LEARNING_DEFAULT_TIMEOUT = 90     // seconds - used until the device tells us the real duration
+@Field static final Integer SONOFF_LEARNING_GRACE = 15               // seconds added on top of the duration reported by the device
+@Field static final List<String> SONOFF_ZONE_RANGES = ['0-1m', '1-1.5m', '1.5-2m', '2-2.5m', '2.5-3m', '3-3.5m', '3.5-4m']
+
+// Zone 1 occupies BOTH bit 0 and bit 1 (the device merges the two 0.5 m slots), zones 2..7 use bit 2..bit 7.
+private int sonoffZoneBitMask(final int zone) { return zone == 1 ? 0x03 : (1 << zone) }
+
+private String sonoffZonesToString(final int bitmap) {
+    List<String> zones = []
+    for (int z = 1; z <= SONOFF_ZONES_COUNT; z++) {
+        if ((bitmap & sonoffZoneBitMask(z)) != 0) { zones.add(z.toString()) }
+    }
+    return zones.isEmpty() ? 'none' : zones.join(',')
+}
+
+// infoLog=false for zonesOccupied : the device pushes it about once per second while a person is present,
+// so it must not fill the log with Info lines. The event is still sent, that is what automations subscribe to.
+private void sendSonoffZonesEvent(final String attribName, final int bitmap, final String what, final boolean infoLog) {
+    String zones = sonoffZonesToString(bitmap)
+    String descText = "${what}: ${zones}"
+    sendEvent(name: attribName, value: zones, descriptionText: descText, type: 'physical')
+    if (infoLog) { logInfo "${descText} (bitmap 0x${zigbee.convertToHexString(bitmap & 0xFF, 2)})" }
+    else { logDebug "${descText} (bitmap 0x${zigbee.convertToHexString(bitmap & 0xFF, 2)})" }
+}
+
+private String sonoffZonesHelp() {
+    List<String> help = []
+    for (int z = 1; z <= SONOFF_ZONES_COUNT; z++) { help.add("${z}=${SONOFF_ZONE_RANGES[z - 1]}") }
+    return help.join(' ')
+}
+
+private List<String> sonoffWriteZoneEnable(final int bitmap) {
+    int bm = bitmap & 0xFF
+    logInfo "setting the enabled detection zones to ${sonoffZonesToString(bm)} (bitmap 0x${zigbee.convertToHexString(bm, 2)})"
+    device.updateSetting('zoneEnable', [value: bm.toString(), type: 'number'])
+    // 0x19 = BITMAP16, as used by both Zigbee2MQTT and the ZHA quirk
+    return zigbee.writeAttribute(SONOFF_FC11_CLUSTER, 0x2016, 0x19, bm, ['mfgCode': SONOFF_MFG_CODE], delay = 200) +
+           zigbee.readAttribute(SONOFF_FC11_CLUSTER, 0x2016, ['mfgCode': SONOFF_MFG_CODE], delay = 500)
+}
+
+// sendCommand('setZone', '<zone 1..7> <on|off>')  e.g.  setZone('3 off')
+List<String> setZone(String val = null) {
+    if (val == null || val.trim().isEmpty()) {
+        logInfo "setZone: expected '&lt;zone&gt; &lt;on|off&gt;', for example <b>3 off</b> . Zone ranges: ${sonoffZonesHelp()}"
+        return []
+    }
+    List<String> parts = val.trim().toLowerCase().split('[\\s,:=]+') as List<String>
+    int zone = safeToInt(parts[0], -1)
+    if (zone < 1 || zone > SONOFF_ZONES_COUNT) {
+        logWarn "setZone: invalid zone '${parts[0]}' - must be 1..${SONOFF_ZONES_COUNT} (${sonoffZonesHelp()})"
+        return []
+    }
+    boolean enable = true
+    if (parts.size() > 1) { enable = !(parts[1] in ['off', '0', 'false', 'no', 'disable', 'disabled']) }
+    // the last value reported by the device is the most authoritative one, the preference is the fallback
+    int bitmap = safeToInt(device.currentValue('zoneEnable'), safeToInt(settings?.zoneEnable, 0xFF))
+    int mask = sonoffZoneBitMask(zone)
+    int newBitmap = enable ? (bitmap | mask) : (bitmap & ~mask)
+    if (newBitmap == bitmap) {
+        logInfo "setZone: zone ${zone} (${SONOFF_ZONE_RANGES[zone - 1]}) is already ${enable ? 'enabled' : 'disabled'}"
+        return []
+    }
+    logInfo "setZone: ${enable ? 'enabling' : 'disabling'} zone ${zone} (${SONOFF_ZONE_RANGES[zone - 1]})"
+    return sonoffWriteZoneEnable(newBitmap)
+}
+
+// sendCommand('setAllZones', 'all' | 'none' | '1,2,5')
+List<String> setAllZones(String val = null) {
+    if (val == null || val.trim().isEmpty()) {
+        logInfo "setAllZones: expected <b>all</b>, <b>none</b>, or a list of zones such as <b>1,2,5</b> . Zone ranges: ${sonoffZonesHelp()}"
+        return []
+    }
+    String v = val.trim().toLowerCase()
+    int bitmap = 0
+    if (v in ['all', 'on', 'enable', 'enabled']) {
+        for (int z = 1; z <= SONOFF_ZONES_COUNT; z++) { bitmap |= sonoffZoneBitMask(z) }
+    }
+    else if (v in ['none', 'off', 'disable', 'disabled']) {
+        bitmap = 0
+    }
+    else {
+        for (String p : v.split('[\\s,;]+')) {
+            int z = safeToInt(p, -1)
+            if (z < 1 || z > SONOFF_ZONES_COUNT) {
+                logWarn "setAllZones: invalid zone '${p}' - must be 1..${SONOFF_ZONES_COUNT} (${sonoffZonesHelp()})"
+                return []
+            }
+            bitmap |= sonoffZoneBitMask(z)
+        }
+    }
+    return sonoffWriteZoneEnable(bitmap)
+}
+
+// little-endian hex string of the lowest 'bytes' bytes of value, as expected by the SONOFF payload
+private String sonoffLongToLeHex(final long value, final int bytes) {
+    StringBuilder sb = new StringBuilder()
+    long v = value
+    for (int i = 0; i < bytes; i++) {
+        sb.append(zigbee.convertToHexString((int)(v & 0xFFL), 2))
+        v = v >>> 8
+    }
+    return sb.toString()
+}
+
+// reads 'len' little-endian bytes starting at 'offset' from a catchall data list
+private Long sonoffLeHexToLong(final List<String> data, final int offset, final int len) {
+    if (data == null || data.size() < (offset + len)) { return null }
+    StringBuilder sb = new StringBuilder()
+    for (int i = offset + len - 1; i >= offset; i--) { sb.append(data[i]) }
+    try { return Long.parseLong(sb.toString(), 16) }
+    catch (e) { logWarn "sonoffLeHexToLong: exception ${e} caught while parsing '${sb}'" ; return null }
+}
+
+private void sendSpatialLearningStateEvent(final String value, final String descText) {
+    sendEvent(name: 'spatialLearningState', value: value, descriptionText: descText, type: 'digital', isStateChange: true)
+}
+
+// sendCommand('spatialLearning') - starts the space learning calibration. The room must be EMPTY while it runs!
+List<String> spatialLearning(String val = null) {
+    // sub command 0x00 = start, followed by an uint64 little-endian sequence number (the current time in milliseconds)
+    String payload = '00' + sonoffLongToLeHex(now(), 8)
+    logInfo 'spatialLearning: starting the spatial learning (calibration) - LEAVE THE ROOM and keep it empty until it completes!'
+    sendSpatialLearningStateEvent('learning', 'spatial learning was started')
+    runIn(SONOFF_LEARNING_DEFAULT_TIMEOUT, 'spatialLearningTimeout', [overwrite: true])
+    return zigbee.command(SONOFF_FC11_CLUSTER, SONOFF_SPATIAL_LEARNING_CMD, ['mfgCode': SONOFF_MFG_CODE], 200, payload)
+}
+
+void spatialLearningTimeout() {
+    if (device.currentValue('spatialLearningState') == 'learning') {
+        logWarn 'spatialLearning: timed out - the device did not report the result of the calibration'
+        sendSpatialLearningStateEvent('timeout', 'spatial learning timed out')
+    }
+}
+
+// cluster 0xFC11 cluster-specific command 0x04 sent by the device : sub command 0x01 = accepted, 0x02 = finished
+void parseSonoffSpatialLearning(final Map descMap) {
+    List<String> data = descMap.data as List<String>
+    if (data == null || data.isEmpty()) {
+        logWarn "parseSonoffSpatialLearning: empty payload (descMap=${descMap})"
+        return
+    }
+    logDebug "parseSonoffSpatialLearning: raw payload ${data}"
+    int subCmd = safeToInt(hexStrToUnsignedInt(data[0]))
+    switch (subCmd) {
+        case 0x01 :     // start acknowledge : sequence (uint64 LE) + expected end time (uint64 LE)
+            Long seq = sonoffLeHexToLong(data, 1, 8)
+            Long expectedEnd = sonoffLeHexToLong(data, 9, 8)
+            if (seq == null || expectedEnd == null) {
+                logWarn "parseSonoffSpatialLearning: sub command 0x01 with a too short payload ${data}"
+                return
+            }
+            long durationMs = expectedEnd - seq
+            if (durationMs < 0L) { durationMs = 0L }
+            int duration = (int)(durationMs.intdiv(1000L))
+            logInfo "spatialLearning: accepted by the device, it will take ${duration} seconds - keep the room EMPTY!"
+            sendSpatialLearningStateEvent('learning', "spatial learning is running, ${duration} seconds remaining")
+            runIn(duration + SONOFF_LEARNING_GRACE, 'spatialLearningTimeout', [overwrite: true])
+            break
+        case 0x02 :     // result : sequence (uint64 LE) + state (uint8) + reason (uint8)
+            if (data.size() < 11) {
+                logWarn "parseSonoffSpatialLearning: sub command 0x02 with a too short payload ${data}"
+                return
+            }
+            int learnState = safeToInt(hexStrToUnsignedInt(data[9]))
+            int reason = safeToInt(hexStrToUnsignedInt(data[10]))
+            unschedule('spatialLearningTimeout')
+            if (learnState == 0x00 && reason == 0x00) {
+                logInfo 'spatialLearning: completed successfully'
+                sendSpatialLearningStateEvent('success', 'spatial learning completed successfully')
+            }
+            else {
+                logWarn "spatialLearning: FAILED (state=${learnState} reason=${reason})"
+                sendSpatialLearningStateEvent('failed', "spatial learning failed (state=${learnState} reason=${reason})")
+            }
+            break
+        default :
+            logWarn "parseSonoffSpatialLearning: unknown sub command 0x${data[0]} (payload ${data})"
+            break
+    }
+}
+
+/*
+ * -----------------------------------------------------------------------------
+ * Bindings and reporting configuration, driven by the optional 'configureReporting'
+ * section of the device profile. Profiles that do not declare it are not affected.
+ *
+ * Note on the 'bind' list : zigbee.configureReporting() already emits its own 'zdo bind' for the
+ * cluster it configures, so a cluster that has a 'reporting' entry must NOT also be listed under
+ * 'bind' - that just sends the same bind twice. Use 'bind' only for clusters you want bound
+ * without configuring any reporting on them.
+ * -----------------------------------------------------------------------------
+*/
+
+private Integer hexStringToIntSafe(final String hex) {
+    if (hex == null) { return null }
+    String s = hex.trim()
+    if (s.toLowerCase().startsWith('0x')) { s = s.substring(2) }
+    try { return Integer.parseInt(s, 16) }
+    catch (e) { logWarn "hexStringToIntSafe: invalid hex value '${hex}'" ; return null }
+}
+
+List<String> customConfigureDevice() {
+    List<String> cmds = []
+    if (this.respondsTo('ensureCurrentProfileLoaded')) { ensureCurrentProfileLoaded() }
+    Map cfg = DEVICE?.configureReporting as Map
+    if (cfg == null || cfg.isEmpty()) {
+        logDebug "customConfigureDevice: no 'configureReporting' section in the ${getDeviceProfile()} profile - nothing to bind or configure"
+        return cmds
+    }
+    ((cfg.bind ?: []) as List).each { bindCluster ->
+        Integer clusterInt = hexStringToIntSafe(bindCluster as String)
+        if (clusterInt == null) { return }
+        String clusterHex = zigbee.convertToHexString(clusterInt, 4)
+        logDebug "customConfigureDevice: binding cluster 0x${clusterHex}"
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x${clusterHex} {${device.zigbeeId}} {}", 'delay 251']
+    }
+    ((cfg.reporting ?: []) as List).each { entry ->
+        Map r = entry as Map
+        String at = r?.at as String
+        if (at == null || !at.contains(':')) { logWarn "customConfigureDevice: invalid reporting entry ${r}" ; return }
+        Integer clusterInt = hexStringToIntSafe(at.split(':')[0])
+        Integer attrInt    = hexStringToIntSafe(at.split(':')[1])
+        Integer dt         = hexStringToIntSafe(r.dt as String)
+        if (clusterInt == null || attrInt == null || dt == null) { logWarn "customConfigureDevice: invalid reporting entry ${r}" ; return }
+        int minTime = safeToInt(r.min, 0)
+        int maxTime = safeToInt(r.max, 3600)
+        // discrete data types (bitmaps, enums, booleans) must be configured WITHOUT a reportable change value
+        Integer delta = r.containsKey('delta') ? safeToInt(r.delta, 0) : null
+        Map opts = r.mfgCode != null ? ['mfgCode': r.mfgCode as String] : [:]
+        logDebug "customConfigureDevice: configuring reporting for ${at} dt=0x${zigbee.convertToHexString(dt, 2)} min=${minTime} max=${maxTime} delta=${delta}"
+        cmds += zigbee.configureReporting(clusterInt, attrInt, dt, minTime, maxTime, delta, opts, 251)
+    }
+    logDebug "customConfigureDevice: cmds=${cmds}"
+    return cmds
 }
 
 

@@ -24,6 +24,7 @@ Drivers/Tuya Zigbee Valve/ScratchPad.txt
 Drivers/Tuya ZigBee Vibration Sensor/scratchPad.txt
 Libraries/scratchPad.txt
 Drivers/Aqara Cube T1 Pro/scratchPad.txt
+Drivers/Aqara Cube T1 Pro/AQARA_CUBE_T1_PRO_LIBRARY_RETIREMENT_PLAN.md
 Drivers/Aqara LED Strip T1/scratchPad.txt
 Drivers/Tuya Contact Sensor/scratchPad.txt
 Drivers/ZigUSB/scratchPad.txt
@@ -59,7 +60,6 @@ Drivers/Tuya Zigbee mmWave Sensor/customDeviceProfiles/TS0044 SPAM.txt
 Drivers/Tuya Zigbee mmWave Sensor/Tuya_Zigbee_mmWave_Sensor_IMPROVEMENT_PLAN.md
 Drivers/Tuya Zigbee mmWave Sensor/Tuya_Zigbee_mmWave_Sensor_ORIENTATION.md
 Drivers/Tuya Zigbee mmWave Sensor/AGENTS.md
-Drivers/Tuya Multi Sensor 4 In 1/AGENTS.md
 Drivers/Ikea Matter/BUGS.md
 Drivers/Ikea Matter/AGENTS.md
 Drivers/Aqara P1 Motion Sensor/BUGS.md
@@ -114,3 +114,11 @@ Drivers/Tuya ZigBee Vibration Sensor/codex_TS0210_fix.md
 Drivers/Tuya ZigBee Vibration Sensor/TS0210_FIXES_PLAN.md
 Drivers/Tuya ZigBee Vibration Sensor/C15-wake-safe-config-writes-plan.md
 Drivers/Tuya Multi Sensor 4 In 1/ILLUMINANCE_FIXES_PROMPT.md
+Drivers/Matter Advanced Device/AGENTS.md
+Drivers/Matter Advanced Device/BUGS.md
+Drivers/Matter Advanced Device/TODO.md
+Drivers/Matter Advanced Device/OTA_PROBE_PLAN.md
+Drivers/Aqara P1 Motion Sensor/PLAN.md
+Drivers/Aqara P100 Multi-State Sensor/BUGS.md
+Drivers/Aqara P100 Multi-State Sensor/TODO.md
+Drivers/Misc/tests/Bluetooth Methods Dumper.groovy

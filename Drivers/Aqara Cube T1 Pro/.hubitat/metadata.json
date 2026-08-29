@@ -5,6 +5,12 @@
       "id": 2614,
       "codeType": "driver",
       "version": 102
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Drivers/Aqara Cube T1 Pro/Aqara_Cube_T1_Pro.groovy",
+      "id": 2614,
+      "codeType": "driver",
+      "version": 103
     }
   ]
 }

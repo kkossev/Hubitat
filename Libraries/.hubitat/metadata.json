@@ -64,19 +64,19 @@
       "filepath": "/c:/work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 716
+      "version": 721
     },
     {
       "filepath": "/c:/work/Hubitat/Libraries/illuminanceLib.groovy",
       "id": 168,
       "codeType": "library",
-      "version": 23
+      "version": 25
     },
     {
       "filepath": "/c:/work/Hubitat/Libraries/deviceProfileLib.groovy",
       "id": 142,
       "codeType": "library",
-      "version": 685
+      "version": 687
     },
     {
       "filepath": "/C:/work/Hubitat/Libraries/commonLib.groovy",
@@ -107,6 +107,18 @@
       "id": 169,
       "codeType": "library",
       "version": 11
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Libraries/batteryLib.groovy",
+      "id": 171,
+      "codeType": "library",
+      "version": 29
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Libraries/onOffLib.groovy",
+      "id": 176,
+      "codeType": "library",
+      "version": 35
     }
   ]
 }

@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/refs/heads/development/Libraries/commonLib.groovy', documentationLink: 'https://github.com/kkossev/Hubitat/wiki/libraries-commonLib',
-    version: '4.1.0'
+    version: '4.1.1'
 )
 /*
   *  Common ZCL Library
@@ -29,7 +29,8 @@ library(
   * ver. 4.0.3  2025-10-18 kkossev  - added ignoreDuplicatedZigbeeMessages setting; DIGITAL_TIMER increased to 5000 ms
   * ver. 4.0.4  2026-06-04 kkossev  - added ED00 cluster;
   * ver. 4.0.5  2026-08-03 kkossev  - bug fixes
-  * ver. 4.1.0  2026-08-05 kkossev  - (dev. branch) the administrative commands drop-down moved from configure(par) to the new deviceUtilities(par) command, so that configure() is again a plain Configuration capability button; removed the two separator entries from ConfigureOpts; configureHelp() is callable again and shows the command list and a '_status_' event when nothing was selected; do not use 'defaultValue' in a command parameter - it does not preselect the drop-down, but it IS submitted when Run is pressed without a selection!; configure() now shows a 'sleepy devices can not be configured' warning text; ping() icon changed to the antenna bars; added a one-click 'loadAllDefaults' command button
+  * ver. 4.1.0  2026-08-05 kkossev  - the administrative commands drop-down moved from configure(par) to the new deviceUtilities(par) command, so that configure() is again a plain Configuration capability button; removed the two separator entries from ConfigureOpts; configureHelp() is callable again and shows the command list and a '_status_' event when nothing was selected; do not use 'defaultValue' in a command parameter - it does not preselect the drop-down, but it IS submitted when Run is pressed without a selection!; configure() now shows a 'sleepy devices can not be configured' warning text; ping() icon changed to the antenna bars; added a one-click 'loadAllDefaults' command button
+  * ver. 4.1.1  2026-08-23 kkossev  - (dev. branch) bug fix: quoted the respondsTo('processTuyaDPfromDeviceProfile') argument in standardProcessTuyaDP(); the bare identifier threw a NullPointerException in drivers without deviceProfileLib; cosmetic: parse() and standardAndCustomParseCluster() log the cluster id from clusterId/clusterInt when descMap.cluster is null (catchall messages), instead of 'cluster:0xnull'; removed a stray '}' from the healthStatus warning text
   *
   *                                   TODO: change the offline threshold to 2 
   *                                   TODO: add GetInfo (endpoints list) command (in the 'Tuya Device' driver?)
@@ -46,8 +47,8 @@ library(
   *
 */
 
-String commonLibVersion() { '4.1.0' }
-String commonLibStamp() { '2026/08/05 11:18 PM' }
+String commonLibVersion() { '4.1.1' }
+String commonLibStamp() { '2026/08/23 4:28 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -209,7 +210,9 @@ public void parse(final String description) {
             break
         default:
             if (settings.logEnable) {
-                logWarn "parse: zigbee received <b>unknown cluster:${descMap.cluster} (${descMap.clusterInt})</b> message (${descMap})"
+                // descMap.cluster is null for catchall messages - fall back to clusterId, or format clusterInt
+                String clusterHex = descMap.cluster ?: descMap.clusterId ?: zigbee.convertToHexString(descMap.clusterInt as Integer, 4)
+                logWarn "parse: zigbee received <b>unknown cluster:0x${clusterHex} (${descMap.clusterInt})</b> message (${descMap})"
             }
             break
     }
@@ -228,8 +231,10 @@ public void parse(final String description) {
 boolean standardAndCustomParseCluster(Map descMap, final String description) {
     Integer clusterInt = descMap.clusterInt as Integer
     String  clusterName = ClustersMap[clusterInt] ?: UNKNOWN
+    // descMap.cluster is null for catchall messages - fall back to clusterId, or format clusterInt, so that the logs never show 'cluster:0xnull'
+    String  clusterHex = descMap.cluster ?: descMap.clusterId ?: zigbee.convertToHexString(clusterInt, 4)
     if (clusterName == null || clusterName == UNKNOWN) {
-        logWarn "standardAndCustomParseCluster: zigbee received <b>unknown cluster:0x${descMap.cluster} (${descMap.clusterInt})</b> message (${descMap})"
+        logWarn "standardAndCustomParseCluster: zigbee received <b>unknown cluster:0x${clusterHex} (${clusterInt})</b> message (${descMap})"
         return false
     }
     String customParser = "customParse${clusterName}Cluster"
@@ -247,7 +252,7 @@ boolean standardAndCustomParseCluster(Map descMap, final String description) {
         return true
     }
     if (device?.getDataValue('model') != 'ZigUSB' && descMap.cluster != '0300') {    // patch!
-        logWarn "standardAndCustomParseCluster: <b>Missing</b> ${standardParser} or ${customParser} handler for <b>cluster:0x${descMap.cluster} (${descMap.clusterInt})</b> message (${descMap})"
+        logWarn "standardAndCustomParseCluster: <b>Missing</b> ${standardParser} or ${customParser} handler for <b>cluster:0x${clusterHex} (${clusterInt})</b> message (${descMap})"
     }
     return false
 }
@@ -408,8 +413,11 @@ private void parseReadReportingConfigResponse(final Map descMap) {
         int min = zigbee.convertHexToInt(descMap.data[6]) * 256 + zigbee.convertHexToInt(descMap.data[5])
         int max = zigbee.convertHexToInt(descMap.data[8] + descMap.data[7])
         int delta = 0
-        if (descMap.data.size() >= 10) {
+        if (descMap.data.size() >= 11) {
             delta = zigbee.convertHexToInt(descMap.data[10] + descMap.data[9])
+        }
+        else if (descMap.data.size() == 10) {
+            delta = zigbee.convertHexToInt(descMap.data[9])      // 1-byte reportable change (uint8/int8)
         }
         else {
             logTrace "descMap.data.size = ${descMap.data.size()}"
@@ -446,7 +454,15 @@ private void parseDefaultCommandResponse(final Map descMap) {
     final int statusCode = hexStrToUnsignedInt(data[1])
     final String status = ZigbeeStatusEnum[statusCode] ?: "0x${data[1]}"
     if (statusCode > 0x00) {
-        logWarn "zigbee ${clusterLookup(descMap.clusterInt)} command 0x${commandId} error: ${status}"
+        // Tuya EF00 devices answer every DP write (command 0x00) with a Default Response of 0x01 'Failure'
+        // regardless of the outcome - hub-verified 2026-08-24 on _TZE200_2aaelwxk (ZG-204ZM): a write that
+        // genuinely changed dp 102 from 30 to 60 was acknowledged with the same 'Failure'. Not worth a warning.
+        if (descMap.clusterInt == CLUSTER_TUYA && commandId == '00') {
+            logDebug "zigbee ${clusterLookup(descMap.clusterInt)} command 0x${commandId} response: ${status} (Tuya EF00 write - status byte is not meaningful)"
+        }
+        else {
+            logWarn "zigbee ${clusterLookup(descMap.clusterInt)} command 0x${commandId} error: ${status}"
+        }
     } else {
         logDebug "zigbee ${clusterLookup(descMap.clusterInt)} command 0x${commandId} response: ${status}"
         // ZigUSB has its own interpretation of the Zigbee standards ... :(
@@ -490,7 +506,7 @@ private void handlePingResponse() {
     int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: '0').toInteger()
     if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
         state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1
-        if (timeRunning < safeToInt((state.stats['pingsMin'] ?: '999'))) { state.stats['pingsMin'] = timeRunning }
+        if (timeRunning < safeToInt((state.stats['pingsMin'] ?: '9999'))) { state.stats['pingsMin'] = timeRunning }
         if (timeRunning > safeToInt((state.stats['pingsMax'] ?: '0')))   { state.stats['pingsMax'] = timeRunning }
         state.stats['pingsAvg'] = approxRollingAverage(safeToDouble(state.stats['pingsAvg']), safeToDouble(timeRunning)) as int
         sendRttEvent()
@@ -829,7 +845,7 @@ void standardProcessTuyaDP(final Map descMap, final int dp, final int dp_id, fin
         }
     }
     // check if DeviceProfile processing method exists (deviceProfieLib should be included in the main driver)
-    if (this.respondsTo(processTuyaDPfromDeviceProfile)) {
+    if (this.respondsTo('processTuyaDPfromDeviceProfile')) {
         //logTrace 'standardProcessTuyaDP: processTuyaDPfromDeviceProfile exists, calling it...'
         if (this.respondsTo('isInCooldown') && isInCooldown()) {
             logDebug "standardProcessTuyaDP: device is in cooldown, skipping processing of dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
@@ -873,11 +889,35 @@ public List<String> sendTuyaCommand(String dp, String dp_type, String fncmd, int
     else {
         tuyaCmd = tuyaCmdDefault // 0x00 is the default command for most of the Tuya devices, except some ..
     }
-    // Get delay from device profile or use default
-    int tuyaDelay = DEVICE?.device?.tuyaDelay as Integer ?: 201
-    cmds = zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], delay = tuyaDelay, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd )
-    logDebug "getTuyaCommand (dp=$dp fncmd=$fncmd dp_type=$dp_type) = ${cmds}"
+    // Get delay from device profile or use default - guarded the same way as tuyaCmd above, because a driver that
+    // includes commonLib but NOT deviceProfileLib has no DEVICE at all (BUGS.md A3).
+    int tuyaDelay = (this.respondsTo('getDEVICE') ? (getDEVICE()?.device?.tuyaDelay as Integer) : null) ?: 201
+    String tuyaPayload = PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd
+    // deviceProfile device key disableDefaultResponse:true - suppress the ZCL Default Response that the device is
+    // otherwise obliged to send for every EF00 command (Tuya answers 0x01 'Failure' regardless of the outcome).
+    // zigbee.command() always leaves the frame control 'disable default response' bit clear, so the frame has to be
+    // hand-built as 'he raw' with frame control 0x11 (bit0-1 = cluster specific, bit4 = disable default response).
+    boolean disableDefaultRsp = this.respondsTo('getDEVICE') ? (getDEVICE()?.device?.disableDefaultResponse == true) : false
+    if (disableDefaultRsp) {
+        String epHex  = zigbee.convertToHexString(ep, 2)
+        String cmdHex = zigbee.convertToHexString(tuyaCmd, 2)
+        cmds = ["he raw 0x${device.deviceNetworkId} 0x01 0x${epHex} 0x${zigbee.convertToHexString(CLUSTER_TUYA, 4)} {11 ${getZclSeqNo()} ${cmdHex} ${tuyaPayload}} {0x0104}", "delay ${tuyaDelay}"]
+    }
+    else {
+        cmds = zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], delay = tuyaDelay, tuyaPayload)
+    }
+    logDebug "getTuyaCommand (dp=$dp fncmd=$fncmd dp_type=$dp_type disableDefaultRsp=${disableDefaultRsp}) = ${cmds}"
     return cmds
+}
+
+// ZCL sequence number for hand-built 'he raw' frames - zigbee.command() manages its own, 'he raw' does not.
+// Must increment, otherwise a burst of writes goes out with a duplicate sequence number.
+private String getZclSeqNo() {
+    if (state.lastTx == null) { state.lastTx = [:] }
+    int seq = safeToInt(state.lastTx['zclSeq']) + 1
+    if (seq > 0xFF) { seq = 1 }
+    state.lastTx['zclSeq'] = seq
+    return zigbee.convertToHexString(seq, 2)
 }
 
 private String getPACKET_ID() { return zigbee.convertToHexString(new Random().nextInt(65536), 4) }
@@ -1143,7 +1183,7 @@ private void sendHealthStatusEvent(final String value) {
         logInfo "${descriptionText}"
     }
     else {
-        if (settings?.txtEnable) { log.warn "${device.displayName}} <b>${descriptionText}</b>" }
+        if (settings?.txtEnable) { log.warn "${device.displayName} <b>${descriptionText}</b>" }
     }
 }
 

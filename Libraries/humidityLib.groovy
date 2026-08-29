@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Humidity Library', name: 'humidityLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/humidityLib.groovy', documentationLink: '',
-    version: '3.3.0'
+    version: '3.3.1'
 )
 /*
  *  Zigbee Humidity Library
@@ -13,13 +13,14 @@ library(
  * ver. 3.2.0  2024-05-29 kkossev  - commonLib 3.2.0 allignment; added humidityRefresh()
  * ver. 3.2.2  2024-07-02 kkossev  - fixed T/H clusters attribute different than 0 (temperature, humidity MeasuredValue) bug
  * ver. 3.2.3  2024-07-24 kkossev  - added humidity delta filtering to prevent duplicate events for unchanged values
- * ver. 3.3.0  2025-09-15 kkossev  - (dev. branch) commonLib 4.0.0 allignment; added humidityOffset;
+ * ver. 3.3.0  2025-09-15 kkossev  - commonLib 4.0.0 allignment; added humidityOffset;
+ * ver. 3.3.1  2026-08-23 kkossev  - (dev. branch) bugfix: isRefresh now bypasses the humidity delta filter and the minReportingTime queue; bugfix: the first event after the states are cleared is no longer delayed by minReportingTime
  *
  *                                   TODO: add humidityOffset
 */
 
-static String humidityLibVersion()   { '3.3.0' }
-static String humidityLibStamp() { '2025/09/15 7:56 PM' }
+static String humidityLibVersion()   { '3.3.1' }
+static String humidityLibStamp() { '2026/08/23 3:31 PM' }
 
 metadata {
     capability 'RelativeHumidityMeasurement'
@@ -53,7 +54,8 @@ void handleHumidityEvent(BigDecimal humidityPar, Boolean isDigital=false) {
     BigDecimal humidityRounded = humidity.setScale(0, BigDecimal.ROUND_HALF_UP)
     BigDecimal lastHumi = device.currentValue('humidity') ?: 0
     logTrace "lastHumi=${lastHumi} humidityRounded=${humidityRounded} delta=${Math.abs(lastHumi - humidityRounded)}"
-    if (Math.abs(lastHumi - humidityRounded) < 1.0) {
+    boolean isRefresh = state.states['isRefresh'] == true
+    if (!isRefresh && Math.abs(lastHumi - humidityRounded) < 1.0) {
         logDebug "skipped humidity ${humidityRounded}, less than delta 1.0 (lastHumi=${lastHumi})"
         return
     }
@@ -63,10 +65,15 @@ void handleHumidityEvent(BigDecimal humidityPar, Boolean isDigital=false) {
     eventMap.type = isDigital == true ? 'digital' : 'physical'
     //eventMap.isStateChange = true
     eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
-    Integer timeElapsed = Math.round((now() - (state.lastRx['humiTime'] ?: now())) / 1000)
+    if (isRefresh) {
+        eventMap.descriptionText += ' [refresh]'
+        eventMap.isStateChange = true
+    }
     Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
+    // a null lastRx time means there is no previous event to space this one from - send it right away instead of queueing it for minTime seconds
+    Integer timeElapsed = state.lastRx['humiTime'] != null ? Math.round((now() - (state.lastRx['humiTime'] as long)) / 1000) as Integer : minTime
     Integer timeRamaining = (minTime - timeElapsed) as Integer
-    if (timeElapsed >= minTime) {
+    if (isRefresh || timeElapsed >= minTime) {
         logInfo "${eventMap.descriptionText}"
         unschedule('sendDelayedHumidityEvent')
         state.lastRx['humiTime'] = now()

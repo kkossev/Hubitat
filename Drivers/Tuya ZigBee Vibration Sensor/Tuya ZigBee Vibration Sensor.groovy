@@ -17,7 +17,7 @@
  *  for the specific language governing permissions and limitations under the License.
  * 
  * ver 1.4.6 2026-07-31 kkossev - TS0210 IAS sensitivity 0..50; repeated vibration reset timer; tamper and battery-low reporting
- * ver 1.4.7 2026-08-02 kkossev - (development version) - minor bug fixes; timer-driven vibration reset is now a digital event; exposed contact state for the kzm5w4iz TS0601 door/vibration sensor.
+ * ver 1.4.7 2026-08-02 kkossev - minor bug fixes; timer-driven vibration reset is now a digital event; exposed contact state for the kzm5w4iz TS0601 door/vibration sensor.
  *
  * Full version history: see CHANGELOG.md: https://github.com/kkossev/Hubitat/blob/development/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/CHANGELOG.md
  *
