@@ -41,7 +41,7 @@
 */
 
 static String version() { "4.2.5" }
-static String timeStamp() {"2026/08/24 11:44 PM"}
+static String timeStamp() {"2026/08/29 07:05 PM"}
 
 @Field static final Boolean _DEBUG = false           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -238,18 +238,28 @@ void customParseFC11Cluster(final Map descMap) {
         else { logWarn "customParseFC11Cluster: received unknown 0xFC11 cluster-specific command 0x${descMap.command} (data ${descMap.data})" }
         return
     }
+    // SNZB-06P24 firmware bug (verified on device 2026-08-29): BITMAP16 (encoding 0x19) attributes are serialized
+    // BIG-ENDIAN in the Read Attributes Responses. In one and the same refresh, 0x2018 (INT16, encoding 0x29) came
+    // back as the correct little-endian 6400 -> 100, while 0x2016 came back as 00FF -> 65280 instead of 255. The
+    // device's own unsolicited reports of 0x2016 use encoding 0x21 and are little-endian too, so the byte order
+    // must be corrected for encoding 0x19 only. Affects 0x2016 (zoneEnable) and 0x2015 (zoneStatus).
+    Map fixedMap = descMap
+    if (descMap.encoding == '19' && descMap.value?.size() == 4) {
+        fixedMap = descMap + [value: descMap.value[2..3] + descMap.value[0..1]]
+        logTrace "customParseFC11Cluster: corrected the BITMAP16 byte order of attribute 0x${descMap.attrId} : ${descMap.value} -> ${fixedMap.value}"
+    }
     // not every 0xFC11 attribute holds a number - SNZB-06P24 answers a read of 0x2017 with a ZCL ARRAY (encoding 0x48)
     // of 16 uint8, and hexStrToUnsignedInt() throws NumberFormatException on a value that wide.
     Integer value
-    try { value = safeToInt(hexStrToUnsignedInt(descMap.value)) }
+    try { value = safeToInt(hexStrToUnsignedInt(fixedMap.value)) }
     catch (e) {
-        logWarn "customParseFC11Cluster: 0xFC11 attribute 0x${descMap.attrId} is not a number (encoding 0x${descMap.encoding}, raw ${descMap.value}) - ignored"
+        logWarn "customParseFC11Cluster: 0xFC11 attribute 0x${fixedMap.attrId} is not a number (encoding 0x${fixedMap.encoding}, raw ${fixedMap.value}) - ignored"
         return
     }
-    logTrace "customParseFC11Cluster: zigbee received 0xFC11 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
-    boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
+    logTrace "customParseFC11Cluster: zigbee received 0xFC11 attribute 0x${fixedMap.attrId} value ${value} (raw ${fixedMap.value})"
+    boolean result = processClusterAttributeFromDeviceProfile(fixedMap)    // deviceProfileLib
     if (result == false) {
-        logWarn "customParseFC11Cluster: received unknown 0xFC11 attribute 0x${descMap.attrId} (value ${descMap.value})"
+        logWarn "customParseFC11Cluster: received unknown 0xFC11 attribute 0x${fixedMap.attrId} (value ${fixedMap.value})"
     }
 }
 void customParseOccupancyCluster(final Map descMap) {
