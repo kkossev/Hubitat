@@ -547,8 +547,9 @@ Rules that apply to every document here:
 - **Never publish absolute local paths, private (RFC1918) hub addresses, device ids, or personal
   data** — including inside screenshots. This applies to anything that could become public.
 - **Repository documents use bare Jira keys only** (for example, `HUB-6`). Never include an
-  Atlassian site URL or hostname in repository files; the hostname may disclose a private company
-  or organization name even when the Jira issue itself is access-controlled.
+  issue-tracker site URL or hostname in repository files, commit messages, or any other content
+  that could become public; the hostname may disclose a private company or organization name even
+  when the issue itself is access-controlled.
 
 ### `BUGS.md` — reviewed bug work-list
 
