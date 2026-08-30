@@ -18,7 +18,7 @@ is explicitly requested, not a cut/released version with its own `[Unreleased]` 
 ### Fixed
 
 - **DS18B20 relay children and the ZTH03PRO probe child no longer lose their identity**
-  ([HUB-137](https://smartifysystems.atlassian.net/browse/HUB-137), reported by `@pauljneil2` on
+  (HUB-137, reported by `@pauljneil2` on
   [the MHCOZY 4-relay thread](https://community.hubitat.com/t/how-to-use-mhcozy-4-relay-w-temp/163128)).
   Custom child labels and the automations attached to them survived a board power cycle only by
   luck. Four separate defects, all fixed:
