@@ -184,7 +184,7 @@ Known data:
 - Model: `TS0601`
 - Manufacturer: `_TZE284_hodyryli`
 - Model group: `TS0601_ZTH03PRO`
-- Probe child device: `<parent-dni>-probe`
+- Probe child device: `<device.id>-probe` since 2.2.1 (older children keep `<parent-dni>-probe`)
 - Current `componentRefresh()` handles only the `DS18B20` group.
 
 Implementation direction:
@@ -365,13 +365,47 @@ Implementation direction:
 
 Verification:
 
-- With Advanced options disabled, both controls appear for every model group that currently allows
-  them, and neither appears for a model group that its existing `limit` excludes.
+- With Advanced options disabled, each control appears for every model group allowed by that
+  control's existing `limit`, and does not appear when that `limit` excludes the group.
 - Saving equivalent values sends the same temperature-reporting configuration as before the UI
   relocation, and existing saved values survive the change.
 - Verify the reporting response on a supported sleepy Zigbee device. SNZB-02LD-specific behavior
   remains **VERIFY ON DEVICE** until its exact fingerprint and reporting response are confirmed.
 
+### 12. `[?]` `OPEN` — DS18B20 / probe child devices lose their identity — fix applied, pending hub confirmation — HUB-137
+
+**User-visible problem:** `@pauljneil2` reports that after power-cycling an MHCOZY four-relay board
+(`TS000F` `_TZ3218_ya5d6wth`, model group `DS18B20`) the custom labels on his relay children were
+sometimes replaced by default ones and his automations stopped working. Intermittent: in a second
+reproduction on 2026-08-22 the labels survived and only the two children he had manually deleted
+came back.
+
+Evidence:
+
+- Forum topic: https://community.hubitat.com/t/how-to-use-mhcozy-4-relay-w-temp/163128
+- Logs through `2026-08-22 02:53:34` confirm recreation of the manually deleted Relay 2 and Relay 3
+  only — that part is expected self-repair, not the defect.
+- The parent and child DNIs before and after the power cycle were **not** captured, so the
+  short-address change itself is not proven by the supplied log.
+
+Maintainer decision: all four relay children are part of the device contract for
+`_TZ3218_ya5d6wth` and are created automatically. Manually deleting one is unsupported and it will
+be recreated. No relay-selection preference is added.
+
+Fix applied in 2.2.1 (see `CHANGELOG.md`): child DNIs are now built from the immutable
+`device.id`; existing children keep their old DNI and are resolved by suffix instead; Initialize,
+a transient `UNKNOWN` model group, and the legacy-child migration no longer delete children.
+
+Remaining verification — **VERIFY ON DEVICE**:
+
+- Upgrade an existing four-relay installation: no child is deleted or recreated, numeric child ids,
+  custom labels, rooms and **In Use By** are unchanged, no duplicates appear.
+- Power cycle the board, ideally forcing a rejoin that changes the parent short DNI: labels survive
+  and On/Off/Refresh from each child still address the right relay endpoint.
+- Press **Initialize** and confirm the children survive.
+- Regression: single-relay `_TZ3218_7fiyo3kv` keeps exactly one working child, and the
+  `TS0601_ZTH03PRO` probe child survives the same operations.
+- Paul's confirmation on the physical DC four-relay board is still outstanding.
 ## Already resolved, declined, or outside this backlog
 
 ### `RESOLVED` — `_TZE204_m9dzckna` SNT857Z temperature sensor

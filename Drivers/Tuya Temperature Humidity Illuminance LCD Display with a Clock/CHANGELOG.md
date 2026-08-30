@@ -10,10 +10,51 @@ and this project follows Semantic Versioning where applicable.
 libraries and no separate generated bundle to keep in sync. See `TODO.md` and `AGENTS.md` in this
 folder for the model-group architecture and the maintainer work list.
 
-## [2.2.0] - 2026-08-04
+## [2.2.1] - 2026-08-29
 
 This is the current development version — all work stays under this heading until a version bump
 is explicitly requested, not a cut/released version with its own `[Unreleased]` above it.
+
+### Fixed
+
+- **DS18B20 relay children and the ZTH03PRO probe child no longer lose their identity**
+  ([HUB-137](https://smartifysystems.atlassian.net/browse/HUB-137), reported by `@pauljneil2` on
+  [the MHCOZY 4-relay thread](https://community.hubitat.com/t/how-to-use-mhcozy-4-relay-w-temp/163128)).
+  Custom child labels and the automations attached to them survived a board power cycle only by
+  luck. Four separate defects, all fixed:
+  - Child DNIs were built from `device.deviceNetworkId`, which for a Zigbee device is the **16-bit
+    short network address**, not the immutable Hubitat device id. When the board rejoined with a
+    different short address the driver could no longer find its own children, created replacements
+    with default labels, and left the user's automations pointing at the orphaned originals.
+    New children now use `"${device.id}-<suffix>"`.
+  - **Initialize** wiped every child: `initialize()` -> `installed()` -> `initializeVars(true)` ->
+    `loadAllDefaults()` -> `deleteAllChildDevices()`. Recreated children get new Hubitat device ids,
+    so every label and app reference was lost. `loadAllDefaults()` no longer deletes children;
+    settings and state are still fully reset.
+  - A temporary `UNKNOWN`/unsupported model group (possible during repair, a settings update or a
+    data migration) ran `removeAllChildDevices()` from the default branch of `manageChildDevices()`.
+    That branch now only logs. `removeAllChildDevices()` is reached from `uninstalled()` only.
+  - `manageDS18B20ChildDevices()` deleted the legacy v2.0.0 `-switch` child and any relay child
+    above the current relay count. Both deletions are gone.
+
+  Existing children are **not** migrated to the new DNI format and are never deleted, renamed or
+  relabeled - a new `getChildBySuffix()` helper resolves them by the semantic suffix of their DNI
+  (`-relay1`..`-relay4`, `-probe`, and the v2.0.0 `-switch` child as Relay 1) regardless of which
+  parent short address they were created under. `getDS18B20RelayIndexFromChild()` matches the same
+  suffix instead of requiring the parent's *current* DNI as a prefix, so On/Off from a child created
+  under an older short address keeps addressing the right relay endpoint.
+
+  Unchanged: `_TZ3218_ya5d6wth` still reconciles all four relays and `_TZ3218_7fiyo3kv` one, a
+  genuinely missing child is still recreated automatically (manually deleting a managed child
+  remains unsupported - it will come back), and no new preference was added.
+
+  Not verifiable without hardware: the rejoin-with-changed-short-address case itself. The code paths
+  above are confirmed by reading the driver, but the intermittent first occurrence Paul reported
+  still needs confirmation on the physical board after a power cycle.
+- Header version-history line for 2.2.0 shortened to the user-visible essentials; the full
+  per-change detail lives here in the changelog only.
+
+## [2.2.0] - 2026-08-05
 
 ### Added
 

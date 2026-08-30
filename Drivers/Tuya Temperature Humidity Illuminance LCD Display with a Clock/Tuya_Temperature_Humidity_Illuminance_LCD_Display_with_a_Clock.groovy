@@ -78,16 +78,13 @@
  * ver. 2.1.0  2026-03-31 kkossev - added TS0601 _TZE284_hodyryli Tuya Temperature Humidity Sensor with External Probe into a new 'TS0601_ZTH03PRO' group, using child device for the probe @njanda
  * ver. 2.1.1  2026-04-19 kkossev - added support for four switch child devices for _TZ3218_ya5d6wth @pauljneil2 ; added TS0601 _TZE284_9ern5sfh @rlynch into a new group TS0601_Tuya_3; bug fixes
  * ver. 2.1.2  2026-04-22 kkossev - added COOLO CS-201Z _TZE200_npj9bug3 _TZE200_wrmhp6b3 into new 'TS0601_Soil_Coolo' group; added soilMoisture attribute
- * ver. 2.2.0  2026-08-05 kkossev - (dev. branch) bug fixes; TS0201_LCZ030 (_TZ3000_qaaysllp) - removed wrong EF00 DP 09/0A/0B transmissions (device has no EF00 cluster); added Temperature/Humidity Decimal Places preferences (community request #695)
- *                                  added corrected fingerprint and moved _TZ3000_utwgoauk ("SNZB-02" Tuya clone) from TS0201 to Zigbee NON-Tuya group (community report #694)
- *                                  added new 'TS0601_Illum_TH' group and fingerprint for _TZE204_rbbx5mfq; fixed DP 0x02/0x06/0x07 illuminance/temperature/humidity mismatch (community request #691); corrected _TZE200_rbbx5mfq from TS0601_Tuya
- *                                  added new 'TS0601_Soil_5IN1' group and fingerprints for _TZE284_hdml1aav / _TZE2841000000_hdml1aav (Excellux ZS-300TF); added soilFertilityValue/waterWarning/soilFertilityWarning attributes (community request #687)
- *                                  added a second _TZ3000_utwgoauk ("SNZB-02" clone) fingerprint with the inClusters in the order actually announced by calinatl's unit - fingerprint matching is order-sensitive (community report #704)
+ * ver. 2.2.0  2026-08-05 kkossev - added Temperature/Humidity Decimal Places preferences; new devices: _TZE204_rbbx5mfq, Excellux ZS-300TF soil tester (_TZE284_hdml1aav), SNZB-02 clone (_TZ3000_utwgoauk); bug fixes (details in CHANGELOG.md)
+ * ver. 2.2.1  2026-08-29 kkossev - (dev. branch) DS18B20 relay and probe child devices keep their custom names and automations after a power cycle, rejoin or Initialize @pauljneil2 ; bug fixes (details in CHANGELOG.md)
  *
 */
 
-@Field static final String VERSION = '2.2.0'
-@Field static final String TIME_STAMP = '2026/08/06 12:22 AM'
+@Field static final String VERSION = '2.2.1'
+@Field static final String TIME_STAMP = '2026/08/29 7:28 PM'
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1311,18 +1308,23 @@ private Integer getDS18B20DefaultRelayCount() {
     return Math.min(Math.max(defaultCount, 1), DS18B20_MAX_RELAYS)
 }
 
+// Stable child DNI - based on the immutable Hubitat device id, NOT on the Zigbee short address, which changes on rejoin.
+private String childDni(String suffix) { return "${device.id}-${suffix}" }
+
+// Resolve a child by its semantic suffix: the stable DNI first, then any attached child whose DNI ends with the
+// legacy suffix - covers the old "<shortAddress>-relayN" children and the v2.0.0 "<shortAddress>-switch" child.
+private getChildBySuffix(String suffix) {
+    def child = getChildDevice(childDni(suffix))
+    if (child != null) { return child }
+    List<String> legacy = suffix == 'relay1' ? ['-relay1', '-switch'] : ["-${suffix}"]
+    return getChildDevices()?.find { c -> legacy.any { c.deviceNetworkId?.endsWith(it) } }
+}
+
 private Integer getDS18B20RelayIndexFromChild(def childDevice) {
     String dni = childDevice?.deviceNetworkId ?: ''
-    String prefix = "${device.deviceNetworkId}-relay"
-    if (!dni.startsWith(prefix)) {
-        return null
-    }
-    String relayPart = dni.substring(prefix.length())
-    Integer relay = safeToInt(relayPart)
-    if (relay == null || relay < 1 || relay > DS18B20_MAX_RELAYS) {
-        return null
-    }
-    return relay
+    if (dni.endsWith('-switch')) { return 1 }    // v2.0.0 legacy single relay child
+    def matcher = dni =~ /-relay([1-4])$/
+    return matcher ? safeToInt(matcher[0][1]) : null
 }
 
 private void updateDS18B20ChildSwitch(Integer endpoint, int value) {
@@ -1333,13 +1335,13 @@ private void updateDS18B20ChildSwitch(Integer endpoint, int value) {
         return
     }
 
-    if (!getChildDevice("${device.deviceNetworkId}-relay${relayEndpoint}")) {
+    if (getChildBySuffix("relay${relayEndpoint}") == null) {
         manageDS18B20ChildDevices()
     }
 
     def switchState = value == 1 ? 'on' : 'off'
 
-    def childDevice = getChildDevice("${device.deviceNetworkId}-relay${relayEndpoint}")
+    def childDevice = getChildBySuffix("relay${relayEndpoint}")
     if (childDevice) {
         def currentState = childDevice.currentValue('switch')
         if (currentState == switchState) {
@@ -1355,7 +1357,7 @@ private void updateDS18B20ChildSwitch(Integer endpoint, int value) {
 }
 
 private void updateZTH03PROChildTemperature(double temperatureC) {
-    def childDevice = getChildDevice("${device.deviceNetworkId}-probe")
+    def childDevice = getChildBySuffix('probe')
     if (!childDevice) {
         logWarn 'ZY-ZTH03PRO probe child temperature device not found'
         return
@@ -1388,62 +1390,34 @@ private void manageChildDevices() {
             manageChildDevice('probe', 'Generic Component Temperature Sensor', 'Probe Temperature')
             break
         default:
-            // Remove any existing child devices for unsupported model groups
-            removeAllChildDevices()
+            // Model group does not use child devices - never delete existing children here, the group may be temporarily UNKNOWN
+            logDebug "no child devices are managed for model group ${modelGroup}"
             break
     }
 }
 
 private void manageDS18B20ChildDevices() {
+    // Create the missing relay children only - existing children are never deleted or renamed here.
+    // The legacy v2.0.0 "-switch" child is kept and resolved as Relay 1 by getChildBySuffix().
     Integer relayCount = getDS18B20DefaultRelayCount()
-
-    // Remove the old single relay child device id used in v2.0.0 before creating new dynamic children.
-    String legacyChildId = "${device.deviceNetworkId}-switch"
-    def legacyChild = getChildDevice(legacyChildId)
-    if (legacyChild) {
-        logInfo "Removing legacy DS18B20 child device ${legacyChild.displayName}"
-        try {
-            deleteChildDevice(legacyChildId)
-        } catch (Exception e) {
-            logWarn "Failed to remove legacy DS18B20 child switch: ${e.message}"
-        }
-    }
-
     for (int relay = 1; relay <= relayCount; relay++) {
         manageChildDevice("relay${relay}", 'Generic Component Switch', "Relay ${relay}")
-    }
-
-    for (int relay = relayCount + 1; relay <= DS18B20_MAX_RELAYS; relay++) {
-        String childId = "${device.deviceNetworkId}-relay${relay}"
-        def child = getChildDevice(childId)
-        if (child) {
-            logInfo "Removing unused DS18B20 child device ${child.displayName}"
-            try {
-                deleteChildDevice(childId)
-            } catch (Exception e) {
-                logWarn "Failed to remove DS18B20 child relay ${relay}: ${e.message}"
-            }
-        }
     }
 }
 
 private void manageChildDevice(String deviceSuffix, String hubDriverType, String deviceLabel) {
-    def childId = "${device.deviceNetworkId}-${deviceSuffix}"
-    def childDevice = getChildDevice(childId)
-    def modelGroup = getModelGroup()
-    
-    // Create child device if it doesn't exist
-    if (!childDevice) {
-        logInfo "Creating ${deviceLabel} child device for ${modelGroup}"
-        try {
-            addChildDevice("hubitat", hubDriverType, childId, 
-                [name: "${device.displayName} ${deviceLabel}", 
-                 label: "${device.displayName} ${deviceLabel}",
-                 isComponent: true])
-            logInfo "Successfully created ${deviceLabel} child device"
-        } catch (Exception e) {
-            logWarn "Failed to create ${deviceLabel} child device: ${e.message}"
-        }
+    // An already existing child is left completely untouched - its DNI, name, label and app usage are preserved
+    if (getChildBySuffix(deviceSuffix) != null) { return }
+    String childId = childDni(deviceSuffix)
+    logInfo "Creating ${deviceLabel} child device for ${getModelGroup()}"
+    try {
+        addChildDevice("hubitat", hubDriverType, childId, 
+            [name: "${device.displayName} ${deviceLabel}", 
+             label: "${device.displayName} ${deviceLabel}",
+             isComponent: true])
+        logInfo "Successfully created ${deviceLabel} child device"
+    } catch (Exception e) {
+        logWarn "Failed to create ${deviceLabel} child device: ${e.message}"
     }
 }
 
@@ -2051,7 +2025,7 @@ void loadAllDefaults() {
     deleteAllCurrentStates()
     deleteAllScheduledJobs()
     deleteAllStates()
-    deleteAllChildDevices()
+    // deleteAllChildDevices() is deliberately NOT called here - Initialize must not destroy the component children (HUB-137)
     logWarn ('All Defaults Loaded! F5 to refresh')
 }
 
