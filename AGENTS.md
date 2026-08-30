@@ -548,8 +548,7 @@ Rules that apply to every document here:
   data** — including inside screenshots. This applies to anything that could become public.
 - **Repository documents use bare Jira keys only** (for example, `HUB-6`). Never include an
   issue-tracker site URL or hostname in repository files, commit messages, or any other content
-  that could become public; the hostname may disclose a private company or organization name even
-  when the issue itself is access-controlled.
+  that could become public.
 
 ### `BUGS.md` — reviewed bug work-list
 
