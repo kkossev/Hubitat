@@ -285,6 +285,12 @@ version string does.
    `* ver. x.y.z  YYYY-MM-DD kkossev  - description`
    Third-party contributions credit the contributor in the author column; dev-branch entries are
    tagged `(dev. branch)`.
+   **Keep it short — one line, users are the audience.** Name only what a user would notice: new
+   devices/model groups, new preferences/attributes/commands, and visible behavior fixes, plus a
+   bare `bug fixes` for the rest. No root-cause explanations, no method or variable names, no
+   forum/issue links, no continuation lines. All of that detail belongs in `CHANGELOG.md` only —
+   point there instead (`... (details in CHANGELOG.md)`). Shorten an over-long existing line when
+   you touch it.
 3. Follow **[PUBLISHING.md](PUBLISHING.md)** for README, `packageManifest.json` and the catalog.
 
 `packageManifest.json` versions lag the driver routinely across this repo — that is normal between
