@@ -30,7 +30,7 @@
  * ver. 4.2.2  2026-06-27 kkossev  - added HOBEIAN ZG-204ZK 24 GHz Human Presence Detector (TS0601 _TZE200_ka8l86iu)
  * ver. 4.2.3  2026-06-28 kkossev  - added ignoreSSLIssues=true for HTTPS profile JSON downloads;
  * ver. 4.2.4  2026-07-09 kkossev  - mutiple bug fixes
- * ver. 4.2.5  2026-08-24 kkossev  - (dev.branch) added support for SONOFF SNZB-06P24 Presence Sensor
+ * ver. 4.2.5  2026-08-30 kkossev  - (dev.branch) added support for SONOFF SNZB-06P24 Presence Sensor
  *
  *                                   TODO: new info page on WiKi
  *                                   TODO: Show both the profile key and the profile name in the Preferences page!
@@ -41,7 +41,7 @@
 */
 
 static String version() { "4.2.5" }
-static String timeStamp() {"2026/08/29 07:05 PM"}
+static String timeStamp() {"2026/08/30 07:38 AM"}
 
 @Field static final Boolean _DEBUG = false           // debug commands
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -238,28 +238,18 @@ void customParseFC11Cluster(final Map descMap) {
         else { logWarn "customParseFC11Cluster: received unknown 0xFC11 cluster-specific command 0x${descMap.command} (data ${descMap.data})" }
         return
     }
-    // SNZB-06P24 firmware bug (verified on device 2026-08-29): BITMAP16 (encoding 0x19) attributes are serialized
-    // BIG-ENDIAN in the Read Attributes Responses. In one and the same refresh, 0x2018 (INT16, encoding 0x29) came
-    // back as the correct little-endian 6400 -> 100, while 0x2016 came back as 00FF -> 65280 instead of 255. The
-    // device's own unsolicited reports of 0x2016 use encoding 0x21 and are little-endian too, so the byte order
-    // must be corrected for encoding 0x19 only. Affects 0x2016 (zoneEnable) and 0x2015 (zoneStatus).
-    Map fixedMap = descMap
-    if (descMap.encoding == '19' && descMap.value?.size() == 4) {
-        fixedMap = descMap + [value: descMap.value[2..3] + descMap.value[0..1]]
-        logTrace "customParseFC11Cluster: corrected the BITMAP16 byte order of attribute 0x${descMap.attrId} : ${descMap.value} -> ${fixedMap.value}"
-    }
     // not every 0xFC11 attribute holds a number - SNZB-06P24 answers a read of 0x2017 with a ZCL ARRAY (encoding 0x48)
     // of 16 uint8, and hexStrToUnsignedInt() throws NumberFormatException on a value that wide.
     Integer value
-    try { value = safeToInt(hexStrToUnsignedInt(fixedMap.value)) }
+    try { value = safeToInt(hexStrToUnsignedInt(descMap.value)) }
     catch (e) {
-        logWarn "customParseFC11Cluster: 0xFC11 attribute 0x${fixedMap.attrId} is not a number (encoding 0x${fixedMap.encoding}, raw ${fixedMap.value}) - ignored"
+        logWarn "customParseFC11Cluster: 0xFC11 attribute 0x${descMap.attrId} is not a number (encoding 0x${descMap.encoding}, raw ${descMap.value}) - ignored"
         return
     }
-    logTrace "customParseFC11Cluster: zigbee received 0xFC11 attribute 0x${fixedMap.attrId} value ${value} (raw ${fixedMap.value})"
-    boolean result = processClusterAttributeFromDeviceProfile(fixedMap)    // deviceProfileLib
+    logTrace "customParseFC11Cluster: zigbee received 0xFC11 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
     if (result == false) {
-        logWarn "customParseFC11Cluster: received unknown 0xFC11 attribute 0x${fixedMap.attrId} (value ${fixedMap.value})"
+        logWarn "customParseFC11Cluster: received unknown 0xFC11 attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
 }
 void customParseOccupancyCluster(final Map descMap) {
@@ -518,13 +508,24 @@ private String sonoffZonesHelp() {
     return help.join(' ')
 }
 
+List<String> customSetZoneEnable(final int bitmap) {
+    return sonoffWriteZoneEnable(bitmap)
+}
+
 private List<String> sonoffWriteZoneEnable(final int bitmap) {
     int bm = bitmap & 0xFF
+    int wireValue = bm << 8
     logInfo "setting the enabled detection zones to ${sonoffZonesToString(bm)} (bitmap 0x${zigbee.convertToHexString(bm, 2)})"
     device.updateSetting('zoneEnable', [value: bm.toString(), type: 'number'])
-    // 0x19 = BITMAP16, as used by both Zigbee2MQTT and the ZHA quirk
-    return zigbee.writeAttribute(SONOFF_FC11_CLUSTER, 0x2016, 0x19, bm, ['mfgCode': SONOFF_MFG_CODE], delay = 200) +
-           zigbee.readAttribute(SONOFF_FC11_CLUSTER, 0x2016, ['mfgCode': SONOFF_MFG_CODE], delay = 500)
+    // SNZB-06P24 consumes this BITMAP16 write in big-endian byte order. Hubitat serializes ZCL 0x19
+    // little-endian, so pre-swap the logical low-byte bitmap to put 00 XX on the wire.
+    return zigbee.writeAttribute(
+        SONOFF_FC11_CLUSTER, 0x2016, 0x19, wireValue,
+        ['mfgCode': SONOFF_MFG_CODE], delay = 200
+    ) + zigbee.readAttribute(
+        SONOFF_FC11_CLUSTER, 0x2016,
+        ['mfgCode': SONOFF_MFG_CODE], delay = 500
+    )
 }
 
 // sendCommand('setZone', '<zone 1..7> <on|off>')  e.g.  setZone('3 off')

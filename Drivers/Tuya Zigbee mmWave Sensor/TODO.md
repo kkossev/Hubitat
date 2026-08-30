@@ -1,9 +1,11 @@
 # Open User Requests — Tuya Zigbee mmWave Sensor
 
-Improvement requests harvested from all 508 posts of the community thread
-([BETA] Tuya Zigbee mmWave Sensors, topic 137410) on 2026-07-11. Checked against driver
-v4.2.4 / deviceProfilesV4_mmWave.json v4.1.5 before listing — everything already fixed in a
-released version (per the header changelog and the JSON changelog) was dropped.
+Improvement requests and unresolved reports harvested from all 515 visible posts through highest
+visible post 520 of the community thread ([BETA] Tuya Zigbee mmWave Sensors, topic 137410) on
+2026-08-30. Deleted posts account for the difference between the visible-post count and highest
+post number. Checked against driver v4.2.5 / deviceProfilesV4_mmWave.json v4.1.6 before listing —
+everything already fixed in a released version (per the header changelog and the JSON changelog)
+was dropped.
 Post links are `https://community.hubitat.com/t/-/137410/<post#>`.
 
 This list complements the two existing planning documents:
@@ -133,6 +135,225 @@ GitHub issue: https://github.com/kkossev/Hubitat/issues/133.
 FP1E?" ([#474](https://community.hubitat.com/t/-/137410/474), nckepa, 2026-02-10 — unanswered). Most radars stop sending distance when
 idle, so the last value stays stale on dashboards. Could be a small generic option in
 `customProcessDeviceProfileEvent()`/motion-inactive handling.
+
+### 2.8 `[~]` `PARTIAL` — SNZB-06P24 zone-enable writes can disable all motion — HUB-129
+
+Outgoing-write fix **Confirmed on device** on the maintainer's firmware `1.0.0` unit (2026-08-30),
+together with the scope of the quirk (BITMAP16 only) and the `zoneStatus` read path (2.9). Still
+open: the `setZone` / `setAllZones` commands end to end, and the reporter's firmware `1.0.4` device.
+
+**User-visible problem:** on a SONOFF `SNZB-06P24` running firmware `1.0.4`, saving Preferences
+with `zoneEnable = 255` stops all motion reports even though Refresh subsequently displays all
+zones as enabled. The same outgoing write path is used by the `setZone` and `setAllZones`
+commands.
+
+Evidence:
+
+- Exact textual fingerprint from [#514](https://community.hubitat.com/t/-/137410/514), kdb:
+  `profileId:"0104", endpointId:"01", inClusters:"0000,0003,0400,0406,FC11,FC57",`
+  `outClusters:"0003,0019", model:"SNZB-06P24", manufacturer:"SONOFF"`.
+- [#518](https://community.hubitat.com/t/-/137410/518) records an `0xFC11:0x2016`
+  BITMAP16 read response with on-wire bytes `00 FF`, which Hubitat correctly decodes as
+  `0xFF00` / `65280`.
+- [#519](https://community.hubitat.com/t/-/137410/519) added the then-current receive-side byte
+  swap. [#520](https://community.hubitat.com/t/-/137410/520), kdb, confirms that this makes Refresh
+  look correct but does not prevent Save Preferences from disabling every zone. The reporter's
+  outgoing-write workaround was preliminarily working and a PR was offered, but no matching PR was
+  present when checked on 2026-08-30.
+- **On-device confirmation of the fix** — maintainer's unit, device `BE94`, firmware `1.0.0`
+  (`firmwareMT 1286-0812-00001000`), C-8 Pro 2.5.1.176, driver 4.2.5 timestamp
+  `2026/08/30 07:38 AM`, hub log 2026-08-30 08:21:44–08:21:45. Save Preferences with
+  `zoneEnable = 255` produced:
+
+  ```
+  setPar: found customSetFunction=null, scaledValue=255 (val=255)
+  setPar: (1) successfluly executed setPar customSetZoneEnable(255)
+  sendZigbeeCommands: sent cmd=[he wattr 0xBE94 0x01 0xFC11 0x2016 0x19 {FF00} {1286}, ...]
+  zigbee response write private cluster 0xFC11 attribute response: Success
+  parse: descMap = [raw:BE9401FC110C162019FF00, ..., attrId:2016, encoding:19, value:00FF]
+  zoneEnable is 255 (raw:255) (no change)
+  ```
+
+  Current States afterwards: `zoneEnable 255`, `zonesEnabled 1,2,3,4,5,6,7`.
+
+Byte order — settled by the two read frames:
+
+Hubitat reverses the ZCL payload octets when it builds `descMap.value`. The same log shows
+illuminance `0x0400:0x0000` arriving as wire `FF 4F` → `descMap.value 4FFF` → 20479 → 112 lx,
+which is correct, so the reversal is standard Hubitat behavior and not a device quirk.
+
+| | logical value | logged `he wattr` | on the wire | sensor stores | read response wire | Hubitat decodes |
+|---|---|---|---|---|---|---|
+| before the fix ([#518](https://community.hubitat.com/t/-/137410/518)) | 255 | `{00FF}` | `FF 00` | `0xFF00` = 65280 | `00 FF` | 65280 ✗ |
+| after the fix (2026-08-30 log) | 65280 | `{FF00}` | `00 FF` | `0x00FF` = 255 | `FF 00` | 255 ✓ |
+
+Only one model fits both frames: **the sensor decodes BITMAP16 writes big-endian, but serializes
+read responses little-endian like any other attribute.** A device that were big-endian in both
+directions would have decoded correctly in #518 without any driver change, and one that were
+little-endian in both directions would never have stored 65280. The correction therefore belongs on
+the transmit side only; the earlier receive-side swap treated the symptom on the display and left
+the wrong bitmap in the sensor.
+
+Pre-fix code behavior (driver 4.2.5, timestamp `2026/08/29 07:05 PM`):
+
+- `customUpdated()` calls `updateAllPreferences()`. The V4 profile library routed `zoneEnable`
+  through generic `setPar()` / `zclWriteAttribute()` because no `customSetZoneEnable()` existed, so
+  logical value `255` was passed directly to the BITMAP16 writer.
+- `sonoffWriteZoneEnable()` likewise passed the logical low-byte bitmap directly; both zone commands
+  call this helper.
+- `customParseFC11Cluster()` swapped every four-character `0x19` value on cluster `0xFC11`, without
+  a model or attribute guard. This masked the displayed readback and could affect other FC11
+  BITMAP16 attributes; it did not repair the bitmap already stored by the sensor.
+
+Implementation applied on 2026-08-30 (driver 4.2.5, timestamp `2026/08/30 07:38 AM`):
+
+- Removed the receive-side BITMAP16 swap from `customParseFC11Cluster()`. **Confirmed correct** —
+  the read frame above decodes to 255 with no parser correction.
+- Added `customSetZoneEnable(int)` so Save Preferences and generic `setPar` writes use the same
+  centralized helper as `setZone` / `setAllZones`. **Confirmed reached** — the log shows
+  `setPar: (1) successfluly executed setPar customSetZoneEnable(255)`.
+- Restricted the byte-order workaround to outgoing `0xFC11:0x2016` writes. The helper passes
+  `(bitmap & 0xFF) << 8` to Hubitat's BITMAP16 writer; other FC11 attributes are unchanged.
+- The JSON profile database was not changed: the functional fix does not require profile data, and
+  comment cleanup would need its own data-version bump.
+
+Open defect in the regenerated bundle — **not yet fixed**:
+
+`Tuya_Zigbee_mmWave_Sensor_lib_included.groovy` was regenerated with the five `#include` directives
+left live at lines 62–66 *on top of* the inlined library code. HEAD blanks those five lines; the
+current file would include each library twice and will not compile on a hub. Only the `#include`
+source driver has been pushed and verified so far. Rebuild the bundle before publishing.
+
+Library note (cosmetic, `deviceProfileLibV4` line 698): `setPar()` logs
+`found customSetFunction=${setFunction}` with an undeclared variable — the intended one is
+`customSetFunction`, used correctly by `sendAttribute()` at line 841. Hubitat resolves the unknown
+property to `null` instead of throwing, so the hook still runs; the log line simply reads
+`found customSetFunction=null`.
+
+Scope of the quirk — **settled 2026-08-30**, the Refresh at 08:37:42 read back
+`0xFC11:0x2018` (`illuminationOffset`, INT16 `0x29`) as `raw:BE9401FC110C1820293200` →
+`value:0032` → **50**, the value written earlier in the same session. The sensor therefore consumes
+INT16 writes little-endian like any normal device. **The big-endian write defect is specific to the
+BITMAP16 (`0x19`) attribute handler**, so the pre-swap must stay confined to `0x2016` and must not
+be generalized to other `0xFC11` attributes.
+
+Remaining verification — **VERIFY ON DEVICE**:
+
+- `zoneStatus` (`0xFC11:0x2015`) read path: **passed**, see 2.9.
+- Confirm motion still reports active/inactive after Save Preferences, then test reversible
+  `setAllZones none/all` and one `setZone` operation before restoring `255`. Motion active/inactive
+  is confirmed working in the 08:31–08:38 captures; the zone commands themselves are still untested.
+- Repeat on kdb's firmware `1.0.4` device. The absence of unsolicited `zoneStatus` reports there
+  remains **NEEDS_EVIDENCE** and is not part of this fix. Do not transfer the firmware `1.0.0`
+  result to `1.0.4` by identity alone.
+- Expected and not a regression: the `0x2021` write in the same Save is answered with
+  `0x86 UNSUPPORTED_ATTRIBUTE` (`data:[86, 21, 20]`). Firmware `1.0.0` does not implement
+  `radarSensitivity`; this is already documented in the profile comment in
+  `deviceProfilesV4_mmWave.json`.
+
+### 2.9 `[~]` `PARTIAL` — SNZB-06P24 `zoneStatus` byte order and zone mapping — HUB-129
+
+Byte order and zone mapping **Confirmed on device** (firmware `1.0.0`, 2026-08-30 08:31–08:38, all
+seven zones observed). Tests C, E and F below are still open.
+
+`zoneStatus` (`0xFC11:0x2015`, read-only, same bit layout as `zoneEnable`) had never been observed
+with a non-zero value before this session: every earlier capture read `0` with nobody present,
+which is consistent with either byte order, so the receive path removed in 2.8 was unproven for
+this attribute.
+
+Results, 2026-08-30 (device `BE94`, firmware `1.0.0`, driver 4.2.5 timestamp `2026/08/30 07:38 AM`):
+
+- **Reads need no correction.** Every occupancy value decoded into the low byte, exactly as the
+  2.8 model predicts. Nothing above 255 was ever seen.
+
+  | zone | report payload | `descMap.value` | `zonesOccupied` |
+  |---|---|---|---|
+  | 1 (0-1 m) | `02 00` | `0002` | `1` |
+  | 2 (1-1.5 m) | `04 00` | `0004` | `2` |
+  | 3 (1.5-2 m) | `08 00` | `0008` | `3` |
+  | 4 (2-2.5 m) | `10 00` | `0010` | `4` |
+  | 5 (2.5-3 m) | `20 00` | `0020` | `5` |
+  | 6 (3-3.5 m) | `40 00` | `0040` | `6` |
+  | 7 (3.5-4 m) | `80 00` | `0080` | `7` |
+  | empty | `00 00` | `0000` | `none` |
+
+- **Zone 1 is bit 1, not bits 0+1.** Bit 0 was never set in any of the captured reports — zone `N`
+  maps to bit `N` for all of `1..7`. `sonoffZoneBitMask(1)` returns `0x03`, which still detects and
+  still enables/disables zone 1 correctly because bit 1 is inside the mask, so no code change is
+  needed. Worth knowing before anyone "simplifies" that mask.
+- **`zoneStatus` is one-hot in practice, not a multi-zone bitmap.** Across both capture sessions
+  (08:31-08:38 and 08:46-08:48, well over a hundred reports with continuous free movement) every
+  non-zero value had exactly **one** bit set: only `0002`, `0004`, `0008`, `0010`, `0020`, `0040`,
+  `0080` and `0000` were ever seen. No combination such as `000C` or `0030` occurred even while
+  crossing zone boundaries. The sensor therefore appears to report the single zone holding the
+  strongest target rather than every occupied zone, so `zonesOccupied` will in practice always name
+  one zone or `none`. The driver decodes it as a bitmap, which stays correct either way — but the
+  attribute description in `deviceProfilesV4_mmWave.json` ("Which detection zone is currently
+  occupied") should not be reworded to promise a multi-zone list.
+- Adjacent-zone ping-ponging at the 1 Hz report rate is common (for example `5 → 7 → 5 → 7` at
+  08:47:17-08:47:22). Whether that is target-tracking jitter or genuine movement is unknown, since
+  neither capture was a controlled walk. Anyone building automations on `zonesOccupied` will want
+  to debounce it.
+- **The report path differs from the read path** and both are little-endian:
+  - Unsolicited reports (`command:0A`) arrive as a single multi-attribute Report Attributes frame
+    that always bundles `0x2016` **and** `0x2015`, both with encoding **`0x21`** (UINT16), e.g.
+    `raw:BE9401FC1114162021FF001520218000` → `zoneEnable 255` plus
+    `additionalAttrs:[[attrId:2015, value:0080]]` → `zonesOccupied 7`.
+  - Read Attributes Responses (`command:01`, from Refresh) use encoding **`0x19`**, e.g.
+    `raw:BE9401FC110C1520190000`.
+  - The profile declares `dt: "0x19"`. That is only used for writes, and `0x2015` is read-only, so
+    the encoding mismatch on the report path is harmless — but do not "fix" the profile to `0x21`.
+- **Unsolicited `zoneStatus` reports do arrive on firmware `1.0.0`**, roughly once per second while
+  a person is present. kdb reports none on `1.0.4`; that difference is real and still
+  **NEEDS_EVIDENCE**.
+- Event volume is self-limiting: `deviceProfileLib` only calls `customProcessDeviceProfileEvent()`
+  when the decoded value changes, so a stationary person produces `(no change)` debug lines rather
+  than a 1 Hz stream of events.
+
+Why a zero reading proves nothing, and what does:
+
+The zone bits all live in the low byte — zone 1 is bits 0+1 (`0x03`), zones 2..7 are bits 2..7. So
+**any** genuine occupancy value is asymmetric, and a byte swap moves every bit into the high byte:
+
+| occupied zone | logical | little-endian read (`descMap.value`) | byte-swapped read | `zonesOccupied` if swapped |
+|---|---|---|---|---|
+| 1 (0-1 m) | `0x0003` = 3 | `0003` → 3 | `0300` → 768 | `none` |
+| 4 (2-2.5 m) | `0x0010` = 16 | `0010` → 16 | `1000` → 4096 | `none` |
+| 7 (3.5-4 m) | `0x0080` = 128 | `0080` → 128 | `8000` → 32768 | `none` |
+
+`sonoffZonesToString()` only inspects bits 0..7, so a swapped value silently yields
+`zonesOccupied = none` while the raw `zoneStatus` attribute holds a number above 255. **Rule of
+thumb: any `zoneStatus` value greater than 255 means the read path needs a swap for `0x2015`.**
+
+Preconditions: `zoneEnable = 255` (`zonesEnabled` shows `1,2,3,4,5,6,7`), `ignoreZoneStatus = false`,
+debug logging on, room empty and `motion` settled to `inactive` before each test.
+
+- **A. Decisive endianness test — near zone. `[x]` PASSED.** Stand still at roughly 0.5 m directly in front of the
+  sensor for about 10 seconds. Capture the `parse: descMap = [raw:...attrId:2015...]` lines.
+  Pass: payload `03 00`, `value:0003`, `zoneStatus 3`, `zonesOccupied 1`.
+  Fail: `value:0300`, `zoneStatus 768`, `zonesOccupied none` — restore the receive-side swap,
+  scoped to `0x2015` only.
+- **B. Far zone. `[x]` PASSED.** Stand still at roughly 3.7 m. Pass: `value:0080`, `zoneStatus 128`,
+  `zonesOccupied 7`. This also checks the bit-to-distance mapping, not just the byte order.
+- **C. Walk test. `[ ]` still open** — the 2026-08-30 capture was free movement around the
+  sensor, not a straight walk out, so the direction of the mapping is not yet proven. Walk slowly from 0.5 m out to 4 m. `zonesOccupied` should climb
+  `1 → 2 → 3 → ... → 7`. A clean `7 → 6 → ... → 1` progression means the bit order within the byte
+  is reversed, which is a different defect from endianness and would need its own fix.
+- **D. Polled read versus unsolicited report. `[x]` PASSED**, see the report-path notes above. With someone present, press **Refresh** and capture
+  the Read Attributes Response (`command:01`) for `0x2015`; separately capture an unsolicited report
+  (`command:0A`). Record the `encoding` of each. The device is known to report `0x2016` with
+  encoding `0x21` rather than the `0x19` it uses in read responses, so the two paths must be
+  confirmed independently. Also record whether unsolicited `zoneStatus` reports arrive at all on
+  firmware `1.0.0` — kdb reports none on `1.0.4`.
+- **E. End-to-end zone gating. `[ ]` still open.** `setAllZones('none')`, then `setZone('1 on')`. Stand in zone 1:
+  `zonesOccupied` shows `1` and `motion` goes active. Stand at 3 m: no motion and
+  `zonesOccupied none`. Restore with `setAllZones('all')`. This is the original HUB-129 symptom, and
+  it also exercises `setZone`, which takes `device.currentValue('zoneEnable')` as its base bitmap —
+  that attribute must stay within `0..255` after every operation.
+- **F. Log-volume regression. `[ ]` partially done** — the roughly 1 Hz cadence is confirmed;
+  `ignoreZoneStatus = true` is still untested. Confirm the roughly one-per-second cadence while a person is
+  present, and that setting `ignoreZoneStatus = true` suppresses the events without affecting
+  `motion`.
 
 ## 3. Generic driver features
 
