@@ -31,7 +31,7 @@
  * ver. 1.2.7  2025-02-03 kkossev  - Xfinity/Visonic MCT-350 Zigbee Contact Sensor fingerprint typo fix - tnx @thanhvle-94
  * ver. 1.2.8  2025-10-20 kkossev  - added IMOU Door and Window Sensor ZD1 ( MultIR ZD2-EN )
  * ver. 1.3.0  2026-05-12 kkossev  - added TS0601 _TZE200_seq9cm6u/_TZE204_seq9cm6u pressure strip as contact sensor;
- * ver. 1.3.1  2026-07-18 kkossev  - bugfix: restored getModelGroup() deviceProfile selection (removed the pressure-strip test hardcode); added 3RDREALITY_TILT_BATT device profile for the 3RDTS01056Z garage door tilt sensor;
+ * ver. 1.3.1  2026-07-18 kkossev  - bugfix: restored getModelGroup() deviceProfile selection (removed the pressure-strip test hardcode); added 3RDREALITY_TILT_BATT device profile for the 3RDTS01056Z garage door tilt sensor; added Sonoff SNZB-04PR2 contact sensor;
  *
  *                                   TODO: handle the case when 'lastBattery' is missing.
  *                                   TODO: filter duplicated open/close messages when 'Poll Contact Status' option is enabled
@@ -44,7 +44,7 @@
  */
 
 static String version() { '1.3.1' }
-static String timeStamp() { '2026/07/18 11:33 PM' }
+static String timeStamp() { '2026/08/28 11:33 AM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -112,6 +112,7 @@ metadata {
 
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0003,0500,0001', outClusters: '0003', model: 'DS01', manufacturer: 'eWeLink', deviceJoinName: 'Sonoff Contact Sensor'
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0003,0020,0500,FC57,FC11', outClusters: '0003,0006,0019', model: 'SNZB-04P', manufacturer: 'eWeLink', deviceJoinName: 'Sonoff SNZB-04P Contact Sensor'
+        fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0003,0020,0500,FC57,FC11', outClusters: '0003,0019', model: 'SNZB-04PR2', manufacturer: 'SONOFF', controllerType: 'ZGB', deviceJoinName: 'Sonoff SNZB-04PR2 Contact Sensor'
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,FF01,FF00,0001,0500', outClusters: '0019', model: '3RDS17BZ', manufacturer: 'Third Reality, Inc', deviceJoinName: 'Third Reality Contact Sensor' 
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0500,FFF1', outClusters:'0019', model:'3RDTS01056Z', manufacturer:'Third Reality, Inc', controllerType: 'ZGB', deviceJoinName: 'Third Reality Tilt Sensor'         
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0001,0003,0020,0402,0500,0B05', outClusters: '0019', model: 'URC4460BC0-X-R', manufacturer: 'Universal Electronics Inc', deviceJoinName: 'Xfinity/Visonic MCT-350 Zigbee Contact Sensor'   
@@ -258,6 +259,18 @@ metadata {
         attributes    : ['healthStatus'],
         preferences   : ['minReportingTime': true],
         batteries     : 'CR2032'
+    ],
+    'SONOFF_CONTACT_BATT_SNZB_04PR2' : [       // 2nd generation of the SNZB-04P - contact, tamper, battery and reporting interval verified
+        model         : 'SNZB-04PR2',
+        manufacturers : ['SONOFF'],            // note: the manufacturer was changed from 'eWeLink' to 'SONOFF'
+        deviceJoinName: 'Sonoff SNZB-04PR2 Contact Sensor',
+        inClusters    : '0000,0001,0003,0020,0500,FC57,FC11',
+        outClusters   : '0003,0019',
+        capabilities  : ['contactSensor': true, 'battery': true, 'tamperAlert': true],
+        configuration : ['battery': true, 'minReportingTime': true],
+        attributes    : ['healthStatus'],
+        preferences   : ['minReportingTime': true],
+        batteries     : '2xAAA'
     ],
     '3RDREALITY_CONTACT_BATT' : [
         model         : '3RDS17BZ',
