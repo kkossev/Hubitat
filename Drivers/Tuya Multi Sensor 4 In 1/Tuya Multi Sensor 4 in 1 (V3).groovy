@@ -36,7 +36,7 @@
  * ver. 3.5.6  2026-06-04 kkossev  - added TS0601 _TZE284_gnpflcoq 4-in-1 mmWave Radar Sensor profile 'TS0601_TZE284_4IN1'
  * ver. 3.5.7  2026-07-31 kkossev  - added HOBEIAN ZG-204ZX fingerprint to 'TS0601_TZE284_4IN1'
  * ver. 3.6.0  2026-08-05 kkossev  - added PGST TS0601 _TZE284_zmgahdog PIR+siren combo (motion only) profile 'TS0601_PGST_PIR_SIREN'; TS0202_MOTION_SWITCH illuminance state (dark/light); bug fixes
- * ver. 3.6.1  2026-08-23 kkossev  - (dev. branch) added LinknLink eMotion Air 4-in-1 presence sensor; devices with a built-in button now create a child button device; bug fixes
+ * ver. 3.6.1  2026-08-23 kkossev  - (dev. branch) added LinknLink eMotion Air 4-in-1 presence sensor; devices with a built-in button now create a child button device; bug fixes; added Zbeacon MS01 motion sensor
  *
  *                                   TODO: show Temperature Offset and Humidity Offset only when the device profile supports TemperatureMeasurement and RelativeHumidityMeasurement capabilities
  *                                   TODO: check why no preferences : updateAllPreferences: no preferences defined for device profile SIHAS_USM-300Z_4_IN_1
@@ -615,6 +615,28 @@ boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
             attributes:       [
                 [at:'0x0500:0x0013', name:'sensitivity', type:'enum',   rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'PIR sensor sensitivity (update at the time motion is activated)'],
                 [at:'0x0500:0xF001', name:'keepTime',    type:'enum',   rw: 'rw', min:0, max:2,    defVal:'0',  unit:'seconds',    map:[0:'30 seconds', 1:'60 seconds', 2:'120 seconds'], title:'<b>Keep Time</b>',   description:'PIR keep time in seconds (update at the time motion is activated)'],
+            ],
+            configuration : ['battery': false]
+    ],
+
+    // Tested on a unit retailed as a 'Besisglas Zigbee Human Presence Sensor' (24GHz mmWave, per the listing).
+    // Over Zigbee it exposes only the IAS Zone alarm1 bit - no EF00, no occupancy cluster (0x0406), no
+    // illuminance - so it is configured like the IAS PIR profiles, even though the sensing element is radar
+    // (per the manufacturer, and the housing has no PIR Fresnel lens).
+    // 'zbeacon' is a generic manufacturer string that also turns up on unrelated devices; this model is not
+    // in zigbee-herdsman-converters (its zbeacon.ts covers only a TS0721 switch).
+    'ZBEACON_MOTION_IAS'   : [
+            description   : 'Zbeacon MS01 Motion sensor (IAS)',
+            models        : ['MS01'],
+            device        : [type: 'radar', isIAS:true, powerSource: 'battery', isSleepy:true],
+            capabilities  : ['MotionSensor': true, 'Battery': true],
+            preferences   : ['motionReset':true, 'keepTime':'0x0500:0xF001', 'sensitivity':'0x0500:0x0013'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0001,0500,0020', outClusters:'0019', model:'MS01', manufacturer:'zbeacon', controllerType:'ZGB', deviceJoinName: 'Zbeacon MS01 Motion Sensor']
+            ],
+            attributes:       [       // dt 0x20 (uint8) confirmed by reading both attributes back; without dt, setPar assumes 0x30 (enum8) and the device rejects the write with 0x8D INVALID_DATA_TYPE
+                [at:'0x0500:0x0013', name:'sensitivity', type:'enum',   dt:'0x20', rw: 'rw', min:0, max:2,    defVal:'2',  unit:'',           map:[0:'low', 1:'medium', 2:'high'], title:'<b>Sensitivity</b>',   description:'Sensor sensitivity (power cycle the device for the new value to take effect)'],
+                [at:'0x0500:0xF001', name:'keepTime',    type:'enum',   dt:'0x20', rw: 'rw', min:0, max:2,    defVal:'0',  unit:'seconds',    map:[0:'30 seconds', 1:'60 seconds', 2:'120 seconds'], title:'<b>Keep Time</b>',   description:'Keep time in seconds (power cycle the device for the new value to take effect)'],
             ],
             configuration : ['battery': false]
     ],

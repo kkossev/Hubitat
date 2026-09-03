@@ -23,6 +23,10 @@ is explicitly requested, not a cut/released version with its own `[Unreleased]` 
 Most of this entry is **shared-library** work: `commonLib` 4.1.1, `onOffLib` 3.2.4, `batteryLib`
 3.2.4, `humidityLib` 3.3.1 and `temperatureLib` 3.3.2. Those reach every driver that embeds them.
 
+### Added
+
+- Zbeacon MS01 Motion Sensor, model `MS01`, manufacturer `zbeacon`.
+
 ### Fixed
 
 - **Refresh now forces temperature and humidity events.** Pressing Refresh re-read the device, but
