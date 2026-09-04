@@ -1,12 +1,12 @@
 # Consolidated TODO — Tuya Temperature Humidity Illuminance LCD Display with a Clock
 
 Analysis date: 2026-07-11 (forum backlog, posts through 693); bug backlog merged 2026-08-04;
-incremental forum audit through post 712 on 2026-08-15; supplemental topic 156210 audited through
+incremental forum audit through post 713 on 2026-09-04; supplemental topic 156210 audited through
 post 7 on 2026-08-29
-Forum cutoff: post 712, 2026-08-15
+Forum cutoff: post 713, 2026-09-04
 Topic: https://community.hubitat.com/t/-/88093  
-Coverage: complete Discourse stream through post 712 — 696 visible posts; highest visible post
-number 712 at audit time
+Coverage: complete Discourse stream through post 713 — 697 visible posts; highest visible post
+number 713 at audit time
 Supplemental topic: https://community.hubitat.com/t/-/156210 — complete stream through post 7;
 7 visible posts, highest post number 7 at audit time
 
@@ -406,6 +406,43 @@ Remaining verification — **VERIFY ON DEVICE**:
 - Regression: single-relay `_TZ3218_7fiyo3kv` keeps exactly one working child, and the
   `TS0601_ZTH03PRO` probe child survives the same operations.
 - Paul's confirmation on the physical DC four-relay board is still outstanding.
+### 13. [ ] `OPEN` / `NEEDS_EVIDENCE` — Add TS0601 `_TZE284_qf5mzewi` temperature/humidity sensor support — HUB-145
+
+**Requested outcome:** recognize the device and report temperature and humidity instead of leaving it
+in model group `UNKNOWN` with no readings.
+
+Evidence:
+
+- User report, exact identity, driver version, and state variables:
+  https://community.hubitat.com/t/-/88093/713
+- Topic 88093 was audited through post 713 on 2026-09-04.
+
+Known data:
+
+- Model: `TS0601`
+- Manufacturer: `_TZE284_qf5mzewi`
+- Reported driver: 2.2.1, timestamp 2026/08/29 7:28 PM
+- `Model Group: UNKNOWN`; the reporter tried every manually selectable model group without success.
+- Receive activity is present (`rxCtr: 22`), but the post contains no raw Tuya EF00 DP payloads or
+  textual cluster lists.
+
+Implementation direction:
+
+- Obtain debug/trace logs containing the exact Tuya EF00 datapoints and the complete textual Hubitat
+  fingerprint, including `inClusters` and `outClusters`.
+- Search current Zigbee2MQTT and ZHA support for the exact manufacturer; do not borrow datapoints
+  from similar-looking products or different fingerprints.
+- Reuse an existing model group only if its DP semantics match exactly; otherwise add a dedicated
+  group and route only confirmed datapoints.
+- Preserve all existing model-group behavior and debug-log unsupported DPs.
+
+Verification — **VERIFY ON DEVICE**:
+
+- The exact identity is recognized instead of `UNKNOWN`.
+- Confirmed temperature and humidity DPs create plausible events with correct scaling and units.
+- Automatic driver selection is verified after adding the complete observed fingerprint.
+- The reporting user confirms readings from the development build before this item is completed.
+
 ## Already resolved, declined, or outside this backlog
 
 ### `RESOLVED` — `_TZE204_m9dzckna` SNT857Z temperature sensor
