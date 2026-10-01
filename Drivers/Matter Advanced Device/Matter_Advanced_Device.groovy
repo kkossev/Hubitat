@@ -7,7 +7,7 @@
  *  invokes any command, discovers endpoints and clusters, and reports the device
  *  firmware version and the Matter OTA software update state.
  *
- *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
+ *  https://community.hubitat.com/t/alpha-matter-advanced-device/165806
  *
  *     Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *     in compliance with the License. You may obtain a copy of the License at:
@@ -20,13 +20,14 @@
  *
  * The Matter cluster and attribute reference data is derived from the Matter Advanced Bridge matterLib.
  *
- * ver. 1.0.0  2026-08-15 kkossev  - (dev. branch) first version: discovery, Get Info, read/write/invoke,
+ * ver. 1.0.0  2026-08-15 kkossev  - first version: discovery, Get Info, read/write/invoke,
  *                                   plain English read menu, dynamic picker, housekeeping commands,
  *                                   identify/ping/health, firmware version and Matter OTA state monitoring.
+ * ver. 1.0.1  2026-10-01 kkossev  - (dev. branch) discovery waits for delayed replies; detailed endpoint summaries.
  */
 
-static String version() { '1.0.0' }
-static String timeStamp() { '2026/08/16 12:22 PM' }
+static String version() { '1.0.1' }
+static String timeStamp() { '2026/10/01 1:51 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = false
@@ -840,6 +841,7 @@ void collectTick() {
             c.quiet = 0
             c.notBefore = 0L                        // this entry's chunk pacing starts here (C2)
             if (entry.attrs != null) {
+                c.valuesReceived = false ; c.ticks = 0
                 sendAttributeReads(entry.ep as Integer, entry.cluster as Integer, entry.attrs as List)
                 c.phase = INFO_STATE_VALUES_WAIT
             } else {
@@ -859,6 +861,7 @@ void collectTick() {
                     flushCollectedEntry(c)
                     c.idx = (c.idx as Integer) + 1 ; c.phase = INFO_STATE_NEXT
                 } else {
+                    c.valuesReceived = false
                     sendAttributeReads(entry.ep as Integer, entry.cluster as Integer, attrs)
                     c.phase = INFO_STATE_VALUES_WAIT ; c.quiet = 0 ; c.ticks = 0
                 }
@@ -873,7 +876,8 @@ void collectTick() {
         case INFO_STATE_VALUES_WAIT:
             c.quiet = (c.quiet ?: 0) + 1
             boolean allChunksSent = new Date().getTime() >= safeToLong(c.notBefore, 0L)
-            boolean settled = allChunksSent && (c.quiet as Integer) >= INFO_SETTLE_QUIET_TICKS
+            // Silence before the first value is response latency, not a completed read (B8).
+            boolean settled = c.valuesReceived == true && allChunksSent && (c.quiet as Integer) >= INFO_SETTLE_QUIET_TICKS
             if (settled || (c.ticks as Integer) > INFO_COLLECT_MAX_TICKS) {
                 // replies, NOT lines: 'did this entry answer' is not 'did the dump grow'. An
                 // AttributeList reply adds no line, and when the dump was capped the line count
@@ -918,6 +922,9 @@ void collectInfoLine(final Integer endpoint, final Integer cluster, final Intege
     Map current = (c.idx as Integer) < queue.size() ? queue[c.idx as Integer] as Map : null
     if (current != null && (current.ep as Integer) == endpoint && (current.cluster as Integer) == cluster) {
         c.quiet = 0                                 // a reply to what we are waiting for - keep waiting for more
+        if ((c.phase as Integer) == INFO_STATE_VALUES_WAIT && attrInt != 0xFFFB) {
+            c.valuesReceived = true
+        }
     }
     c.replies = (c.replies ?: 0) + 1                // this entry answered - independent of what gets printed
     if (attrInt == 0xFFFB) { state.collect = c ; return }   // the list itself is not an interesting line
@@ -989,7 +996,7 @@ void finishCollect() {
 
 void discoverAll() {
     ensureStateMaps()
-    logInfo 'discoverAll() - step 1 of 2: reading the root endpoint descriptor ...'
+    logInfo 'discoverAll() - step 1 of 2: reading the root endpoint descriptor ...<br><br><br>'
     state.endpoints = [:]
     state.states['discoveryPending'] = true
     state.states['discoveryStage'] = 1
@@ -1023,7 +1030,9 @@ void afterDiscovery() {
     // stage 2 finished
     state.states['discoveryStage'] = 0
     Integer epCount = (state.endpoints ?: [:]).size()
-    logInfo "discovery finished - ${epCount} endpoint(s), ${summarizeEndpoints()}"
+    Integer clusterCount = (state.endpoints ?: [:]).values().sum { (it?.serverList ?: []).size() } ?: 0
+    logInfo "discovery finished - ${epCount} endpoint(s), ${clusterCount} server clusters<br><br><br>"
+    (state.endpoints ?: [:]).each { epKey, rec -> logInfo summarizeEndpoint(epKey, rec) }
     if (device.currentValue('otaSupported') == null) {
         sendEvent(name: 'otaSupported', value: 'no', descriptionText: 'the OTA Software Update Requestor cluster was not found on this device')
     }
@@ -1033,8 +1042,14 @@ void afterDiscovery() {
 
 String summarizeEndpoints() {
     return (state.endpoints ?: [:]).collect { epKey, rec ->
-        "ep ${epKey}: ${rec?.deviceTypes ?: 'unknown type'} (${(rec?.serverList ?: []).size()} clusters)"
-    }.join(' | ')
+        summarizeEndpoint(epKey, rec)
+    }.join('<br>')
+}
+
+String summarizeEndpoint(final String epKey, final Map rec) {
+    List<Integer> clusters = toIntList(rec?.serverList).sort()
+    String heading = "ep ${epKey}: device type(s): ${rec?.deviceTypes ?: 'unknown'} (${clusters.size()} server clusters)"
+    return heading + clusters.collect { "<br>&nbsp;&nbsp;${hex4(it)} ${getClusterName(it)}" }.join('')
 }
 
 /**

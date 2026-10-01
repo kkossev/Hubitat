@@ -3,6 +3,21 @@
 All notable changes to the **Matter Advanced Device** driver.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.1] - 2026-10-01
+
+This stays the working section until a version bump is requested.
+
+### Changed
+
+- Updated the development version and timestamp.
+- Discovery logs each endpoint separately with its sorted server cluster IDs and names, plus a
+  total cluster count. The endpoints utility includes the same cluster details.
+
+### Fixed
+
+- Discovery and attribute dumps wait for the first matching value reply before treating a quiet
+  interval as completion. Local checks and live discovery on a TADO Smart Radiator Thermostat X pass.
+
 ## [1.0.0] - 2026-08-15
 
 This stays the working section until a version bump is requested.

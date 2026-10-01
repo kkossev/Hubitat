@@ -1,6 +1,6 @@
 boolean aborted = false
 // Simulation of the Matter Advanced Device collector state machine.
-// The tick body is copied verbatim from the driver; everything around it is mocked.
+// The tick logic follows the driver; clock, I/O, scheduling and log flushing are mocked.
 import groovy.transform.Field
 
 @Field static final Integer INFO_STATE_NEXT = 0, INFO_STATE_ATTR_LIST_WAIT = 2,
@@ -26,7 +26,7 @@ int sendReads(Map state, int ep, int cluster, List attrs, long now) {
     return chunks
 }
 
-def runCollect = { List queue, Map answers, String label, boolean bufferFull = false ->
+def runCollect = { List queue, Map answers, String label, boolean bufferFull = false, Map timing = [:] ->
     // bufferFull models the dump sitting at MAX_INFO_BUFFER_LINES: the device still answers, so
     // c.replies climbs, but c.lines is frozen because nothing more can be remembered (B7)
     state.collect = [queue: queue, idx: 0, phase: INFO_STATE_NEXT, ticks: 0, quiet: 0,
@@ -36,8 +36,34 @@ def runCollect = { List queue, Map answers, String label, boolean bufferFull = f
     visited = []
     int guard = 0
     aborted = false
+    List pending = []
+    List received = []
+    List finished = []
+    def scheduleValues = { Map entry ->
+        String path = "${entry.ep}/${hex4(entry.cluster)}".toString()
+        int delay = timing.containsKey(path) ? timing[path] as int : 300
+        if (delay >= 0) { pending << [at: now + delay, ep: entry.ep, cluster: entry.cluster, attr: 0] }
+    }
+    pending.addAll(timing.noise ?: [])
     while (state.collect != null && guard++ < 5000) {
         Map c = state.collect
+        // Deliver reports independently of the tick that sent the read. Match collectInfoLine's gate.
+        List due = pending.findAll { it.at <= now }
+        pending.removeAll(due)
+        due.each { Map report ->
+            if (!queue.any { it.ep == report.ep && it.cluster == report.cluster }) { return }
+            Map current = c.idx < queue.size() ? queue[c.idx] : null
+            if (current != null && current.ep == report.ep && current.cluster == report.cluster) {
+                c.quiet = 0
+                if ((c.phase as Integer) == INFO_STATE_VALUES_WAIT && report.attr != 0xFFFB) {
+                    c.valuesReceived = true
+                }
+            }
+            c.replies++
+            if (report.attr == 0xFFFB) { return }
+            received << "${report.ep}/${hex4(report.cluster)}".toString()
+            if (!bufferFull) { c.lines++ }
+        }
         c.ticks = (c.ticks ?: 0) + 1
         switch (c.phase as Integer) {
             case INFO_STATE_NEXT:
@@ -48,10 +74,10 @@ def runCollect = { List queue, Map answers, String label, boolean bufferFull = f
                 c.quiet = 0
                 c.notBefore = 0L
                 if (entry.attrs != null) {
+                    c.valuesReceived = false ; c.ticks = 0
                     visited << "${entry.ep}/${hex4(entry.cluster)}(fixed)"
                     sendReads(state, entry.ep, entry.cluster, entry.attrs, now)
-                    c.replies = (c.replies as Integer) + 1  // the fake device answers fixed reads
-                    if (!bufferFull) { c.lines = (c.lines as Integer) + 1 }
+                    scheduleValues(entry)
                     c.phase = INFO_STATE_VALUES_WAIT
                 } else {
                     visited << "${entry.ep}/${hex4(entry.cluster)}(list)"
@@ -65,13 +91,13 @@ def runCollect = { List queue, Map answers, String label, boolean bufferFull = f
                 break
             case INFO_STATE_ATTR_LIST_WAIT:
                 Map waitingFor = (c.queue as List)[c.idx as Integer] as Map
-                if (c.pendingList != null) { c.gotAttrListFor = hex4(waitingFor.cluster as Integer) ; c.pendingList = null }
+                if (c.pendingList != null) { c.gotAttrListFor = hex4(waitingFor.cluster as Integer) ; c.pendingList = null ; c.replies++ }
                 if (c.gotAttrListFor == hex4(waitingFor.cluster as Integer)) {
                     List attrs = (answers["${waitingFor.ep}/${hex4(waitingFor.cluster)}".toString()] ?: []).findAll { it != 0xFFFB }
                     if (attrs.isEmpty()) { c.idx = (c.idx as Integer) + 1 ; c.phase = INFO_STATE_NEXT }
-                    else { sendReads(state, waitingFor.ep, waitingFor.cluster, attrs, now)
-                           c.replies = (c.replies as Integer) + 1
-                           if (!bufferFull) { c.lines = (c.lines as Integer) + 1 }
+                    else { c.valuesReceived = false
+                           sendReads(state, waitingFor.ep, waitingFor.cluster, attrs, now)
+                           scheduleValues(waitingFor)
                            c.phase = INFO_STATE_VALUES_WAIT ; c.quiet = 0 ; c.ticks = 0 }
                 } else if ((c.ticks as Integer) > INFO_COLLECT_MAX_TICKS) {
                     c.misses = (c.misses ?: 0) + 1
@@ -81,8 +107,9 @@ def runCollect = { List queue, Map answers, String label, boolean bufferFull = f
             case INFO_STATE_VALUES_WAIT:
                 c.quiet = (c.quiet ?: 0) + 1
                 boolean allChunksSent = now >= safeToLong(c.notBefore, 0L)
-                boolean settled = allChunksSent && (c.quiet as Integer) >= INFO_SETTLE_QUIET_TICKS
+                boolean settled = c.valuesReceived == true && allChunksSent && (c.quiet as Integer) >= INFO_SETTLE_QUIET_TICKS
                 if (settled || (c.ticks as Integer) > INFO_COLLECT_MAX_TICKS) {
+                    finished << [idx: c.idx, at: now, received: received.size()]
                     c.misses = (c.replies as Integer) > (c.repliesAtEntry as Integer ?: 0) ? 0 : (c.misses ?: 0) + 1
                     c.repliesAtEntry = c.replies
                     c.idx = (c.idx as Integer) + 1 ; c.phase = INFO_STATE_NEXT ; c.ticks = 0 ; c.notBefore = 0L
@@ -95,7 +122,7 @@ def runCollect = { List queue, Map answers, String label, boolean bufferFull = f
         state.collect = c
         now += 300
     }
-    return [ticks: guard, seconds: now / 1000.0, visited: visited, aborted: aborted]
+    return [ticks: guard, seconds: now / 1000.0, visited: visited, aborted: aborted, received: received, finished: finished]
 }
 
 int fails = 0
@@ -140,5 +167,32 @@ r = runCollect(q7, [:], 'no new lines', true)
 expect('replies without lines do not abort', !r.aborted && r.visited.size() == 12,
        "aborted=${r.aborted}, visited ${r.visited.size()} of 12")
 
+// B8: a quiet interval before any values is not a completed read.
+r = runCollect([[ep:0, cluster:0x001D, attrs:[0,1,2,3,4]]], [:], 'delayed root', false, ['0/001D':2400])
+expect('delayed root reply precedes completion', r.received == ['0/001D'] && r.finished[0].at >= 2400,
+       "received ${r.received}, finished ${r.finished}")
+r = runCollect(q2, [:], 'delayed endpoints', false, ['1/001D':2100, '2/001D':3000, '3/001D':3900])
+expect('delayed endpoint descriptors are collected', r.received.size() == q2.size(), "received ${r.received}")
+r = runCollect([[ep:0,cluster:0x001D]], answers, 'delayed values after list', false, ['0/001D':3000])
+expect('AttributeList is not a value reply', r.received == ['0/001D'] && r.finished[0].at >= 3300,
+       "received ${r.received}, finished ${r.finished}")
+r = runCollect([[ep:0,cluster:0x001D,attrs:[0]]], [:], 'silent fixed', false, ['0/001D':-1])
+expect('silent fixed read waits for bounded timeout', r.received.isEmpty() && r.seconds >= 10 && r.seconds < 12, "${r.seconds}s")
+r = runCollect([[ep:0,cluster:0x001D]], answers, 'list only', false, ['0/001D':-1])
+expect('list without values waits for bounded timeout', r.received.isEmpty() && r.seconds >= 10 && r.seconds < 12, "${r.seconds}s")
+def noiseQueue = [[ep:0,cluster:0x001D,attrs:[0]], [ep:1,cluster:0x001D,attrs:[0]]]
+r = runCollect(noiseQueue, [:], 'late and unrelated reports', false,
+    ['1/001D':3000, noise:[[at:1500,ep:0,cluster:0x001D,attr:0],
+                           [at:1500,ep:1,cluster:0x0028,attr:0],
+                           [at:1800,ep:1,cluster:0x001D,attr:0xFFFB]]])
+expect('other endpoint, cluster and AttributeList cannot settle value phase',
+       r.received.contains('1/001D') && r.finished[1].at >= 3900, "finished ${r.finished}")
+r = runCollect([[ep:0,cluster:0x0035]], bigAnswers, 'early first chunk')
+expect('first value does not bypass chunk pacing', r.finished[0].at >= 2300, "finished ${r.finished}")
+r = runCollect(q3, answers, 'delayed final cluster', false, ['1/0008':3900])
+expect('final cluster values precede summary', r.received.contains('1/0008') && r.finished[-1].received == 4,
+       "received ${r.received}")
+
 println ''
 println (fails == 0 ? 'ALL PASS' : fails + ' FAILURE(S)')
+if (fails != 0) { System.exit(1) }

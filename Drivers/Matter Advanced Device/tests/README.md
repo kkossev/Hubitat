@@ -22,7 +22,11 @@ Three checks, in order:
    mocked clock and a mocked device. It proves the walk terminates and visits every entry for:
    discovery stage 1 and 2, a wildcard `getInfo`, one silent cluster among answering ones, a
    cluster large enough to need four read chunks, and a device that answers nothing at all.
+   B8 cases deliver delayed value reports independently of the sending tick: fixed discovery reads,
+   values after AttributeList, silent fixed/value reads, unrelated and late reports, chunk pacing,
+   and a delayed final cluster. The simulated report gate follows `collectInfoLine()` as well.
 
 **Caveat worth knowing:** the tick body in `collector_sim.groovy` is a *copy* of the one in the
 driver. If you change `collectTick`, re-copy it, or the simulation will keep testing the old logic.
+Keep the simulated report gate synchronized when changing `collectInfoLine()` too.
 The helper assertions do not have this problem — they re-extract every run.

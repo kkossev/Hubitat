@@ -1,10 +1,10 @@
 {
   "packageName": "Matter Advanced Device",
   "author": "Krassimir Kossev",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minimumHEVersion": "2.5.1.135",
   "dateReleased": "2026-10-01",
-  "releaseNotes": "1.0.0 2026-10-01 - first HPM release of the Matter Advanced Device utility driver for directly paired Matter devices.",
+  "releaseNotes": "1.0.1 2026-10-01 - Fix discovery and attribute dumps ending before delayed device replies arrive. Expand endpoint summaries with explicit device types and sorted server cluster IDs and names. Verified discovery and attribute collection on a TADO Smart Radiator Thermostat X.",
   "documentationLink": "https://community.hubitat.com/t/alpha-matter-advanced-device/165806",
   "communityLink": "https://community.hubitat.com/t/alpha-matter-advanced-device/165806",
   "drivers": [

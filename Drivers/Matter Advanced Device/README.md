@@ -7,19 +7,25 @@ settings.
 
 It is a diagnostic tool, not a driver you leave assigned to a device you use every day.
 
-Current development source version: 1.0.0
+Current development source version: 1.0.1
 
 > Status: **partly tested on real hardware** (2026-08-15/16) — an IKEA GRILLPLATS plug and an IKEA
 > DIRIGERA bridge. Discovery, *Get Info*, *Get Info Advanced*, subscriptions and the OTA probe
 > suite have all run against real devices. The write path and the picker have not. What Matter OTA
 > allows on Hubitat is now established — see *Firmware updates* below.
 
+**Confirmed on 2026-10-01:** v1.0.1 discovery and attribute collection on a TADO Smart Radiator
+Thermostat X (firmware 1.4.289, Hubitat 2.5.2.126). Discovery finds all three endpoints; the full
+dump collects 155 values across 17 server clusters. This version waits for delayed replies before
+finishing a read and labels device types separately from server cluster IDs in endpoint summaries.
+
 ## Features
 
 - **A plain English menu.** Pick *Firmware version*, *Battery level*, *Temperature*, *On/Off
   state* and so on from a dropdown. You never have to know what an endpoint or a cluster is — the
   driver finds them for you.
-- **Full discovery.** Walks every endpoint and names every cluster it finds.
+- **Full discovery.** Walks every endpoint and logs its device types, sorted server cluster IDs
+  and names, with a separate summary entry for each endpoint and an overall cluster count.
 - **Get Info.** Logs the Matter fingerprint of every endpoint, exactly like the built-in *Device*
   driver.
 - **Get Info Advanced.** Dumps one endpoint, or the whole device, as a single readable block in
@@ -239,4 +245,4 @@ list.
 - The driver deliberately refuses to subscribe to the Descriptor cluster `0x001D` — doing so
   destabilises the Matter stack.
 
-(last edited 2026-08-16)
+(last edited 2026-10-01)
