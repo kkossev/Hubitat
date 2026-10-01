@@ -1,0 +1,19 @@
+{
+  "packageName": "Matter Advanced Device",
+  "author": "Krassimir Kossev",
+  "version": "1.0.0",
+  "minimumHEVersion": "2.5.1.135",
+  "dateReleased": "2026-10-01",
+  "releaseNotes": "1.0.0 2026-10-01 - first HPM release of the Matter Advanced Device utility driver for directly paired Matter devices.",
+  "documentationLink": "https://community.hubitat.com/t/alpha-matter-advanced-device/165806",
+  "communityLink": "https://community.hubitat.com/t/alpha-matter-advanced-device/165806",
+  "drivers": [
+    {
+      "id": "4e2397f2-92e4-4345-aeef-671069e523c1",
+      "name": "Matter Advanced Device",
+      "namespace": "kkossev",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Device/Matter_Advanced_Device.groovy",
+      "required": true
+    }
+  ]
+}
