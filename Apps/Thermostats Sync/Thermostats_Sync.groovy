@@ -225,42 +225,42 @@ def initialize() {
     // Only subscribe to events if autoSync is enabled
     if (atomicState.autoSyncEnabled) {
         // Subscribe to events based on user preferences
-        if (syncThermostatMode) {
+        if (settings.syncThermostatMode) {
             subscribe(thermostat1, "thermostatMode", thermostatModeHandler)
             subscribe(thermostat2, "thermostatMode", thermostatModeHandler)
         }
         
-        if (syncHeatingSetpoint) {
+        if (settings.syncHeatingSetpoint) {
             subscribe(thermostat1, "heatingSetpoint", heatingSetpointHandler)
             subscribe(thermostat2, "heatingSetpoint", heatingSetpointHandler)
         }
         
-        if (syncCoolingSetpoint) {
+        if (settings.syncCoolingSetpoint) {
             subscribe(thermostat1, "coolingSetpoint", coolingSetpointHandler)
             subscribe(thermostat2, "coolingSetpoint", coolingSetpointHandler)
         }
         
-        if (syncFanMode) {
+        if (settings.syncFanMode) {
             subscribe(thermostat1, "thermostatFanMode", fanModeHandler)
             subscribe(thermostat2, "thermostatFanMode", fanModeHandler)
         }
         
-        if (syncTemperature) {
+        if (settings.syncTemperature) {
             subscribe(thermostat1, "temperature", temperatureHandler)
             subscribe(thermostat2, "temperature", temperatureHandler)
         }
         
-        if (syncOperatingState) {
+        if (settings.syncOperatingState) {
             subscribe(thermostat1, "thermostatOperatingState", operatingStateHandler)
             subscribe(thermostat2, "thermostatOperatingState", operatingStateHandler)
         }
         
-        if (syncBattery) {
+        if (settings.syncBattery) {
             subscribe(thermostat1, "battery", batteryHandler)
             subscribe(thermostat2, "battery", batteryHandler)
         }
         
-        if (syncHealthStatus) {
+        if (settings.syncHealthStatus) {
             subscribe(thermostat1, "healthStatus", healthStatusHandler)
             subscribe(thermostat2, "healthStatus", healthStatusHandler)
         }
@@ -281,7 +281,7 @@ def performManualSync(sourceDevice, targetDevice) {
     logInfo "Performing manual sync: ${sourceDevice.displayName} → ${targetDevice.displayName}"
     
     // Sync thermostat mode if enabled
-    if (syncThermostatMode) {
+    if (settings.syncThermostatMode) {
         def mode = sourceDevice.currentValue('thermostatMode')
         if (mode) {
             syncThermostatMode([target: targetDevice.deviceId, value: mode, source: sourceDevice.deviceId, eventType: "digital"])
@@ -289,7 +289,7 @@ def performManualSync(sourceDevice, targetDevice) {
     }
     
     // Sync heating setpoint if enabled
-    if (syncHeatingSetpoint) {
+    if (settings.syncHeatingSetpoint) {
         def heatingSetpoint = sourceDevice.currentValue('heatingSetpoint')
         if (heatingSetpoint) {
             syncHeatingSetpoint([target: targetDevice.deviceId, value: heatingSetpoint, source: sourceDevice.deviceId, eventType: "digital"])
@@ -297,7 +297,7 @@ def performManualSync(sourceDevice, targetDevice) {
     }
     
     // Sync cooling setpoint if enabled
-    if (syncCoolingSetpoint) {
+    if (settings.syncCoolingSetpoint) {
         def coolingSetpoint = sourceDevice.currentValue('coolingSetpoint')
         if (coolingSetpoint) {
             syncCoolingSetpoint([target: targetDevice.deviceId, value: coolingSetpoint, source: sourceDevice.deviceId, eventType: "digital"])
@@ -305,7 +305,7 @@ def performManualSync(sourceDevice, targetDevice) {
     }
     
     // Sync fan mode if enabled
-    if (syncFanMode) {
+    if (settings.syncFanMode) {
         def fanMode = sourceDevice.currentValue('thermostatFanMode')
         if (fanMode) {
             syncFanMode([target: targetDevice.deviceId, value: fanMode, source: sourceDevice.deviceId, eventType: "digital"])
@@ -313,7 +313,7 @@ def performManualSync(sourceDevice, targetDevice) {
     }
     
     // Sync temperature if enabled
-    if (syncTemperature) {
+    if (settings.syncTemperature) {
         def temperature = sourceDevice.currentValue('temperature')
         if (temperature) {
             syncTemperature([target: targetDevice.deviceId, value: temperature, source: sourceDevice.deviceId, eventType: "digital"])
@@ -321,7 +321,7 @@ def performManualSync(sourceDevice, targetDevice) {
     }
     
     // Sync operating state if enabled
-    if (syncOperatingState) {
+    if (settings.syncOperatingState) {
         def operatingState = sourceDevice.currentValue('thermostatOperatingState')
         if (operatingState) {
             syncOperatingState([target: targetDevice.deviceId, value: operatingState, source: sourceDevice.deviceId, eventType: "digital"])
@@ -329,7 +329,7 @@ def performManualSync(sourceDevice, targetDevice) {
     }
     
     // Sync battery if enabled
-    if (syncBattery) {
+    if (settings.syncBattery) {
         def battery = sourceDevice.currentValue('battery')
         if (battery != null) {
             syncBattery([target: targetDevice.deviceId, value: battery, source: sourceDevice.deviceId, eventType: "digital"])
@@ -337,7 +337,7 @@ def performManualSync(sourceDevice, targetDevice) {
     }
     
     // Sync health status if enabled
-    if (syncHealthStatus) {
+    if (settings.syncHealthStatus) {
         def healthStatus = sourceDevice.currentValue('healthStatus')
         if (healthStatus) {
             syncHealthStatus([target: targetDevice.deviceId, value: healthStatus, source: sourceDevice.deviceId, eventType: "digital"])
@@ -349,7 +349,7 @@ def performManualSync(sourceDevice, targetDevice) {
 
 // Event Handlers
 def thermostatModeHandler(evt) {
-    if (!syncThermostatMode || !atomicState.autoSyncEnabled) return
+    if (!settings.syncThermostatMode || !atomicState.autoSyncEnabled) return
     
     // Filter duplicate events
     if (isDuplicateEvent(evt)) return
@@ -366,7 +366,7 @@ def thermostatModeHandler(evt) {
 }
 
 def heatingSetpointHandler(evt) {
-    if (!syncHeatingSetpoint || !atomicState.autoSyncEnabled) return
+    if (!settings.syncHeatingSetpoint || !atomicState.autoSyncEnabled) return
     
     // Filter duplicate events
     if (isDuplicateEvent(evt)) return
@@ -383,7 +383,7 @@ def heatingSetpointHandler(evt) {
 }
 
 def coolingSetpointHandler(evt) {
-    if (!syncCoolingSetpoint || !atomicState.autoSyncEnabled) return
+    if (!settings.syncCoolingSetpoint || !atomicState.autoSyncEnabled) return
     
     // Filter duplicate events
     if (isDuplicateEvent(evt)) return
@@ -400,7 +400,7 @@ def coolingSetpointHandler(evt) {
 }
 
 def fanModeHandler(evt) {
-    if (!syncFanMode || !atomicState.autoSyncEnabled) return
+    if (!settings.syncFanMode || !atomicState.autoSyncEnabled) return
     
     // Filter duplicate events
     if (isDuplicateEvent(evt)) return
@@ -417,7 +417,7 @@ def fanModeHandler(evt) {
 }
 
 def temperatureHandler(evt) {
-    if (!syncTemperature || !atomicState.autoSyncEnabled) return
+    if (!settings.syncTemperature || !atomicState.autoSyncEnabled) return
     
     // Filter duplicate events
     if (isDuplicateEvent(evt)) return
@@ -440,7 +440,7 @@ def temperatureHandler(evt) {
 }
 
 def operatingStateHandler(evt) {
-    if (!syncOperatingState || !atomicState.autoSyncEnabled) return
+    if (!settings.syncOperatingState || !atomicState.autoSyncEnabled) return
     
     // Filter duplicate events
     if (isDuplicateEvent(evt)) return
@@ -463,7 +463,7 @@ def operatingStateHandler(evt) {
 }
 
 def batteryHandler(evt) {
-    if (!syncBattery || !atomicState.autoSyncEnabled) return
+    if (!settings.syncBattery || !atomicState.autoSyncEnabled) return
     
     // Filter duplicate events
     if (isDuplicateEvent(evt)) return
@@ -486,7 +486,7 @@ def batteryHandler(evt) {
 }
 
 def healthStatusHandler(evt) {
-    if (!syncHealthStatus || !atomicState.autoSyncEnabled) return
+    if (!settings.syncHealthStatus || !atomicState.autoSyncEnabled) return
     
     // Filter duplicate events
     if (isDuplicateEvent(evt)) return
