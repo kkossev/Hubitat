@@ -236,6 +236,16 @@
         "Tools & Utilities", "Matter"
        ]
     },
+  {
+    "id":"ef47ac84-42b9-49f9-b94b-46bfb6746545",
+    "name":"Matter Advanced Device",
+    "category":"Integrations",
+    "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Device/packageManifest.json",
+    "description":"Matter Advanced Device - general purpose utility driver for directly paired Matter devices",
+    "tags":[
+    "Tools & Utilities", "Matter"
+     ]
+  },
 	{
       "id":"3d3e4d40-3184-4604-b26c-0165f04f8b4a",
       "name":"Tuya Zigbee Control Screen Panel",
