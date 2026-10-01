@@ -20,14 +20,17 @@
  *                                    added Battery and Health Status sync support;
  *  ver. 1.0.3  2025-11-16 kkossev  - fixed an accidental UTF-8 with BOM encoding that caused issues with HPM
  *  ver. 1.0.4  2025-12-07 kkossev  - added syncEventType option to preserve physical/digital event designation when syncing attributes via command introspection
+ *  ver. 1.0.5  2026-09-24 neeravmodi - skip heating/cooling setpoint sync when target thermostat
+ *                                      is in the opposite mode (prevents driver-rejected
+ *                                      setHeatingSetpoint/setCoolingSetpoint calls and log spam)
  * 
  *              TODO:
  *
  */
 
 import groovy.transform.Field
-@Field static final String VERSION = "1.0.4"
-@Field static final String COMPILE_TIME = '2025/12/07 9:11 AM'
+@Field static final String VERSION = "1.0.5"
+@Field static final String COMPILE_TIME = '2026/09/24 2:45 AM'
 
 definition(
     name: "Thermostats Sync",
@@ -557,6 +560,13 @@ def syncHeatingSetpoint(data) {
     def sourceDevice = getDeviceById(data.source)
     
     if (targetDevice && sourceDevice) {
+        // Skip if target thermostat is in cool mode - setHeatingSetpoint will be rejected
+        def targetMode = targetDevice.currentValue('thermostatMode')
+        if (targetMode == 'cool') {
+            logDebug "Skipping heating setpoint sync: ${targetDevice.displayName} is in cool mode"
+            return
+        }
+        
         // Set both source and target flags at the start of actual sync
         setSyncInProgress("heatingSetpoint", data.source, true)
         setSyncInProgress("heatingSetpoint", data.target, true)
@@ -596,6 +606,13 @@ def syncCoolingSetpoint(data) {
     def sourceDevice = getDeviceById(data.source)
     
     if (targetDevice && sourceDevice) {
+        // Skip if target thermostat is in heat mode - setCoolingSetpoint will be rejected
+        def targetMode = targetDevice.currentValue('thermostatMode')
+        if (targetMode == 'heat') {
+            logDebug "Skipping cooling setpoint sync: ${targetDevice.displayName} is in heat mode"
+            return
+        }
+        
         // Set both source and target flags at the start of actual sync
         setSyncInProgress("coolingSetpoint", data.source, true)
         setSyncInProgress("coolingSetpoint", data.target, true)
