@@ -69,7 +69,8 @@
  * ver. 2.1.5 2026-06-11 kkossev  - Added FP300 Time-cluster Read Attributes handling through the Hubitat zigbeeLogsocket WebSocket; replies now echo the exact request ZCL transaction sequence number.
  * ver. 2.1.6 2026-06-13 kkossev  - HE platform 2.5.0.157 - Complete hub attribute responses for Zigbee Time Cluster (0x000A) read attribute requests; code cleanup
  * ver. 2.1.7 2026-06-14 kkossev  - Aqara's like initialization of FP300 (0.0.0_6542) 
- * ver. 2.1.8 2026-06-20 kkossev  - (dev. branch) code cleanup; re-enabled refresh() for FP300;
+ * ver. 2.1.8 2026-06-20 kkossev  - code cleanup; re-enabled refresh() for FP300;
+ * ver. 2.1.9 2026-09-28 kkossev  - (dev. branch) experimental FP400 basic support (overall presence, illuminance)
  * 
  *
  *                                 TODO: scheduleDeviceHealthCheck() never called!
@@ -80,8 +81,8 @@
  *
  */
 
-static String version() { "2.1.8" }
-static String timeStamp() {"2026/06/20 9:49 PM"}
+static String version() { "2.1.9" }
+static String timeStamp() {"2026/09/28 10:49 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -144,7 +145,14 @@ metadata {
         attribute "targetDistance", "number"    // FP1E
         attribute "detectionRange", "decimal"   // FP1E
         attribute "motionSensitivity", "enum", ["low", "medium", "high"]   // FP1E
-        attribute "spatialLearning", "enum", ["idle","started"]
+        attribute "spatialLearning", "enum", ["idle","started","accepted","resultReceived","noResult","failed"]
+        attribute 'spatialLearningResultCode', 'number'
+        attribute 'installationMode', 'enum', ['unknown', 'wall', 'ceiling']
+        attribute 'installationPosition', 'enum', ['unknown', 'wall', 'left_corner', 'right_corner']
+        attribute 'installationHeight', 'number'
+        attribute 'aiPersonRecognition', 'enum', ['on', 'off']
+        attribute 'humanCount', 'number'
+        attribute 'activityState', 'enum', ['unknown', 'active', 'still']
         attribute "deviceTemperature", "number"  // Internal temperature for non-FP300 devices
         
         // FP300-specific attributes
@@ -165,14 +173,14 @@ metadata {
             attribute "region_last_unoccupied", "number"
         }
         
-        command "configure", [[name: "Initialize the device after switching drivers. Will load device default values!" ]]
+        command "configure", [[name: "Initialize reporting and read device settings (FP400 preserves hardware settings)." ]]
         command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["active", "inactive"], description: "Use for tests", defaultValue: "inactive"]]
         command "ping",      [[name: "Check device online status and measure the Round-Trip Time (ms). May not work for battery-powered devices."]]
         command "resetPresence", [[name: "Reset Presence (FP1/FP1E/FP300)" ]]
         command "restartDevice", [[name: "Restart Device (FP1E/FP300)" ]]
-        command "startSpatialLearning", [[name: "Wake the device with one button press.<br> Ensure the room is empty, then click Run to start a 30-second calibration (FP1E/FP300)." ]]
+        command "startSpatialLearning", [[name: "Ensure the room is empty and the sensor is in its final position. FP1E/FP300: wake before running. FP400: experimental learning; acknowledgement is not completion." ]]
         command "trackTargetDistance", [[name: "Press the FP300 pairing button once to wake the device, then click Run. <br> The sensor will report the distance to the detected target for about 3 minutes (FP300)."]]
-        command "refresh", [[name: "Refreshes all parameters and states from the device.<br>Make sure to wake up the device to receive all updates.<br>Do not use frequently on battery-powered devices."]]
+        command "refresh", [[name: "Read current states and settings. Battery-powered devices must be awake; FP400 needs no wake-up button press."]]
 
         if (_DEBUG) {
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "FCC0"]]
@@ -195,6 +203,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0", outClusters:"0003,0019", model:"lumi.sensor_occupy.agl1", manufacturer:"aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP1E Human Presence Detector RTCZCGQ13LM"        // RTCZCGQ13LM ( FP1E )
         // for Aqara PS-S04D (FP300), use the Dedicated Aqara FP300 Presence Multi-Sensor Zigbee Driver : https://community.hubitat.com/t/release-dedicated-aqara-fp300-presence-multi-sensor-zigbee-driver/162353 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0012,0400,0405,0402,0001,0003,0000,FCC0", outClusters:"000A,0019", model:"lumi.sensor_occupy.agl8", manufacturer:"Aqara", controllerType: "ZGB", deviceJoinName: "Aqara FP300 Presence Sensor PS-S04D"  // PS-S04D ( FP300 ) Hubitat fingerprint
+        // Model-only match from Koenkk/zigbee2mqtt#33146; manufacturer string and full Hubitat fingerprint await tester data.
+        fingerprint model:"lumi.models.4447_8295", deviceJoinName: "Aqara FP400 Spatial Multi-Sensor"  // not tested!
     }
 
     preferences {
@@ -202,7 +212,18 @@ metadata {
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "Debug information, useful for troubleshooting. Recommended value is <b>disabled</b>", defaultValue: true)
         input (name: 'helpInfo',  type: 'hidden', title: "Information on Pairing and Configuration", description: "Pair the P1 and FP1/FP1E devices two times (without deleting), very close to the HE hub. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences")
         if (device) {
-            if (!(isFP1() || isFP1E() || isFP300()) && !isLightSensor()) {
+            if (isFP400()) {
+                input name: 'motionSensitivity', type: 'enum', title: 'Presence sensitivity', options: sensitivityOptions, defaultValue: '0', description: 'Run Configure first. Save Preferences applies changed selections with readback verification; Current States shows actual values. Experimental FP400 controls require device validation.'
+                input name: 'absenceDelayTimer', type: 'number', title: 'Absence confirmation period (seconds)', range: '10..300', required: false, description: 'Blank preserves the device setting. This is the sensor delay, not a software motion timer.'
+                input name: 'fp400MountingMode', type: 'enum', title: 'Mounting mode', options: ['keep':'Keep current', 'wall':'Wall', 'ceiling':'Ceiling'], defaultValue: 'keep'
+                input name: 'fp400MountingPosition', type: 'enum', title: 'Wall or corner position', options: ['keep':'Keep current', 'wall':'Wall', 'left_corner':'Left corner', 'right_corner':'Right corner'], defaultValue: 'keep', description: 'Applies to wall mounting only.'
+                input name: 'fp400InstallationHeight', type: 'number', title: 'Installation height (mm)', range: '1..65535', required: false, description: 'Enter the actual measured height. Blank preserves the device setting; firmware limits are checked when available.'
+                input name: 'fp400AiPersonRecognition', type: 'enum', title: 'AI enhanced person recognition', options: ['keep':'Keep current', 'on':'Enabled', 'off':'Disabled'], defaultValue: 'keep'
+                input name: 'fp400AiAdaptiveSensitivity', type: 'enum', title: 'AI adaptive sensitivity', options: ['keep':'Keep current', 'on':'Enabled', 'off':'Disabled'], defaultValue: 'keep'
+                input name: 'fp400AiInterferenceRecognition', type: 'enum', title: 'AI interference recognition', options: ['keep':'Keep current', 'on':'Enabled', 'off':'Disabled'], defaultValue: 'keep'
+                input name: 'fp400DiagnosticsInterval', type: 'enum', title: 'Count/activity polling interval', options: ['0':'Disabled', '30':'30 seconds', '60':'60 seconds', '300':'5 minutes'], defaultValue: '0', description: 'Experimental readouts; they do not determine occupancy. Refresh always reads them.'
+            }
+            if (!(isFP1() || isFP1E() || isFP300() || isFP400()) && !isLightSensor()) {
                 input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ${motionResetTimer} second(s) until resetting to inactive state. Default = 30 seconds", range: "0..7200", defaultValue: 30)
             }    
             if (isRTCGQ13LM() || isP1() || isT1()) {
@@ -280,6 +301,9 @@ metadata {
 @Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 1
 
 @Field static final Map aqaraModels = [
+    'FP400': [
+        model: "lumi.models.4447_8295", deviceJoinName: "Aqara FP400 Spatial Multi-Sensor"
+    ],
     'RTCZCGQ11LM': [
         model: "lumi.motion.ac01", manufacturer: "aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM",
         capabilities: ["motionSensor":true, "temperatureMeasurement":true, "battery":true, "powerSource":true, "signalStrength":true],
@@ -354,6 +378,7 @@ def isP1()        { if (deviceSimulation) return false else return (device.getDa
 def isFP1()       { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac01'] ) }     // Aqara FP1 Presence sensor (microwave radar)
 def isFP1E()      { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.sensor_occupy.agl1'] ) }     // Aqara FP1E Presence sensor
 def isFP300()     { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.sensor_occupy.agl8'] ) }     // Aqara FP300 Presence sensor
+def isFP400()     { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.models.4447_8295']) }
 def isT1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl02'] ) }    // Aqara T1 motion sensor
 def isLightSensorXiaomi() { return (device.getDataValue('model') in ['lumi.sen_ill.mgl01'] ) } // Mi Light Detection Sensor
 def isLightSensorAqara()  { return (device.getDataValue('model') in ['lumi.sen_ill.agl01'] ) } // T1 light intensity sensor
@@ -454,7 +479,7 @@ void parse(String description) {
 
     def descMap = [:]
     
-    if (description.contains("cluster: 0000")) {
+    if (!isFP400() && description.contains("cluster: 0000")) {
         if (description.contains("attrId: FF01")) {
             parseAqaraAttributeFF01(description)
             return
@@ -474,6 +499,10 @@ void parse(String description) {
     }
     if (isSpammyReport(descMap)) { return }
     if (logEnable) {log.debug "${device.displayName} parse: descMap: {$descMap} parse: description is ${description}"}
+    if (isFP400() && descMap.attrId != null) {
+        parseFp400Attributes(descMap)
+        return
+    }
     if (descMap.attrId != null ) {
         // attribute report received
         List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value, status: descMap.status]]
@@ -559,6 +588,387 @@ void parse(String description) {
     } 
     else {
         logWarn "Unprocesed unknown command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+    }
+}
+
+// FP400 attributes are independent of the older FCC0/TLV decoders.
+// Source: jcastro/c7a8370fde6bc124d6154fbd458f18b9, revision 8b9c5a7 (experimental).
+Map fp400Parameters() {
+    return [
+        motionSensitivity: [cluster:0x0080, attr:0, type:0x20, attribute:'motionSensitivity', options:['1':0, '2':1, '3':2], labels:['low','medium','high']],
+        absenceDelayTimer: [cluster:0x0406, attr:3, type:0x21, attribute:'absenceDelayTimer', min:10, max:300],
+        fp400MountingMode: [cluster:0xFC0A, attr:0, type:0x30, attribute:'installationMode', options:[wall:1, ceiling:2], labels:['unknown','wall','ceiling']],
+        fp400MountingPosition: [cluster:0xFC0A, attr:2, type:0x30, attribute:'installationPosition', options:[wall:1, left_corner:2, right_corner:3], labels:['unknown','wall','left_corner','right_corner']],
+        fp400InstallationHeight: [cluster:0xFC0A, attr:4, type:0x21, attribute:'installationHeight', min:1, max:65535],
+        fp400AiPersonRecognition: [cluster:0xFC0A, attr:0x29, type:0x10, attribute:'aiPersonRecognition', options:[off:0, on:1], labels:['off','on']],
+        fp400AiAdaptiveSensitivity: [cluster:0xFC0A, attr:0x2A, type:0x10, attribute:'aiSensitivityAdaptive', options:[off:0, on:1], labels:['off','on']],
+        fp400AiInterferenceRecognition: [cluster:0xFC0A, attr:0x2C, type:0x10, attribute:'aiInterferenceIdentification', options:[off:0, on:1], labels:['off','on']]
+    ]
+}
+
+Map fp400Options(int cluster) {
+    return cluster >= 0xFC00 ? [destEndpoint:1, mfgCode:0x115F] : [destEndpoint:1]
+}
+
+Integer fp400Hex(Object value, int digits = 4) {
+    String hex = value?.toString()
+    if (!hex || hex.length() > digits || !(hex ==~ /(?i)[0-9a-f]+/)) { return null }
+    return Integer.parseInt(hex, 16)
+}
+
+void fp400Status(String message) {
+    state.fp400LastStatus = [message:message.toString(), time:now()]
+    logWarn "FP400 ${message}"
+    sendInfoEvent("FP400: ${message}".toString())
+}
+
+void parseFp400Attributes(Map descMap) {
+    String endpoint = (descMap.sourceEndpoint ?: descMap.endpoint ?: '').toString().padLeft(2, '0')
+    Integer cluster = fp400Hex(descMap.cluster ?: descMap.clusterId)
+    if (cluster == null) { return }
+    if (cluster >= 0xFC00 && descMap.manufacturerId != null && fp400Hex(descMap.manufacturerId) != 0x115F) { return }
+    List attributes = [descMap] + (descMap.additionalAttrs ?: [])
+    attributes.each { attr ->
+        Integer attribute = fp400Hex(attr.attrId)
+        if (attribute == null) { return }
+        def parameter = fp400Parameters().find { key, spec -> spec.cluster == cluster && spec.attr == attribute }
+        if (attr.status != null && fp400Hex(attr.status, 2) != 0) {
+            logWarn "FP400 read/report failed: endpoint=${endpoint} cluster=${cluster} attrId=${attr.attrId} status=${attr.status}"
+            if (endpoint == '01' && parameter && state.fp400Pending?.key == parameter.key) {
+                fp400FinishSetting(false, "read status ${attr.status}".toString())
+            }
+            return
+        }
+        if (endpoint == '01' && cluster == 0 && attribute == 1 && state.pingTime != null) {
+            sendRttEvent()
+            state.remove('pingTime')
+            return
+        }
+        if (endpoint == '01' && cluster == 0x0406 && attribute == 4) {
+            fp400AbsenceBounds(attr.value)
+            return
+        }
+        boolean occupancy = endpoint == '01' && cluster == 0x0406 && attribute == 0
+        boolean illuminance = endpoint == '02' && cluster == 0x0400 && attribute == 0
+        if (!occupancy && !illuminance && endpoint != '01') { return }
+        int digits = occupancy ? 2 : (parameter ? (parameter.value.type == 0x21 ? 4 : 2) : 4)
+        Integer value = fp400Hex(attr.value, digits)
+        if (value == null) {
+            logDebug "FP400 ignored invalid/unsupported attribute: endpoint=${endpoint} cluster=${cluster} attrId=${attr.attrId} value=${attr.value}"
+            return
+        }
+        if (occupancy) { roomStateEvent((value & 1) != 0 ? 'occupied' : 'unoccupied') }
+        else if (illuminance) { illuminanceEvent(value) }
+        else if (parameter) {
+            Map spec = parameter.value
+            if (attr.encoding != null && fp400Hex(attr.encoding, 2) != spec.type) { return }
+            if (spec.labels && value >= spec.labels.size()) { logWarn "FP400 unknown ${parameter.key} value ${value}"; return }
+            fp400ValueEvent(spec.attribute, spec.labels ? spec.labels[value] : value)
+            Map actual = state.fp400Actual ?: [:]
+            actual[parameter.key] = value
+            state.fp400Actual = actual
+            def preference = spec.options ? spec.options.find { option, raw -> raw == value }?.key : value
+            if (preference != null) { storeParamValue(parameter.key, preference, spec.options ? 'enum' : 'number', false) }
+            // Only the current request's expected value can advance the batch.
+            if (state.fp400Pending?.key == parameter.key && state.fp400Pending?.phase == 'write' && value == state.fp400Pending?.value) {
+                fp400FinishSetting(true, 'readback matched')
+            }
+        }
+        else if (cluster == 0xFC0A && attribute in [5, 6]) {
+            Map bounds = state.fp400HeightBounds ?: [:]
+            bounds[attribute == 5 ? 'min' : 'max'] = value
+            state.fp400HeightBounds = bounds
+            if (state.fp400Pending?.phase == 'heightBounds' && bounds.min != null && bounds.max != null) { fp400WritePending() }
+        }
+        else if (cluster == 0xFC0B && attribute == 2) {
+            fp400ValueEvent('humanCount', value)
+            if (state.fp400Capacity != null && value > state.fp400Capacity) { logWarn "FP400 native count ${value} exceeds reported capacity ${state.fp400Capacity}" }
+        }
+        else if (cluster == 0xFC0C && attribute == 7 && value in [0, 1, 2]) { fp400ValueEvent('activityState', ['unknown','active','still'][value]) }
+        else if (cluster == 0xFC0C && attribute == 0 && value < 255) { state.fp400Capacity = value }
+        else { logDebug "FP400 ignored attribute: endpoint=${endpoint} cluster=${cluster} attrId=${attr.attrId} value=${attr.value}" }
+    }
+}
+
+void fp400ValueEvent(String name, Object value) {
+    Map times = state.fp400LastSeen ?: [:]
+    times[name] = now()
+    state.fp400LastSeen = times
+    if (device.currentValue(name)?.toString() != value.toString()) {
+        Map event = [name:name, value:value, type:'physical', descriptionText:"${name} is ${value}".toString()]
+        if (name == 'installationHeight') { event.unit = 'mm' }
+        if (name == 'absenceDelayTimer') { event.unit = 's' }
+        sendEvent(event)
+        logInfo event.descriptionText
+    }
+}
+
+void fp400AbsenceBounds(Object value) {
+    // Only the standard raw STRUCT of three UINT16 members is decoded here.
+    // Hubitat variants of the STRUCT representation require a tester capture.
+    String hex = value?.toString()?.toUpperCase()
+    if (!(hex ==~ /030021[0-9A-F]{4}21[0-9A-F]{4}21[0-9A-F]{4}/)) {
+        logDebug "FP400 absence bounds representation not decoded: ${value}"
+        return
+    }
+    int minimum = Integer.parseInt(hex[8..9] + hex[6..7], 16)
+    int maximum = Integer.parseInt(hex[14..15] + hex[12..13], 16)
+    int defaultValue = Integer.parseInt(hex[20..21] + hex[18..19], 16)
+    state.fp400AbsenceBounds = [min:minimum, max:maximum, defaultValue:defaultValue]
+    logDebug "FP400 absence bounds: ${state.fp400AbsenceBounds}"
+}
+
+void initializeFp400() {
+    device.updateSetting('motionResetTimer', [value:0, type:'number'])
+    unschedule('resetToMotionInactive')
+    device.deleteCurrentState('battery')
+    device.deleteCurrentState('batteryVoltage')
+    powerSourceEvent()
+    if (state.fp400Submitted == null) {
+        // A first run adopts existing UI selections, including stale settings from another driver.
+        state.fp400Submitted = fp400Parameters().collectEntries { key, spec -> [(key):settings[key]?.toString()] }
+        state.fp400RefreshStage = 0
+        runIn(1, 'fp400ReadConfiguration', [overwrite:true])
+    }
+}
+
+List<String> fp400RefreshCommands() {
+    List<String> cmds = zigbee.readAttribute(0x0406, 0x0000, [destEndpoint:1], 200)
+    cmds += zigbee.readAttribute(0x0400, 0x0000, [destEndpoint:2], 200)
+    return cmds
+}
+
+List<String> fp400ConfigureCommands() {
+    logDebug 'FP400 experimental setup: EP1 occupancy min=0 max=300; EP2 illuminance min=5 max=300 raw delta=500'
+    List<String> cmds = []
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}", 'delay 200']
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0400 {${device.zigbeeId}} {}", 'delay 200']
+    cmds += zigbee.configureReporting(0x0406, 0x0000, 0x18, 0, 300, null, [destEndpoint:1], 200)
+    cmds += zigbee.configureReporting(0x0400, 0x0000, DataType.UINT16, 5, 300, 500, [destEndpoint:2], 200)
+    cmds += fp400RefreshCommands()
+    return cmds
+}
+
+boolean fp400Busy() { return state.fp400Pending != null || state.fp400Queue || state.fp400LearningActive == true }
+
+void fp400ResetWork() {
+    ['fp400ReadConfiguration','fp400NextSetting','fp400SettingTimeout','fp400LearningTimeout','fp400Poll'].each { unschedule(it) }
+    if (state.fp400LearningActive == true) { sendEvent(name:'spatialLearning', value:'noResult', type:'digital') }
+    ['fp400Pending','fp400Queue','fp400LearningActive','fp400RefreshStage'].each { state.remove(it) }
+}
+
+void fp400Recover() {
+    fp400ResetWork()
+    state.fp400RefreshStage = 0
+    runIn(2, 'fp400ReadConfiguration', [overwrite:true])
+}
+
+void fp400Refresh() {
+    if (fp400Busy() || state.fp400RefreshStage != null) { fp400Status('Busy; retry Refresh after the current operation.'); return }
+    sendZigbeeCommands(fp400RefreshCommands())
+    state.fp400RefreshStage = 0
+    runIn(1, 'fp400ReadConfiguration', [overwrite:true])
+}
+
+void fp400ReadConfiguration() {
+    if (!isFP400() || fp400Busy()) { return }
+    int stage = (state.fp400RefreshStage ?: 0) as int
+    List batches = [[[0x0080, [0,1,2]], [0x0406, [3,4]]], [[0xFC0A, [0,2,4,5,6]]], [[0xFC0A, [0x29,0x2A,0x2C]]], [[0xFC0B, [2]], [0xFC0C, [0,7]]]]
+    if (stage >= batches.size()) { state.remove('fp400RefreshStage'); fp400SchedulePoll(); return }
+    List<String> cmds = []
+    batches[stage].each { request -> cmds += zigbee.readAttribute(request[0], request[1], fp400Options(request[0]), 200) }
+    sendZigbeeCommands(cmds)
+    state.fp400RefreshStage = stage + 1
+    runIn(2, 'fp400ReadConfiguration', [overwrite:true])
+}
+
+void fp400ApplyPreferences() {
+    fp400SchedulePoll()
+    if (fp400Busy() || state.fp400RefreshStage != null) { fp400Status('Busy; save preferences again after the current operation.'); return }
+    List queue = []
+    boolean invalidMounting = false
+    boolean validationFailed = false
+    Map submitted = state.fp400Submitted ?: [:]
+    fp400Parameters().each { key, spec ->
+        String selection = settings[key]?.toString()
+        if (selection == submitted[key]) { return }
+        if (!selection || selection == 'keep' || (key == 'motionSensitivity' && selection == '0')) { submitted[key] = selection; return }
+        Integer value = spec.options ? spec.options[selection] : (selection.isInteger() ? selection.toInteger() : null)
+        if (value == null || (!spec.options && (value < spec.min || value > spec.max))) {
+            validationFailed = true
+            if (key in ['fp400MountingMode','fp400MountingPosition']) { invalidMounting = true }
+            fp400Status("Invalid ${key}: ${selection}".toString())
+            return
+        }
+        if (state.fp400Actual?.get(key) == null) {
+            validationFailed = true
+            if (key in ['fp400MountingMode','fp400MountingPosition']) { invalidMounting = true }
+            fp400Status("Read ${key} with Refresh before changing it.".toString())
+            return
+        }
+        submitted[key] = selection
+        if (hasParamChanged(key, selection)) { queue << [key:key, value:value, previous:state.fp400Actual[key], selection:selection] }
+    }
+    state.fp400Submitted = submitted
+    if (invalidMounting) { queue = queue.findAll { !(it.key in ['fp400MountingPosition','fp400InstallationHeight']) } }
+    state.fp400Queue = queue
+    state.fp400BatchFailed = validationFailed
+    if (queue) { fp400NextSetting() }
+    else { logDebug 'FP400 no changed hardware selections to apply' }
+}
+
+void fp400NextSetting() {
+    if (!isFP400() || state.fp400Pending != null) { return }
+    List queue = state.fp400Queue ?: []
+    if (!queue) {
+        state.remove('fp400Queue')
+        if (state.fp400BatchFailed == false) { sendInfoEvent('FP400 settings readbacks confirmed') }
+        fp400SchedulePoll()
+        return
+    }
+    Map request = new LinkedHashMap(queue.remove(0))
+    state.fp400Queue = queue
+    state.fp400Pending = request
+    if (request.key == 'fp400MountingPosition' && state.fp400Actual?.fp400MountingMode != 1) {
+        fp400FinishSetting(false, 'wall/corner position requires confirmed wall mounting')
+        return
+    }
+    if (request.key == 'fp400InstallationHeight') {
+        state.fp400HeightBounds = [:]
+        request.phase = 'heightBounds'
+        state.fp400Pending = request
+        sendZigbeeCommands(zigbee.readAttribute(0xFC0A, [5,6], fp400Options(0xFC0A), 200))
+        runIn(10, 'fp400SettingTimeout', [overwrite:true])
+        return
+    }
+    fp400WritePending()
+}
+
+void fp400WritePending() {
+    Map request = state.fp400Pending
+    if (!request || !isFP400()) { return }
+    Map spec = fp400Parameters()[request.key]
+    Map bounds = request.key == 'absenceDelayTimer' ? state.fp400AbsenceBounds : (request.key == 'fp400InstallationHeight' ? state.fp400HeightBounds : null)
+    if (bounds) {
+        int minimum = request.key == 'absenceDelayTimer' ? Math.max(10, (bounds.min ?: 0) as int) : Math.max(1, (bounds.min ?: 0) as int)
+        int maximum = request.key == 'absenceDelayTimer' ? Math.min(300, (bounds.max == null ? 300 : bounds.max) as int) : ((bounds.max ?: 65535) as int)
+        if (minimum > maximum || request.value < minimum || request.value > maximum) { fp400FinishSetting(false, "device bounds ${minimum}..${maximum}".toString()); return }
+    }
+    else { logDebug "FP400 ${request.key}: bounds unavailable; using the experimental input limits" }
+    request.phase = 'write'
+    request.sent = now()
+    state.fp400Pending = request
+    List<String> cmds = zigbee.writeAttribute(spec.cluster, spec.attr, spec.type, request.value, fp400Options(spec.cluster), 300)
+    cmds += zigbee.readAttribute(spec.cluster, spec.attr, fp400Options(spec.cluster), 200)
+    sendZigbeeCommands(cmds)
+    runIn(10, 'fp400SettingTimeout', [overwrite:true])
+}
+
+void fp400FinishSetting(boolean success, String detail) {
+    Map request = state.fp400Pending
+    if (!request) { return }
+    unschedule('fp400SettingTimeout')
+    if (success) { logInfo "FP400 ${request.key} confirmed: ${request.value}" }
+    else {
+        state.fp400BatchFailed = true
+        fp400Status("${request.key} not confirmed (${detail}); change the selection before retrying.".toString())
+        if (request.key in ['fp400MountingMode','fp400MountingPosition']) {
+            state.fp400Queue = (state.fp400Queue ?: []).findAll { !(it.key in ['fp400MountingPosition','fp400InstallationHeight']) }
+        }
+    }
+    state.remove('fp400Pending')
+    runIn(1, 'fp400NextSetting', [overwrite:true])
+}
+
+void fp400SettingTimeout() {
+    if (!isFP400() || !state.fp400Pending) { return }
+    // Unknown height bounds are not a safe reason to guess following a failed read.
+    fp400FinishSetting(false, state.fp400Pending.phase == 'heightBounds' ? 'height bounds read timed out' : 'readback timed out')
+}
+
+void fp400SchedulePoll() {
+    unschedule('fp400Poll')
+    int interval = safeToInt(settings?.fp400DiagnosticsInterval, 0)
+    if (isFP400() && interval in [30,60,300]) { runIn(interval, 'fp400Poll', [overwrite:true]) }
+}
+
+void fp400Poll() {
+    if (!isFP400()) { return }
+    int interval = safeToInt(settings?.fp400DiagnosticsInterval, 0)
+    if (!(interval in [30,60,300])) { return }
+    if (!fp400Busy() && state.fp400RefreshStage == null && device.currentValue('healthStatus') != 'offline') {
+        List<String> cmds = zigbee.readAttribute(0xFC0B, 2, fp400Options(0xFC0B), 200)
+        cmds += zigbee.readAttribute(0xFC0C, 7, fp400Options(0xFC0C), 200)
+        sendZigbeeCommands(cmds)
+    }
+    fp400SchedulePoll()
+}
+
+void fp400StartLearning() {
+    if (fp400Busy() || state.fp400RefreshStage != null) { fp400Status('Busy; retry learning after the current operation.'); return }
+    state.fp400LearningActive = true
+    state.fp400LearningRequested = now()
+    state.remove('fp400LearningAccepted')
+    device.deleteCurrentState('spatialLearningResultCode')
+    sendEvent(name:'spatialLearning', value:'started', type:'digital')
+    // Documented Hubitat command overload; no FP1/FP300 FCC0 write.
+    sendZigbeeCommands(zigbee.command(0xFC0A, 0x03, fp400Options(0xFC0A), 200, ''))
+    runIn(60, 'fp400LearningTimeout', [overwrite:true])
+    fp400SchedulePoll()
+}
+
+void fp400LearningTimeout() {
+    if (!isFP400() || state.fp400LearningActive != true) { return }
+    state.fp400LearningActive = false
+    sendEvent(name:'spatialLearning', value:'noResult', type:'digital')
+    fp400Status('No learning result observed within 60 seconds; device outcome is unknown.')
+    fp400SchedulePoll()
+}
+
+void fp400ZclResponse(Map descMap) {
+    logDebug "FP400 ZCL response: endpoint=${descMap.sourceEndpoint ?: descMap.endpoint} cluster=${descMap.clusterId} command=${descMap.command} data=${descMap.data}"
+    if (descMap.profileId != '0104' || (descMap.sourceEndpoint ?: descMap.endpoint)?.toString()?.padLeft(2, '0') != '01') { return }
+    Integer cluster = fp400Hex(descMap.clusterId)
+    Integer command = fp400Hex(descMap.command, 2)
+    if (cluster == null || command == null) { return }
+    if (!(descMap.data instanceof List) || !descMap.data.every { fp400Hex(it, 2) != null }) { return }
+    List data = descMap.data.collect { fp400Hex(it, 2) }
+    if (cluster >= 0xFC00 && fp400Hex(descMap.manufacturerId) != 0x115F) { return }
+    // Parsed global responses: use status only for the active cluster's write.
+    Map pending = state.fp400Pending
+    if (pending && pending.phase == 'write' && fp400Parameters()[pending.key].cluster == cluster) {
+        if (command == 4 && data.size() == 3 && data[0] != 0 && (data[1] + (data[2] << 8)) == fp400Parameters()[pending.key].attr) {
+            fp400FinishSetting(false, "write status ${data[0]}".toString())
+        }
+        else if (command == 0x0B && data.size() == 2 && data[0] == 2 && data[1] != 0) {
+            fp400FinishSetting(false, "write default-response status ${data[1]}".toString())
+        }
+    }
+    if (cluster != 0xFC0A) { return }
+    if (command == 0x0B && data.size() == 2 && data[0] == 3 && state.fp400LearningActive == true) {
+        if (data[1] == 0) {
+            state.fp400LearningAccepted = now()
+            sendEvent(name:'spatialLearning', value:'accepted', type:'physical')
+        }
+        else {
+            state.fp400LearningActive = false
+            unschedule('fp400LearningTimeout')
+            sendEvent(name:'spatialLearning', value:'failed', type:'physical')
+            fp400Status("Learning command rejected: status ${data[1]}".toString())
+            fp400SchedulePoll()
+        }
+    }
+    // The converter's verified full ZCL frame only. Payload-only Hubitat captures
+    // are logged until a tester establishes their exact representation.
+    if (command == 0x8B && data.size() == 8 && data[0] in [0x1C,0x0C] && data[1..2] == [0x5F,0x11] && data[4..6] == [0x8B,3,0]) {
+        // The sensor's event transaction byte does not establish which request caused it.
+        state.fp400LearningResult = [code:data[7], time:now(), duringObservation:state.fp400LearningActive == true, correlation:'unverified']
+        sendEvent(name:'spatialLearningResultCode', value:data[7], type:'physical')
+        sendEvent(name:'spatialLearning', value:'resultReceived', type:'physical')
+        state.fp400LearningActive = false
+        unschedule('fp400LearningTimeout')
+        logInfo "FP400 learning result code ${data[7]} received; interpretation remains experimental"
+        fp400SchedulePoll()
     }
 }
 
@@ -1497,6 +1907,10 @@ def sendBatteryEvent( roundedPct, isDigital=false ) {
 }
 
 def parseZDOcommand( Map descMap ) {
+    if (isFP400() && descMap.clusterId in ['0000', '0002', '0036', '8004']) {
+        logDebug "FP400 ZDO cluster=${descMap.clusterId} data=${descMap.data}; no legacy descriptor handling"
+        return
+    }
     List<String> cmds = []
     switch (descMap.clusterId) {
         case '0000' : // Network Address Request (NWK_addr_req)
@@ -1602,6 +2016,10 @@ def parseZDOcommand( Map descMap ) {
 }
 
 def parseZHAcommand( Map descMap) {
+    if (isFP400()) {
+        fp400ZclResponse(descMap)
+        return
+    }
     switch (descMap.command) {
         case "01" : //read attribute response. If there was no error, the successful attribute reading would be processed in the main parse() method.
             if (descMap?.data?.size() <3) {    // Mi Light Detection Sensor GZCGQ01LM : raw:catchall: 0104 0003 01 FF 0040 00 0508 01 00 0000 01 00 , profileId:0104, clusterId:0003, clusterInt:3, sourceEndpoint:01, destinationEndpoint:FF, options:0040, messageType:00, dni:0508, isClusterSpecific:true, isManufacturerSpecific:false, manufacturerId:0000, command:01, direction:00, data:[]]
@@ -1741,7 +2159,7 @@ void handleIlluminanceEvent(int illuminance, boolean isDigital=false) {
     Integer timeRamaining = (minTime - timeElapsed) as Integer
     Integer lastIllum = device.currentValue('illuminance') ?: 0
     Integer delta = Math.abs(lastIllum - illumCorrected)
-    if (delta < ((settings?.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD) as int)) {
+    if (!(isFP400() && device.currentValue('illuminance') == null) && delta < ((settings?.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD) as int)) {
         logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${settings?.illuminanceThreshold} (lastIllum=${lastIllum})"
         return
     }
@@ -1888,7 +2306,7 @@ def humidityEvent( humidity ) {
 
 private handleMotion( Boolean motionActive, isDigital=false ) {    
     if (motionActive) {
-        def timeout = settings?.motionResetTimer == null ? 30 : motionResetTimer
+        def timeout = isFP400() ? 0 : (settings?.motionResetTimer == null ? 30 : motionResetTimer)
         // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in the code
         if (timeout != 0) {
             runIn(timeout, "resetToMotionInactive", [overwrite: true])
@@ -1924,6 +2342,7 @@ def getMotionResult( Boolean motionActive, isDigital=false ) {
 }
 
 def resetToMotionInactive() {
+    if (isFP400()) { return }    // Ignore a stale PIR reset job after switching drivers.
 	if (device.currentState('motion')?.value == "active") {
 		def descText = "Motion reset to inactive after ${getSecondsInactive()} s."
 		sendEvent(
@@ -1949,8 +2368,8 @@ def getSecondsInactive() {
 }
 
 def powerSourceEvent() {
-    def value = (isFP1() || isFP1E()) ? "dc" : "battery"
-    def descriptionText = (isFP1() || isFP1E()) ? "powerSource is dc/mains" : "powerSource is battery"
+    def value = (isFP1() || isFP1E() || isFP400()) ? "dc" : "battery"
+    def descriptionText = (isFP1() || isFP1E() || isFP400()) ? "powerSource is dc/mains" : "powerSource is battery"
     sendEvent(name : "powerSource",	value : value, descriptionText: descriptionText, type: "digital")
     logInfo "${descriptionText}"
 }
@@ -1994,7 +2413,7 @@ void ping() {
     logInfo 'ping...'
     scheduleCommandTimeoutCheck()
     state.pingTime = new Date().getTime()
-    sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
+    sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, isFP400() ? [destEndpoint: 1] : [:], 0) )
 }
 
 void sendRttEvent() {
@@ -2029,7 +2448,7 @@ private void scheduleDeviceHealthCheck(int intervalMins) {
 }
 
 void deviceCommandTimeout() {
-    if (isFP1() || isFP1E()) {
+    if (isFP1() || isFP1E() || isFP400()) {
         logWarn 'no response received (device offline?)'
         sendHealthStatusEvent("offline")
     }
@@ -2106,6 +2525,10 @@ void setWatchdogTimer() {
 
 void refresh() {
     logInfo 'refresh...'
+    if (isFP400()) {
+        fp400Refresh()
+        return
+    }
     List<String> cmds = []
     if (isFP1E()) {
         cmds += zigbee.readAttribute(0xFCC0, 0x015B, [mfgCode: 0x115F], delay=200)  // detection range
@@ -2139,6 +2562,7 @@ void refresh() {
 
 // Start Spatial Learning - FP1E only. Sends a single write to ATTR_SPATIAL_LEARNING with value 0x01.
 void startSpatialLearning() {
+    if (isFP400()) { fp400StartLearning(); return }
     if (!(isFP1E() || isFP300())) {
         logWarn 'startSpatialLearning() is supported only for FP1E/FP300 devices.'
         return
@@ -2160,6 +2584,7 @@ void startSpatialLearning() {
 }
 
 private void spatialLearningReset() {
+    if (isFP400()) { return }    // Ignore a stale FP1E/FP300 scheduled callback.
     sendEvent(name: 'spatialLearning', value: 'idle', type: 'digital', descriptionText: 'Spatial Learning idle')
     logInfo 'Spatial Learning state reset to idle'
 }
@@ -2196,6 +2621,14 @@ void logsOff(){
 void updated() {
     logDebug "updated()..."
     checkDriverVersion()
+    if (isFP400()) {
+        initializeFp400()
+        if (settings?.logEnable) { runIn(86400, 'logsOff', [overwrite:true]) }
+        else { unschedule('logsOff') }
+        runIn(DEFAULT_POLLING_INTERVAL, 'deviceHealthCheck', [overwrite:true, misfire:'ignore'])
+        fp400ApplyPreferences()
+        return
+    }
     ArrayList<String> cmds = []
     
     if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getName()} model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> (driver version ${driverVersionAndTimeStamp()})"
@@ -2563,7 +2996,8 @@ void initializeVars(boolean fullInit = false) {
         if (fullInit == true || settings.tempOffset == null) { device.updateSetting("tempOffset", 0) }
         if (fullInit == true || settings.humidityOffset == null) { device.updateSetting("humidityOffset", 0) }
     }
-    if (fullInit == true ) { powerSourceEvent() }
+    if (isFP400()) { initializeFp400() }
+    else if (fullInit == true ) { powerSourceEvent() }
     
     updateAqaraVersion()
 }
@@ -2580,6 +3014,7 @@ void installed() {
 }
 
 void uninstalled() {
+    if (isFP400()) { fp400ResetWork() }
     log.info "${device.displayName} uninstalled() model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
 }
 
@@ -2588,6 +3023,12 @@ void configure(boolean fullInit = false) {
     unschedule()
     initializeVars(fullInit)
     runIn( DEFAULT_POLLING_INTERVAL, "deviceHealthCheck", [overwrite: true, misfire: "ignore"])
+    if (isFP400()) {
+        setDeviceName()
+        fp400Recover()
+        sendZigbeeCommands(fp400ConfigureCommands())
+        return
+    }
     logWarn "<b>if no more logs, please pair the device again to HE!</b>"
     
     // Ensure child device exists for FP300
@@ -2961,6 +3402,13 @@ String consolidateZoneRanges(List zones) {
 
 // device Web UI command
 void setMotion(final String mode) {
+    if (isFP400()) {
+        if (mode in ['active', 'inactive']) {
+            roomStateEvent(mode == 'active' ? 'occupied' : 'unoccupied', true)
+        }
+        else { logWarn 'select motion action' }
+        return
+    }
     switch (mode) {
         case "active" : 
             handleMotion(true, isDigital=true)
@@ -2997,6 +3445,10 @@ String integerToHexString(Integer value, Integer minBytes, boolean reverse=false
 }
 
 void aqaraReadAttributes() {
+    if (isFP400()) {
+        fp400Refresh()
+        return
+    }
     List<String> cmds = []
 
     if (isT1()) {             // RTCGQ12LM Aqara T1 human body movement and illuminance sensor
@@ -3033,6 +3485,14 @@ void aqaraReadAttributes() {
 }
 
 void aqaraBlackMagic() {
+    if (isFP400()) {
+        initializeVars(false)
+        setDeviceName()
+        fp400Recover()
+        runIn(DEFAULT_POLLING_INTERVAL, 'deviceHealthCheck', [overwrite: true, misfire: 'ignore'])
+        sendZigbeeCommands(fp400ConfigureCommands())
+        return
+    }
     List<String> cmds = []
 
     if (isP1()) {
@@ -3204,6 +3664,7 @@ boolean isCompatible(Integer minLevel) { //check to see if the hub version meets
 }
 
 void updateAqaraVersion() {
+    if (isFP400()) { return }    // One application byte does not identify the full FP400 firmware.
     def application = device.getDataValue("application") 
     if (application != null) {
         def str = "0.0.0_" + String.format("%04d", zigbee.convertHexToInt(application.substring(0, Math.min(application.length(), 2))));

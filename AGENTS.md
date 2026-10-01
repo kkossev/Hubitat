@@ -60,6 +60,10 @@ When sources disagree:
    release procedure and package-catalog rules. Those two are the authoritative, user-facing docs —
    this file deliberately does not restate them.
 
+**Before starting a new session:** check the current GitHub branch with `git branch --show-current`
+and record it in your working context. Never create or switch to a new branch without asking the
+user first.
+
 **Before editing anything:** check whether the folder you are working in has its own `AGENTS.md`
 and read it, along with the complete target `.groovy` file. Never analyse from a partial read —
 most bugs in this codebase are context-dependent (a `case` label 900 lines away, a helper whose
@@ -113,14 +117,16 @@ those folders operates on the nested repo, not on `kkossev/Hubitat`. Check `git 
    history or changelog lines, after an individual fix.** The user names the release point
    explicitly. The one thing that *is* bumped whenever it changes is the mmWave driver's JSON
    profile database `version`/`timestamp` — it versions the data, not the driver.
-5. **Never upload or publish to the hub.** The user pushes the driver from the Hubitat VS Code
+5. **Never create or switch to a new Git branch without asking the user first.** Preserve the
+  current branch unless the user explicitly approves the branch operation.
+6. **Never upload or publish to the hub.** The user pushes the driver from the Hubitat VS Code
    extension and reports the result. Your job ends at the file edit — then wait. Mark a `BUGS.md` /
    `TODO.md` item `[x]` only after the user confirms the hub test.
-6. **`ASK USER` and `VERIFY ON DEVICE` items are blocked** until the user answers. When code
+7. **`ASK USER` and `VERIFY ON DEVICE` items are blocked** until the user answers. When code
    contradicts its own comments or changelog, that is an ASK USER, not a unilateral fix.
-7. **Keep changes minimal and local.** No mass-reformatting, no opportunistic refactors, no
+8. **Keep changes minimal and local.** No mass-reformatting, no opportunistic refactors, no
    re-enabling of deliberately disabled code, no unrelated fixes folded into a device-support change.
-8. **Analysis tasks produce documents, not edits.**
+9. **Analysis tasks produce documents, not edits.**
 
 ---
 

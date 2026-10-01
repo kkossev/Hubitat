@@ -5,6 +5,12 @@
       "id": 2211,
       "codeType": "driver",
       "version": 1431
+    },
+    {
+      "filepath": "/c:/work/Hubitat/Drivers/Aqara P1 Motion Sensor/Aqara_P1_Motion_Sensor.groovy",
+      "id": 2211,
+      "codeType": "driver",
+      "version": 1432
     }
   ]
 }
