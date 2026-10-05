@@ -121,3 +121,5 @@ Drivers/Aqara P1 Motion Sensor/PLAN.md
 Drivers/Aqara P100 Multi-State Sensor/BUGS.md
 Drivers/Aqara P100 Multi-State Sensor/TODO.md
 Drivers/Misc/tests/Bluetooth Methods Dumper.groovy
+
+docs/maintainer/MATTER_COMMISSIONING_LOG_2026-10-03.md

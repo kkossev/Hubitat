@@ -10,6 +10,10 @@ number 713 at audit time
 Supplemental topic: https://community.hubitat.com/t/-/156210 — complete stream through post 7;
 7 visible posts, highest post number 7 at audit time
 
+Focused support planning on 2026-10-05: item 13 reviewed against posts 713-718 and 720,
+the photo in post 714, and exact-identity upstream source. This is not a new full-topic audit;
+the complete-audit cutoff above is unchanged. Post 719 concerns another reporter's devices.
+
 This is the single consolidated backlog for this driver. It combines the forum-derived
 device-support/feature backlog with the reviewed bug list. **`BUGS.md` was merged into this file
 and deleted on 2026-08-04 — do not recreate it; add new findings here instead.** Resolved bugs were
@@ -406,42 +410,163 @@ Remaining verification — **VERIFY ON DEVICE**:
 - Regression: single-relay `_TZ3218_7fiyo3kv` keeps exactly one working child, and the
   `TS0601_ZTH03PRO` probe child survives the same operations.
 - Paul's confirmation on the physical DC four-relay board is still outstanding.
-### 13. [ ] `OPEN` / `NEEDS_EVIDENCE` — Add TS0601 `_TZE284_qf5mzewi` temperature/humidity sensor support — HUB-145
+### 13. [ ] `OPEN` — Add TS0601 `_TZE284_qf5mzewi` temperature/humidity sensor support — HUB-145
 
-**Requested outcome:** recognize the device and report temperature and humidity instead of leaving it
-in model group `UNKNOWN` with no readings.
+**Requested outcome:** recognize SunnyDutch's sensor and obtain automatic temperature/humidity
+readings while preserving existing device behavior.
 
-Evidence:
+> Plan reviewed 2026-10-05 against the complete monolithic driver, version 2.2.1,
+> timestamp `2026/08/29 7:28 PM`. **Ready to implement from the exact upstream implementation;
+> no additional questions or logs from the forum reporter are prerequisites.**
+> This is one focused device-support change, followed by hardware verification.
+> No driver code has been changed for this item. The user uploads and tests; no agent hub upload.
+> No version, timestamp, header-history or manifest changes until an explicit release.
+> There is no generated bundle or shared-library dependency.
 
-- User report, exact identity, driver version, and state variables:
-  https://community.hubitat.com/t/-/88093/713
-- Topic 88093 was audited through post 713 on 2026-09-04.
+**Evidence and device identity**
 
-Known data:
+- **Reported**, SunnyDutch: model `TS0601`, manufacturer `_TZE284_qf5mzewi`, driver 2.2.1,
+  `Model Group: UNKNOWN`, incoming traffic but no readings:
+  [post 713](https://community.hubitat.com/t/-/88093/713).
+- **Reported**, the same user: online health status and adjusted clock, still no Hubitat data:
+  [post 714](https://community.hubitat.com/t/-/88093/714). The inspected photo shows temperature,
+  humidity and a clock, but does not establish brand, firmware or a cluster signature.
+- **Reported**, the same user: Model Group reverts after pressing an unnamed command's Run button:
+  [post 716](https://community.hubitat.com/t/-/88093/716),
+  [post 718](https://community.hubitat.com/t/-/88093/718).
+  [Post 720](https://community.hubitat.com/t/-/88093/720) requests follow-up.
+- **Reported working on matching hardware**, upstream contributor **latez**:
+  [merged PR 13010](https://github.com/Koenkk/zigbee-herdsman-converters/pull/13010)
+  identifies exactly `TS0601 / _TZE284_qf5mzewi` and reports temperature, humidity, battery and
+  temperature-unit decoding working in Zigbee2MQTT 2.9.2. This is a different owner's device.
+- **Reported fingerprint from matching hardware**, **kopaszsop**:
+  [issue 31209](https://github.com/Koenkk/zigbee2mqtt/issues/31209) supplies endpoint `01`,
+  profile `0104`, input clusters `0004,0005,EF00,0000,ED00`, output clusters `0019,000A`
+  for that exact model/manufacturer pair. Use this as the reference fingerprint, not as a
+  fingerprint captured from SunnyDutch's unit. Do not transfer that owner's firmware version.
+- SunnyDutch's raw reports and firmware remain **Unknown**, but matching upstream implementation
+  and independent hardware reports are sufficient to design this support patch. Its result on
+  SunnyDutch's physical unit remains **VERIFY ON DEVICE**, after implementation.
 
-- Model: `TS0601`
-- Manufacturer: `_TZE284_qf5mzewi`
-- Reported driver: 2.2.1, timestamp 2026/08/29 7:28 PM
-- `Model Group: UNKNOWN`; the reporter tried every manually selectable model group without success.
-- Receive activity is present (`rxCtr: 22`), but the post contains no raw Tuya EF00 DP payloads or
-  textual cluster lists.
+**Implementation authority**
 
-Implementation direction:
+Use the maintained Zigbee2MQTT
+[ZTH05Z definition](https://github.com/Koenkk/zigbee-herdsman-converters/blob/5750b44559405203b202e0f5539dc0d6f46f1c8d/src/devices/tuya.ts)
+and [Tuya protocol helpers](https://github.com/Koenkk/zigbee-herdsman-converters/blob/5750b44559405203b202e0f5539dc0d6f46f1c8d/src/lib/tuya.ts),
+pinned at `5750b44559405203b202e0f5539dc0d6f46f1c8d`. They explicitly include the target identifier.
+Upstream labels it ONENUO TH05Z; that does not establish SunnyDutch's retail brand.
 
-- Obtain debug/trace logs containing the exact Tuya EF00 datapoints and the complete textual Hubitat
-  fingerprint, including `inClusters` and `outClusters`.
-- Search current Zigbee2MQTT and ZHA support for the exact manufacturer; do not borrow datapoints
-  from similar-looking products or different fingerprints.
-- Reuse an existing model group only if its DP semantics match exactly; otherwise add a dedicated
-  group and route only confirmed datapoints.
-- Preserve all existing model-group behavior and debug-log unsupported DPs.
+PR 13010 corrected the earlier long manufacturer string and its behavior gates; therefore the
+old plan's manufacturer-comment ambiguity is not a reason to block core support. The current
+definition contains both strings. Scope this patch to the requested `_TZE284_qf5mzewi` only.
+Calibration and DP 18 availability were not independently hardware-verified by that PR author;
+they are outside the requested core-reading change.
 
-Verification — **VERIFY ON DEVICE**:
+The inspected [ZHA Tuya sensor module](https://github.com/zigpy/zha-device-handlers/blob/d6fcec59eff9f63f154723500be9378be926d927/zhaquirks/tuya/tuya_sensor.py)
+does not list this exact manufacturer. Zigbee2MQTT provides the required exact match.
 
-- The exact identity is recognized instead of `UNKNOWN`.
-- Confirmed temperature and humidity DPs create plausible events with correct scaling and units.
-- Automatic driver selection is verified after adding the complete observed fingerprint.
-- The reporting user confirms readings from the development build before this item is completed.
+**Diagnosis**
+
+Missing recognition explains `UNKNOWN`. It does not fully explain missing readings: this
+driver's generic handling already decodes DPs 1, 2 and 4. Any received packet marks the device
+online, so health and clock traffic do not prove measurement traffic arrived. The concrete gaps
+relative to upstream are the configure-time data query and MCU gateway-status response, together
+with model-specific DP isolation. Their causal contribution to SunnyDutch's symptom is an
+**inference**, not a captured failure trace.
+
+**Planned changes — one coherent support patch**
+
+1. **Recognition and isolated model group.**
+   In `metadata`, add the reference fingerprint above with the exact model/manufacturer and
+   a temperature/humidity LCD sensor join name; append `// not tested!`.
+   Use the local `_TZE284_aao3yzhs` fingerprint as the structural donor because its endpoint,
+   profile and cluster lists match the independently reported signature. Copy no soil behavior.
+   Add `_TZE284_qf5mzewi` to `Models` as proposed group `TS0601_ZTH05Z`, and expose that group
+   in `modelGroupPreference`. Add an `is*()` predicate, e.g. `isQf5mzewi()`, checking the exact
+   model/manufacturer pair for protocol commands. Keep automatic configuration writes out of
+   this new group; do not extend the existing `TS0601_Tuya_2` write paths.
+
+2. **Reuse core decoding and prevent conflicting generic DP handling.**
+   At the start of `processTuyaDP()`, let the new group use the existing branches for only
+   DPs 1, 2 and 4. For its other DPs, debug-log the DP/type/value and return before the generic
+   switch. This small guard avoids duplicating working measurement code or building a profile
+   framework. In particular DP 3 must never emit illuminance or overwrite a real battery
+   percentage with an invented coarse percentage.
+
+   | DP | Upstream meaning | Planned Hubitat behavior |
+   |---|---|---|
+   | 1 | Temperature, value / 10 | Existing temperature branch and `temperatureEvent()` |
+   | 2 | Humidity, raw percent | Existing branch and `humidityEvent()` |
+   | 4 | Battery, raw percent | Existing `getBatteryPercentageResult(value * 2)` |
+   | 3 | Battery-state enum | Debug-log only; percentage comes from DP 4 |
+   | Other | Settings/status or unknown | Debug-log only; no generic fallback or new attributes |
+
+   Preserve the existing temperature conversion, offsets, decimal preferences and event
+   throttling. Configuration/status reports must not be compared against irrelevant defaults.
+   For later work, the upstream settings map is DP 9 unit; 10/11 temperature limits;
+   12/13 humidity limits; 14/15 alarms (0 lower, 1 upper, 2 canceled); 17 temperature interval
+   in minutes; 19 temperature sensitivity /10; 20 humidity sensitivity; 23/24 calibration.
+   These meanings explain why the existing generic alarm/interval branches must be bypassed.
+   No writable settings or extra capabilities are needed to solve this report.
+
+3. **Query measurements during configuration.**
+   Append one EF00 command `0x03` with empty payload to `configure()`'s existing command list,
+   after `tuyaBlackMagic()` and `initializeDevice()`, gated by the exact-identity predicate.
+   Reuse the command construction already used for this driver's TS0601 Refresh/announce query.
+   This matches upstream `queryOnConfigure: true`; implement it as part of support, not as a
+   conditional experiment after another round of reporter logs.
+   Retain existing query-on-announce, command `0x11`, and Refresh behavior. No periodic polling.
+
+4. **Answer the MCU gateway-status request.**
+   In `processTuyaCluster()`, handle EF00 command `0x25` for the exact identity and send the
+   cluster-specific `0x25` reply with payload **`010001`** through the existing Zigbee helpers.
+   Upstream sends `{payloadSize: 1, payload: 1}`: the first field is a little-endian UINT16
+   (`01 00`), followed by UINT8 connected status (`01`). This is not a datapoint write;
+   do not use `sendTuyaCommand()` or add its packet-ID/DP/type/length envelope.
+   The encoding is established by the pinned
+   [command schema](https://github.com/Koenkk/zigbee-herdsman/blob/03495312e131c705a7cabc07fd3c403f2ddf7e42/src/zspec/zcl/definition/cluster.ts),
+   [ZCL serializer](https://github.com/Koenkk/zigbee-herdsman/blob/03495312e131c705a7cabc07fd3c403f2ddf7e42/src/zspec/zcl/buffaloZcl.ts)
+   and [UINT16 writer](https://github.com/Koenkk/zigbee-herdsman/blob/03495312e131c705a7cabc07fd3c403f2ddf7e42/src/buffalo/buffalo.ts).
+   There is no need to ask the reporter to establish byte order.
+
+**Boundaries and migration**
+
+- Retain the existing EF00 `0x24` Unix-epoch UTC/local time response. The current maintained
+  upstream uses the 1970 epoch. Do not import the older
+  [external converter's](https://github.com/kopaszsop/ts0601_tze284_zigbee2mqtt/blob/baee9bac272860aa08375e4014a8f9c8373d4891/js/tze284_z2m_optimized.js)
+  60-second polling or fixed clock-offset workaround into this patch.
+- The new group avoids incompatible automatic defaults: current upstream sensitivity limits for
+  this identifier are 0.6–2 °C and 6–20% RH; `TS0601_Tuya_2` defaults include 0.5 °C and 5%.
+  Upstream does not expose a separate DP 18 humidity interval for this identifier.
+  Advanced device-side controls can be considered separately; they are not prerequisites.
+- Preserve Initialize's documented reset. It clears preferences and restores Auto detect;
+  with the new mapping, Auto detect now resolves this sensor correctly. Thus support does not
+  depend on retaining a forced group. The unnamed Run action is not sufficient evidence for a
+  separate reset defect, and no reset investigation or reporter question is part of this patch.
+- Existing paired devices can use Auto detect after installing the change. Verify with the
+  device awake; if re-pairing is needed, retain the existing Hubitat device. Do not require
+  deletion/recreation or tell the owner to press Configure while the battery device sleeps.
+- Limit edits to the monolithic source and this canonical item. Keep other manufacturers,
+  public names, version metadata and release files unchanged.
+
+**Validation after implementation — VERIFY ON DEVICE**
+
+- Local review: fingerprint and all three recognition locations agree; the DP guard affects only
+  the new group; the query/status reply requires the exact identity; no new automatic settings
+  writes, polling schedules, shared-library changes or reflection are introduced.
+- Maintainer compiles on Hubitat and identifies the actual tested source (retain a source copy/
+  hash because the version/timestamp is intentionally unchanged). Auto detect resolves
+  `TS0601_ZTH05Z`; test automatic driver selection on a pairing separately.
+- Sample core decoding: DP 1 value 268 -> 26.8 °C, DP 2 value 58 -> 58%, DP 4 value 100 -> 100%
+  at zero offsets. DP 3 produces no illuminance and does not replace battery percentage.
+  Check actual LCD changes, offsets, C/F conversion and delayed events on the physical device.
+- Configuration/rejoin sends the expected query; an incoming command 25 receives command 25
+  payload `010001`. Verify no exception, duplicate response or sustained request loop.
+  A device that does not send command 25 need not be made to send it for core support to pass.
+- Readings continue automatically through ordinary wake cycles and at least 24 hours without
+  manual polling; clock synchronization continues. Extend observation for a longer cadence.
+- Existing model groups retain their behavior. Mark support **Implemented unverified** after
+  coding, and leave this item unchecked until a physical Hubitat test is confirmed.
 
 ## Already resolved, declined, or outside this backlog
 
