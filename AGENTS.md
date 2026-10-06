@@ -215,9 +215,20 @@ lines near the top of the file.
 - Behaviour is data-driven: a `deviceProfilesV3` map (V3) or a JSON profile database (V4) supplies
   fingerprints, datapoints, preferences and commands; device-specific glue lives in `custom*()`
   hooks called by `commonLib`.
-- **There is no build script.** Regeneration is manual: copy the source, paste each library verbatim
-  between its markers, preserving the marker lines. Always state whether the bundle was regenerated
-  or is pending.
+- **The Hubitat hub generates the bundle. Never assemble it manually.** Regeneration may be done
+  **only upon the maintainer's explicit request in the current session**. Never regenerate a bundle
+  automatically after a code change or as a finishing step. If regeneration has not been explicitly
+  requested, report it as pending and ask before proceeding.
+- Before generation, verify that the source driver and every included library on the selected hub
+  match the intended local sources by reading them back. The hub expands **its own library copies**;
+  stale hub libraries will be embedded in the result. Uploading sources to the hub also requires
+  explicit maintainer authorization.
+- Request **`GET /driver/downloadFull/<driverId>`** from that hub. Hubitat returns the expanded source
+  with the `#include` directives removed and the include delimiters and per-line library markers
+  added. Save this response as `<Driver>_lib_included.groovy` with **CRLF** line endings (the endpoint
+  returns LF; the repository uses `core.autocrlf=true`). Do not construct or patch library bodies
+  locally. Verify the downloaded driver and library contents against the intended sources, and
+  always state whether the bundle was generated or remains pending.
 - Verify sync before and after any change by comparing `version()` in both files.
 
 ### Legacy monolithic
