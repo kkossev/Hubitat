@@ -16,17 +16,17 @@
  * ver. 3.3.0  2024-06-22 kkossev  - new driver for Aqara Smoke Detector
  * ver. 3.3.1  2024-06-23 kkossev  - Xiaomi tags debug decoding; added alarmSelfTest command; smoke state is derived from 0xFCC0:0x013A,
  * ver. 3.4.0  2025-10-03 kkossev  - (dev. branch) 
+ * ver. 3.4.1  2026-09-29 polpas   - developed battery reporting in percentage
+ * ver. 3.4.2  2026-10-06 kkossev  - (dev. branch) libraries updated
  *
- *                                   TODO: refresh the smoke custom cluster state and publish the first alpha version!
  *                                   TODO: mute() command (mute the buzzer)
  *                                   TODO: buzz() command (alarm the buzzer)
  *                                   TODO: setAlarm() command
  *                                   TODO: setClear() command
- *                                   TODO: handle the battery reporting (convert to percentage)
  */
 
-static String version() { '3.4.0' }
-static String timeStamp() { '2025/10/03 3:17 PM' }
+static String version() { '3.4.2' }
+static String timeStamp() { '2026/10/06 12:36 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
@@ -126,6 +126,67 @@ metadata {
             configuration : [:]
     ]
 ]
+
+boolean isAqaraSmartSmokeDetector() { getDeviceProfile() == 'AQARA_SMART_SMOKE_DETECTOR' }
+
+void customParsePowerCluster(final Map descMap) {
+    if (!isAqaraSmartSmokeDetector() || descMap.attrId != '0020') {
+        standardParsePowerCluster(descMap)
+        return
+    }
+
+    // BatteryVoltage is an unsigned byte in units of 100 mV.
+    if (descMap.value == null || !(descMap.value ==~ /[0-9A-Fa-f]{1,2}/)) {
+        logWarn "ignoring Aqara battery voltage report (${descMap.value})"
+        return
+    }
+    final int rawValue = hexStrToUnsignedInt(descMap.value)
+    if (rawValue == 0 || rawValue == 255) {
+        logWarn "ignoring Aqara battery voltage report (${descMap.value})"
+        return
+    }
+
+    state.lastRx['batteryTime'] = new Date().getTime()
+    state.stats['bVoltCtr'] = (state.stats['bVoltCtr'] ?: 0) + 1
+    sendBatteryVoltageEvent(rawValue)
+    sendBatteryPercentageEvent(aqaraSmokeVoltageToPercent(rawValue / 10G))
+}
+
+// polpas PR #155: unverified CR123A estimate, not calibrated remaining capacity.
+// Used only for AQARA_SMART_SMOKE_DETECTOR standard battery voltage reports.
+Integer aqaraSmokeVoltageToPercent(final BigDecimal volts) {
+    final List<List<BigDecimal>> curve = [
+        [3.20G, 100G],
+        [3.15G,  95G],
+        [3.10G,  90G],
+        [3.05G,  85G],
+        [3.00G,  75G],
+        [2.95G,  68G],
+        [2.90G,  60G],
+        [2.85G,  50G],
+        [2.80G,  40G],
+        [2.75G,  32G],
+        [2.70G,  25G],
+        [2.65G,  18G],
+        [2.60G,  10G],
+        [2.50G,   5G],
+        [2.40G,   0G]
+    ]
+    if (volts >= curve[0][0]) { return 100 }
+    if (volts <= curve[curve.size() - 1][0]) { return 0 }
+
+    for (int i = 0; i < curve.size() - 1; i++) {
+        final BigDecimal highV = curve[i][0]
+        final BigDecimal highP = curve[i][1]
+        final BigDecimal lowV = curve[i + 1][0]
+        final BigDecimal lowP = curve[i + 1][1]
+        if (volts <= highV && volts >= lowV) {
+            final BigDecimal fraction = (volts - lowV) / (highV - lowV)
+            return Math.round(lowP + fraction * (highP - lowP))
+        }
+    }
+    return 0
+}
 
 void customParseIASCluster(final Map descMap) {
     logDebug "customParseIASCluster: cluster=${descMap} attrInt=${descMap.attrInt} value=${descMap.value}"
