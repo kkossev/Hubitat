@@ -410,7 +410,7 @@ Remaining verification — **VERIFY ON DEVICE**:
 - Regression: single-relay `_TZ3218_7fiyo3kv` keeps exactly one working child, and the
   `TS0601_ZTH03PRO` probe child survives the same operations.
 - Paul's confirmation on the physical DC four-relay board is still outstanding.
-### 13. [ ] `OPEN` — Add TS0601 `_TZE284_qf5mzewi` temperature/humidity sensor support — HUB-145
+### 13. [ ] `Implemented unverified` — Add TS0601 `_TZE284_qf5mzewi` temperature/humidity sensor support — HUB-145
 
 **Requested outcome:** recognize SunnyDutch's sensor and obtain automatic temperature/humidity
 readings while preserving existing device behavior.
@@ -419,7 +419,9 @@ readings while preserving existing device behavior.
 > timestamp `2026/08/29 7:28 PM`. **Ready to implement from the exact upstream implementation;
 > no additional questions or logs from the forum reporter are prerequisites.**
 > This is one focused device-support change, followed by hardware verification.
-> No driver code has been changed for this item. The user uploads and tests; no agent hub upload.
+> Implemented 2026-10-06 in the monolithic driver, version 2.2.2, timestamp `2026/10/06 6:24 AM`.
+> All four changes below are applied; physical Hubitat verification remains outstanding.
+> The user uploads and tests; no agent hub upload.
 > No version, timestamp, header-history or manifest changes until an explicit release.
 > There is no generated bundle or shared-library dependency.
 
@@ -474,7 +476,7 @@ relative to upstream are the configure-time data query and MCU gateway-status re
 with model-specific DP isolation. Their causal contribution to SunnyDutch's symptom is an
 **inference**, not a captured failure trace.
 
-**Planned changes — one coherent support patch**
+**Implemented changes — core support and requested preferences**
 
 1. **Recognition and isolated model group.**
    In `metadata`, add the reference fingerprint above with the exact model/manufacturer and
@@ -482,43 +484,53 @@ with model-specific DP isolation. Their causal contribution to SunnyDutch's symp
    Use the local `_TZE284_aao3yzhs` fingerprint as the structural donor because its endpoint,
    profile and cluster lists match the independently reported signature. Copy no soil behavior.
    Add `_TZE284_qf5mzewi` to `Models` as proposed group `TS0601_ZTH05Z`, and expose that group
-   in `modelGroupPreference`. Add an `is*()` predicate, e.g. `isQf5mzewi()`, checking the exact
-   model/manufacturer pair for protocol commands. Keep automatic configuration writes out of
-   this new group; do not extend the existing `TS0601_Tuya_2` write paths.
+   in `modelGroupPreference`. Per the maintainer's 2026-10-06 correction, use the existing
+   `getModelGroup()` pattern for protocol commands, including a manually selected group;
+   do not add a manufacturer-specific helper. Keep writes in this model group; do not extend the existing `TS0601_Tuya_2` write paths.
 
 2. **Reuse core decoding and prevent conflicting generic DP handling.**
-   At the start of `processTuyaDP()`, let the new group use the existing branches for only
-   DPs 1, 2 and 4. For its other DPs, debug-log the DP/type/value and return before the generic
-   switch. This small guard avoids duplicating working measurement code or building a profile
-   framework. In particular DP 3 must never emit illuminance or overwrite a real battery
-   percentage with an invented coarse percentage.
+   In `processTuyaDP()`, reuse the existing cases for DPs 1, 2 and 4. Add group-specific
+   debug logging where different handling is needed: DPs 3, 10/11, 14/15 and 23/24.
+   Reuse shared logs for DPs 9, 12/13 and 19/20; share the AVATTO minutes branch for 17/18.
+   Use upstream names, decoded enum meanings and applicable scaling, retaining the raw value.
+   Append the new group before the fallback in existing `if / else if / else` chains, with
+   the shared case-ending `break`. Do not wrap equivalent existing handlers in model-specific branches.
+   Per the maintainer's correction, unrelated cases and the default branch retain their existing
+   behavior; there is no blanket exclusion or pre-switch allowlist. DP 3 logs battery_state
+   without emitting illuminance or replacing the DP 4 battery percentage.
 
    | DP | Upstream meaning | Planned Hubitat behavior |
    |---|---|---|
    | 1 | Temperature, value / 10 | Existing temperature branch and `temperatureEvent()` |
    | 2 | Humidity, raw percent | Existing branch and `humidityEvent()` |
    | 4 | Battery, raw percent | Existing `getBatteryPercentageResult(value * 2)` |
-   | 3 | Battery-state enum | Debug-log only; percentage comes from DP 4 |
-   | Other | Settings/status or unknown | Debug-log only; no generic fallback or new attributes |
+   | 3 | Battery-state enum | Debug-log low/medium/high; percentage comes from DP 4 |
+   | 9 | Temperature unit | Existing shared temperature-scale log |
+   | 10/11, 14/15, 23/24 | Temperature limits, alarms and calibration | Group-specific logging where existing semantics differ |
+   | 12/13 | Humidity alarm limits | Existing shared logging, unscaled |
+   | 17/18 | Reporting intervals | Shared minutes-based logging with AVATTO; no Haozee scaling |
+   | 19/20 | Sensitivity | Existing scaling and comparison with the implemented preferences |
+   | Other | Not in the upstream map | Existing driver case/default handling; no new group-specific exclusions |
 
    Preserve the existing temperature conversion, offsets, decimal preferences and event
    throttling. Configuration/status reports must not be compared against irrelevant defaults.
-   For later work, the upstream settings map is DP 9 unit; 10/11 temperature limits;
+   The upstream settings map is DP 9 unit; 10/11 temperature limits;
    12/13 humidity limits; 14/15 alarms (0 lower, 1 upper, 2 canceled); 17 temperature interval
    in minutes; 19 temperature sensitivity /10; 20 humidity sensitivity; 23/24 calibration.
-   These meanings explain why the existing generic alarm/interval branches must be bypassed.
-   No writable settings or extra capabilities are needed to solve this report.
+   Preserve distinct alarm-enum handling and bypass the incompatible Haozee interval scaling.
+   The maintainer subsequently requested writable DPs 9, 19/20 and 17 (below); no extra capabilities.
 
 3. **Query measurements during configuration.**
-   Append one EF00 command `0x03` with empty payload to `configure()`'s existing command list,
-   after `tuyaBlackMagic()` and `initializeDevice()`, gated by the exact-identity predicate.
+   Append one EF00 command `0x03` with empty payload in `initializeDevice()`,
+   gated by `getModelGroup() == 'TS0601_ZTH05Z'`. Keep `configure()` as the common collector
+   and sender of `tuyaBlackMagic()` and `initializeDevice()` commands.
    Reuse the command construction already used for this driver's TS0601 Refresh/announce query.
    This matches upstream `queryOnConfigure: true`; implement it as part of support, not as a
    conditional experiment after another round of reporter logs.
    Retain existing query-on-announce, command `0x11`, and Refresh behavior. No periodic polling.
 
 4. **Answer the MCU gateway-status request.**
-   In `processTuyaCluster()`, handle EF00 command `0x25` for the exact identity and send the
+   In `processTuyaCluster()`, handle EF00 command `0x25` for model group `TS0601_ZTH05Z` and send the
    cluster-specific `0x25` reply with payload **`010001`** through the existing Zigbee helpers.
    Upstream sends `{payloadSize: 1, payload: 1}`: the first field is a little-endian UINT16
    (`01 00`), followed by UINT8 connected status (`01`). This is not a datapoint write;
@@ -529,6 +541,22 @@ with model-specific DP isolation. Their causal contribution to SunnyDutch's symp
    and [UINT16 writer](https://github.com/Koenkk/zigbee-herdsman/blob/03495312e131c705a7cabc07fd3c403f2ddf7e42/src/buffalo/buffalo.ts).
    There is no need to ask the reporter to establish byte order.
 
+5. **Requested preferences (2026-10-06).**
+   Reuse `temperatureUnit`, `temperatureSensitivity`, `humiditySensitivity` and
+   `maxReportingTimeTemp`, exposed through the existing advanced preferences for this group.
+   Declare the three differing ranges/defaults as `configParams` entries with mutually exclusive
+   model-group `limit` lists and the existing setting names; keep the rendering loop unchanged.
+   Match the pinned ZTH05Z converter for the exact `_TZE284_qf5mzewi` identifier:
+   DP 9 enum 0/1 = Celsius/Fahrenheit; DP 19 value = sensitivity ×10 (0.6–2 °C,
+   0.1 °C steps); DP 20 value = humidity sensitivity (6–20% RH); DP 17 value =
+   temperature interval in minutes (1–120). Keep the existing interval preference in seconds
+   (60–7200), rounded to whole minutes for the transmitted value; leave saved preferences unchanged.
+   Use initial sensitivity defaults 0.6 °C and 6% RH for this group only.
+   Extend the existing sensitivity write branches in `updated()`; add adjacent branches only
+   for LCD unit selection and the unscaled minute interval. Use the common sender, as for
+   other Tuya groups. No custom queue or model-specific sending block in `parse()`.
+   Reported values remain visible in named debug logs. No ZCL state-machine extension or polling.
+
 **Boundaries and migration**
 
 - Retain the existing EF00 `0x24` Unix-epoch UTC/local time response. The current maintained
@@ -538,7 +566,7 @@ with model-specific DP isolation. Their causal contribution to SunnyDutch's symp
 - The new group avoids incompatible automatic defaults: current upstream sensitivity limits for
   this identifier are 0.6–2 °C and 6–20% RH; `TS0601_Tuya_2` defaults include 0.5 °C and 5%.
   Upstream does not expose a separate DP 18 humidity interval for this identifier.
-  Advanced device-side controls can be considered separately; they are not prerequisites.
+  Alarm limits and device calibration remain outside the requested preference additions.
 - Preserve Initialize's documented reset. It clears preferences and restores Auto detect;
   with the new mapping, Auto detect now resolves this sensor correctly. Thus support does not
   depend on retaining a forced group. The unnamed Run action is not sufficient evidence for a
@@ -551,9 +579,19 @@ with model-specific DP isolation. Their causal contribution to SunnyDutch's symp
 
 **Validation after implementation — VERIFY ON DEVICE**
 
-- Local review: fingerprint and all three recognition locations agree; the DP guard affects only
-  the new group; the query/status reply requires the exact identity; no new automatic settings
-  writes, polling schedules, shared-library changes or reflection are introduced.
+- **Local checks passed (2026-10-06):** full source parsed with Hubitat stubs on Groovy 4.0.32;
+  core readings, 14 non-core DP handlers, model-group query/status gating (automatic and forced), `010001`
+  reply, immediate preference writes, time sync, Fahrenheit/offset conversion and
+  delayed temperature events checked. Preference visibility, exact payloads, valid endpoints/minute conversion,
+  immediate Save Preferences delivery, unchanged saved preferences and no activity-triggered resend passed.
+  667 DP comparisons across 23 existing model groups
+  matched the pre-patch source. These checks do not establish Hubitat's Groovy 2.4.21 sandbox compatibility
+  or physical-device behavior. `git diff --check` passed; pre-existing header/version changes
+  and unrelated TODO items were preserved. Fingerprint donor: `_TZE284_aao3yzhs` as planned.
+- **Source SHA-256 for the hardware test:**
+  `1130D91A00D48C4A12F1DEA574F85B89087BD0538216D1431C3A500985753252`.
+- Local review: fingerprint and all three recognition locations agree; the named DP logging affects only
+  the new group; the query/status reply and requested writes use the same model group; no new polling schedules, shared-library changes or reflection are introduced.
 - Maintainer compiles on Hubitat and identifies the actual tested source (retain a source copy/
   hash because the version/timestamp is intentionally unchanged). Auto detect resolves
   `TS0601_ZTH05Z`; test automatic driver selection on a pairing separately.
@@ -563,6 +601,14 @@ with model-specific DP isolation. Their causal contribution to SunnyDutch's symp
 - Configuration/rejoin sends the expected query; an incoming command 25 receives command 25
   payload `010001`. Verify no exception, duplicate response or sustained request loop.
   A device that does not send command 25 need not be made to send it for core support to pass.
+- Preference checks: enable Advanced Options and debug logging; choose Fahrenheit, temperature
+  sensitivity 1.2 °C, humidity sensitivity 12%, and temperature interval 300 seconds. Save
+  Preferences while the device is awake; expect all four writes immediately. Verify the LCD shows
+  Fahrenheit and reports DP 9 = 1, DP 19 = 12, DP 20 = 12, DP 17 = 5. Test Celsius again.
+  Verify periodic temperature reporting near five minutes and sensitivity-triggered reports,
+  allowing for sensor sampling and the driver's minimum-reporting-time filter. Test limits
+  0.6/2 °C, 6/20% RH, and 60/7200 seconds; 90 seconds should send 2 minutes while the saved preference remains 90 seconds.
+  Delivery and firmware acceptance are **VERIFY ON DEVICE**, not established by local tests.
 - Readings continue automatically through ordinary wake cycles and at least 24 hours without
   manual polling; clock synchronization continues. Extend observation for a longer cadence.
 - Existing model groups retain their behavior. Mark support **Implemented unverified** after
