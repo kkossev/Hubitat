@@ -10,10 +10,32 @@ and this project follows Semantic Versioning where applicable.
 libraries and no separate generated bundle to keep in sync. See `TODO.md` and `AGENTS.md` in this
 folder for the model-group architecture and the maintainer work list.
 
-## [2.2.1] - 2026-08-29
+## [2.2.2] - 2026-10-06
 
-This is the current development version — all work stays under this heading until a version bump
-is explicitly requested, not a cut/released version with its own `[Unreleased]` above it.
+Development version. New-device support is **Implemented unverified**; Hubitat compilation and
+physical-device testing remain pending.
+
+### Added
+
+- Support for TS0601 `_TZE284_qf5mzewi` in the new `TS0601_ZTH05Z` model group (HUB-145),
+  including automatic recognition and manual group selection. Reuses existing temperature,
+  humidity and battery decoding; handles the device's battery-state, alarm and calibration
+  reports without conflicting measurement events or unrelated alarm-preference warnings.
+- Advanced preferences for LCD Celsius/Fahrenheit (DP 9), temperature sensitivity
+  (DP 19, 0.6–2 °C), humidity sensitivity (DP 20, 6–20% RH), and temperature reporting
+  interval (DP 17, 60–7200 seconds, transmitted as rounded whole minutes).
+  Writes follow the existing Tuya Save Preferences path; saved values are not rewritten.
+  Device-side calibration and alarm-limit writes are not implemented.
+- Initial Tuya data query during configuration and a connected-status response to EF00
+  command `0x25` for this model group. No periodic polling is added.
+
+Protocol mapping follows the
+[upstream ZTH05Z converter](https://github.com/Koenkk/zigbee-herdsman-converters/blob/5750b44559405203b202e0f5539dc0d6f46f1c8d/src/devices/tuya.ts).
+Local checks with Hubitat stubs passed for command payloads, preference visibility, report
+handling and 667 comparisons across existing model groups. These are not a Hubitat compile
+or confirmation of firmware behavior.
+
+## [2.2.1] - 2026-08-29
 
 ### Fixed
 
