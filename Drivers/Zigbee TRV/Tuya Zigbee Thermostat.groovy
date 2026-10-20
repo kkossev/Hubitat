@@ -812,9 +812,9 @@ public boolean isBotR15w() { return getDeviceProfile() == 'BOT_R15W_ZB_THERMOSTA
  * -----------------------------------------------------------------------------
 */
 void customParseThermostatCluster(final Map descMap) {
+    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "customParseThermostatCluster: zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
-    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
     boolean result = processClusterAttributeFromDeviceProfile(descMap)
     if ( result == false ) {
         logWarn "parseThermostatClusterThermostat: received unknown Thermostat cluster (0x0201) attribute 0x${descMap.attrId} (value ${descMap.value})"

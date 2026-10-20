@@ -2,7 +2,7 @@
 library(
     base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Thermostat Library', name: 'thermostatLib', namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy', documentationLink: '',
-    version: '3.6.3')
+    version: '3.6.4')
 /*
  *  Zigbee Thermostat Library
  *
@@ -25,13 +25,14 @@ library(
  * ver. 3.6.1  2025-10-31 kkossev  - added setRefreshRequest() in the autoPollThermostat() method, so that events are always sent with [refresh] tag 
  * ver. 3.6.2  2025-12-06 kkossev  - changed setheatingSetpoint to use [digital] / [physical]  type for the event logic 77
  * ver. 3.6.3  2026-02-08 kkossev  - setCoolingSetpoint() BOT-R15W_ZB_THERMOSTAT special handling; added sendCoolingSetpointEvent(); moved 'systemMode' 'off' check before 'eco' mode check in setThermostatMode(); info messages when unsupported modes are attempted to be set;
+ * ver. 3.6.4  2026-10-20 kkossev  - prevent errors on incomplete thermostat reports and mode retries before the first mode report.
  *
  *                                   TODO: add eco() method
  *                                   TODO: refactor sendHeatingSetpointEvent
 */
 
-public static String thermostatLibVersion()   { '3.6.3' }
-public static String thermostatLibStamp() { '2026/02/08 11:23 PM' }
+public static String thermostatLibVersion()   { '3.6.4' }
+public static String thermostatLibStamp() { '2026/10/20 1:31 PM' }
 
 metadata {
     capability 'Actuator'           // also in onOffLib
@@ -88,9 +89,9 @@ public void customOn()  { setThermostatMode('heat') }   // invoked from the comm
 */
 // * should be implemented in the custom driver code ...
 public void standardParseThermostatCluster(final Map descMap) {
+    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "standardParseThermostatCluster: zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
-    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
     if (deviceProfilesV3 != null || g_deviceProfilesV4 != null) {
         boolean result = processClusterAttributeFromDeviceProfile(descMap)
         if ( result == false ) {
@@ -588,9 +589,9 @@ void modeReceiveCheck() {
     if (settings?.resendFailed != true) { return }
     if (state.lastTx?.isModeSetReq != true) { return }    // no mode change was requested
 
-    if (state.lastTx.mode != device.currentState('thermostatMode', true).value) {
+    if (state.lastTx.mode != device.currentState('thermostatMode', true)?.value) {
         state.lastTx['setModeRetries'] = (state.lastTx['setModeRetries'] ?: 0) + 1
-        logWarn "modeReceiveCheck() <b>failed</b> (expected ${state.lastTx['mode']}, current ${device.currentState('thermostatMode', true).value}), retry#${state.lastTx['setModeRetries']} of ${MaxRetries}"
+        logWarn "modeReceiveCheck() <b>failed</b> (expected ${state.lastTx['mode']}, current ${device.currentState('thermostatMode', true)?.value}), retry#${state.lastTx['setModeRetries']} of ${MaxRetries}"
         if (state.lastTx['setModeRetries'] < MaxRetries) {
             logDebug "resending mode command : ${state.lastTx['mode']}"
             state.stats['txFailCtr'] = (state.stats['txFailCtr']  ?: 0) + 1

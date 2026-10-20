@@ -21,12 +21,13 @@
  * ver. 3.5.2  2025-05-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
  * ver. 3.6.0  2025-11-01 kkossev  - autoPollThermostat() fixes; added reporting configuration; added refreshAll() command (inccluding valveOpeningDegree and valveClosingDegree)
  * ver. 3.6.1  2025-12-06 kkossev  - (dev. branch) added [physical] or [digital] type to heatingSetpoint events; added ignoreDuplicatedZigbeeMessages setting
+ * ver. 3.6.2  2026-10-20 kkossev  - (dev. branch) added SONOFF TRV-ZBT core thermostat support and display rotation.
  *
  *                                   TODO: 
  */
 
-static String version() { '3.6.1' }
-static String timeStamp() { '2025/12/06 10:45 PM' }
+static String version() { '3.6.2' }
+static String timeStamp() { '2026/10/20 10:22 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -66,6 +67,7 @@ metadata {
         attribute 'maxHeatingSetpoint', 'number'                    // BRT-100, Sonoff, AVATTO
         attribute 'minHeatingSetpoint', 'number'                    // BRT-100, Sonoff, AVATTO
         attribute 'windowOpenDetection', 'enum', ['off', 'on']      // BRT-100, Aqara E1, Sonoff
+        attribute 'screenDirection', 'enum', ['0°', '90°', '180°', '270°'] // TRV-ZBT
 
         command 'setThermostatMode', [[name: 'thermostat mode (not all are available!)', type: 'ENUM', constraints: ['--- select ---'] + AllPossibleThermostatModesOpts.options.values() as List<String>]]
         command 'setTemperature', ['NUMBER']                        // Virtual thermostat
@@ -161,6 +163,36 @@ metadata {
             configuration : [:]
     ],
 
+    // Protocol: https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/devices/sonoff.ts
+    // Fingerprint: bobbles, https://community.hubitat.com/t/-/128886/98 (softwareBuild 1.0.9).
+    // Separate from SONOFF_TRV: Gen2 settings and supported ranges differ.
+    'SONOFF_TRV_ZBT' : [
+            description   : 'Sonoff TRV-ZBT',
+            device        : [manufacturers: ['SONOFF'], type: 'TRV', powerSource: 'battery'],
+            capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint': true, 'ThermostatMode': true, 'BatteryVoltage': true],
+            preferences   : ['childLock':'0xFC11:0x0000', 'windowOpenDetection':'0xFC11:0x6000', 'frostProtectionTemperature':'0xFC11:0x6002', 'calibrationTemp':'0x0201:0x0010', 'screenDirection':'0xFC11:0x0021'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0006,0020,0201,FC11,FC57', outClusters:'000A,0019', model:'TRV-ZBT', manufacturer:'SONOFF', deviceJoinName:'Sonoff TRV-ZBT'] // not tested!
+            ],
+            commands      : ['refresh':'refresh', 'refreshAll':'refreshAll', 'initialize':'initialize', 'configureTRV':'configureTRV', 'updateAllPreferences':'updateAllPreferences', 'resetStats':'resetStats'],
+            tuyaDPs       : [:],
+            attributes    : [
+                [at:'0x0201:0x0000', name:'temperature', type:'decimal', dt:'0x29', rw:'ro', scale:100, unit:'°C', description:'Local temperature'],
+                [at:'0x0201:0x0010', name:'calibrationTemp', type:'decimal', dt:'0x28', rw:'rw', min:-10.0, max:10.0, step:0.2, scale:10, unit:'°C', title:'<b>Local Temperature Calibration</b>', description:'Room temperature calibration, in 0.2°C steps'],
+                [at:'0x0201:0x0012', name:'heatingSetpoint', type:'decimal', dt:'0x29', rw:'rw', min:5.0, max:30.0, step:0.5, scale:100, unit:'°C', description:'Occupied heating setpoint'],
+                [at:'0x0201:0x001B', name:'controlSequenceOfOperation', type:'enum', dt:'0x30', rw:'ro', scale:1, map:[2:'heating only'], description:'Control sequence of operation'],
+                [at:'0x0201:0x001C', name:'thermostatMode', type:'enum', dt:'0x30', rw:'rw', min:0, max:4, scale:1, map:[0:'off', 1:'auto', 4:'heat'], description:'Thermostat mode'],
+                [at:'0x0201:0x0029', name:'thermostatOperatingState', type:'enum', dt:'0x19', rw:'ro', scale:1, map:[0:'idle', 1:'heating'], description:'Thermostat operating state'],
+                [at:'0xFC11:0x0000', name:'childLock', type:'enum', dt:'0x10', rw:'rw', min:0, max:1, scale:1, map:[0:'off', 1:'on'], title:'<b>Child Lock</b>', description:'Lock physical controls'],
+                [at:'0xFC11:0x0021', name:'screenDirection', type:'enum', dt:'0x20', rw:'rw', min:0, max:3, scale:1, map:[0:'0°', 1:'90°', 2:'180°', 3:'270°'], title:'<b>Display Rotation</b>', description:'Display orientation'],
+                [at:'0xFC11:0x6000', name:'windowOpenDetection', type:'enum', dt:'0x10', rw:'rw', min:0, max:1, scale:1, map:[0:'off', 1:'on'], title:'<b>Open Window Detection</b>', description:'Enable automatic open-window detection'],
+                [at:'0xFC11:0x6002', name:'frostProtectionTemperature', type:'decimal', dt:'0x29', rw:'rw', min:5.0, max:15.0, step:0.5, scale:100, unit:'°C', title:'<b>Frost Protection Temperature</b>', description:'Minimum temperature for frost protection'],
+            ],
+            refresh       : ['temperature', 'calibrationTemp', 'heatingSetpoint', 'thermostatMode', 'thermostatOperatingState', 'childLock', 'screenDirection', 'windowOpenDetection', 'frostProtectionTemperature', 'pollBatteryPercentage'],
+            deviceJoinName: 'Sonoff TRV-ZBT',
+            configuration : [:]
+    ],
+
     // TODO = check constants! https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/constants.ts#L17
     'UNKNOWN'   : [
             description   : 'GENERIC TRV',
@@ -196,9 +228,9 @@ metadata {
  * -----------------------------------------------------------------------------
 */
 void customParseThermostatCluster(final Map descMap) {
+    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "customParseThermostatCluster: zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
-    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
     boolean result = processClusterAttributeFromDeviceProfile(descMap)
     if ( result == false ) {
         logWarn "parseThermostatClusterThermostat: received unknown Thermostat cluster (0x0201) attribute 0x${descMap.attrId} (value ${descMap.value})"
@@ -212,9 +244,9 @@ void customParseThermostatCluster(final Map descMap) {
  * -----------------------------------------------------------------------------
 */
 void customParseFC11Cluster(final Map descMap) {
+    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "customParseFC11Cluster: zigbee received Sonoff custom cluster (0xFC11) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
-    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
     boolean result = processClusterAttributeFromDeviceProfile(descMap)
     if ( result == false ) {
         logWarn "customParseFC11Cluster: received unknown Sonoff custom cluster (0xFC11) attribute 0x${descMap.attrId} (value ${descMap.value})"
@@ -281,19 +313,27 @@ List<String> refreshSonoff() {
     return cmds
 }
 
+boolean isSonoffZBT() { state.deviceProfile == 'SONOFF_TRV_ZBT' }
+
 List<String> customConfigure() {
     List<String> cmds = []
-    logInfo 'customConfigure() : Configuring Sonoff TRVZB following Z2M pattern...'
+    logInfo "customConfigure() : Configuring ${DEVICE?.description} following Z2M pattern..."
+    String temperatureChange = isSonoffZBT() ? '32 00' : '05 00'
     cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x00 0x0201 {${device.zigbeeId}} {}", 'delay 200']      // hvacThermostat
-    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0000 0x29 30 3600 {05 00}", 'delay 300']          // thermostatTemperature
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0000 0x29 30 3600 {${temperatureChange}}", 'delay 300']          // thermostatTemperature
     cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0012 0x29 0 3600 {0A 00}", 'delay 300']           // thermostatOccupiedHeatingSetpoint
     cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x001C 0x30 10 3600 {}", 'delay 300']               // thermostatSystemMode 
     
-    cmds += zigbee.readAttribute(0x0201, 0x0010, [:], delay = 400)                          // localTemperatureCalibration  
-    cmds += zigbee.readAttribute(0xFC11, [0x0000, 0x6000, 0x6002, 0x6003, 0x6004, 0x6005, 0x6006, 0x6007], [:], delay = 500)
-    cmds += zigbee.readAttribute(0xFC11, [0x600B, 0x600C, 0x2000, 0x2001], [:], delay = 600)            // valve opening/closing degree, tamper, ?illumination?
-    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 200)  // Battery percentage remaining
-    
+    if (isSonoffZBT()) {
+        cmds += refreshFromConfigureReadList(DEVICE.refresh)
+    }
+    else {
+        cmds += zigbee.readAttribute(0x0201, 0x0010, [:], delay = 400)                          // localTemperatureCalibration
+        cmds += zigbee.readAttribute(0xFC11, [0x0000, 0x6000, 0x6002, 0x6003, 0x6004, 0x6005, 0x6006, 0x6007], [:], delay = 500)
+        cmds += zigbee.readAttribute(0xFC11, [0x600B, 0x600C, 0x2000, 0x2001], [:], delay = 600)            // valve opening/closing degree, tamper, ?illumination?
+        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 200)  // Battery percentage remaining
+    }
+
     logDebug "customConfigure() : ${cmds}"
     return cmds
 }
@@ -352,6 +392,7 @@ void refreshAll() {
 
 List<String> initializeSonoff()
 {
+    if (isSonoffZBT()) { return customConfigure() }
     logWarn 'initializeSonoff() ...'
     List<String> cmds = []
 
@@ -407,7 +448,7 @@ void customInitializeVars(final boolean fullInit=false) {
         setDeviceNameAndProfile()               // in deviceProfileiLib.groovy
     }
     thermostatInitializeVars(fullInit)
-    if (fullInit == true) {
+    if (fullInit == true && !isSonoffZBT()) {
         resetPreferencesToDefaults()
     }
 }
@@ -415,6 +456,11 @@ void customInitializeVars(final boolean fullInit=false) {
 // called from initializeVars() in the main code ...
 void customInitEvents(final boolean fullInit=false) {
     logDebug "customInitEvents(${fullInit})"
+    if (isSonoffZBT()) {
+        // Publish capabilities, then wait for real reports instead of synthetic temperatures/modes.
+        sendSupportedThermostatModes()
+        return
+    }
     thermostatInitEvents(fullInit)
 }
 
