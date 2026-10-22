@@ -1329,8 +1329,9 @@ void parseZHAcommand(Map descMap) {
                                     sendEvent(name: 'timerTimeLeft', value: value, type: 'physical')
                                 }
                                 else {
+                                    String descText = "waterConsumed is ${value} L"
                                     logInfo "WaterConsumed (${cmd}) is: ${value} (Litres)"
-                                    sendEvent(name: 'waterConsumed', value: value, type: 'physical')
+                                    sendEvent(name: 'waterConsumed', value: value, unit: 'L', descriptionText: descText, type: 'physical')
                                 }
                                 break
                             case '70' : // (112)
