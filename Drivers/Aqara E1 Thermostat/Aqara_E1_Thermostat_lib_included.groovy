@@ -21,12 +21,13 @@
  * ver. 3.5.0  2025-04-08 kkossev  - urgent fix for java.lang.CloneNotSupportedException
  * ver. 3.5.2  2025-05-25 kkossev  - HE platfrom version 2.4.1.x decimal preferences patch/workaround.
  * ver. 3.6.0  2025-09-15 kkossev  - (dev. branch) commonLib 4.0.0 allignment;
+ * ver. 3.6.1  2026-11-09 kkossev  - (dev. branch) thermostat mode compatibility improvements;
  *
  *                                   TODO: 
  */
 
-static String version() { '3.6.0' }
-static String timeStamp() { '2025/09/15 8:11 PM' }
+static String version() { '3.6.1' }
+static String timeStamp() { '2026/11/09 7:19 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -157,7 +158,7 @@ metadata {
                 [at:'0x0201:0xFFF2',  name:'unknown',                type:'number', dt:'0x21', rw: 'ro', min:0,    max:100,  step:1,  scale:1,    unit:'%',  description:'Battery percentage remaining'],
             //                          ^^ unsupported attribute?  or reporting only ?
             ],
-            supportedThermostatModes: ['off', 'auto', 'heat', 'away'/*, "emergency heat"*/],
+            supportedThermostatModes: ['off', 'auto', 'heat'],
             refresh: ['refreshAqaraE1'],
             deviceJoinName: 'Aqara E1 Thermostat',
             configuration : [:]
@@ -288,6 +289,7 @@ void customUpdated() {
     else {
         logDebug 'forcedProfile is not set'
     }
+    sendSupportedThermostatModes()
     final int pollingInterval = (settings.temperaturePollingInterval as Integer) ?: 0
     if (pollingInterval > 0) {
         logInfo "updatedThermostat: scheduling temperature polling every ${pollingInterval} seconds"
