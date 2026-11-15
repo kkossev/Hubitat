@@ -42,6 +42,14 @@ The two component children are the authoritative devices for independent valve a
 
 ---
 
+## Version 1.8.2 (2026-11-15)
+
+* SWV-ZFU: correct byte order for irrigation duration and volume reports; reduce repeated description logs.
+* SWV-ZFU: add **Reported water volume unit** (`liter` by default or `US gallon`) for `irrigationVolume` and `waterConsumed`. The selection applies to the next report and is independent of manual irrigation settings. Gallon values use three decimal places.
+* Reject unrecognized or incomplete manual irrigation settings instead of updating attributes and preferences from them.
+
+**Validation status: Implemented unverified on SWV-ZFU.** Hubitat compilation and local conversion checks passed; rejection of the unrecognized settings response was tested on SWV-ZFE. SWV-ZFU duration units still require device verification.
+
 ## Features
 
 * Standard "Valve" capability plus mirrored "Switch" for Alexa/Google Home/HomeKit
@@ -55,4 +63,4 @@ The two component children are the authoritative devices for independent valve a
 * Debug / description-text logging (debug auto-off after 24 h)
 
 -----
-(last edited 2026-07-12)
+(last edited 2026-11-15)

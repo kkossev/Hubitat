@@ -59,7 +59,8 @@
  *                                  fixed Sonoff SWV on_with_timed_off auto-close timer cancelled by refresh(): skip genOnOff read (cluster 6) when valve is open.
  *  ver. 1.8.0 2026-07-11 kkossev - added SONOFF SWV-ZF2 dual-valve support with endpoint-aware control, child valves, and manual irrigation settings.
  *                                  various bugfixes;
- *  ver. 1.8.1 2026-07-11 kkossev - (dev. branch) implemented brianwilson's (bdwilson) SONOFF SWV-ZF2 (Hydro DUO) improvements from https://github.com/bdwilson/hubitat/tree/master/Tuya-Zigbee-Valve 
+ *  ver. 1.8.1 2026-07-11 kkossev - implemented brianwilson's (bdwilson) SONOFF SWV-ZF2 (Hydro DUO) improvements from https://github.com/bdwilson/hubitat/tree/master/Tuya-Zigbee-Valve
+ *  ver. 1.8.2 2026-11-15 kkossev - (dev. branch) SWV-ZFU reporting fixes, quieter logs and US gallon option; bug fixes
  *
  *                                  Open TODO items are tracked in TODO.md in this folder.
  */
@@ -67,8 +68,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-static String version() { '1.8.1' }
-static String timeStamp() { '2026/07/11 8:26 PM' }
+static String version() { '1.8.2' }
+static String timeStamp() { '2026/11/15 8:44 PM' }
 
 @Field static final Boolean _DEBUG = false                                      // disable it for the production release !
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true                        // disable it for the production release !
@@ -158,6 +159,9 @@ metadata {
             if (isSASWELL() || isGIEX()) {
                 input(name: 'irrigationCapacity', type: 'number', title: '<b>Irrigation Capacity</b>', description: 'Automatically turn off agter how many liters?', defaultValue: DEFAULT_CAPACITY, range: '0..999', required: false)
             }
+            if (isSonoffZFU()) {
+                input(name: 'reportedVolumeUnitPreference', type: 'enum', title: '<b>Reported water volume unit</b>', description: 'Unit for reported irrigation and daily water volumes. Applied on the next report.', options: ['liter', 'US gallon'], defaultValue: 'liter', required: true)
+            }
             if (isSonoffZN()) {
                 input(name: 'manualAmountUnitPreference', type: 'enum', title: '<b>Manual irrigation amount unit</b>', description: 'Amount unit used by the simple manual-irrigation commands.', options: ['US gallon', 'liter'], defaultValue: 'liter', required: true)
                 input(name: 'manualFailSafePreference', type: 'number', title: '<b>Manual irrigation fail-safe</b>', description: 'Shared manual irrigation safety timeout, in minutes (0..719).', range: '0..719', defaultValue: 0, required: true)
@@ -229,6 +233,7 @@ Integer getSonoffFwVersion() {   // zero-padded '00001004' -> 1004; dotted '1.0.
     } catch (e) { return 0 }
 }
 boolean isSonoffFwGte(Integer v) { return getSonoffFwVersion() >= v }
+boolean isSonoffZFU()            { return isSonoffZN() && device.getDataValue('model') == 'SWV-ZFU' && device.getDataValue('manufacturer') == 'SONOFF' }
 boolean isSonoffZN()             { return getModelGroup().contains('SONOFF_SWV_ZN') }  // Sonoff SWV-ZN series (SWV-ZNE, SWV-ZFE, SWV-ZNU, SWV-ZFU)
 boolean isSonoffZF2()            { return getModelGroup().contains('SONOFF_SWV_ZF2') }
 
@@ -1474,18 +1479,30 @@ void parseSonoffCluster(Map it, String description, sourceEndpoint=null) {
     long epochOffset = isSonoffFwGte(1004) ? 0L : 946684800L
     String zf2Endpoint = isSonoffZF2() ? normalizeZF2Endpoint(sourceEndpoint) : '01'
     if (isSonoffZF2() && zf2Endpoint == null) { return }
+    long irrigationValue = intValue
+    if (isSonoffZFU() && it.attrId in ['5006', '5007']) {
+        // SWV-ZFU reports these UINT32 attributes in big-endian order (Zigbee2MQTT).
+        if (!(it.value ==~ /(?i)[0-9a-f]{8}/)) { logWarn "Invalid SWV-ZFU ${it.attrId} UINT32 value: ${it.value}"; return }
+        irrigationValue = Long.parseLong(it.value[6..7] + it.value[4..5] + it.value[2..3] + it.value[0..1], 16)
+    }
+    String reportedVolumeUnit = isSonoffZFU() && settings?.reportedVolumeUnitPreference == 'US gallon' ? 'gal' : 'L'
     switch (it.attrId) {
         case '5006' :   // Real-time irrigation duration (0..86400, seconds)
-            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} value is ${intValue} (raw: ${it.value})"
-            descText = "lastValveOpenDuration is ${intValue} seconds"
-            sendZF2PortEvent(zf2Endpoint, [name:'lastValveOpenDuration', value:intValue, descriptionText:descText, type:'physical'])
-            logInfo "${descText}"
+            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} value is ${irrigationValue} (raw: ${it.value})"
+            descText = "lastValveOpenDuration is ${irrigationValue} seconds"
+            boolean durationChanged = !isSonoffZFU() || device.currentValue('lastValveOpenDuration') == null || device.currentValue('lastValveOpenDuration').toString() != irrigationValue.toString()
+            sendZF2PortEvent(zf2Endpoint, [name:'lastValveOpenDuration', value:irrigationValue, descriptionText:descText, type:'physical'])
+            if (durationChanged) { logInfo "${descText}" }
             break
         case '5007' :   // Real-time Irrigation Volume (0..1000, divisor:10, unit: 'L')
-            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} value is ${intValue} (raw: ${it.value})"
-            descText = "irrigationVolume is ${intValue} L"
-            sendEvent(name: 'irrigationVolume', value: intValue, descriptionText: descText, type: 'physical')
-            logInfo "${descText}"
+            logDebug "Sonoff cluster 0x${it.cluster} attribute ${it.attrId} value is ${irrigationValue} (raw: ${it.value})"
+            Number reportedIrrigationVolume = reportedVolumeUnit == 'gal' ? (irrigationValue / 3.785411784).setScale(3, java.math.RoundingMode.HALF_UP) : irrigationValue
+            descText = "irrigationVolume is ${reportedIrrigationVolume} ${reportedVolumeUnit}"
+            boolean volumeChanged = !isSonoffZFU() || device.currentValue('irrigationVolume') == null || safeToDouble(device.currentValue('irrigationVolume')) != reportedIrrigationVolume.doubleValue()
+            Map volumeEvent = [name: 'irrigationVolume', value: reportedIrrigationVolume, descriptionText: descText, type: 'physical']
+            if (isSonoffZFU()) { volumeEvent.unit = reportedVolumeUnit }
+            sendEvent(volumeEvent)
+            if (volumeChanged) { logInfo "${descText}" }
             break
         case '5008' :   // Cyclic Timed Irrigation // data type: Char string      0x0A 01 01 00 00 04 B0 00 00 0E 10
             //                                                      raw: E9D701FC11 0A 08 50 42 00,
@@ -1561,9 +1578,10 @@ void parseSonoffCluster(Map it, String description, sourceEndpoint=null) {
             }
             break
         case '500F' :   // Daily Irrigation Volume (Irrigation water volume for the day)    // uint32 (Liter)
-            descText = "Daily irrigation volume is ${intValue} L"
+            Number reportedDailyVolume = reportedVolumeUnit == 'gal' ? (intValue / 3.785411784).setScale(3, java.math.RoundingMode.HALF_UP) : intValue
+            descText = "Daily irrigation volume is ${reportedDailyVolume} ${reportedVolumeUnit}"
             logInfo "${descText}"
-            sendEvent(name: 'waterConsumed', value: intValue, unit: 'L', descriptionText: descText, type: 'physical')
+            sendEvent(name: 'waterConsumed', value: reportedDailyVolume, unit: reportedVolumeUnit, descriptionText: descText, type: 'physical')
             break
         case '5010' :   // Valve Work State (Valve working status)  // 0 - 'manual control'; 1 - 'Cycle timing / quantity control''; 2 - 'Schedule control'
             String workState = SonoffWorkStateOptions[intValue.toString()] ?: "unknown (${intValue})"
@@ -1579,12 +1597,20 @@ void parseSonoffCluster(Map it, String description, sourceEndpoint=null) {
             break
         case '501D' :   // Manual irrigation defaults: ZCL array of 12 UINT8 values
             try {
+                if (it.value == null || (it.value.size() % 2) != 0) { throw new IllegalArgumentException('invalid hex payload') }
                 List<Integer> bytes = it.value.toList().collate(2).collect { Integer.parseInt(it.join(), 16) }
-                int offset = (bytes.size() >= 15 && bytes[0] == 0x20) ? 3 : 0
-                if (bytes.size() < offset + 12) { throw new IllegalArgumentException("payload has ${bytes.size()} bytes") }
+                int offset = 0
+                if (bytes.size() >= 15 && bytes[0] == 0x20) {
+                    int elementCount = bytes[1] | (bytes[2] << 8)
+                    if (elementCount < 12 || bytes.size() < elementCount + 3) { throw new IllegalArgumentException('invalid 501D array length') }
+                    offset = 3
+                } else if (bytes.size() != 12) {
+                    throw new IllegalArgumentException('unrecognized 501D array format')
+                }
                 int mode = bytes[offset]
                 int duration = (bytes[offset + 3] << 8) | bytes[offset + 4]
                 int unit = bytes[offset + 7]
+                if (!(mode in [0, 1]) || !(unit in [0, 1])) { throw new IllegalArgumentException("unsupported mode ${mode} or unit ${unit}") }
                 int amount = (bytes[offset + 8] << 8) | bytes[offset + 9]
                 int failSafe = (bytes[offset + 10] << 8) | bytes[offset + 11]
                 Map manualSettings = [
