@@ -3,9 +3,9 @@ Find me on the Hubitat Community: https://community.hubitat.com/u/kkossev/summar
 
 ----
 
-All my work is provided for free to the awesome Hubitat community. If you find these drivers useful, donations are always appreciated.
-This will keep me going to bring even more Zigbee smart devices to Hubitat.
-https://www.paypal.com/paypalme/kkossev
+**All my Hubitat drivers are free to use.**
+
+If my work has helped you, I’d be grateful if you [subscribed to the Hubitat Shop EU newsletter](https://hubitat-shop.eu/pages/subscribe). You’ll get one email a month with Hubitat news, new articles, and new products.
 
 ---------------------------
 
